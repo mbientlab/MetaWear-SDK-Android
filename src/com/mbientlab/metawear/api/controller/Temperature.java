@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 MbientLab Inc. All rights reserved.
  *
  * IMPORTANT: Your use of this Software is limited to those specific rights
@@ -28,36 +28,62 @@
  * Should you have any questions regarding your right to use this Software, 
  * contact MbientLab Inc, at www.mbientlab.com.
  */
-package com.mbientlab.metawear.api;
+package com.mbientlab.metawear.api.controller;
+
+import java.nio.ByteBuffer;
+import java.util.Collection;
+
+import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
+import com.mbientlab.metawear.api.MetaWearController.ModuleController;
+import com.mbientlab.metawear.api.Module;
 
 /**
- * Actions that the gatt callback can broadcast
+ * Controller for the temperature module
  * @author Eric Tsai
+ * @see com.mbientlab.metawear.api.Module#TEMPERATURE
  */
-public class Actions {
+public interface Temperature extends ModuleController {
     /**
-     * MetaWear specific Intent actions
+     * Enumeration of registers under the temperature module
      * @author Eric Tsai
      */
-    public class MetaWear {
-        /** Data was received from a MetaWear notification register */
-        public static final String NOTIFICATION_RECEIVED=
-                "com.mbientlab.com.metawear.api.Actions.MetaWear.NOTIFICATION_RECEIVED";
+    public enum Register implements com.mbientlab.metawear.api.Register {
+        /** Retrieves the current temperature from the sensor */
+        TEMPERATURE {
+            @Override public byte opcode() { return 0x1; }
+            @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
+                    byte[] data) {
+                byte[] reverse= new byte[] {data[3], data[2]};
+                float degrees= (float)(Short.valueOf(ByteBuffer.wrap(reverse).getShort()).floatValue() / 4.0);
+                for(ModuleCallbacks it: callbacks) {
+                    ((Callbacks)it).receivedTemperature(degrees);
+                }
+            }
+        };
+        
+        @Override public Module module() { return Module.TEMPERATURE; }
+    }
+
+    /**
+     * Callbacks for temperature module
+     * @author Eric Tsai
+     */
+    public abstract static class Callbacks implements ModuleCallbacks {
+        public final Module getModule() { return Module.TEMPERATURE; }
+
+        /**
+         * Called when MetaWear has responded with the temperature reading
+         * @param degrees Value of the temperature in Celsius
+         */
+        public void receivedTemperature(float degrees) { }
     }
     
     /**
-     * General Bluetooth LE Intent actions
-     * @author Eric Tsai
+     * Read the temperature reported from MetaWear.
+     * The function Temperature.receivedTemperature will be called the the data is available
+     * @see Callbacks#receivedTemperature(float)
      */
-    public class BluetoothLE {
-        /** Connected to a Bluetooth device */
-        public static final String DEVICE_CONNECTED= 
-                "com.mbientlab.com.metawear.api.DEVICE_CONNECTED";
-        /** Disconnected from a Bluetooth device */
-        public static final String DEVICE_DISCONNECTED= 
-                "com.mbientlab.com.metawear.api.DEVICE_DISCONNECTED";
-        /** A Bluetooth characteristic was read */
-        public static final String CHARACTERISTIC_READ=
-                "com.mbientlab.com.metawear.api.CHARACTERISTIC_READ";
-    }
+    public void readTemperature();
+    
+    
 }

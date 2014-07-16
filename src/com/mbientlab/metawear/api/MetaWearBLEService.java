@@ -14,7 +14,7 @@
  * Software and/or its documentation for any purpose.
  *
  * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE 
- * PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+ * PROVIDED Â“AS ISÂ” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
  * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
  * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
  * MBIENTLAB OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT, NEGLIGENCE, 
@@ -30,11 +30,22 @@
  */
 package com.mbientlab.metawear.api;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
+import com.mbientlab.metawear.api.GATT.GATTCharacteristic;
+import com.mbientlab.metawear.api.GATT.GATTService;
+import com.mbientlab.metawear.api.MetaWearController.DeviceCallbacks;
+import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
+import com.mbientlab.metawear.api.characteristic.*;
+import com.mbientlab.metawear.api.controller.*;
+import com.mbientlab.metawear.api.util.Registers;
 
 import android.app.Service;
 import android.bluetooth.BluetoothDevice;
@@ -44,6 +55,8 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Binder;
@@ -53,7 +66,7 @@ import android.os.IBinder;
  * Service for maintaining the Bluetooth GATT connection to the MetaWear board
  * @author Eric Tsai
  */
-public class MetaWearBLEService extends Service {
+public class MetaWearBleService extends Service {
     /**
      * Represents the state of MetaWear service
      * @author Eric Tsai
@@ -69,140 +82,495 @@ public class MetaWearBLEService extends Service {
         READY;
     }
 
-    /** BLE standard UUID for device information service */
-    private final static UUID deviceInfoService= UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb");
-    /** UUID for MetaWear specific service */
-    private final static UUID metaWearService= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
-    /** BLE standard UUID for configuring characteristics */
-    private final static UUID characteristicConfig= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+    private class Action {
+        /** Data was received from a MetaWear notification register */
+        public static final String NOTIFICATION_RECEIVED=
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Action.NOTIFICATION_RECEIVED";
+        /** Connected to a Bluetooth device */
+        public static final String DEVICE_CONNECTED= 
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Action.DEVICE_CONNECTED";
+        /** Disconnected from a Bluetooth device */
+        public static final String DEVICE_DISCONNECTED= 
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Action.DEVICE_DISCONNECTED";
+        /** A Bluetooth characteristic was read */
+        public static final String CHARACTERISTIC_READ=
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Action.CHARACTERISTIC_READ";
+    }
+    private class Extra {
+        public static final String SERVICE_UUID= 
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Extra.SERVICE_UUID";
+        /** Extra Intent information for the characteristic UUID */
+        public static final String CHARACTERISTIC_UUID= 
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Extra.CHARACTERISTIC_UUID";
+        /** Extra Intent information for the characteristic value */
+        public static final String CHARACTERISTIC_VALUE= 
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Extra.CHARACTERISTIC_VALUE";
+    }
 
+    private final static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+    private final static HashMap<Byte, ArrayList<ModuleCallbacks>> moduleCallbackMap= new HashMap<>();
+    private final static HashSet<DeviceCallbacks> deviceCallbacks= new HashSet<>();
+    
+    private boolean connected;
     /** GATT connection to the ble device */
     private BluetoothGatt metaWearGatt;
     /** Current state of the device */
     private DeviceState deviceState;
+    private BluetoothDevice metaWearBoard;
     /** Bytes still be to written to the MetaWear command characteristic */
     private final ConcurrentLinkedQueue<byte[]> commandBytes= new ConcurrentLinkedQueue<>();
     /** Characteristic UUIDs still to be read from MetaWear */
-    private final ConcurrentLinkedQueue<UUID> readCharUuids= new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<GATTCharacteristic> readCharUuids= new ConcurrentLinkedQueue<>();
 
     /**
-     * Get an IntentFilter for MetaWear specific actions used by the MetaWear modules
+     * Get the IntentFilter for actions broadcasted by the MetaWear service
      * @return IntentFilter for MetaWear specific actions
-     * @see BroadcastReceiverBuilder
+     * @see ModuleCallbacks
+     * @see DeviceCallbacks
      */
     public static IntentFilter getMetaWearIntentFilter() {
         IntentFilter filter= new IntentFilter();
         
-        filter.addAction(Actions.MetaWear.NOTIFICATION_RECEIVED);
+        filter.addAction(Action.NOTIFICATION_RECEIVED);
+        filter.addAction(Action.CHARACTERISTIC_READ);
+        filter.addAction(Action.DEVICE_CONNECTED);
+        filter.addAction(Action.DEVICE_DISCONNECTED);
         return filter;
     }
-
+    
+    private static BroadcastReceiver mwBroadcastReceiver;
+    
     /**
-     * Get an IntentFilter for general Bluetooth LE broadcasts
-     * @return IntentFilter for general Bluetooth LE broadcasts
+     * Get the broadcast receiver for MetaWear intents.  An Activity using the MetaWear service 
+     * will need to register this receiver to trigger its callback functions.
+     * @return MetaWear specific broadcast receiver
      */
-    public static IntentFilter getBLEIntentFilter() {
-        IntentFilter filter= new IntentFilter();
-        
-        filter.addAction(Actions.BluetoothLE.CHARACTERISTIC_READ);
-        filter.addAction(Actions.BluetoothLE.DEVICE_CONNECTED);
-        filter.addAction(Actions.BluetoothLE.DEVICE_DISCONNECTED);
-        return filter;
+    public static BroadcastReceiver getMetaWearBroadcastReceiver() {
+        if (mwBroadcastReceiver == null) {
+            mwBroadcastReceiver= new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    switch (intent.getAction()) {
+                    case Action.NOTIFICATION_RECEIVED:
+                        byte[] data= (byte[])intent.getExtras().get(Extra.CHARACTERISTIC_VALUE);
+                        byte moduleOpcode= data[0], registerOpcode= (byte)(0x7f & data[1]);
+                        Module.lookupModule(moduleOpcode).lookupRegister(registerOpcode)
+                                .notifyCallbacks(moduleCallbackMap.get(moduleOpcode), data);
+                        break;
+                    case Action.DEVICE_CONNECTED:
+                        for(DeviceCallbacks it: deviceCallbacks) {
+                            it.connected();
+                        }
+                        break;
+                    case Action.DEVICE_DISCONNECTED:
+                        for(DeviceCallbacks it: deviceCallbacks) {
+                            it.disconnected();
+                        }
+                        break;
+                    case Action.CHARACTERISTIC_READ:
+                        UUID serviceUuid= (UUID)intent.getExtras().get(Extra.SERVICE_UUID), 
+                                charUuid= (UUID)intent.getExtras().get(Extra.CHARACTERISTIC_UUID);
+                        GATTCharacteristic characteristic= GATTService.lookupGATTService(serviceUuid).getCharacteristic(charUuid);
+                        for(DeviceCallbacks it: deviceCallbacks) {
+                            it.receivedGATTCharacteristic(characteristic, (byte[])intent.getExtras().get(Extra.CHARACTERISTIC_VALUE));
+                        }
+                        break;
+                    }
+                }
+            };
+        }
+        return mwBroadcastReceiver;
     }
     
     /** Interacts with the MetaWear board */
     private final MetaWearController controller= new MetaWearController() {
-        private final Collection<NotificationRegister> globalEnables= new HashSet<>(); 
+        private final Collection<Accelerometer.Component> enabledComponents= new HashSet<>();
+        private final HashMap<Module, ModuleController> modules= new HashMap<>();
         
         @Override
-        public void setLEDState(LEDState state) {
-            queueCommand(Commands.Register.LED_ENABLE.buildWriteCommand(state.setting));
+        public MetaWearController addModuleCallback(ModuleCallbacks callback) {
+            byte moduleOpcode= callback.getModule().opcode;
+            if (!moduleCallbackMap.containsKey(moduleOpcode)) {
+                moduleCallbackMap.put(moduleOpcode, new ArrayList<ModuleCallbacks>());
+            }
+            moduleCallbackMap.get(moduleOpcode).add(callback);
+            return this;
         }
         @Override
-        public void setLEDColor(byte red, byte green, byte blue) {
-            queueCommand(Commands.Register.LED_COLOR.buildWriteCommand(red, green, blue));
-        }
-        
-        @Override
-        public void readTemperature() {
-            queueCommand(Commands.Register.TEMPERATURE.buildReadCommand((byte)0));
-        }
-        
-        @Override
-        public void readAnalogInput(byte pin, AnalogMode mode) {
-            queueCommand(mode.register.buildReadCommand(pin));
-        }
-        @Override
-        public void readDigitalInput(byte pin) {
-            queueCommand(Commands.Register.READ_DIGITAL_INPUT.buildReadCommand(pin));
-        }
-        @Override
-        public void setDigitalOutput(byte pin) {
-            queueCommand(Commands.Register.SET_DIGITAL_OUTPUT.buildWriteCommand(pin));
-        }
-        @Override
-        public void clearDigitalOutput(byte pin) {
-            queueCommand(Commands.Register.CLEAR_DIGITAL_OUTPUT.buildWriteCommand(pin));
+        public void removeModuleCallback(ModuleCallbacks callback) {
+            moduleCallbackMap.get(callback.getModule().opcode).remove(callback);
         }
         
         @Override
-        public void setDigitalInput(byte pin, PullMode mode) {
-            queueCommand(mode.register.buildWriteCommand(pin));
+        public MetaWearController addDeviceCallback(DeviceCallbacks callback) {
+            deviceCallbacks.add(callback);
+            return this;
+        }
+        @Override
+        public void removeDeviceCallback(DeviceCallbacks callback) {
+            deviceCallbacks.remove(callback);
         }
         
         @Override
-        public void resetDevice() {
-            queueCommand(Commands.Register.RESET_DEVICE.buildWriteCommand());
+        public ModuleController getModuleController(Module opcode) {
+            switch (opcode) {
+            case ACCELEROMETER:
+                return getAccelerometerModule();
+            case DEBUG:
+                return getDebugModule();
+            case GPIO:
+                return getGPIOModule();
+            case IBEACON:
+                return getIBeaconModule();
+            case LED:
+                return getLEDDriverModule();
+            case MECHANICAL_SWITCH:
+                return getMechanicalSwitchModule();
+            case NEO_PIXEL:
+                return getNeoPixelDriver();
+            case TEMPERATURE:
+                return getTemperatureModule();
+            case HAPTIC:
+            	return getHapticModule();
+            }
+            return null;
         }
-        @Override
-        public void jumpToBootloader() {
-            queueCommand(Commands.Register.JUMP_TO_BOOTLOADER.buildWriteCommand());
+        private ModuleController getAccelerometerModule() {
+            if (!modules.containsKey(Module.ACCELEROMETER)) {
+                modules.put(Module.ACCELEROMETER, new Accelerometer() {
+                    @Override
+                    public void enableNotification(Component component) {
+                        enabledComponents.add(component);
+                        writeRegister(component.enable, (byte)1);
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)1);
+                    }
+
+                    @Override
+                    public void disableNotification(Component component) {
+                        writeRegister(component.enable, (byte)0);
+                        enabledComponents.remove(component);
+                        if (enabledComponents.isEmpty()) {
+                            writeRegister(Register.GLOBAL_ENABLE, (byte)0);
+                        }
+                    }
+
+                    @Override
+                    public void readComponentConfiguration(Component component) {
+                        readRegister(component.config, (byte)0);
+                    }
+
+                    @Override
+                    public void setComponentConfiguration(Component component,
+                            byte[] data) {
+                        writeRegister(component.config, data);
+                    }
+                });
+            }
+            return modules.get(Module.ACCELEROMETER);
         }
-        
+        private Debug getDebugModule() {
+            if (!modules.containsKey(Module.DEBUG)) {
+                modules.put(Module.DEBUG, new Debug() {
+                    @Override
+                    public void resetDevice() {
+                        writeRegister(Register.RESET_DEVICE);
+                    }
+                    @Override
+                    public void jumpToBootloader() {
+                        writeRegister(Register.JUMP_TO_BOOTLOADER);
+                    }
+                });
+            }
+            return (Debug)modules.get(Module.DEBUG);
+        }
+        private GPIO getGPIOModule() {
+            if (!modules.containsKey(Module.GPIO)) {
+                modules.put(Module.GPIO, new GPIO() {
+                    @Override
+                    public void readAnalogInput(byte pin, AnalogMode mode) {
+                        readRegister(mode.register, pin);
+                    }
+                    @Override
+                    public void readDigitalInput(byte pin) {
+                        readRegister(Register.READ_DIGITAL_INPUT, pin);
+                    }
+                    @Override
+                    public void setDigitalOutput(byte pin) {
+                        writeRegister(Register.SET_DIGITAL_OUTPUT, pin);
+                    }
+                    @Override
+                    public void clearDigitalOutput(byte pin) {
+                        writeRegister(Register.CLEAR_DIGITAL_OUTPUT, pin);
+                    }                
+                    @Override
+                    public void setDigitalInput(byte pin, PullMode mode) {
+                        writeRegister(mode.register, pin);
+                    }
+                });
+            }
+            return (GPIO)modules.get(Module.GPIO);
+        }
+        private IBeacon getIBeaconModule() {
+            if (!modules.containsKey(Module.IBEACON)) {
+                modules.put(Module.IBEACON, new IBeacon() {
+                    @Override
+                    public void enableIBeacon() {
+                        writeRegister(Register.ENABLE, (byte)1);                    
+                    }
+                    @Override
+                    public void disableIBecon() {
+                        writeRegister(Register.ENABLE, (byte)0);
+                    }
+                    @Override
+                    public IBeacon setUUID(UUID uuid) {
+                        byte[] uuidBytes= ByteBuffer.wrap(new byte[16])
+                                .putLong(uuid.getMostSignificantBits())
+                                .putLong(uuid.getLeastSignificantBits())
+                                .array();
+                        writeRegister(Register.ADVERTISEMENT_UUID, uuidBytes);
+                        return this;
+                    }
+                    @Override
+                    public void readSetting(Register register) {
+                        readRegister(register);
+                    }
+                    @Override
+                    public IBeacon setMajor(short major) {
+                        writeRegister(Register.MAJOR, (byte)(major >> 8 & 0xff), (byte)(major & 0xff));
+                        return this;
+                    }
+                    @Override
+                    public IBeacon setMinor(short minor) {
+                        writeRegister(Register.MINOR, (byte)(minor >> 8 & 0xff), (byte)(minor & 0xff));
+                        return this;
+                    }
+                    @Override
+                    public IBeacon setCalibratedRXPower(byte power) {
+                        writeRegister(Register.RX_POWER, power);
+                        return this;
+                    }
+                    @Override
+                    public IBeacon setTXPower(byte power) {
+                        writeRegister(Register.TX_POWER, power);
+                        return this;
+                    }
+                    @Override
+                    public IBeacon setAdvertisingPeriod(short freq) {
+                        writeRegister(Register.ADVERTISEMENT_PERIOD, (byte)(freq >> 8 & 0xff), (byte)(freq & 0xff));
+                        return this;
+                    }
+                });
+            }
+            return (IBeacon)modules.get(Module.IBEACON);
+        }
+        private LED getLEDDriverModule() {
+            if (!modules.containsKey(Module.LED)) {
+                modules.put(Module.LED, new LED() {
+                    public void play(boolean autoplay) {
+                        writeRegister(Register.PLAY, (byte)(autoplay ? 2 : 1));
+                    }
+                    public void pause() {
+                        writeRegister(Register.PLAY, (byte)0);
+                    }
+                    public void stop(boolean resetChannels) {
+                        writeRegister(Register.STOP, (byte)(resetChannels ? 1 : 0));
+                    }
+                    
+                    public ChannelDataWriter setColorChannel(final ColorChannel color) {
+                        return new ChannelDataWriter() {
+                            private byte[] channelData= new byte[15];
+                            @Override
+                            public ColorChannel getChannel() {
+                                return color;
+                            }
+
+                            @Override
+                            public ChannelDataWriter withHighIntensity(byte intensity) {
+                                channelData[2]= intensity;
+                                return this;
+                            }
+
+                            @Override
+                            public ChannelDataWriter withLowIntensity(byte intensity) {
+                                channelData[3]= intensity;
+                                return this;
+                            }
+
+                            @Override
+                            public ChannelDataWriter withRiseTime(short time) {
+                                channelData[5]= (byte)(time >> 8);
+                                channelData[4]= (byte)(time & 0xff);
+                                return this;
+                            }
+
+                            @Override
+                            public ChannelDataWriter withHighTime(short time) {
+                                channelData[7]= (byte)(time >> 8);
+                                channelData[6]= (byte)(time & 0xff);
+                                return this;
+                            }
+
+                            @Override
+                            public ChannelDataWriter withFallTime(short time) {
+                                channelData[9]= (byte)(time >> 8);
+                                channelData[8]= (byte)(time & 0xff);
+                                return this;
+                            }
+
+                            @Override
+                            public ChannelDataWriter withPulseDuration(short period) {
+                                channelData[11]= (byte)(period >> 8);
+                                channelData[10]= (byte)(period & 0xff);
+                                return this;
+                            }
+
+                            @Override
+                            public ChannelDataWriter withPulseOffset(short offset) {
+                                channelData[13]= (byte)(offset >> 8);
+                                channelData[12]= (byte)(offset & 0xff);
+                                return this;
+                            }
+
+                            @Override
+                            public ChannelDataWriter withRepeatCount(byte count) {
+                                channelData[14]= count;;
+                                return this;
+                            }
+
+                            @Override
+                            public void commit() {
+                                channelData[0]= (byte)(color.ordinal());
+                                channelData[1]= 0x2;    ///< Keep it set to flash for now
+                                writeRegister(Register.MODE, channelData);
+                            }
+                        };
+                    }
+                });
+            }
+            return (LED)modules.get(Module.LED);
+        }
+        private MechanicalSwitch getMechanicalSwitchModule() {
+            if (!modules.containsKey(Module.MECHANICAL_SWITCH)) {
+                modules.put(Module.MECHANICAL_SWITCH, new MechanicalSwitch() {
+                    @Override
+                    public void enableNotification() {
+                        writeRegister(Register.SWITCH_STATE, (byte)1);
+                    }
+                    @Override
+                    public void disableNotification() {
+                        writeRegister(Register.SWITCH_STATE, (byte)0);
+                    }
+                });
+            }
+            return (MechanicalSwitch)modules.get(Module.MECHANICAL_SWITCH);
+        }
+        private NeoPixel getNeoPixelDriver() {
+            if (!modules.containsKey(Module.NEO_PIXEL)) {
+                modules.put(Module.NEO_PIXEL, new NeoPixel() {
+                    @Override
+                    public void readStrandState(byte strand) {
+                        readRegister(Register.INITIALIZE, strand);
+                    }
+                    @Override
+                    public void readHoldState(byte strand) {
+                        readRegister(Register.HOLD, strand);
+                    }
+                    @Override
+                    public void readPixelState(byte strand, byte pixel) {
+                        readRegister(Register.PIXEL, strand, pixel);
+                    }
+                    @Override
+                    public void readRotationState(byte strand) {
+                        readRegister(Register.ROTATE, strand);
+                    }
+                    @Override
+                    public void initializeStrand(byte strand, ColorOrdering ordering,
+                            StrandSpeed speed, byte ioPin, byte length) {
+                        writeRegister(Register.INITIALIZE, strand, 
+                                (byte)(ordering.ordinal() << 4 | speed.ordinal()), ioPin, length);
+                        
+                    }
+                    @Override
+                    public void holdStrand(byte strand, byte holdState) {
+                        writeRegister(Register.HOLD, strand, holdState);
+                        
+                    }
+                    @Override
+                    public void clearStrand(byte strand, byte start, byte end) {
+                        writeRegister(Register.CLEAR, strand, start, end);
+                        
+                    }
+                    @Override
+                    public void setPixel(byte strand, byte pixel, byte red,
+                            byte green, byte blue) {
+                        writeRegister(Register.PIXEL, strand, pixel, red, green, blue);
+                        
+                    }
+                    @Override
+                    public void rotateStrand(byte strand, RotationDirection direction, byte repetitions,
+                            short delay) {
+                        writeRegister(Register.ROTATE, strand, (byte)direction.ordinal(), repetitions, 
+                                (byte)(delay >> 8 & 0xff), (byte)(delay & 0xff));
+                    }
+                    @Override
+                    public void deinitializeStrand(byte strand) {
+                        writeRegister(Register.DEINITIALIZE, strand);
+                        
+                    }
+                });
+            }
+            return (NeoPixel)modules.get(Module.NEO_PIXEL);
+        }
+        private Temperature getTemperatureModule() {
+            if (!modules.containsKey(Module.TEMPERATURE)) {
+                modules.put(Module.TEMPERATURE, new Temperature() {
+                    @Override
+                    public void readTemperature() {
+                        readRegister(Register.TEMPERATURE, (byte)0);
+                    }
+                });
+            }
+            return (Temperature)modules.get(Module.TEMPERATURE);
+        }
+        private Haptic getHapticModule() {
+            if (!modules.containsKey(Module.HAPTIC)) {
+                modules.put(Module.HAPTIC, new Haptic() {
+                    @Override
+                    public void startMotor(short pulseWidth) {
+                        writeRegister(Register.PULSE, (byte)128, (byte)(pulseWidth & 0xff), (byte)(pulseWidth >> 8), (byte)1);
+                    }
+
+                    @Override
+                    public void startBuzzer(short pulseWidth) {
+                        writeRegister(Register.PULSE, (byte)248, (byte)(pulseWidth & 0xff), (byte)(pulseWidth >> 8), (byte)0);
+                    }
+                });
+            }
+            return (Haptic)modules.get(Module.HAPTIC);
+        }
         @Override
         public void readDeviceInformation() {
-            for(Characteristics.DeviceInformation it: Characteristics.DeviceInformation.values()) {
-                readCharUuids.add(it.uuid);
+            for(GATTCharacteristic it: DeviceInformation.values()) {
+                readCharUuids.add(it);
             }
             if (deviceState == DeviceState.READY) {
                 deviceState= DeviceState.READING_CHARACTERISTICS;
                 readCharacteristic();
             }
         }
-        
         @Override
-        public void enableNotification(NotificationRegister notifyRegister) {
-            queueCommand(notifyRegister.register.buildWriteCommand((byte)1));
-            if (notifyRegister.requireGlobalEnable) {
-                queueCommand(Commands.Register.GLOBAL_ENABLE.buildWriteCommand((byte)1));
-                globalEnables.add(notifyRegister);
-            }
-        }
-        @Override
-        public void disableNotification(NotificationRegister notifyRegister) {
-            queueCommand(notifyRegister.register.buildWriteCommand((byte)0));
-            globalEnables.remove(notifyRegister);
-            if (globalEnables.isEmpty()) queueCommand(Commands.Register.GLOBAL_ENABLE.buildWriteCommand((byte)0));
+        public boolean isConnected() {
+            return connected;
         }
     };
-    /**
-     * Adds a command to the write queue
-     * @param data Sequence of byte representing a command for MetaWear
-     */
-    private void queueCommand(byte[] data) {
-        commandBytes.add(data);
-        if (deviceState == DeviceState.READY) {
-            deviceState= DeviceState.WRITING_CHARACTERISTICS;
-            writeCommand();
-        }
-    }
+    
     /**
      * Writes a command to MetaWear via the command register UUID
      * @see Characteristics.MetaWear#COMMAND
      */
     private void writeCommand() {
-        BluetoothGattService service= metaWearGatt.getService(metaWearService);
-        BluetoothGattCharacteristic command= service.getCharacteristic(Characteristics.MetaWear.COMMAND.uuid);
+        BluetoothGattService service= metaWearGatt.getService(GATTService.METAWEAR.uuid());
+        BluetoothGattCharacteristic command= service.getCharacteristic(MetaWear.COMMAND.uuid());
         command.setValue(commandBytes.poll());
         metaWearGatt.writeCharacteristic(command);
     }
@@ -210,12 +578,13 @@ public class MetaWearBLEService extends Service {
     /**
      * Read a characteristic from MetaWear.
      * An intent with the action CHARACTERISTIC_READ will be broadcasted.
-     * @see Actions.BluetoothLE#CHARACTERISTIC_READ
+     * @see Action.BluetoothLe#ACTION_CHARACTERISTIC_READ
      */
     private void readCharacteristic() {
-        BluetoothGattService service= metaWearGatt.getService(deviceInfoService);
+        GATTCharacteristic charInfo= readCharUuids.poll();
+        BluetoothGattService service= metaWearGatt.getService(charInfo.gattService().uuid());
 
-        BluetoothGattCharacteristic characteristic= service.getCharacteristic(readCharUuids.poll());
+        BluetoothGattCharacteristic characteristic= service.getCharacteristic(charInfo.uuid());
         metaWearGatt.readCharacteristic(characteristic);
     }
     
@@ -232,10 +601,12 @@ public class MetaWearBLEService extends Service {
             switch (newState) {
             case BluetoothProfile.STATE_CONNECTED:
                 gatt.discoverServices();
-                intent.setAction(Actions.BluetoothLE.DEVICE_CONNECTED);
+                intent.setAction(Action.DEVICE_CONNECTED);
+                connected= true;
                 break;
             case BluetoothProfile.STATE_DISCONNECTED:
-                intent.setAction(Actions.BluetoothLE.DEVICE_DISCONNECTED);
+                intent.setAction(Action.DEVICE_DISCONNECTED);
+                connected= false;
                 break;
             default:
                 broadcast= false;
@@ -260,7 +631,7 @@ public class MetaWearBLEService extends Service {
 
         private void setupNotification() {
             metaWearGatt.setCharacteristicNotification(shouldNotify.peek(), true);
-            BluetoothGattDescriptor descriptor= shouldNotify.poll().getDescriptor(characteristicConfig);
+            BluetoothGattDescriptor descriptor= shouldNotify.poll().getDescriptor(CHARACTERISTIC_CONFIG);
             descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
             metaWearGatt.writeDescriptor(descriptor);
         }
@@ -271,18 +642,24 @@ public class MetaWearBLEService extends Service {
             if (!shouldNotify.isEmpty()) setupNotification();
             else deviceState= DeviceState.READY;
             
-            if (deviceState == DeviceState.READY && !commandBytes.isEmpty()) {
-                deviceState= DeviceState.WRITING_CHARACTERISTICS;
-                writeCommand();
+            if (deviceState == DeviceState.READY) {
+                if (!commandBytes.isEmpty()) {
+                    deviceState= DeviceState.WRITING_CHARACTERISTICS;
+                    writeCommand();
+                } else if (!readCharUuids.isEmpty()) {
+                    deviceState= DeviceState.READING_CHARACTERISTICS;
+                    readCharacteristic();
+                }
             }
         }
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
-            Intent intent= new Intent(Actions.BluetoothLE.CHARACTERISTIC_READ);
-            intent.putExtra(BroadcastReceiverBuilder.CHARACTERISTIC_UUID, characteristic.getUuid());
-            intent.putExtra(BroadcastReceiverBuilder.CHARACTERISTIC_VALUE, characteristic.getValue());
+            Intent intent= new Intent(Action.CHARACTERISTIC_READ);
+            intent.putExtra(Extra.SERVICE_UUID, characteristic.getService().getUuid());
+            intent.putExtra(Extra.CHARACTERISTIC_UUID, characteristic.getUuid());
+            intent.putExtra(Extra.CHARACTERISTIC_VALUE, characteristic.getValue());
             sendBroadcast(intent);
 
             if (!readCharUuids.isEmpty()) readCharacteristic(); 
@@ -313,8 +690,8 @@ public class MetaWearBLEService extends Service {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic) {
-            Intent intent= new Intent(Actions.MetaWear.NOTIFICATION_RECEIVED);
-            intent.putExtra(BroadcastReceiverBuilder.CHARACTERISTIC_VALUE, characteristic.getValue());
+            Intent intent= new Intent(Action.NOTIFICATION_RECEIVED);
+            intent.putExtra(Extra.CHARACTERISTIC_VALUE, characteristic.getValue());
             sendBroadcast(intent);
         }
     };
@@ -327,19 +704,49 @@ public class MetaWearBLEService extends Service {
         return controller;
     }
     /**
-     * Connect to the GATT service on the NetaWear device
-     * @param metaWearDevice MetaWear device to connect to
+     * Connect to the GATT service on the MetaWear device
+     * @param metaWearBoard MetaWear device to connect to
      */
-    public void connect(BluetoothDevice metaWearDevice) {
-        metaWearGatt= metaWearDevice.connectGatt(this, false, metaWearGattCallback);
+    public void connect(BluetoothDevice metaWearBoard) {
+        if (!metaWearBoard.equals(this.metaWearBoard)) {
+            commandBytes.clear();
+            readCharUuids.clear();
+        }
+        deviceState= null;
+        close();
+        this.metaWearBoard= metaWearBoard;
+        metaWearGatt= metaWearBoard.connectGatt(this, false, metaWearGattCallback);
     }
-
-    /** Disconnect from the GATT service */
+    
+    public void reconnect() {
+        if (metaWearBoard != null) {
+            deviceState= null;
+            close();
+            metaWearGatt= metaWearBoard.connectGatt(this, false, metaWearGattCallback);
+        }
+    }
+    
     public void disconnect() {
+        if (metaWearGatt != null) {
+            metaWearGatt.disconnect();
+        }
+    }
+    /** Close the GATT service and free up resources */
+    public void close(boolean notify) {
         if (metaWearGatt != null) {
             metaWearGatt.close();
             metaWearGatt= null;
+            connected= false;
+            if (notify) {
+                for(DeviceCallbacks it: deviceCallbacks) {
+                    it.disconnected();
+                }
+            }
         }
+    }
+    /** Close the GATT service and free up resources */
+    public void close() {
+        close(false);
     }
 
     /** Binding between the Intent and this service */
@@ -351,8 +758,8 @@ public class MetaWearBLEService extends Service {
          * Get the MetaWearBLEService object
          * @return MetaWearBLEService object
          */
-        public MetaWearBLEService getService() {
-            return MetaWearBLEService.this;
+        public MetaWearBleService getService() {
+            return MetaWearBleService.this;
         }
     }
 
@@ -364,7 +771,30 @@ public class MetaWearBLEService extends Service {
 
     @Override
     public boolean onUnbind(Intent intent) {
-        disconnect();
+        close();
         return super.onUnbind(intent);
+    }
+
+    private void readRegister(com.mbientlab.metawear.api.Register register,
+            byte... parameters) {
+        queueCommand(Registers.buildReadCommand(register, parameters));
+    }
+
+    private void writeRegister(com.mbientlab.metawear.api.Register register,
+            byte... data) {
+        queueCommand(Registers.buildWriteCommand(register, data));
+    }
+
+    /**
+     * @param module
+     * @param registerOpcode
+     * @param data
+     */
+    private void queueCommand(byte[] command) {
+        commandBytes.add(command);
+        if (deviceState == DeviceState.READY) {
+            deviceState= DeviceState.WRITING_CHARACTERISTICS;
+            writeCommand();
+        }
     }
 }
