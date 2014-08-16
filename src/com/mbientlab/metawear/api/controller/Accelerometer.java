@@ -145,19 +145,20 @@ public interface Accelerometer extends ModuleController {
      * @author Eric Tsai
      */
     public enum Component {
-        DATA(Register.DATA_ENABLE, Register.DATA_SETTINGS),
-        FREE_FALL(Register.FREE_FALL_ENABLE, Register.FREE_FALL_SETTINGS),
-        ORIENTATION(Register.ORIENTATION_ENABLE, Register.ORIENTATION_SETTING);
+        DATA(Register.DATA_ENABLE, Register.DATA_SETTINGS, Register.DATA_VALUE),
+        FREE_FALL(Register.FREE_FALL_ENABLE, Register.FREE_FALL_SETTINGS, Register.FREE_FALL_VALUE),
+        ORIENTATION(Register.ORIENTATION_ENABLE, Register.ORIENTATION_SETTING, Register.ORIENTATION_VALUE);
         
-        public final Register enable, config;
+        public final Register enable, config, status;
 
         /**
          * @param enable
          * @param config
          */
-        private Component(Register enable, Register config) {
-            this.enable = enable;
-            this.config = config;
+        private Component(Register enable, Register config, Register status) {
+            this.enable= enable;
+            this.config= config;
+            this.status= status;
         }
         
     }

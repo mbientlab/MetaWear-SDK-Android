@@ -152,7 +152,7 @@ public class MetaWearBleService extends Service {
                 public void onReceive(Context context, Intent intent) {
                     switch (intent.getAction()) {
                     case Action.NOTIFICATION_RECEIVED:
-                        byte[] data= (byte[])intent.getExtras().get(Extra.CHARACTERISTIC_VALUE);
+                        final byte[] data= (byte[])intent.getExtras().get(Extra.CHARACTERISTIC_VALUE);
                         byte moduleOpcode= data[0], registerOpcode= (byte)(0x7f & data[1]);
                         Module.lookupModule(moduleOpcode).lookupRegister(registerOpcode)
                                 .notifyCallbacks(moduleCallbackMap.get(moduleOpcode), data);
@@ -242,12 +242,14 @@ public class MetaWearBleService extends Service {
                     public void enableNotification(Component component) {
                         enabledComponents.add(component);
                         writeRegister(component.enable, (byte)1);
+                        writeRegister(component.status, (byte)1);
                         writeRegister(Register.GLOBAL_ENABLE, (byte)1);
                     }
 
                     @Override
                     public void disableNotification(Component component) {
                         writeRegister(component.enable, (byte)0);
+                        writeRegister(component.status, (byte)0);
                         enabledComponents.remove(component);
                         if (enabledComponents.isEmpty()) {
                             writeRegister(Register.GLOBAL_ENABLE, (byte)0);
@@ -268,7 +270,7 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.ACCELEROMETER);
         }
-        private Debug getDebugModule() {
+        private ModuleController getDebugModule() {
             if (!modules.containsKey(Module.DEBUG)) {
                 modules.put(Module.DEBUG, new Debug() {
                     @Override
@@ -281,9 +283,9 @@ public class MetaWearBleService extends Service {
                     }
                 });
             }
-            return (Debug)modules.get(Module.DEBUG);
+            return modules.get(Module.DEBUG);
         }
-        private GPIO getGPIOModule() {
+        private ModuleController getGPIOModule() {
             if (!modules.containsKey(Module.GPIO)) {
                 modules.put(Module.GPIO, new GPIO() {
                     @Override
@@ -308,9 +310,9 @@ public class MetaWearBleService extends Service {
                     }
                 });
             }
-            return (GPIO)modules.get(Module.GPIO);
+            return modules.get(Module.GPIO);
         }
-        private IBeacon getIBeaconModule() {
+        private ModuleController getIBeaconModule() {
             if (!modules.containsKey(Module.IBEACON)) {
                 modules.put(Module.IBEACON, new IBeacon() {
                     @Override
@@ -361,9 +363,9 @@ public class MetaWearBleService extends Service {
                     }
                 });
             }
-            return (IBeacon)modules.get(Module.IBEACON);
+            return modules.get(Module.IBEACON);
         }
-        private LED getLEDDriverModule() {
+        private ModuleController getLEDDriverModule() {
             if (!modules.containsKey(Module.LED)) {
                 modules.put(Module.LED, new LED() {
                     public void play(boolean autoplay) {
@@ -447,9 +449,9 @@ public class MetaWearBleService extends Service {
                     }
                 });
             }
-            return (LED)modules.get(Module.LED);
+            return modules.get(Module.LED);
         }
-        private MechanicalSwitch getMechanicalSwitchModule() {
+        private ModuleController getMechanicalSwitchModule() {
             if (!modules.containsKey(Module.MECHANICAL_SWITCH)) {
                 modules.put(Module.MECHANICAL_SWITCH, new MechanicalSwitch() {
                     @Override
@@ -462,9 +464,9 @@ public class MetaWearBleService extends Service {
                     }
                 });
             }
-            return (MechanicalSwitch)modules.get(Module.MECHANICAL_SWITCH);
+            return modules.get(Module.MECHANICAL_SWITCH);
         }
-        private NeoPixel getNeoPixelDriver() {
+        private ModuleController getNeoPixelDriver() {
             if (!modules.containsKey(Module.NEO_PIXEL)) {
                 modules.put(Module.NEO_PIXEL, new NeoPixel() {
                     @Override
@@ -519,9 +521,9 @@ public class MetaWearBleService extends Service {
                     }
                 });
             }
-            return (NeoPixel)modules.get(Module.NEO_PIXEL);
+            return modules.get(Module.NEO_PIXEL);
         }
-        private Temperature getTemperatureModule() {
+        private ModuleController getTemperatureModule() {
             if (!modules.containsKey(Module.TEMPERATURE)) {
                 modules.put(Module.TEMPERATURE, new Temperature() {
                     @Override
@@ -530,9 +532,9 @@ public class MetaWearBleService extends Service {
                     }
                 });
             }
-            return (Temperature)modules.get(Module.TEMPERATURE);
+            return modules.get(Module.TEMPERATURE);
         }
-        private Haptic getHapticModule() {
+        private ModuleController getHapticModule() {
             if (!modules.containsKey(Module.HAPTIC)) {
                 modules.put(Module.HAPTIC, new Haptic() {
                     @Override
@@ -546,7 +548,7 @@ public class MetaWearBleService extends Service {
                     }
                 });
             }
-            return (Haptic)modules.get(Module.HAPTIC);
+            return modules.get(Module.HAPTIC);
         }
         @Override
         public void readDeviceInformation() {
