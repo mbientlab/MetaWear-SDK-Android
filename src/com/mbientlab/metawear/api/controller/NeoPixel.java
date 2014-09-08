@@ -30,7 +30,6 @@
  */
 package com.mbientlab.metawear.api.controller;
 
-import java.nio.ByteBuffer;
 import java.util.Collection;
 
 import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
@@ -40,30 +39,29 @@ import com.mbientlab.metawear.api.Module;
 import static com.mbientlab.metawear.api.Module.NEO_PIXEL;
 
 /**
- * Controller for the Neo Pixel module
+ * Controller for the NeoPixel module
  * @author Eric Tsai
  * @see com.mbientlab.metawear.api.Module#NEO_PIXEL
  */
 public interface NeoPixel extends ModuleController {
     /**
-     * Enumeration of registers under the Neo Pixel module
+     * Enumeration of registers under the NeoPixel module
      * @author Eric Tsai
      */
     public enum Register implements com.mbientlab.metawear.api.Register {
-        /** Initializes a strand and retrieves a strand state */
+        /** Initializes a strand and retrieves information about a strand */
         INITIALIZE {
             @Override public byte opcode() { return 0x1; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks, 
                     byte[] data) {
-                StrandSpeed speed= StrandSpeed.values[(byte)(data[3] & 0xf)];
-                ColorOrdering order= ColorOrdering.values[(byte)((data[3] >> 4) & 0xf)];
+                StrandSpeed speed= StrandSpeed.values[(byte)((data[3] >> 2) & 0x3)];
+                ColorOrdering order= ColorOrdering.values[(byte)(data[3] & 0x3)];
                 for(ModuleCallbacks it: callbacks) 
                     ((Callbacks)it).receivedStrandState(data[2], order, speed, data[4], data[5]);
             }
         },
-        /** Sets and retrives a strand's hold state */
+        /** Sets and retrieves a strand's hold state */
         HOLD {
-            @Override public Module module() { return NEO_PIXEL; }
             @Override public byte opcode() { return 0x2; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks, 
                     byte[] data) {
@@ -72,12 +70,10 @@ public interface NeoPixel extends ModuleController {
         },
         /** Clears pixels on a strand */
         CLEAR {
-            @Override public Module module() { return NEO_PIXEL; }
             @Override public byte opcode() { return 0x3; }
         },
         /** Sets or retrieves pixel color on a strand */ 
         PIXEL {
-            @Override public Module module() { return NEO_PIXEL; }
             @Override public byte opcode() { return 0x4; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks, 
                     byte[] data) {
@@ -87,19 +83,17 @@ public interface NeoPixel extends ModuleController {
         },
         /** Sets or retrieves rotation state */
         ROTATE {
-            @Override public Module module() { return NEO_PIXEL; }
             @Override public byte opcode() { return 0x5; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks, 
                     byte[] data) {
                 RotationDirection direction= RotationDirection.values[data[3]];
-                short delay= ByteBuffer.wrap(data, 5, 2).getShort();
+                short delay= (short)((data[6] << 8) | (data[5] & 0xff));
                 for(ModuleCallbacks it: callbacks)
                     ((Callbacks)it).receivedRotatationState(data[2], direction, data[4], delay);
             }
         },
-        /** Frees up the resources on a strand */
+        /** Frees up resources allocated for a strand */
         DEINITIALIZE {
-            @Override public Module module() { return NEO_PIXEL; }
             @Override public byte opcode() { return 0x6; }
         };
         
@@ -119,7 +113,7 @@ public interface NeoPixel extends ModuleController {
          * @param strandIndex Strand index read
          * @param order Color ordering of the specific strand
          * @param speed Interface speed of the strand
-         * @param pin Pin number on the MetaWear board the NeoPixel strand is connected to 
+         * @param pin GPIO pin on the MetaWear board the NeoPixel strand is connected to 
          * @param strandLength Number of pixels on the strand
          */
         public void receivedStrandState(byte strandIndex, ColorOrdering order, StrandSpeed speed, byte pin, byte strandLength) { }
@@ -141,7 +135,7 @@ public interface NeoPixel extends ModuleController {
         /**
          * Called when the rotate state of a strand has been read 
          * @param strandIndex Strand index read
-         * @param direction 0 if shifting away from the board, 1 if shifting towards the board
+         * @param direction Rotation direction i.e. away from or towards the board
          * @param repetitions Number of times the rotation will occur, -1 if rotation is happening indefinitely
          * @param period Delay between rotations in milliseconds
          */
@@ -182,34 +176,35 @@ public interface NeoPixel extends ModuleController {
      * @author Eric Tsai
      */
     public enum RotationDirection {
-        /** Move pixels away from the board */
-        AWAY,
         /** Move pixels towards the board */
-        TOWARDS;
+        TOWARDS,
+        /** Move pixels away from the board */
+        AWAY;
         
         public static final RotationDirection values[]= values();
     }
     
     /**
-     * Initialize a NeoPixel strand
-     * @param strand Index to initialize
+     * Initialize memory on the MetaWear board for a NeoPixel strand
+     * @param strand Strand number (id) to initialize, can be in the range [0, 2]
      * @param ordering Color ordering format
      * @param speed Operating speed
-     * @param ioPin MetaWear pin number the strand is connected to
+     * @param ioPin GPIO pin the strand is connected to
      * @param length Number of pixels to initialize
      */
     public void initializeStrand(byte strand, ColorOrdering ordering, StrandSpeed speed, byte ioPin, byte length);
     /**
      * Read the state of a NeoPixel strand.  When data is available, the receivedStrandState function will be called
-     * @param strand Strand index to read information on
+     * @param strand Strand number to read information about
      * @see Callbacks#receivedStrandState(byte, 
      * com.mbientlab.metawear.api.controller.NeoPixel.ColorOrdering, 
      * com.mbientlab.metawear.api.controller.NeoPixel.StrandSpeed, byte, byte)
      */
     public void readStrandState(byte strand);
     /**
-     * Set the hold state on a strand 
-     * @param strand Strand to set
+     * Set the hold state on a strand.  When enabled, the strand will not refresh with any LED changes until the hold 
+     * is disabled.  This allows you to form complex LED patterns without having the strand refresh with partial changes.
+     * @param strand Strand number to modify
      * @param holdState 0 to disable, 1 to enable
      */
     public void holdStrand(byte strand, byte holdState);
@@ -221,18 +216,18 @@ public interface NeoPixel extends ModuleController {
     public void readHoldState(byte strand);
     /**
      * Clear pixel states on a strand
-     * @param strand Strand index to clear
+     * @param strand Strand number to clear
      * @param start Pixel index to start clearing from
-     * @param end Pixel index to clear to
+     * @param end Pixel index to clear to, inclusive
      */
     public void clearStrand(byte strand, byte start, byte end);
     /**
      * Set pixel color
-     * @param strand Strand index the pixel is on
+     * @param strand Strand number the pixel is on
      * @param pixel Index of the pixel
-     * @param red Red value
-     * @param green Green value
-     * @param blue Blue value
+     * @param red Red value, between [0, 255]
+     * @param green Green value, between [0, 255]
+     * @param blue Blue value, between [0, 255]
      */
     public void setPixel(byte strand, byte pixel, byte red, byte green, byte blue);
     /**
@@ -245,8 +240,8 @@ public interface NeoPixel extends ModuleController {
     /**
      * Rotate the pixels on a strand 
      * @param strand Strand to rotate
-     * @param direction 0 to shift away from the board, 1 to shift towards
-     * @param repetitions Number of extra times to repeat the rotation, -1 to rotate indefinitely
+     * @param direction Rotation direction
+     * @param repetitions Number of times to repeat the rotation.  Use -1 to rotate indefinitely, 0 to terminate
      * @param period Amount of time, in milliseconds, between rotations
      */
     public void rotateStrand(byte strand, RotationDirection direction, byte repetitions, short period);
@@ -258,7 +253,7 @@ public interface NeoPixel extends ModuleController {
      */
     public void readRotationState(byte strand);
     /**
-     * Free resources on the NeoPixel strand
+     * Free resources on the MetaWeard board for a NeoPixel strand
      * @param strand Strand index to free
      */
     public void deinitializeStrand(byte strand);

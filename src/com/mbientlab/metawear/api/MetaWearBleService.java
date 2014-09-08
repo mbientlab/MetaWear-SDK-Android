@@ -153,9 +153,15 @@ public class MetaWearBleService extends Service {
                     switch (intent.getAction()) {
                     case Action.NOTIFICATION_RECEIVED:
                         final byte[] data= (byte[])intent.getExtras().get(Extra.CHARACTERISTIC_VALUE);
-                        byte moduleOpcode= data[0], registerOpcode= (byte)(0x7f & data[1]);
-                        Module.lookupModule(moduleOpcode).lookupRegister(registerOpcode)
-                                .notifyCallbacks(moduleCallbackMap.get(moduleOpcode), data);
+                        if (data.length > 1) {
+                            byte moduleOpcode= data[0], registerOpcode= (byte)(0x7f & data[1]);
+                            Collection<ModuleCallbacks> callbacks;
+                            if (moduleCallbackMap.containsKey(moduleOpcode) && 
+                                    (callbacks= moduleCallbackMap.get(moduleOpcode)) != null) {
+                                Module.lookupModule(moduleOpcode).lookupRegister(registerOpcode)
+                                        .notifyCallbacks(callbacks, data);
+                            }
+                        }
                         break;
                     case Action.DEVICE_CONNECTED:
                         for(DeviceCallbacks it: deviceCallbacks) {
@@ -489,7 +495,7 @@ public class MetaWearBleService extends Service {
                     public void initializeStrand(byte strand, ColorOrdering ordering,
                             StrandSpeed speed, byte ioPin, byte length) {
                         writeRegister(Register.INITIALIZE, strand, 
-                                (byte)(ordering.ordinal() << 4 | speed.ordinal()), ioPin, length);
+                                (byte)(speed.ordinal() << 2 | ordering.ordinal()), ioPin, length);
                         
                     }
                     @Override
@@ -512,7 +518,7 @@ public class MetaWearBleService extends Service {
                     public void rotateStrand(byte strand, RotationDirection direction, byte repetitions,
                             short delay) {
                         writeRegister(Register.ROTATE, strand, (byte)direction.ordinal(), repetitions, 
-                                (byte)(delay >> 8 & 0xff), (byte)(delay & 0xff));
+                                (byte)(delay & 0xff), (byte)(delay >> 8 & 0xff));
                     }
                     @Override
                     public void deinitializeStrand(byte strand) {
