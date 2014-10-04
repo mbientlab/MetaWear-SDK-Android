@@ -31,6 +31,7 @@
 package com.mbientlab.metawear.api.controller;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Collection;
 
 import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
@@ -76,7 +77,7 @@ public interface GPIO extends ModuleController {
             @Override public byte opcode() { return 0x6; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short value= ByteBuffer.wrap(data, 2, 2).getShort();
+                short value= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).receivedAnalogInputAsAbsValue(value);
                 }
@@ -87,7 +88,7 @@ public interface GPIO extends ModuleController {
             @Override public byte opcode() { return 0x7; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short value= (short)(ByteBuffer.wrap(data, 2, 2).getShort() >> 6);
+                short value= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).receivedAnalogInputAsSupplyRatio(value);
                 }

@@ -31,6 +31,7 @@
 package com.mbientlab.metawear.api.controller;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Collection;
 
 import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
@@ -68,9 +69,9 @@ public interface Accelerometer extends ModuleController {
             @Override public byte opcode() {return 0x4; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short x= (short)(ByteBuffer.wrap(data, 2, 2).getShort() >> 4), 
-                        y= (short)(ByteBuffer.wrap(data, 4, 2).getShort() >> 4), 
-                        z= (short)(ByteBuffer.wrap(data, 6, 2).getShort() >> 4);
+                short x= (short)(ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort()), 
+                        y= (short)(ByteBuffer.wrap(data, 4, 2).order(ByteOrder.LITTLE_ENDIAN).getShort()), 
+                        z= (short)(ByteBuffer.wrap(data, 6, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).receivedDataValue(x, y, z);
                 }
@@ -162,6 +163,10 @@ public interface Accelerometer extends ModuleController {
         }
         
     }
+    
+    public void enableComponent(Component component);
+    public void disableComponent(Component component);
+    
     /**
      * Enable notifications from a component
      * @param component Component to enable notifications from

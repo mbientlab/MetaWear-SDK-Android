@@ -63,6 +63,7 @@ public interface GATT {
      * @author Eric Tsai
      */
     public enum GATTService implements GATT {
+        BATTERY("180f", Battery.values()),
         /**
          * BLE standard UUID for device information service
          * @see DeviceInformation

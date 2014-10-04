@@ -31,6 +31,7 @@
 package com.mbientlab.metawear.api;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -190,7 +191,6 @@ public class MetaWearBleService extends Service {
     
     /** Interacts with the MetaWear board */
     private final MetaWearController controller= new MetaWearController() {
-        private final Collection<Accelerometer.Component> enabledComponents= new HashSet<>();
         private final HashMap<Module, ModuleController> modules= new HashMap<>();
         
         @Override
@@ -238,15 +238,86 @@ public class MetaWearBleService extends Service {
                 return getTemperatureModule();
             case HAPTIC:
             	return getHapticModule();
+            case LOGGING:
+                return getLoggingModule();
+            default:
+                break;
             }
             return null;
+        }
+        private ModuleController getLoggingModule() {
+            if (!modules.containsKey(Module.LOGGING)) {
+                modules.put(Module.LOGGING, new Logging() {
+                    @Override
+                    public void startLogging() {
+                        writeRegister(Register.ENABLE, (byte) 1);
+                    }
+
+                    @Override
+                    public void stopLogging() {
+                        writeRegister(Register.ENABLE, (byte) 0);
+                    }
+
+                    @Override
+                    public void addTrigger(Trigger triggerObj) {
+                        writeRegister(Register.ADD_TRIGGER, triggerObj.register().module().opcode, triggerObj.register().opcode(), 
+                                triggerObj.index(), (byte) (triggerObj.offset() | (triggerObj.length() << 5)));
+                    }
+
+                    @Override
+                    public void triggerIdToObject(byte triggerId) {
+                        readRegister(Register.ADD_TRIGGER, triggerId);
+                    }
+
+                    @Override
+                    public void removeTrigger(byte triggerId) {
+                        writeRegister(Register.REMOVE_TRIGGER, triggerId);
+                    }
+
+                    @Override
+                    public void readReferenceTick() {
+                        readRegister(Register.TIME, (byte) 0);
+                    }
+
+                    @Override
+                    public void readTotalEntryCount() {
+                        readRegister(Register.LENGTH, (byte) 0);
+                    }
+
+                    @Override
+                    public void downloadLog(int nEntries, int notifyIncrement) {
+                        ByteBuffer buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+                        buffer.putShort((short) (nEntries & 0xffff)).putShort((short) (notifyIncrement & 0xffff));
+                        
+                        writeRegister(Register.READOUT_NOTIFY, (byte) 1);
+                        writeRegister(Register.READOUT_PROGRESS, (byte) 1);
+                        writeRegister(Register.READOUT, buffer.array());
+                    }
+                    
+                });
+            }
+            return modules.get(Module.LOGGING);
         }
         private ModuleController getAccelerometerModule() {
             if (!modules.containsKey(Module.ACCELEROMETER)) {
                 modules.put(Module.ACCELEROMETER, new Accelerometer() {
                     @Override
+                    public void enableComponent(Component component) {
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
+                        writeRegister(component.enable, (byte)1);
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)1);
+                    }
+                    
+                    @Override
+                    public void disableComponent(Component component) {
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
+                        writeRegister(component.enable, (byte)0);
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)1);
+                    }
+                    
+                    @Override
                     public void enableNotification(Component component) {
-                        enabledComponents.add(component);
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
                         writeRegister(component.enable, (byte)1);
                         writeRegister(component.status, (byte)1);
                         writeRegister(Register.GLOBAL_ENABLE, (byte)1);
@@ -254,12 +325,10 @@ public class MetaWearBleService extends Service {
 
                     @Override
                     public void disableNotification(Component component) {
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
                         writeRegister(component.enable, (byte)0);
                         writeRegister(component.status, (byte)0);
-                        enabledComponents.remove(component);
-                        if (enabledComponents.isEmpty()) {
-                            writeRegister(Register.GLOBAL_ENABLE, (byte)0);
-                        }
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)1);
                     }
 
                     @Override
@@ -567,9 +636,19 @@ public class MetaWearBleService extends Service {
             }
         }
         @Override
+        public void readBatteryLevel() {
+            readCharUuids.add(Battery.BATTERY_LEVEL);
+            if (deviceState == DeviceState.READY) {
+                deviceState= DeviceState.READING_CHARACTERISTICS;
+                readCharacteristic();
+            }
+        }
+        
+        @Override
         public boolean isConnected() {
             return connected;
         }
+        
     };
     
     /**

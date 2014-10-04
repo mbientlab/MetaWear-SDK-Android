@@ -96,6 +96,7 @@ public interface MetaWearController {
      * @see com.mbientlab.metawear.api.characteristic.DeviceInformation
      */
     public void readDeviceInformation();
+    public void readBatteryLevel();
     
     /**
      * Add a module callback for the broadcast receiver
