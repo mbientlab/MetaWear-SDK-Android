@@ -36,10 +36,12 @@ import com.mbientlab.metawear.api.GATT;
 import com.mbientlab.metawear.api.GATT.GATTCharacteristic;
 
 /**
- * @author etsai
- *
+ * Enumeration of GATT characteristics specific to the battery service
+ * @author Eric Tsai
+ * @see com.mbientlab.metawear.api.GATT.GATTService#BATTERY
  */
 public enum Battery implements GATTCharacteristic {
+    /** Battery level, as reported from the connected device */
     BATTERY_LEVEL("19");
     
     private final UUID uuid;

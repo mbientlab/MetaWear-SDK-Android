@@ -285,7 +285,7 @@ public interface Logging extends ModuleController {
          */
         public byte offset();
         /**
-         * Number of bytes required by the trigger data
+         * Number of bytes required by the trigger data.  Can be between [1, 4] bytes
          * @return Data length
          */
         public byte length();

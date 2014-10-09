@@ -46,6 +46,7 @@ import com.mbientlab.metawear.api.MetaWearController.DeviceCallbacks;
 import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
 import com.mbientlab.metawear.api.characteristic.*;
 import com.mbientlab.metawear.api.controller.*;
+import com.mbientlab.metawear.api.controller.Accelerometer.SamplingConfig.OutputDataRate;
 import com.mbientlab.metawear.api.util.Registers;
 
 import android.app.Service;
@@ -245,6 +246,7 @@ public class MetaWearBleService extends Service {
             }
             return null;
         }
+
         private ModuleController getLoggingModule() {
             if (!modules.containsKey(Module.LOGGING)) {
                 modules.put(Module.LOGGING, new Logging() {
@@ -261,7 +263,7 @@ public class MetaWearBleService extends Service {
                     @Override
                     public void addTrigger(Trigger triggerObj) {
                         writeRegister(Register.ADD_TRIGGER, triggerObj.register().module().opcode, triggerObj.register().opcode(), 
-                                triggerObj.index(), (byte) (triggerObj.offset() | (triggerObj.length() << 5)));
+                                triggerObj.index(), (byte) (triggerObj.offset() | ((triggerObj.length() - 1) << 5)));
                     }
 
                     @Override
@@ -298,21 +300,29 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.LOGGING);
         }
+        
         private ModuleController getAccelerometerModule() {
             if (!modules.containsKey(Module.ACCELEROMETER)) {
                 modules.put(Module.ACCELEROMETER, new Accelerometer() {
-                    @Override
-                    public void enableComponent(Component component) {
-                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
-                        writeRegister(component.enable, (byte)1);
-                        writeRegister(Register.GLOBAL_ENABLE, (byte)1);
-                    }
+                    private static final float MMA8452Q_G_PER_STEP= (float) 0.063;
+                    private final HashSet<Component> activeComponents= new HashSet<>();
+                    private final HashSet<Component> activeNotifications= new HashSet<>();
+                    private final HashMap<Component, byte[]> configurations= new HashMap<>();
+                    private OutputDataRate accelOdr= OutputDataRate.ODR_100_HZ;;
                     
                     @Override
-                    public void disableComponent(Component component) {
-                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
-                        writeRegister(component.enable, (byte)0);
-                        writeRegister(Register.GLOBAL_ENABLE, (byte)1);
+                    public void enableActivity(Component component, boolean notify) {
+                        if (notify) {
+                            enableNotification(component);
+                        } else {
+                            writeRegister(Register.GLOBAL_ENABLE, (byte)0);
+                            writeRegister(component.enable, (byte)1);
+                            writeRegister(Register.GLOBAL_ENABLE, (byte)1);
+                        }
+                    }
+                    @Override
+                    public void disableActivity(Component component) {
+                        disableNotification(component);
                     }
                     
                     @Override
@@ -340,6 +350,272 @@ public class MetaWearBleService extends Service {
                     public void setComponentConfiguration(Component component,
                             byte[] data) {
                         writeRegister(component.config, data);
+                    }
+
+                    @Override
+                    public void disableComponent(Component component, boolean saveConfig) {
+                        activeComponents.remove(component);
+                        activeNotifications.remove(component);
+                        
+                        if (!saveConfig) {
+                            configurations.remove(component);
+                        }
+                    }
+                    
+                    @Override
+                    public void disableComponents(boolean saveConfig) {
+                        activeComponents.clear();
+                        activeNotifications.clear();
+                        
+                        if (!saveConfig) {
+                            configurations.clear();
+                        }
+                    }
+                    
+                    @Override
+                    public ThresholdConfig enableTapDetection(TapType type, Axis axis) {
+                        byte[] tapConfig;
+                        
+                        if (!configurations.containsKey(Component.PULSE)) {
+                            tapConfig= new byte[] {0x40, 0, 0x40, 0x40, 0x50, 0x18, 0x28, 0x3c};
+                            configurations.put(Component.PULSE, tapConfig);
+                        } else {
+                            tapConfig= configurations.get(Component.PULSE);
+                            tapConfig[0] &= 0xc0;
+                        }
+                        
+                        switch (type) {
+                        case SINGLE_TAP:
+                            tapConfig[0] |= 1 << (2 * axis.ordinal());
+                            break;
+                        case DOUBLE_TAP:
+                            tapConfig[0] |= 1 << (1 + 2 * axis.ordinal());
+                            break;
+                        }
+                        
+                        configurations.put(Component.PULSE, tapConfig);
+                        activeComponents.add(Component.PULSE);
+                        activeNotifications.add(Component.PULSE);
+                        
+                        return new ThresholdConfig() {
+                            @Override
+                            public ThresholdConfig withThreshold(float gravity) {
+                                byte nSteps= (byte) (gravity / MMA8452Q_G_PER_STEP);
+                                byte[] config= configurations.get(Component.PULSE);
+                                config[2] |= nSteps;
+                                config[3] |= nSteps;                             
+                                config[4] |= nSteps;
+                                
+                                return this;
+                            }
+                            
+                            @Override
+                            public AccelerometerConfig withSilentMode() {
+                                activeNotifications.remove(Component.PULSE);
+                                return this;
+                            }
+
+                            @Override
+                            public byte[] getBytes() {
+                                return configurations.get(Component.PULSE);
+                            }
+                        };
+                    }
+
+                    @Override
+                    public ThresholdConfig enableShakeDetection(Axis axis) {
+                        byte[] shakeConfig;
+                        
+                        if (!configurations.containsKey(Component.TRANSIENT)) {
+                            shakeConfig= new byte[] {0x10, 0, 0x8, 0x5};
+                            configurations.put(Component.TRANSIENT, shakeConfig);
+                        } else {
+                            shakeConfig= configurations.get(Component.TRANSIENT);
+                            shakeConfig[0] &= 0xf1;
+                        }
+                        shakeConfig[0] |= 2 << axis.ordinal();
+                        
+                        activeComponents.add(Component.TRANSIENT);
+                        activeNotifications.add(Component.TRANSIENT);
+                        
+                        return new ThresholdConfig() {
+                            @Override
+                            public ThresholdConfig withThreshold(float gravity) {
+                                configurations.get(Component.TRANSIENT)[2]= (byte) (gravity / MMA8452Q_G_PER_STEP);
+                                return this;
+                            }
+
+                            @Override
+                            public AccelerometerConfig withSilentMode() {
+                                activeNotifications.remove(Component.TRANSIENT);
+                                return this;
+                            }
+
+                            @Override
+                            public byte[] getBytes() {
+                                return configurations.get(Component.TRANSIENT);
+                            }
+                        };
+                    }
+
+                    @Override
+                    public AccelerometerConfig enableOrientationDetection() {
+                        if (!configurations.containsKey(Component.ORIENTATION)) {
+                            configurations.put(Component.ORIENTATION, new byte[] {0, (byte) 0xc0, 0xa, 0, 0});
+                        }
+                        activeComponents.add(Component.ORIENTATION);
+                        activeNotifications.add(Component.ORIENTATION);
+                        
+                        return new AccelerometerConfig() {
+                            @Override
+                            public AccelerometerConfig withSilentMode() {
+                                activeNotifications.remove(Component.ORIENTATION);
+                                return this;
+                            }
+
+                            @Override
+                            public byte[] getBytes() {
+                                return configurations.get(Component.ORIENTATION);
+                            }
+                        };
+                    }
+                    
+                    @Override
+                    public ThresholdConfig enableFreeFallDetection() {
+                        if (!configurations.containsKey(Component.FREE_FALL)) {
+                            configurations.put(Component.FREE_FALL, new byte[] {(byte) 0xb8, 0, 0x3, 0xc});
+                        }
+                        activeComponents.add(Component.FREE_FALL);
+                        activeNotifications.add(Component.FREE_FALL);
+                        
+                        return new ThresholdConfig() {
+                            @Override
+                            public ThresholdConfig withThreshold(float gravity) {
+                                configurations.get(Component.FREE_FALL)[2]= (byte) (gravity / MMA8452Q_G_PER_STEP);
+                                return this;
+                            }
+
+                            @Override
+                            public AccelerometerConfig withSilentMode() {
+                                activeNotifications.remove(Component.FREE_FALL);
+                                return this;
+                            }
+
+                            @Override
+                            public byte[] getBytes() {
+                                return configurations.get(Component.FREE_FALL);
+                            }
+                        };
+                    }
+                    
+                    
+                    public void startActivities() {
+                        float multiplier= (float) Math.pow(2, accelOdr.ordinal() - OutputDataRate.ODR_100_HZ.ordinal());
+                        
+                        for(Component active: activeComponents) {
+                            if (configurations.containsKey(active)) {
+                                byte[] config= configurations.get(active);
+                                
+                                if (accelOdr != OutputDataRate.ODR_100_HZ) {
+                                    switch (active) {
+                                    case FREE_FALL:
+                                        config[3]= (byte) (Math.max(120 / (10 * multiplier), 20));
+                                        break;
+                                    case ORIENTATION:
+                                        config[2]= (byte) (Math.max(100 / (10 * multiplier), 20));
+                                        break;
+                                    case PULSE:
+                                        config[5]= (byte) (Math.max(60 / (2.5 * multiplier), 5));
+                                        config[6]= (byte) (Math.max(200 / (5 * multiplier), 10));
+                                        config[7]= (byte) (Math.max(300 / (5 * multiplier), 10));
+                                        break;
+                                    case TRANSIENT:
+                                        config[3]= (byte) (Math.max(50 / (10 * multiplier), 20));
+                                        break;
+                                    default:
+                                        break;
+                                    }
+                                }
+                                setComponentConfiguration(active, config);
+                            }
+                            
+                            writeRegister(active.enable, (byte)1);
+                            if (activeNotifications.contains(active)) {
+                                writeRegister(active.status, (byte)1);
+                            }
+                        }
+                        
+                        
+                        if (!configurations.containsKey(Component.DATA)){
+                            configurations.put(Component.DATA, new byte[] {0, 0, 0x18, 0, 0});
+                        }
+                        
+                        byte[] globalConfig= configurations.get(Component.DATA);
+                        globalConfig[2] |= 0x1;
+                        setComponentConfiguration(Component.DATA, globalConfig);
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)1);
+                    }
+                    
+                    public void stopActivities() {
+                        byte[] globalConfig= configurations.get(Component.DATA); 
+                        
+                        globalConfig[2] ^= 0x1;
+                        
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
+                        setComponentConfiguration(Component.DATA, globalConfig);
+                        
+                        for(Component active: activeComponents) {
+                            writeRegister(active.enable, (byte)0);
+                            writeRegister(active.status, (byte)0);
+                        }
+                    }
+                    
+                    public void resetAll() {
+                        disableComponents(false);
+                        
+                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
+                        for(Component it: Component.values()) {
+                            writeRegister(it.enable, (byte)0);
+                            writeRegister(it.status, (byte)0);
+                        }
+                    }
+
+                    @Override
+                    public SamplingConfig enableXYZSampling() {
+                        if (!configurations.containsKey(Component.DATA)){
+                            configurations.put(Component.DATA, new byte[] {0, 0, 0x18, 0, 0});
+                        }
+                        activeComponents.add(Component.DATA);
+                        activeNotifications.add(Component.DATA);
+                        
+                        return new SamplingConfig() {
+                            @Override
+                            public SamplingConfig withFullScaleRange(
+                                    FullScaleRange range) {
+                                configurations.get(Component.DATA)[0] &= 0xfc; 
+                                configurations.get(Component.DATA)[0] |= range.ordinal();
+                                return this;
+                            }
+
+                            @Override
+                            public AccelerometerConfig withSilentMode() {
+                                activeNotifications.remove(Component.DATA);
+                                return this;
+                            }
+
+                            @Override
+                            public SamplingConfig withOutputDataRate(OutputDataRate rate) {
+                                configurations.get(Component.DATA)[2] &= 0xc7;
+                                configurations.get(Component.DATA)[2] |= (rate.ordinal() << 3);
+                                accelOdr= rate;
+                                return this;
+                            }
+
+                            @Override
+                            public byte[] getBytes() {
+                                return configurations.get(Component.DATA);
+                            }
+                        };
                     }
                 });
             }

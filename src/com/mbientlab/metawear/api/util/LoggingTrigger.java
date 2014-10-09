@@ -49,19 +49,19 @@ public enum LoggingTrigger implements Trigger {
     /** Logs the X axis values of the accelerometer data output */
     ACCELEROMETER_X_AXIS {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
-        @Override public byte length() { return 1; }
+        @Override public byte length() { return 2; }
     },
     /** Logs the Y axis values of the accelerometer data output */
     ACCELEROMETER_Y_AXIS {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
         @Override public byte offset() { return 2; }
-        @Override public byte length() { return 1; }
+        @Override public byte length() { return 2; }
     },
     /** Logs the Z axis values of the accelerometer data output */
     ACCELEROMETER_Z_AXIS {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
         @Override public byte offset() { return 4; }
-        @Override public byte length() { return 1; }
+        @Override public byte length() { return 2; }
     };
     
     /**
@@ -96,6 +96,6 @@ public enum LoggingTrigger implements Trigger {
     /* (non-Javadoc)
      * @see com.mbientlab.metawear.api.controller.Logging.Trigger#length()
      */
-    @Override public byte length() { return 0; }
+    @Override public byte length() { return 1; }
 
 }
