@@ -309,9 +309,10 @@ public class MetaWearBleService extends Service {
                     private final HashSet<Component> activeNotifications= new HashSet<>();
                     private final HashMap<Component, byte[]> configurations= new HashMap<>();
                     private OutputDataRate accelOdr= OutputDataRate.ODR_100_HZ;;
+                    private byte[] globalConfig= new byte[] {0, 0, 0x18, 0, 0};
                     
                     @Override
-                    public void enableActivity(Component component, boolean notify) {
+                    public void enableComponent(Component component, boolean notify) {
                         if (notify) {
                             enableNotification(component);
                         } else {
@@ -321,7 +322,7 @@ public class MetaWearBleService extends Service {
                         }
                     }
                     @Override
-                    public void disableActivity(Component component) {
+                    public void disableComponent(Component component) {
                         disableNotification(component);
                     }
                     
@@ -353,7 +354,7 @@ public class MetaWearBleService extends Service {
                     }
 
                     @Override
-                    public void disableComponent(Component component, boolean saveConfig) {
+                    public void disableDetection(Component component, boolean saveConfig) {
                         activeComponents.remove(component);
                         activeNotifications.remove(component);
                         
@@ -363,7 +364,7 @@ public class MetaWearBleService extends Service {
                     }
                     
                     @Override
-                    public void disableComponents(boolean saveConfig) {
+                    public void disableAllDetection(boolean saveConfig) {
                         activeComponents.clear();
                         activeNotifications.clear();
                         
@@ -377,7 +378,7 @@ public class MetaWearBleService extends Service {
                         byte[] tapConfig;
                         
                         if (!configurations.containsKey(Component.PULSE)) {
-                            tapConfig= new byte[] {0x40, 0, 0x40, 0x40, 0x50, 0x18, 0x28, 0x3c};
+                            tapConfig= new byte[] {0x40, 0, 0x40, 0x40, 0x50, 0x18, 0x14, 0x3c};
                             configurations.put(Component.PULSE, tapConfig);
                         } else {
                             tapConfig= configurations.get(Component.PULSE);
@@ -480,36 +481,66 @@ public class MetaWearBleService extends Service {
                         };
                     }
                     
+                    class FF_Motion_Config implements ThresholdConfig {
+                        @Override
+                        public ThresholdConfig withThreshold(float gravity) {
+                            configurations.get(Component.FREE_FALL)[2]= (byte) (gravity / MMA8452Q_G_PER_STEP);
+                            return this;
+                        }
+
+                        @Override
+                        public AccelerometerConfig withSilentMode() {
+                            activeNotifications.remove(Component.FREE_FALL);
+                            return this;
+                        }
+
+                        @Override
+                        public byte[] getBytes() {
+                            return configurations.get(Component.FREE_FALL);
+                        }
+                    }
+                    
                     @Override
                     public ThresholdConfig enableFreeFallDetection() {
                         if (!configurations.containsKey(Component.FREE_FALL)) {
-                            configurations.put(Component.FREE_FALL, new byte[] {(byte) 0xb8, 0, 0x3, 0xc});
+                            configurations.put(Component.FREE_FALL, new byte[] {(byte) 0xb8, 0, 0x3, 0xa});
+                        } else {
+                            byte[] ffConfig= configurations.get(Component.FREE_FALL);
+                            ffConfig[0]= (byte) 0xb8;
+                            ffConfig[2]= 0x3;
                         }
+                        
                         activeComponents.add(Component.FREE_FALL);
                         activeNotifications.add(Component.FREE_FALL);
                         
-                        return new ThresholdConfig() {
-                            @Override
-                            public ThresholdConfig withThreshold(float gravity) {
-                                configurations.get(Component.FREE_FALL)[2]= (byte) (gravity / MMA8452Q_G_PER_STEP);
-                                return this;
-                            }
-
-                            @Override
-                            public AccelerometerConfig withSilentMode() {
-                                activeNotifications.remove(Component.FREE_FALL);
-                                return this;
-                            }
-
-                            @Override
-                            public byte[] getBytes() {
-                                return configurations.get(Component.FREE_FALL);
-                            }
-                        };
+                        return new FF_Motion_Config();
+                    }
+                    
+                    public ThresholdConfig enableMotionDetection(Axis ... axes) {
+                        byte[] motionConfig;
+                        if (!configurations.containsKey(Component.FREE_FALL)) {
+                            motionConfig= new byte[] {(byte) 0xc0, 0, 0x20, 0xa};
+                            configurations.put(Component.FREE_FALL, motionConfig);
+                        } else {
+                            motionConfig= configurations.get(Component.FREE_FALL);
+                            motionConfig[0]= (byte) 0xc0;
+                            motionConfig[2]= 0x20;
+                        }
+                        
+                        byte mask= 0;
+                        for(Axis axis: axes) {
+                            mask |= 1 << (axis.ordinal() + 3);
+                        }
+                        motionConfig[0] |= mask;
+                        
+                        activeComponents.add(Component.FREE_FALL);
+                        activeNotifications.add(Component.FREE_FALL);
+                        
+                        return new FF_Motion_Config();
                     }
                     
                     
-                    public void startActivities() {
+                    public void startComponents() {
                         float multiplier= (float) Math.pow(2, accelOdr.ordinal() - OutputDataRate.ODR_100_HZ.ordinal());
                         
                         for(Component active: activeComponents) {
@@ -519,15 +550,15 @@ public class MetaWearBleService extends Service {
                                 if (accelOdr != OutputDataRate.ODR_100_HZ) {
                                     switch (active) {
                                     case FREE_FALL:
-                                        config[3]= (byte) (Math.max(120 / (10 * multiplier), 20));
+                                        config[3]= (byte) (Math.max(100 / (10 * multiplier), 20));
                                         break;
                                     case ORIENTATION:
                                         config[2]= (byte) (Math.max(100 / (10 * multiplier), 20));
                                         break;
                                     case PULSE:
-                                        config[5]= (byte) (Math.max(60 / (2.5 * multiplier), 5));
-                                        config[6]= (byte) (Math.max(200 / (5 * multiplier), 10));
-                                        config[7]= (byte) (Math.max(300 / (5 * multiplier), 10));
+                                        config[5]= (byte) (Math.min(Math.max(60 / (2.5 * multiplier), 5), 0.625));
+                                        config[6]= (byte) (Math.min(Math.max(200 / (5 * multiplier), 10), 1.25));
+                                        config[7]= (byte) (Math.min(Math.max(300 / (5 * multiplier), 10), 1.25));
                                         break;
                                     case TRANSIENT:
                                         config[3]= (byte) (Math.max(50 / (10 * multiplier), 20));
@@ -545,24 +576,12 @@ public class MetaWearBleService extends Service {
                             }
                         }
                         
-                        
-                        if (!configurations.containsKey(Component.DATA)){
-                            configurations.put(Component.DATA, new byte[] {0, 0, 0x18, 0, 0});
-                        }
-                        
-                        byte[] globalConfig= configurations.get(Component.DATA);
-                        globalConfig[2] |= 0x1;
                         setComponentConfiguration(Component.DATA, globalConfig);
                         writeRegister(Register.GLOBAL_ENABLE, (byte)1);
                     }
                     
-                    public void stopActivities() {
-                        byte[] globalConfig= configurations.get(Component.DATA); 
-                        
-                        globalConfig[2] ^= 0x1;
-                        
-                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
-                        setComponentConfiguration(Component.DATA, globalConfig);
+                    public void stopComponents() {
+                        writeRegister(Register.GLOBAL_ENABLE, (byte) 0);
                         
                         for(Component active: activeComponents) {
                             writeRegister(active.enable, (byte)0);
@@ -571,9 +590,10 @@ public class MetaWearBleService extends Service {
                     }
                     
                     public void resetAll() {
-                        disableComponents(false);
+                        disableAllDetection(false);
                         
-                        writeRegister(Register.GLOBAL_ENABLE, (byte)0);
+                        writeRegister(Register.GLOBAL_ENABLE, (byte) 0);
+                        
                         for(Component it: Component.values()) {
                             writeRegister(it.enable, (byte)0);
                             writeRegister(it.status, (byte)0);
@@ -582,9 +602,7 @@ public class MetaWearBleService extends Service {
 
                     @Override
                     public SamplingConfig enableXYZSampling() {
-                        if (!configurations.containsKey(Component.DATA)){
-                            configurations.put(Component.DATA, new byte[] {0, 0, 0x18, 0, 0});
-                        }
+                        globalConfig= new byte[] {0, 0, 0x18, 0, 0};
                         activeComponents.add(Component.DATA);
                         activeNotifications.add(Component.DATA);
                         
@@ -592,8 +610,8 @@ public class MetaWearBleService extends Service {
                             @Override
                             public SamplingConfig withFullScaleRange(
                                     FullScaleRange range) {
-                                configurations.get(Component.DATA)[0] &= 0xfc; 
-                                configurations.get(Component.DATA)[0] |= range.ordinal();
+                                globalConfig[0] &= 0xfc; 
+                                globalConfig[0] |= range.ordinal();
                                 return this;
                             }
 
@@ -605,15 +623,15 @@ public class MetaWearBleService extends Service {
 
                             @Override
                             public SamplingConfig withOutputDataRate(OutputDataRate rate) {
-                                configurations.get(Component.DATA)[2] &= 0xc7;
-                                configurations.get(Component.DATA)[2] |= (rate.ordinal() << 3);
+                                globalConfig[2] &= 0xc7;
+                                globalConfig[2] |= (rate.ordinal() << 3);
                                 accelOdr= rate;
                                 return this;
                             }
 
                             @Override
                             public byte[] getBytes() {
-                                return configurations.get(Component.DATA);
+                                return globalConfig;
                             }
                         };
                     }

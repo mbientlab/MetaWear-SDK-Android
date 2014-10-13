@@ -86,11 +86,11 @@ public interface Accelerometer extends ModuleController {
                 }
             }
         },
-        /** Checks and sets free fall detection status */
+        /** Checks and sets movement detection status */
         FREE_FALL_ENABLE {
             @Override public byte opcode() { return 0x5; }
         },
-        /** Sets or retrieves free fall detection configuration */
+        /** Sets or retrieves movement detection configuration */
         FREE_FALL_SETTINGS {
             @Override public byte opcode() { return 0x6; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
@@ -102,13 +102,13 @@ public interface Accelerometer extends ModuleController {
                 }
             }
         },
-        /** Stores free fall state, enables/disables free fall detection */
+        /** Stores movement state, enables/disables movement detection */
         FREE_FALL_VALUE { 
             @Override public byte opcode() { return 0x7; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     final byte[] data) {
                 if ((data[2] & 0x80) == 0x80) {
-                    FreeFallInfo ffInfo= new FreeFallInfo() {
+                    MovementData ffInfo= new MovementData() {
                         @Override
                         public boolean isAboveThreshold(Axis axis) {
                             byte mask= (byte) (2 << (2 * axis.ordinal()));
@@ -116,14 +116,14 @@ public interface Accelerometer extends ModuleController {
                         }
 
                         @Override
-                        public byte getDirection(Axis axis) {
+                        public Direction getDirection(Axis axis) {
                             byte mask= (byte) (1 << (2 * axis.ordinal()));
-                            return (byte) ((data[2] & mask) == mask ? -1 : 1);
+                            return (data[2] & mask) == mask ? Direction.NEGATIVE : Direction.POSITIVE;
                         }
                     };
                     
                     for(ModuleCallbacks it: callbacks) {
-                        ((Callbacks) it).freeFallDetected(ffInfo);
+                        ((Callbacks) it).movementDetected(ffInfo);
                         ((Callbacks) it).inFreeFall();
                     }
                 }
@@ -150,10 +150,10 @@ public interface Accelerometer extends ModuleController {
             @Override public byte opcode() { return 0xa; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
+                byte enumOffset= (byte) (4 * (data[2] & 0x1) + ((data[2] >> 1) & 0x3));
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).receivedOrientation(data[2]);
-                    ((Callbacks)it).orientationChanged(LaPoOrientation.values()[(data[2] >> 1) & 0x3], 
-                            BaFroOrientation.values()[data[2] & 0x1]);
+                    ((Callbacks)it).orientationChanged(Orientation.values()[enumOffset]);
                 }
             }
         },
@@ -177,15 +177,24 @@ public interface Accelerometer extends ModuleController {
         PULSE_STATUS {
             @Override public byte opcode() { return 0xd; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
-                    byte[] data) {
+                    final byte[] data) {
                 if ((data[2] & 0x80) == 0x80) {
-                    AxisEvent zEvent= (data[2] & 0x40) == 0x40 ? AxisEvent.values()[(data[2] & 0x4) >> 2] : AxisEvent.NOT_ACTIVE, 
-                            yEvent= (data[2] & 0x20) == 0x20 ? AxisEvent.values()[(data[2] & 0x2) >> 1] : AxisEvent.NOT_ACTIVE,
-                            xEvent= (data[2] & 0x10) == 0x10 ? AxisEvent.values()[(data[2] & 0x1)] : AxisEvent.NOT_ACTIVE;
-                            
+                    MovementData moveData= new MovementData() {
+                        @Override
+                        public boolean isAboveThreshold(Axis axis) {
+                            byte mask= (byte) (0x10 << axis.ordinal());
+                            return (data[2] & mask) == mask;
+                        }
+
+                        @Override
+                        public Direction getDirection(Axis axis) {
+                            return Direction.values()[(data[2] >> axis.ordinal()) & 0x1];
+                        }
+                    };
+                    
                     for(ModuleCallbacks it: callbacks) {
-                        if ((data[2] & 0x8) == 0x8) ((Callbacks) it).doubleTapDetected(xEvent, yEvent, zEvent);
-                        else ((Callbacks) it).tapDetected(xEvent, yEvent, zEvent);
+                        if ((data[2] & 0x8) == 0x8) ((Callbacks) it).doubleTapDetected(moveData);
+                        else ((Callbacks) it).singleTapDetected(moveData);
                     }
                 }
             }
@@ -210,13 +219,23 @@ public interface Accelerometer extends ModuleController {
         TRANSIENT_STATUS {
             @Override public byte opcode() { return 0x10; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
-                    byte[] data) {
+                    final byte[] data) {
                 if ((data[2] & 0x40) == 0x40) {
-                    AxisEvent zEvent= (data[2] & 0x20) == 0x20 ? AxisEvent.values()[(data[2] & 0x10) >> 4] : AxisEvent.NOT_ACTIVE, 
-                            yEvent= (data[2] & 0x8) == 0x8 ? AxisEvent.values()[(data[2] & 0x4) >> 2] : AxisEvent.NOT_ACTIVE,
-                            xEvent= (data[2] & 0x2) == 0x2 ? AxisEvent.values()[(data[2] & 0x1)] : AxisEvent.NOT_ACTIVE;
+                    MovementData moveData= new MovementData() {
+                        @Override
+                        public boolean isAboveThreshold(Axis axis) {
+                            byte mask= (byte) (0x2 << (2 * axis.ordinal()));
+                            return (data[2] & mask) == mask;
+                        }
+
+                        @Override
+                        public Direction getDirection(Axis axis) {
+                            return Direction.values()[(data[2] >> (2 * axis.ordinal())) & 0x1];
+                        }
+                        
+                    };
                     for(ModuleCallbacks it: callbacks) {
-                        ((Callbacks) it).shakeDetected(xEvent, yEvent, zEvent);
+                        ((Callbacks) it).shakeDetected(moveData);
                     }
                 }
             }
@@ -249,22 +268,22 @@ public interface Accelerometer extends ModuleController {
         public void receivedDataValue(short x, short y, short z) { }
         
         /**
-         * Called when free fall is detected.  This function will be repeatedly called 
-         * while free fall is detected.
-         * @param ffInfo Free fall information encapsulated in an object
+         * Called when movement is detected.  This function will be repeatedly called 
+         * while movement is detected.
+         * @param moveData Movement data encapsulated in an object
          */
-        public void freeFallDetected(FreeFallInfo ffInfo) { }
+        public void movementDetected(MovementData moveData) { }
         
         /**
          * Called when free fall is detected
-         * @deprecated As of v1.1, replaced by {@link Callbacks#freeFallDetected(Accelerometer.FreeFallInfo)}
+         * @deprecated As of v1.1, replaced by {@link Callbacks#movementDetected(Accelerometer.MovementData)}
          */
         @Deprecated
         public void inFreeFall() { }
         /**
          * Called when free fall has stopped
          * @deprecated As of v1.1, callback function was never properly implemented and 
-         * has been replaced by {@link Callbacks#freeFallDetected(Accelerometer.FreeFallInfo)}
+         * has been replaced by {@link Callbacks#movementDetected(Accelerometer.MovementData)}
          */
         public void stoppedFreeFall() { }
         
@@ -272,41 +291,34 @@ public interface Accelerometer extends ModuleController {
          * Called when the orientation has changed
          * @param orientation Orientation information from the accelerometer's status register
          * @deprecated As of v1.1, replaced by 
-         * {@link Callbacks#orientationChanged(Accelerometer.LaPoOrientation, Accelerometer.BaFroOrientation)} 
+         * {@link Callbacks#orientationChanged(Accelerometer.Orientation)} 
          */
         @Deprecated
         public void receivedOrientation(byte orientation) { }
         
         /**
          * Called when the orientation has changed
-         * @param lapo Landscape/Portrait orientation
-         * @param bafro Back/Front orientation
+         * @param accelOrientation Orientation of the accelerometer
          */
-        public void orientationChanged(LaPoOrientation lapo, BaFroOrientation bafro) { }
+        public void orientationChanged(Orientation accelOrientation) { }
         
         /**
          * Called when a single tap has been detected
-         * @param xEvent Event information for the X axis
-         * @param yEvent Event information for the Y axis
-         * @param zEvent Event information for the Z axis
+         * @param moveData Movement data encapsulated in an object
          */
-        public void tapDetected(AxisEvent xEvent, AxisEvent yEvent, AxisEvent zEvent) { }
+        public void singleTapDetected(MovementData moveData) { }
         /**
          * Called when a double tap has been detected
-         * @param xEvent Event information for the X axis
-         * @param yEvent Event information for the Y axis
-         * @param zEvent Event information for the Z axis
+         * @param moveData Movement data encapsulated in an object
          */
-        public void doubleTapDetected(AxisEvent xEvent, AxisEvent yEvent, AxisEvent zEvent) { }
+        public void doubleTapDetected(MovementData moveData) { }
         
         /**
          * Called when a shake motion is detected.  This function will be continuously called 
          * as long as the set threshold is exceeded in the desired direction
-         * @param xEvent Event information for the X axis
-         * @param yEvent Event information for the Y axis
-         * @param zEvent Event information for the Z axis
+         * @param moveData Movement data encapsulated in an object
          */
-        public void shakeDetected(AxisEvent xEvent, AxisEvent yEvent, AxisEvent zEvent) { }
+        public void shakeDetected(MovementData moveData) { }
     }
 
     /**
@@ -316,7 +328,7 @@ public interface Accelerometer extends ModuleController {
     public enum Component {
         /** XYZ data sampling */
         DATA(Register.DATA_ENABLE, Register.DATA_SETTINGS, Register.DATA_VALUE),
-        /** Free fall detection */
+        /** Free fall or motion detection */
         FREE_FALL(Register.FREE_FALL_ENABLE, Register.FREE_FALL_SETTINGS, Register.FREE_FALL_VALUE),
         /** Orientation detection */
         ORIENTATION(Register.ORIENTATION_ENABLE, Register.ORIENTATION_SETTING, Register.ORIENTATION_VALUE),
@@ -340,33 +352,42 @@ public interface Accelerometer extends ModuleController {
     }
     
     /**
-     * Axis information for the detection callback functions
+     * Orientation definitions for the accelerometer.  The entries are defined 
+     * from the perspective of the accelerometer chip's placement and orientation, 
+     * not from the MetaWear board's perspective.
      * @author Eric Tsai
      */
-    public enum AxisEvent {
-        POSITIVE_POLARITY,
-        NEGATIVE_POLARITY,
-        NOT_ACTIVE;
-    }
-    
-    /**
-     * Orientation modes for landscape and portrait arrangements
-     * @author Eric Tsai
-     */
-    public enum LaPoOrientation {
-        PORTRAIT_UP,
-        PORTRAIT_DOWN,
-        LANDSCAPE_RIGHT,
-        LANDSCAPE_LEFT;
-    }
-    
-    /**
-     * Orientation modes for back and front arrangements
-     * @author Eric Tsai
-     */
-    public enum BaFroOrientation {
-        FRONT,
-        BACK;
+    public enum Orientation {
+        FRONT_PORTRAIT_UP,
+        FRONT_PORTRAIT_DOWN,
+        FRONT_LANDSCAPE_RIGHT {
+            @Override public boolean isFront() { return true; }
+            @Override public boolean isPortrait() { return false; }
+        },
+        FRONT_LANDSCAPE_LEFT {
+            @Override public boolean isFront() { return true; }
+            @Override public boolean isPortrait() { return false; }
+        },
+        BACK_PORTRAIT_UP {
+            @Override public boolean isFront() { return false; }
+            @Override public boolean isPortrait() { return true; }
+        },
+        BACK_PORTRAIT_DOWN {
+            @Override public boolean isFront() { return false; }
+            @Override public boolean isPortrait() { return true; }
+        },
+        BACK_LANDSCAPE_RIGHT {
+            @Override public boolean isFront() { return false; }
+            @Override public boolean isPortrait() { return false; }
+        },
+        BACK_LANDSCAPE_LEFT {
+            @Override public boolean isFront() { return false; }
+            @Override public boolean isPortrait() { return false; }
+        };
+        
+        public boolean isFront() { return true; }
+        public boolean isPortrait() { return true; }
+        
     }
     
     /**
@@ -383,16 +404,27 @@ public interface Accelerometer extends ModuleController {
      * @author etsai
      */
     public enum Axis {
-        X_AXIS,
-        Y_AXIS,
-        Z_AXIS;
+        X,
+        Y,
+        Z;
     }
     
     /**
-     * Wrapper class encapsulating free fall information received from the board
+     * Wrapper class encapsulating movement information received from the board
      * @author Eric Tsai     
      */
-    public interface FreeFallInfo {
+    public interface MovementData {
+        /**
+         * Axis information for the detection callback functions
+         * @author Eric Tsai
+         */
+        public enum Direction {
+            /** Movement is in the positive direction */
+            POSITIVE,
+            /** Movement is in the negative direction */
+            NEGATIVE,
+        }
+        
         /**
          * Returns whether or not the board exceeded the threshold on the specific axis
          * @param axis Axis to check
@@ -402,61 +434,82 @@ public interface Accelerometer extends ModuleController {
         /**
          * Returns the direction the board is moving in on the specific axis
          * @param axis Axis to check
-         * @return -1 if board was moving in the negative axis direction, 1 if 
-         * board was in the positive direction
+         * @return Direction enum value indicating the movement direction
          */
-        public byte getDirection(Axis axis);
+        public Direction getDirection(Axis axis);
     }
     
     /**
-     * Disable the accelerometer component.  If saveConfig is false, you will need 
-     * to reconfigure the component via the appropriate enable detection function.
+     * Disable detection for the accelerometer component.  If saveConfig is false, 
+     * you will need to reconfigure the detection parameters via the appropriate 
+     * enable detection function.
      * @param component Component to disable
      * @param saveConfig True if the component configuration should be saved
      */
-    public void disableComponent(Component component, boolean saveConfig);
+    public void disableDetection(Component component, boolean saveConfig);
     /**
-     * Disable all enabled components.  If saveConfig is false, you will need 
-     * to reconfigure the component via the appropriate enable detection function.
+     * Disable detection for all components.  If saveConfig is false, you will need 
+     * to reconfigure the parameters for each component via the appropriate enable 
+     * detection function.
      * @param saveConfig True if the all configurations should be saved
      */
-    public void disableComponents(boolean saveConfig);
+    public void disableAllDetection(boolean saveConfig);
     /**
-     * Enable tap detection
+     * Enable tap detection.  When a tap is detected, one of the tap detected 
+     * callback functions is called depending on what kind of tap was being detected
      * @param type Tap type to detected
      * @param axis Which axis to detect taps on
      * @return Configuration object to tweak the tap settings
+     * @see Callbacks#singleTapDetected(Accelerometer.MovementData)
+     * @see Callbacks#doubleTapDetected(Accelerometer.MovementData)
      */
     public ThresholdConfig enableTapDetection(TapType type, Axis axis);
     /**
-     * Enable shake detection
+     * Enable shake detection.  When a shake motion is detected along the given axis, 
+     * the {@link Callbacks#shakeDetected(Accelerometer.MovementData)} callback 
+     * function is called
      * @param axis Which axis to detect shake motion
      * @return Configuration object to tweak the shake settings
      */
     public ThresholdConfig enableShakeDetection(Axis axis);
     /**
-     * Enable orientation detection
+     * Enable orientation detection.  When an orientation change is detected, the 
+     * {@link Callbacks#orientationChanged(Accelerometer.Orientation)} callback function 
+     * is called.
      * @return Configuration object to tweak the orientation settings
      */
     public AccelerometerConfig enableOrientationDetection();
     /**
-     * Enable free fall detection
-     * @return Configuration object to tweak the free fall settings
+     * Enable free fall detection.  This function is mutually exclusive with 
+     * {@link #enableMotionDetection(Accelerometer.Axis...)}, you can only enable one or the
+     * other.  When free fall is detected, the {@link Callbacks#movementDetected(Accelerometer.MovementData)} 
+     * callback function is called
+     * @return Configuration object to tweak free fall settings
      */
     public ThresholdConfig enableFreeFallDetection();
     /**
-     * Enable data sampling of the XYZ axes
+     * Enable motion detection.  This function is mutually exclusive with 
+     * {@link #enableFreeFallDetection()}, you can only enable one or the
+     * other.  When motion is detected, the {@link Callbacks#movementDetected(Accelerometer.MovementData)} 
+     * callback function is called
+     * @param axes Axis to detect motion on
+     * @return Configuration object to tweak motion settings
+     */
+    public ThresholdConfig enableMotionDetection(Axis ... axes);
+    /**
+     * Enable data sampling of the XYZ axes.  When axis data is received, the 
+     * {@link Callbacks#receivedDataValue(short, short, short)} callback function is called
      * @return Configuration object to tweak the data sampling settings
      */
     public SamplingConfig enableXYZSampling();
     /**
      * Starts detection / sampling of enabled components
      */
-    public void startActivities();
+    public void startComponents();
     /**
      * Stops activity for enabled components
      */
-    public void stopActivities();
+    public void stopComponents();
     /**
      * Resets configuration and stops detection for all components
      */
@@ -469,7 +522,8 @@ public interface Accelerometer extends ModuleController {
      */
     public interface AccelerometerConfig {
         /**
-         * Disables ble notifications but will still internally detect the desired event
+         * The accelerometer will internally detect the desired event however, callback functions 
+         * will not be called.   
          * @return Calling object
          */
         public AccelerometerConfig withSilentMode();
@@ -538,26 +592,27 @@ public interface Accelerometer extends ModuleController {
     /**
      * Enables accelerometer activity for the given component
      * @param component Component to enable
-     * @param notify True if notifications should be sent via ble radio
+     * @param notify True if the API should be notified of accelerometer events.  
+     * If set to false, the assoicated callback function will not be called.
      */
-    public void enableActivity(Component component, boolean notify);
+    public void enableComponent(Component component, boolean notify);
     /**
      * Disable accelerometer activity for the given component.  Currently, this 
      * function is an alias for {@link #disableNotification(Accelerometer.Component)}
      * @param component Component to disable
      */
-    public void disableActivity(Component component);
+    public void disableComponent(Component component);
     
     /**
      * Enable notifications from a component
      * @param component Component to enable notifications from
-     * @deprecated As of v1.1, use {@link #enableActivity(Accelerometer.Component, boolean)}
+     * @deprecated As of v1.1, use {@link #enableComponent(Accelerometer.Component, boolean)}
      */
     public void enableNotification(Component component);
     /**
      * Disable notifications from a component
      * @param component Component to disable notifications from
-     * @deprecated As of v1.1, use {@link #disableActivity(Accelerometer.Component)}
+     * @deprecated As of v1.1, use {@link #disableComponent(Accelerometer.Component)}
      */
     public void disableNotification(Component component);
     
