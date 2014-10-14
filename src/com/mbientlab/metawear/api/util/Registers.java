@@ -30,8 +30,6 @@
  */
 package com.mbientlab.metawear.api.util;
 
-import java.util.Arrays;
-
 import com.mbientlab.metawear.api.Module;
 import com.mbientlab.metawear.api.Register;
 

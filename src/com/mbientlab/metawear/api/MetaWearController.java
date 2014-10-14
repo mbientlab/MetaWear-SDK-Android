@@ -96,6 +96,12 @@ public interface MetaWearController {
      * @see com.mbientlab.metawear.api.characteristic.DeviceInformation
      */
     public void readDeviceInformation();
+    /**
+     * Reads the battery level characteristic.  When data is received, the 
+     * {@link DeviceCallbacks#receivedGATTCharacteristic(GATTCharacteristic, byte[])} callback 
+     * function will be called with the BATTERY_LEVEL GATT characteristic
+     * @see com.mbientlab.metawear.api.characteristic.Battery
+     */
     public void readBatteryLevel();
     
     /**

@@ -14,7 +14,8 @@ import com.mbientlab.metawear.api.util.LoggingTrigger;
 import static com.mbientlab.metawear.api.Module.LOGGING;
 
 /**
- * Controller for the Logging module
+ * Controller for the Logging module.  The logging module requires firmware v0.6.0 
+ * or higher.
  * @author Eric Tsai
  */
 public interface Logging extends ModuleController {
@@ -74,7 +75,7 @@ public interface Logging extends ModuleController {
         REMOVE_TRIGGER {
             @Override public byte opcode() { return 0x3; }
         },
-        /** Internal tick counter in the Metawear logging module */
+        /** Internal tick counter in the MetaWear logging module */
         TIME {
             @Override public byte opcode() { return 0x4; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
@@ -186,8 +187,14 @@ public interface Logging extends ModuleController {
                     byte[] data) {
                 int nEntriesLeft= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xffff;
                 
-                for(ModuleCallbacks it: callbacks) {
-                    ((Callbacks) it).receivedDownloadProgress(nEntriesLeft);
+                if (nEntriesLeft == 0) {
+                    for(ModuleCallbacks it: callbacks) {
+                        ((Callbacks) it).downloadCompleted();
+                    }
+                } else {
+                    for(ModuleCallbacks it: callbacks) {
+                        ((Callbacks) it).receivedDownloadProgress(nEntriesLeft);
+                    }
                 }
             }
         };
@@ -248,6 +255,10 @@ public interface Logging extends ModuleController {
          * @param nEntriesLeft Number of entries left to download
          */
         public void receivedDownloadProgress(int nEntriesLeft) { }
+        /**
+         * Called when the log download is completed
+         */
+        public void downloadCompleted() { }
     }
 
     /**
@@ -305,8 +316,10 @@ public interface Logging extends ModuleController {
          */
         public abstract long tick();
         /**
-         * Get the timestamp of when the event was recorded
+         * Get the timestamp of when the event was recorded.  A ReferenceTick object is provided 
+         * by the {@link Callbacks#receivedReferenceTick(Logging.ReferenceTick)} callback function
          * @param reference Reference point used to convert the tick count into a timestamp
+         * @see Logging#readReferenceTick()
          */
         public Calendar timestamp(ReferenceTick reference) {
             final double TICK_TIME_STEP= (48 / 32768.0) * 1000;
@@ -331,7 +344,7 @@ public interface Logging extends ModuleController {
     public void stopLogging();
 
     /**
-     * Add a trigger to the Metawear logging module.  When the Metawear board has processed the trigger, 
+     * Add a trigger to the MetaWear logging module.  When the MetaWear board has processed the trigger, 
      * a unique id representing the trigger passed back to the user via the receivedTriggerId function. 
      * @param triggerObj Trigger to log
      * @see Callbacks#receivedTriggerId(byte)
@@ -351,7 +364,7 @@ public interface Logging extends ModuleController {
     public void removeTrigger(byte triggerId);
 
     /**
-     * Retrieve a tick reference from the Metawear board.  When the data is received, the readReferenceTick 
+     * Retrieve a tick reference from the MetaWear board.  When the data is received, the readReferenceTick 
      * callback function will be called
      * @see Callbacks#receivedReferenceTick(Logging.ReferenceTick)
      */
