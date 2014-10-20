@@ -34,6 +34,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -63,6 +64,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Binder;
 import android.os.IBinder;
+import android.util.Log;
 
 /**
  * Service for maintaining the Bluetooth GATT connection to the MetaWear board
@@ -108,12 +110,60 @@ public class MetaWearBleService extends Service {
         public static final String CHARACTERISTIC_VALUE= 
                 "com.mbientlab.com.metawear.api.MetaWearBleService.Extra.CHARACTERISTIC_VALUE";
     }
+    
+    private interface InternalCallback {
+        public void process(byte[] data);
+    }
+    
+    private interface EventInfo {
+        public byte[] entry();
+        public byte[] command();
+    }
+    private class EventTriggerBuilder {
+        private final ArrayList<EventInfo> entryBytes= new ArrayList<>();
+        private final Register srcReg;
+        private final byte index;
+        
+        public EventTriggerBuilder(Register srcReg, byte index) {
+            this.srcReg= srcReg;
+            this.index= index;
+        }
+        
+        public EventTriggerBuilder withDestRegister(final Register destReg, final byte[] command, 
+                final boolean isRead) {
+            entryBytes.add(new EventInfo() {
+                @Override
+                public byte[] entry() {
+                    byte destOpcode= destReg.opcode();
+                    if (isRead) {
+                        destOpcode |= 0x80;
+                    }
+                    return new byte[] {srcReg.module().opcode, srcReg.opcode(), index,
+                            destReg.module().opcode, destOpcode, (byte) command.length};
+                }
 
+                @Override
+                public byte[] command() {
+                    return command;
+                }
+            });
+            return this;
+        }
+        
+        public Collection<EventInfo> getEventInfo() {
+            return entryBytes;
+        }
+    }
+   
     private final static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
     private final static HashMap<Byte, ArrayList<ModuleCallbacks>> moduleCallbackMap= new HashMap<>();
     private final static HashSet<DeviceCallbacks> deviceCallbacks= new HashSet<>();
     
-    private boolean connected;
+    private boolean connected, isRecording= false;
+    private final HashMap<Register, EventTriggerBuilder> etBuilders= new HashMap<>();
+    private final HashSet<Byte> entryIds= new HashSet<>();
+    private Register recordingRegister;
+    
     /** GATT connection to the ble device */
     private BluetoothGatt metaWearGatt;
     /** Current state of the device */
@@ -123,6 +173,8 @@ public class MetaWearBleService extends Service {
     private final ConcurrentLinkedQueue<byte[]> commandBytes= new ConcurrentLinkedQueue<>();
     /** Characteristic UUIDs still to be read from MetaWear */
     private final ConcurrentLinkedQueue<GATTCharacteristic> readCharUuids= new ConcurrentLinkedQueue<>();
+    
+    private final HashMap<Register, InternalCallback> internalCallbacks= new HashMap<>();
 
     /**
      * Get the IntentFilter for actions broadcasted by the MetaWear service
@@ -239,14 +291,68 @@ public class MetaWearBleService extends Service {
                 return getTemperatureModule();
             case HAPTIC:
             	return getHapticModule();
+            case EVENT:
+                return getEventModule();
             case LOGGING:
                 return getLoggingModule();
-            default:
-                break;
             }
             return null;
         }
 
+        private ModuleController getEventModule() {
+            if (!modules.containsKey(Module.EVENT)) {
+                writeRegister(Event.Register.EVENT_ENABLE, (byte) 1);
+                internalCallbacks.put(Event.Register.ADD_ENTRY, new InternalCallback() {
+                    @Override
+                    public void process(byte[] data) {
+                        entryIds.add(data[2]);
+                    }
+                });
+                
+                modules.put(Module.EVENT, new Event() {
+                    @Override
+                    public void recordMacro(
+                            com.mbientlab.metawear.api.Register srcReg) {
+                        isRecording= true;
+                        
+                        etBuilders.put(srcReg, new EventTriggerBuilder(srcReg, (byte) -1));
+                        recordingRegister= srcReg;
+                    }
+
+                    @Override
+                    public byte stopRecord() {
+                        isRecording= false;
+                        for(EventInfo info: etBuilders.get(recordingRegister).getEventInfo()) {
+                            writeRegister(Register.ADD_ENTRY, info.entry());
+                            writeRegister(Register.EVENT_COMMAND, info.command());
+                        }
+                        
+                        return (byte) etBuilders.get(recordingRegister).getEventInfo().size();
+                    }
+
+                    @Override 
+                    public void resetMacros() {
+                        for(byte entryId: entryIds) {
+                            writeRegister(Register.REMOVE_ENTRY, entryId);
+                        }
+                        
+                        entryIds.clear();
+                        etBuilders.clear();
+                    }
+
+                    @Override
+                    public void readCommandInfo(byte commandId) {
+                        readRegister(Register.ADD_ENTRY, (byte) 1);
+                    }
+
+                    @Override
+                    public void readCommandBytes(byte commandId) {
+                        readRegister(Register.EVENT_COMMAND, (byte) 1);
+                    }
+                });
+            }
+            return modules.get(Module.EVENT);
+        }
         private ModuleController getLoggingModule() {
             if (!modules.containsKey(Module.LOGGING)) {
                 modules.put(Module.LOGGING, new Logging() {
@@ -895,9 +1001,77 @@ public class MetaWearBleService extends Service {
         private ModuleController getTemperatureModule() {
             if (!modules.containsKey(Module.TEMPERATURE)) {
                 modules.put(Module.TEMPERATURE, new Temperature() {
+                    private final byte[] samplingConfig= new byte[] {0, 0, 0, 0, 0, 0, 0, 0};
+                    private boolean silent= false;
+                    
                     @Override
                     public void readTemperature() {
-                        readRegister(Register.TEMPERATURE, (byte)0);
+                        readRegister(Register.TEMPERATURE, (byte) 0);
+                    }
+
+                    @Override
+                    public SamplingConfigBuilder configureSampling() {
+                        return new SamplingConfigBuilder() {
+                            @Override
+                            public SamplingConfigBuilder withSilentMode() {
+                                silent= true;
+                                return this;
+                            }
+                            
+                            @Override
+                            public SamplingConfigBuilder withSampingPeriod(
+                                    int period) {
+                                short shortPeriod= (short) (period & 0xffff);
+                                
+                                samplingConfig[1]= (byte)((shortPeriod >> 8) & 0xff);
+                                samplingConfig[0]= (byte)(shortPeriod & 0xff);
+                                
+                                return this;
+                            }
+
+                            @Override
+                            public SamplingConfigBuilder withTemperatureDelta(
+                                    float delta) {
+                                short tempTicks= (short) (delta * 4);
+                                
+                                samplingConfig[3]= (byte)((tempTicks >> 8) & 0xff);
+                                samplingConfig[2]= (byte)(tempTicks & 0xff);
+                                
+                                return this;
+                            }
+
+                            @Override
+                            public SamplingConfigBuilder withThresholdLimits(
+                                    float lower, float upper) {
+                                short lowerTicks= (short) (lower * 4), upperTicks= (short) (upper * 4);
+                                
+                                samplingConfig[5]= (byte)((lowerTicks >> 8) & 0xff);
+                                samplingConfig[4]= (byte)(lowerTicks & 0xff);
+                                samplingConfig[7]= (byte)((upperTicks >> 8) & 0xff);
+                                samplingConfig[6]= (byte)(upperTicks & 0xff);
+                                
+                                return this;
+                            }
+
+                            @Override
+                            public void commit() {
+                                writeRegister(Register.MODE, samplingConfig);
+                                if (!silent) {
+                                    writeRegister(Register.TEMPERATURE, (byte) 1);
+                                    writeRegister(Register.DELTA_TEMP, (byte) 1);
+                                    writeRegister(Register.THRESHOLD_DETECT, (byte) 1);
+                                }
+                            }
+                        };
+                    }
+
+                    @Override
+                    public void disableSampling() {
+                        Arrays.fill(samplingConfig, (byte) 0);
+                        writeRegister(Register.MODE, samplingConfig);
+                        writeRegister(Register.TEMPERATURE, (byte) 0);
+                        writeRegister(Register.DELTA_TEMP, (byte) 0);
+                        writeRegister(Register.THRESHOLD_DETECT, (byte) 0);
                     }
                 });
             }
@@ -1071,9 +1245,18 @@ public class MetaWearBleService extends Service {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic) {
+            byte[] bleData= characteristic.getValue();
             Intent intent= new Intent(Action.NOTIFICATION_RECEIVED);
-            intent.putExtra(Extra.CHARACTERISTIC_VALUE, characteristic.getValue());
+            intent.putExtra(Extra.CHARACTERISTIC_VALUE, bleData);
             sendBroadcast(intent);
+            
+            if (bleData.length > 1) {
+                Register mwRegister= Module.lookupModule(bleData[0]).lookupRegister(bleData[1]);
+                
+                if (internalCallbacks.containsKey(mwRegister)) {
+                    internalCallbacks.get(mwRegister).process(bleData);
+                }
+            }
         }
     };
 
@@ -1158,12 +1341,26 @@ public class MetaWearBleService extends Service {
 
     private void readRegister(com.mbientlab.metawear.api.Register register,
             byte... parameters) {
-        queueCommand(Registers.buildReadCommand(register, parameters));
+        byte[] bleData= Registers.buildReadCommand(register, parameters);
+        
+        if (isRecording) {
+            etBuilders.get(recordingRegister).withDestRegister(register, 
+                    Arrays.copyOfRange(bleData, 2, bleData.length), true);
+        } else {
+            queueCommand(bleData);
+        }
     }
 
     private void writeRegister(com.mbientlab.metawear.api.Register register,
             byte... data) {
-        queueCommand(Registers.buildWriteCommand(register, data));
+        byte[] bleData= Registers.buildWriteCommand(register, data);
+        
+        if (isRecording) {
+            etBuilders.get(recordingRegister).withDestRegister(register, 
+                    Arrays.copyOfRange(bleData, 2, bleData.length), false);
+        } else {
+            queueCommand(bleData);
+        }
     }
 
     /**
@@ -1172,6 +1369,7 @@ public class MetaWearBleService extends Service {
      * @param data
      */
     private void queueCommand(byte[] command) {
+        Log.d("MetaWearBleService", Arrays.toString(command));
         commandBytes.add(command);
         if (deviceState == DeviceState.READY) {
             deviceState= DeviceState.WRITING_CHARACTERISTICS;

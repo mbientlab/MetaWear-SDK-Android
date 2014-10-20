@@ -31,6 +31,7 @@
 package com.mbientlab.metawear.api.controller;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Collection;
 
 import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
@@ -59,6 +60,65 @@ public interface Temperature extends ModuleController {
                     ((Callbacks)it).receivedTemperature(degrees);
                 }
             }
+        },
+        MODE {
+            @Override public byte opcode() { return 0x2; }
+            @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
+                    byte[] data) {
+                final ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+                
+                SamplingConfig config= new SamplingConfig() {
+                    @Override
+                    public int period() {
+                        return ((int) buffer.getShort(2)) & 0xffff;
+                    }
+
+                    @Override
+                    public float deltaDetection() {
+                        return (float) ((float) buffer.getShort(4) * 0.25);
+                    }
+
+                    @Override
+                    public float lowerThs() {
+                        return (float) ((float) buffer.getShort(6) * 0.25);
+                    }
+
+                    @Override
+                    public float upperThs() {
+                        return (float) ((float) buffer.getShort(8) * 0.25);
+                    }
+                };
+                
+                for(ModuleCallbacks it: callbacks) {
+                    ((Callbacks)it).receivedSamplingConfig(config);
+                }
+            }
+        },
+        DELTA_TEMP {
+            @Override public byte opcode() { return 0x3; }
+            @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
+                    byte[] data) {
+                final ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+                float reference= (float) ((float) buffer.getShort(2) * 0.25), 
+                        current= (float) ((float) buffer.getShort(4) * 0.25);
+                
+                for(ModuleCallbacks it: callbacks) {
+                    ((Callbacks)it).temperatureDeltaExceeded(reference, current);
+                }
+            }
+        },
+        THRESHOLD_DETECT {
+            @Override public byte opcode() { return 0x4; }
+            @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
+                    byte[] data) {
+                final ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+                float threshold= (float) ((float) buffer.getShort(2) * 0.25), 
+                        current= (float) ((float) buffer.getShort(4) * 0.25);
+                
+                for(ModuleCallbacks it: callbacks) {
+                    ((Callbacks)it).thresholdCrossed(threshold, current);
+                }
+            }
         };
         
         @Override public Module module() { return Module.TEMPERATURE; }
@@ -76,6 +136,25 @@ public interface Temperature extends ModuleController {
          * @param degrees Value of the temperature in Celsius
          */
         public void receivedTemperature(float degrees) { }
+        public void receivedSamplingConfig(SamplingConfig config) { }
+        public void temperatureDeltaExceeded(float reference, float current) { }
+        public void thresholdCrossed(float threshold, float current) { }
+    }
+    
+    public interface SamplingConfig {
+        public int period();
+        public float deltaDetection();
+        public float lowerThs();
+        public float upperThs();
+    }
+    
+    public interface SamplingConfigBuilder {
+        public SamplingConfigBuilder withSilentMode();
+        public SamplingConfigBuilder withSampingPeriod(int period);
+        public SamplingConfigBuilder withTemperatureDelta(float delta);
+        public SamplingConfigBuilder withThresholdLimits(float lower, float upper);
+        
+        public void commit();
     }
     
     /**
@@ -84,6 +163,7 @@ public interface Temperature extends ModuleController {
      * @see Callbacks#receivedTemperature(float)
      */
     public void readTemperature();
-    
+    public SamplingConfigBuilder configureSampling();
+    public void disableSampling();
     
 }
