@@ -61,6 +61,7 @@ public interface Temperature extends ModuleController {
                 }
             }
         },
+        /** Sampling configuration */
         MODE {
             @Override public byte opcode() { return 0x2; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
@@ -79,12 +80,12 @@ public interface Temperature extends ModuleController {
                     }
 
                     @Override
-                    public float lowerThs() {
+                    public float lowerBound() {
                         return (float) ((float) buffer.getShort(6) * 0.25);
                     }
 
                     @Override
-                    public float upperThs() {
+                    public float upperBound() {
                         return (float) ((float) buffer.getShort(8) * 0.25);
                     }
                 };
@@ -94,6 +95,7 @@ public interface Temperature extends ModuleController {
                 }
             }
         },
+        /** Notification for temperature changes */
         DELTA_TEMP {
             @Override public byte opcode() { return 0x3; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
@@ -107,6 +109,7 @@ public interface Temperature extends ModuleController {
                 }
             }
         },
+        /** Notification for crossing temperature boundaries */
         THRESHOLD_DETECT {
             @Override public byte opcode() { return 0x4; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
@@ -116,7 +119,7 @@ public interface Temperature extends ModuleController {
                         current= (float) ((float) buffer.getShort(4) * 0.25);
                 
                 for(ModuleCallbacks it: callbacks) {
-                    ((Callbacks)it).thresholdCrossed(threshold, current);
+                    ((Callbacks)it).boundaryCrossed(threshold, current);
                 }
             }
         };
@@ -136,34 +139,92 @@ public interface Temperature extends ModuleController {
          * @param degrees Value of the temperature in Celsius
          */
         public void receivedTemperature(float degrees) { }
+        /**
+         * Called when the sampling configuration has been received
+         * @param config Temperature sampling configuration
+         */
         public void receivedSamplingConfig(SamplingConfig config) { }
+        /**
+         * Called when the current temperature has exceeded a reference point by 
+         * the delta specified in {@link SamplingConfigBuilder#withTemperatureDelta(float)}
+         * @param reference Reference temperature, in Celsius, the temperate delta is counted from   
+         * @param current Current temperature, in Celsius
+         */
         public void temperatureDeltaExceeded(float reference, float current) { }
-        public void thresholdCrossed(float threshold, float current) { }
+        /**
+         * Called when either the lower or upper temperature boundaries have been crossed
+         * @param boundary Boundary that was crossed, in Celsius
+         * @param current Current temperature, in Celsius
+         */
+        public void boundaryCrossed(float boundary, float current) { }
     }
     
+    /**
+     * Wrapper class to encapsulate the temperature sampling configuration attributes
+     * @author Eric Tsai
+     */
     public interface SamplingConfig {
+        /** Temperature sampling period, in ms */
         public int period();
+        /** Change in temperature, in Celsius, that will trigger a callback */
         public float deltaDetection();
-        public float lowerThs();
-        public float upperThs();
+        /** Lower boundary for range detection */
+        public float lowerBound();
+        /** Upper boundary for range detection */
+        public float upperBound();
     }
-    
+    /**
+     * Builder for creating a configuration for temperature sampling
+     * @author Eric Tsai
+     */
     public interface SamplingConfigBuilder {
+        /** 
+         * Enables silent mode, which internally is notified of the events but will not 
+         * trigger the callback functions
+         * @return Calling object
+         */
         public SamplingConfigBuilder withSilentMode();
+        /**
+         * Set the temperature sampling period
+         * @param period How often to sample the temperature, in ms
+         * @return Calling object
+         */
         public SamplingConfigBuilder withSampingPeriod(int period);
+        /**
+         * Set the temperature delta.  A temperatur change exceeding the delta will 
+         * trigger a call to {@link Callbacks#temperatureDeltaExceeded(float, float)}
+         * @param delta Change in temperature, in celsius, to detect
+         * @return Calling object
+         */
         public SamplingConfigBuilder withTemperatureDelta(float delta);
-        public SamplingConfigBuilder withThresholdLimits(float lower, float upper);
-        
+        /**
+         * Set the temperature boundaries.  If the temperate lays outside the boundary, 
+         * trigger a call to {@link Callbacks#boundaryCrossed(float, float)}  
+         * @param lower Lower boundary value, in Celsius
+         * @param upper Upper boundary value, in Celsius
+         * @return Calling object
+         */
+        public SamplingConfigBuilder withTemperatureBoundary(float lower, float upper);
+        /**
+         * Write the configuration settings to the MetaWear board and starts the sampling
+         */
         public void commit();
     }
     
     /**
      * Read the temperature reported from MetaWear.
-     * The function Temperature.receivedTemperature will be called the the data is available
-     * @see Callbacks#receivedTemperature(float)
+     * When data is ready, the {@link Callbacks#receivedTemperature(float)} function 
+     * will be called
      */
     public void readTemperature();
-    public SamplingConfigBuilder configureSampling();
+    /**
+     * Enables temperature sampling and event detection
+     * @return Builder to configure the sampling parameters
+     */
+    public SamplingConfigBuilder enableSampling();
+    /**
+     * Disables temperature sampling
+     */
     public void disableSampling();
     
 }

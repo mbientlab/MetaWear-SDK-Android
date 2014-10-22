@@ -1010,7 +1010,7 @@ public class MetaWearBleService extends Service {
                     }
 
                     @Override
-                    public SamplingConfigBuilder configureSampling() {
+                    public SamplingConfigBuilder enableSampling() {
                         return new SamplingConfigBuilder() {
                             @Override
                             public SamplingConfigBuilder withSilentMode() {
@@ -1041,7 +1041,7 @@ public class MetaWearBleService extends Service {
                             }
 
                             @Override
-                            public SamplingConfigBuilder withThresholdLimits(
+                            public SamplingConfigBuilder withTemperatureBoundary(
                                     float lower, float upper) {
                                 short lowerTicks= (short) (lower * 4), upperTicks= (short) (upper * 4);
                                 
