@@ -48,6 +48,7 @@ import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
 import com.mbientlab.metawear.api.characteristic.*;
 import com.mbientlab.metawear.api.controller.*;
 import com.mbientlab.metawear.api.controller.Accelerometer.SamplingConfig.OutputDataRate;
+import com.mbientlab.metawear.api.controller.Logging.Trigger;
 import com.mbientlab.metawear.api.util.Registers;
 
 import android.app.Service;
@@ -295,13 +296,103 @@ public class MetaWearBleService extends Service {
                 return getEventModule();
             case LOGGING:
                 return getLoggingModule();
+            case DATA_PROCESSOR:
+                return getDataProcessorModule();
             }
             return null;
         }
 
+        private ModuleController getDataProcessorModule() {
+            if (!modules.containsKey(Module.DATA_PROCESSOR)) {
+                modules.put(Module.DATA_PROCESSOR, new DataProcessor() {
+                    private byte nNotifies= 0;
+                    @Override
+                    public void chainFilters(byte srcFilterId, byte srcSize,
+                            FilterConfig config) {
+                        byte[] attributes= new byte[config.bytes().length + 5];
+                        attributes[0]= Register.FILTER_NOTIFICATION.module().opcode;
+                        attributes[1]= Register.FILTER_NOTIFICATION.opcode();
+                        attributes[2]= srcFilterId;
+                        attributes[3]= (byte)((srcSize - 1) << 5);
+                        attributes[4]= (byte)(config.type().ordinal() + 1);
+                        
+                        System.arraycopy(config.bytes(), 0, attributes, 5, config.bytes().length);
+                        writeRegister(Register.FILTER_CREATE, attributes);
+                    }
+
+                    @Override
+                    public void addFilter(Trigger trigger, FilterConfig config) {
+                        byte[] attributes= new byte[config.bytes().length + 5];
+                        attributes[0]= trigger.register().module().opcode;
+                        attributes[1]= trigger.register().opcode();
+                        attributes[2]= trigger.index();
+                        attributes[3]= (byte) (trigger.offset() | ((trigger.length() - 1) << 5));
+                        attributes[4]= (byte) (config.type().ordinal() + 1);
+                        System.arraycopy(config.bytes(), 0, attributes, 5, config.bytes().length);
+                        
+                        writeRegister(Register.FILTER_CREATE, attributes);
+                    }
+
+                    @Override
+                    public void setFilterConfiguration(byte filterId,
+                            FilterConfig config) {
+                        byte[] bleData= new byte[config.bytes().length + 2];
+                        
+                        bleData[0]= filterId;
+                        bleData[1]= (byte) (config.type().ordinal() + 1);
+                        
+                        System.arraycopy(config.bytes(), 0, bleData, 2, config.bytes().length);
+                        writeRegister(Register.FILTER_CONFIGURATION, bleData);
+                    }
+                    
+                    @Override
+                    public void resetFilterState(byte filterId) {
+                        writeRegister(Register.FILTER_STATE, filterId);
+                    }
+
+                    @Override
+                    public void removeFilter(byte filterId) {
+                        writeRegister(Register.FILTER_REMOVE, filterId);
+                    }
+
+                    @Override
+                    public void enableFilterNotify(byte filterId) {
+                        if (nNotifies == 0) {
+                            writeRegister(Register.FILTER_NOTIFICATION, (byte) 1);
+                        }
+                        writeRegister(Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 1);
+                        nNotifies++;
+                    }
+
+                    @Override
+                    public void disableFilterNotify(byte filterId) {
+                        writeRegister(Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 0);
+                        nNotifies--;
+                        if (nNotifies == 0) {
+                            writeRegister(Register.FILTER_NOTIFICATION, (byte) 0);
+                        }
+                    }
+
+                    @Override
+                    public void enableModule() {
+                        writeRegister(Register.ENABLE, (byte) 1);
+                    }
+
+                    @Override
+                    public void disableModule() {
+                        writeRegister(Register.ENABLE, (byte) 0);
+                    }
+
+                    @Override
+                    public void filterIdToObject(byte filterId) {
+                        readRegister(Register.FILTER_CREATE, (byte) 1);
+                    }
+                });
+            }
+            return modules.get(Module.DATA_PROCESSOR);
+        }
         private ModuleController getEventModule() {
             if (!modules.containsKey(Module.EVENT)) {
-                writeRegister(Event.Register.EVENT_ENABLE, (byte) 1);
                 internalCallbacks.put(Event.Register.ADD_ENTRY, new InternalCallback() {
                     @Override
                     public void process(byte[] data) {
@@ -313,9 +404,16 @@ public class MetaWearBleService extends Service {
                     @Override
                     public void recordMacro(
                             com.mbientlab.metawear.api.Register srcReg) {
+                        recordMacro(srcReg, (byte) -1);
+                    }
+                    
+                    @Override
+                    public void recordMacro(
+                            com.mbientlab.metawear.api.Register srcReg,
+                            byte index) {
                         isRecording= true;
                         
-                        etBuilders.put(srcReg, new EventTriggerBuilder(srcReg, (byte) -1));
+                        etBuilders.put(srcReg, new EventTriggerBuilder(srcReg, index));
                         recordingRegister= srcReg;
                     }
 
@@ -331,7 +429,7 @@ public class MetaWearBleService extends Service {
                     }
 
                     @Override 
-                    public void resetMacros() {
+                    public void clearMacros() {
                         for(byte entryId: entryIds) {
                             writeRegister(Register.REMOVE_ENTRY, entryId);
                         }
@@ -341,13 +439,23 @@ public class MetaWearBleService extends Service {
                     }
 
                     @Override
-                    public void readCommandInfo(byte commandId) {
+                    public void commandIdToObject(byte commandId) {
                         readRegister(Register.ADD_ENTRY, (byte) 1);
                     }
 
                     @Override
                     public void readCommandBytes(byte commandId) {
                         readRegister(Register.EVENT_COMMAND, (byte) 1);
+                    }
+
+                    @Override
+                    public void enableModule() {
+                        writeRegister(Event.Register.EVENT_ENABLE, (byte) 1);
+                    }
+
+                    @Override
+                    public void disableModule() {
+                        writeRegister(Event.Register.EVENT_ENABLE, (byte) 0);
                     }
                 });
             }
@@ -1369,7 +1477,18 @@ public class MetaWearBleService extends Service {
      * @param data
      */
     private void queueCommand(byte[] command) {
-        Log.d("MetaWearBleService", Arrays.toString(command));
+        boolean first= true;
+        String str= "[";
+        for(byte b : command) {
+            if (first) {
+                str+= String.format("%x", b);
+                first= false;
+            } else {
+                str+= String.format(",%x", b);
+            }
+        }
+        str+= "]";
+        Log.d("MetaWearBleService", str);
         commandBytes.add(command);
         if (deviceState == DeviceState.READY) {
             deviceState= DeviceState.WRITING_CHARACTERISTICS;

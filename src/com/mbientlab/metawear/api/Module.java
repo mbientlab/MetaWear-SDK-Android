@@ -57,6 +57,7 @@ public enum Module {
     /** IBeacon  */
     IBEACON((byte)0x7, IBeacon.Register.values()),
     HAPTIC((byte)0x8, Haptic.Register.values()),
+    DATA_PROCESSOR((byte) 0x9, DataProcessor.Register.values()),
     EVENT((byte)0xa, Event.Register.values()),
     LOGGING((byte)0xb, Logging.Register.values()),
     /** Debug mode for testing purposes */

@@ -35,7 +35,7 @@ public interface Logging extends ModuleController {
                     final byte[] data) {
                 if ((data[1] & 0x80) == 0x80) {
                     final byte[] triggerBytes= new byte[] {data[2], data[3], data[4], 
-                            (byte) (data[5] & 0xf), (byte) ((data[5] >> 5) & 0xf)};
+                            (byte) (data[5] & 0x1f), (byte) ((data[5] >> 5) & 0x7)};
                     Trigger triggerObj= LoggingTrigger.lookupTrigger(triggerBytes);
                     
                     if (triggerObj == null) {
