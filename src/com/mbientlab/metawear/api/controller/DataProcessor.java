@@ -254,8 +254,10 @@ public interface DataProcessor extends ModuleController {
      */
     public void chainFilters(byte srcFilterId, byte srcSize, FilterConfig config);
     /**
-     * Adds a filter.  When the filter has been added, the {@link Callbacks#receivedFilterId(byte)} 
-     * callback function will be called with a user id representing the new filter
+     * Adds a filter that operates on the trigger output.  Filter triggers can have up 
+     * to a length of 8 bytes. When the filter has been added, the 
+     * {@link Callbacks#receivedFilterId(byte)} callback function will be called 
+     * with a user id representing the new filter
      * @param trigger Trigger to filter data on
      * @param config Configuration of the filter to add
      */

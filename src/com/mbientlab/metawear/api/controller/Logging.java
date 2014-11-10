@@ -296,7 +296,7 @@ public interface Logging extends ModuleController {
          */
         public byte offset();
         /**
-         * Number of bytes required by the trigger data.  Can be between [1, 4] bytes
+         * Number of bytes required by the trigger data.
          * @return Data length
          */
         public byte length();
@@ -325,7 +325,7 @@ public interface Logging extends ModuleController {
             final double TICK_TIME_STEP= (48 / 32768.0) * 1000;
             Calendar copy= (Calendar) reference.timestamp().clone();
             
-            copy.add(Calendar.MILLISECOND, (int) ((reference.tickCount() - tick()) * TICK_TIME_STEP)); 
+            copy.add(Calendar.MILLISECOND, (int) ((tick() - reference.tickCount()) * TICK_TIME_STEP)); 
             return copy;
         }
         /**
@@ -344,8 +344,10 @@ public interface Logging extends ModuleController {
     public void stopLogging();
 
     /**
-     * Add a trigger to the MetaWear logging module.  When the MetaWear board has processed the trigger, 
-     * a unique id representing the trigger passed back to the user via the receivedTriggerId function. 
+     * Add a trigger to the MetaWear logging module.  The logging module requires 
+     * triggers to have a data length less than or equal to 4 bytes.  When the MetaWear 
+     * board has processed the trigger, a unique id representing the trigger is passed 
+     * back to the user via the receivedTriggerId function. 
      * @param triggerObj Trigger to log
      * @see Callbacks#receivedTriggerId(byte)
      */

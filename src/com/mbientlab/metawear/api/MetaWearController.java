@@ -82,11 +82,20 @@ public interface MetaWearController {
     }
     
     /**
-     * Get the controller for the desired module
+     * Get the controller for the desired module.
      * @param module Module to control
      * @return Controller for the desired module
+     * @deprecated Deprecated as of v1.2.  Use {@link MetaWearController#getModuleController(Module, boolean)}
      */
+    @Deprecated
     public ModuleController getModuleController(Module module);
+    /**
+     * Get the controller for the desired module
+     * @param module Module to control
+     * @param clean True if a new ModuleController should be instantiated 
+     * @return Controller for the desired module
+     */
+    public ModuleController getModuleController(Module module, boolean clean);
 
     /**
      * Reads general device information from the MetaWear board.  The information available is 

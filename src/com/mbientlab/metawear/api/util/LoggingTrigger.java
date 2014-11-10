@@ -38,7 +38,7 @@ import com.mbientlab.metawear.api.controller.Logging.Trigger;
 import com.mbientlab.metawear.api.controller.MechanicalSwitch;
 
 /**
- * Collection of predefined triggers
+ * Collection of predefined triggers for the logging module
  * @author Eric Tsai
  */
 public enum LoggingTrigger implements Trigger {

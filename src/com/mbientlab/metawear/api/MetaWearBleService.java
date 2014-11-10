@@ -65,7 +65,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Binder;
 import android.os.IBinder;
-import android.util.Log;
 
 /**
  * Service for maintaining the Bluetooth GATT connection to the MetaWear board
@@ -272,40 +271,45 @@ public class MetaWearBleService extends Service {
         }
         
         @Override
-        public ModuleController getModuleController(Module opcode) {
-            switch (opcode) {
+        public ModuleController getModuleController(Module module, boolean clean) {
+            switch (module) {
             case ACCELEROMETER:
-                return getAccelerometerModule();
+                return getAccelerometerModule(clean);
             case DEBUG:
-                return getDebugModule();
+                return getDebugModule(clean);
             case GPIO:
-                return getGPIOModule();
+                return getGPIOModule(clean);
             case IBEACON:
-                return getIBeaconModule();
+                return getIBeaconModule(clean);
             case LED:
-                return getLEDDriverModule();
+                return getLEDDriverModule(clean);
             case MECHANICAL_SWITCH:
-                return getMechanicalSwitchModule();
+                return getMechanicalSwitchModule(clean);
             case NEO_PIXEL:
-                return getNeoPixelDriver();
+                return getNeoPixelDriver(clean);
             case TEMPERATURE:
-                return getTemperatureModule();
+                return getTemperatureModule(clean);
             case HAPTIC:
-            	return getHapticModule();
+                return getHapticModule(clean);
             case EVENT:
-                return getEventModule();
+                return getEventModule(clean);
             case LOGGING:
-                return getLoggingModule();
+                return getLoggingModule(clean);
             case DATA_PROCESSOR:
-                return getDataProcessorModule();
+                return getDataProcessorModule(clean);
             }
             return null;
         }
+        @Override
+        public ModuleController getModuleController(Module module) {
+            return getModuleController(module, false);
+        }
 
-        private ModuleController getDataProcessorModule() {
-            if (!modules.containsKey(Module.DATA_PROCESSOR)) {
+        private ModuleController getDataProcessorModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.DATA_PROCESSOR)) {
                 modules.put(Module.DATA_PROCESSOR, new DataProcessor() {
-                    private byte nNotifies= 0;
+                    private final HashSet<Byte> notifyIds= new HashSet<>();
+                    
                     @Override
                     public void chainFilters(byte srcFilterId, byte srcSize,
                             FilterConfig config) {
@@ -353,22 +357,23 @@ public class MetaWearBleService extends Service {
                     @Override
                     public void removeFilter(byte filterId) {
                         writeRegister(Register.FILTER_REMOVE, filterId);
+                        notifyIds.remove(filterId);
                     }
 
                     @Override
                     public void enableFilterNotify(byte filterId) {
-                        if (nNotifies == 0) {
+                        if (notifyIds.isEmpty()) {
                             writeRegister(Register.FILTER_NOTIFICATION, (byte) 1);
                         }
                         writeRegister(Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 1);
-                        nNotifies++;
+                        notifyIds.add(filterId);
                     }
 
                     @Override
                     public void disableFilterNotify(byte filterId) {
                         writeRegister(Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 0);
-                        nNotifies--;
-                        if (nNotifies == 0) {
+                        notifyIds.remove(filterId);
+                        if (notifyIds.isEmpty()) {
                             writeRegister(Register.FILTER_NOTIFICATION, (byte) 0);
                         }
                     }
@@ -391,8 +396,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.DATA_PROCESSOR);
         }
-        private ModuleController getEventModule() {
-            if (!modules.containsKey(Module.EVENT)) {
+        private ModuleController getEventModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.EVENT)) {
                 internalCallbacks.put(Event.Register.ADD_ENTRY, new InternalCallback() {
                     @Override
                     public void process(byte[] data) {
@@ -461,8 +466,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.EVENT);
         }
-        private ModuleController getLoggingModule() {
-            if (!modules.containsKey(Module.LOGGING)) {
+        private ModuleController getLoggingModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.LOGGING)) {
                 modules.put(Module.LOGGING, new Logging() {
                     @Override
                     public void startLogging() {
@@ -514,9 +519,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.LOGGING);
         }
-        
-        private ModuleController getAccelerometerModule() {
-            if (!modules.containsKey(Module.ACCELEROMETER)) {
+        private ModuleController getAccelerometerModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.ACCELEROMETER)) {
                 modules.put(Module.ACCELEROMETER, new Accelerometer() {
                     private static final float MMA8452Q_G_PER_STEP= (float) 0.063;
                     private final HashSet<Component> activeComponents= new HashSet<>();
@@ -853,8 +857,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.ACCELEROMETER);
         }
-        private ModuleController getDebugModule() {
-            if (!modules.containsKey(Module.DEBUG)) {
+        private ModuleController getDebugModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.DEBUG)) {
                 modules.put(Module.DEBUG, new Debug() {
                     @Override
                     public void resetDevice() {
@@ -868,8 +872,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.DEBUG);
         }
-        private ModuleController getGPIOModule() {
-            if (!modules.containsKey(Module.GPIO)) {
+        private ModuleController getGPIOModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.GPIO)) {
                 modules.put(Module.GPIO, new GPIO() {
                     @Override
                     public void readAnalogInput(byte pin, AnalogMode mode) {
@@ -895,8 +899,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.GPIO);
         }
-        private ModuleController getIBeaconModule() {
-            if (!modules.containsKey(Module.IBEACON)) {
+        private ModuleController getIBeaconModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.IBEACON)) {
                 modules.put(Module.IBEACON, new IBeacon() {
                     @Override
                     public void enableIBeacon() {
@@ -948,8 +952,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.IBEACON);
         }
-        private ModuleController getLEDDriverModule() {
-            if (!modules.containsKey(Module.LED)) {
+        private ModuleController getLEDDriverModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.LED)) {
                 modules.put(Module.LED, new LED() {
                     public void play(boolean autoplay) {
                         writeRegister(Register.PLAY, (byte)(autoplay ? 2 : 1));
@@ -1034,8 +1038,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.LED);
         }
-        private ModuleController getMechanicalSwitchModule() {
-            if (!modules.containsKey(Module.MECHANICAL_SWITCH)) {
+        private ModuleController getMechanicalSwitchModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.MECHANICAL_SWITCH)) {
                 modules.put(Module.MECHANICAL_SWITCH, new MechanicalSwitch() {
                     @Override
                     public void enableNotification() {
@@ -1049,8 +1053,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.MECHANICAL_SWITCH);
         }
-        private ModuleController getNeoPixelDriver() {
-            if (!modules.containsKey(Module.NEO_PIXEL)) {
+        private ModuleController getNeoPixelDriver(boolean clean) {
+            if (clean || !modules.containsKey(Module.NEO_PIXEL)) {
                 modules.put(Module.NEO_PIXEL, new NeoPixel() {
                     @Override
                     public void readStrandState(byte strand) {
@@ -1106,8 +1110,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.NEO_PIXEL);
         }
-        private ModuleController getTemperatureModule() {
-            if (!modules.containsKey(Module.TEMPERATURE)) {
+        private ModuleController getTemperatureModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.TEMPERATURE)) {
                 modules.put(Module.TEMPERATURE, new Temperature() {
                     private final byte[] samplingConfig= new byte[] {0, 0, 0, 0, 0, 0, 0, 0};
                     private boolean silent= false;
@@ -1185,8 +1189,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.TEMPERATURE);
         }
-        private ModuleController getHapticModule() {
-            if (!modules.containsKey(Module.HAPTIC)) {
+        private ModuleController getHapticModule(boolean clean) {
+            if (clean || !modules.containsKey(Module.HAPTIC)) {
                 modules.put(Module.HAPTIC, new Haptic() {
                     @Override
                     public void startMotor(short pulseWidth) {
@@ -1477,18 +1481,6 @@ public class MetaWearBleService extends Service {
      * @param data
      */
     private void queueCommand(byte[] command) {
-        boolean first= true;
-        String str= "[";
-        for(byte b : command) {
-            if (first) {
-                str+= String.format("%x", b);
-                first= false;
-            } else {
-                str+= String.format(",%x", b);
-            }
-        }
-        str+= "]";
-        Log.d("MetaWearBleService", str);
         commandBytes.add(command);
         if (deviceState == DeviceState.READY) {
             deviceState= DeviceState.WRITING_CHARACTERISTICS;
