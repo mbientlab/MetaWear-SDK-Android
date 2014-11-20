@@ -851,6 +851,18 @@ public class MetaWearBleService extends Service {
                             public byte[] getBytes() {
                                 return globalConfig;
                             }
+
+                            @Override
+                            public SamplingConfig withHighPassFilter() {
+                                globalConfig[0] |= 0x10;
+                                return this;
+                            }
+
+                            @Override
+                            public SamplingConfig withHighPassCutoff(byte frequency) {
+                                globalConfig[1] |= frequency;
+                                return this;
+                            }
                         };
                     }
                 });
