@@ -79,23 +79,19 @@ public interface MetaWearController {
          * @param data Bytes read from the characteristic
          */
         public void receivedGATTCharacteristic(GATTCharacteristic characteristic, byte[] data) { }
+        /**
+         * Remote RSSI value received from the device
+         * @param rssi RSSI value for the remote device
+         */
+        public void receivedRemoteRSSI(int rssi) { }
     }
     
     /**
      * Get the controller for the desired module.
      * @param module Module to control
      * @return Controller for the desired module
-     * @deprecated Deprecated as of v1.2.  Use {@link MetaWearController#getModuleController(Module, boolean)}
-     */
-    @Deprecated
+     */    
     public ModuleController getModuleController(Module module);
-    /**
-     * Get the controller for the desired module
-     * @param module Module to control
-     * @param clean True if a new ModuleController should be instantiated 
-     * @return Controller for the desired module
-     */
-    public ModuleController getModuleController(Module module, boolean clean);
 
     /**
      * Reads general device information from the MetaWear board.  The information available is 
@@ -112,6 +108,12 @@ public interface MetaWearController {
      * @see com.mbientlab.metawear.api.characteristic.Battery
      */
     public void readBatteryLevel();
+    /**
+     * Reads the remote RSSI value of the connected device.  When data is received, 
+     * the {@link DeviceCallbacks#receivedRemoteRSSI(int)} callback function will be 
+     * called with the RSSI value.
+     */
+    public void readRemoteRSSI();
     
     /**
      * Add a module callback for the broadcast receiver

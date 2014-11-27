@@ -364,6 +364,10 @@ public interface Logging extends ModuleController {
      * @param triggerId Unique id of the trigger to remove
      */
     public void removeTrigger(byte triggerId);
+    /**
+     * Removes all triggers from the logging module
+     */
+    public void removeAllTriggers();
 
     /**
      * Retrieve a tick reference from the MetaWear board.  When the data is received, the readReferenceTick 

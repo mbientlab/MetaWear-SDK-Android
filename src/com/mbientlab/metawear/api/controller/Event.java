@@ -158,7 +158,7 @@ public interface Event extends ModuleController {
     public void disableModule();
     /**
      * Read the attributes of a command id.  When the data has been received, 
-     * the {@link Callbacks#receivedCommandInfo(Command)} callback function will be called
+     * the {@link Callbacks#receivedCommandInfo(Event.Command)} callback function will be called
      * @param commandId ID of the command to lookup
      */
     public void commandIdToObject(byte commandId);
@@ -193,7 +193,12 @@ public interface Event extends ModuleController {
      */
     public byte stopRecord();
     /**
-     * Clear all recorded macros
+     * Remove all recorded macros
      */
-    public void clearMacros();
+    public void removeMacros();
+    /**
+     * Remove the command from the event handler
+     * @param commandId Id of the command to remove
+     */
+    public void removeCommand(byte commandId);
 }

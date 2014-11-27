@@ -1,7 +1,7 @@
 # MetaWear Android API #
 
 ### Version ###
-1.1
+1.2
 
 ### About ###
 This project provides an Android API for interacting with the MetaWear board.  For more information on MetaWear, check out the MbientLab product page: [https://mbientlab.com/product/](https://mbientlab.com/product/)

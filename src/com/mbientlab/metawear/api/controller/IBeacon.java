@@ -31,6 +31,7 @@
 package com.mbientlab.metawear.api.controller;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -69,8 +70,8 @@ public interface IBeacon extends ModuleController {
             @Override public byte opcode() { return 0x2; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                UUID uuid= new UUID(ByteBuffer.wrap(data, 2, 8).getLong(), 
-                        ByteBuffer.wrap(data, 10, 8).getLong());
+                UUID uuid= new UUID(ByteBuffer.wrap(data, 10, 8).order(ByteOrder.LITTLE_ENDIAN).getLong(), 
+                        ByteBuffer.wrap(data, 2, 8).order(ByteOrder.LITTLE_ENDIAN).getLong());
                 for(ModuleCallbacks it: callbacks) ((Callbacks)it).receivedUUID(uuid);
             }
         },
@@ -83,7 +84,7 @@ public interface IBeacon extends ModuleController {
             @Override public byte opcode() { return 0x3; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short major= ByteBuffer.wrap(data, 2, 2).getShort();
+                short major= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 for(ModuleCallbacks it: callbacks) ((Callbacks)it).receivedMajor(major);
             }
         },
@@ -96,7 +97,7 @@ public interface IBeacon extends ModuleController {
             @Override public byte opcode() { return 0x4; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short minor= ByteBuffer.wrap(data, 2, 2).getShort();
+                short minor= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 for(ModuleCallbacks it: callbacks) ((Callbacks)it).receivedMinor(minor);
             }
         },
@@ -133,7 +134,7 @@ public interface IBeacon extends ModuleController {
             @Override public byte opcode() { return 0x7; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                 byte[] data) {
-                short period= ByteBuffer.wrap(data, 2, 2).getShort();
+                short period= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 for(ModuleCallbacks it: callbacks) ((Callbacks)it).receivedPeriod(period);
             }
         };

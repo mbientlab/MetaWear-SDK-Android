@@ -275,7 +275,7 @@ public abstract class FilterConfigBuilder {
      */
     public static class MathBuilder extends IOConfigBuilder {
         /**
-         * Math operations to perform on the data.  With the exception of {@link Operation#SQRT}, 
+         * Math operations to perform on the data.  With the exception of {@link MathBuilder.Operation#SQRT}, 
          * the right hand value of the operation is specified with the 
          * {@link MathBuilder#withOperand(int)} function
          * @author Eric Tsai

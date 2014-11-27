@@ -99,8 +99,15 @@ public class MetaWearBleService extends Service {
         /** A Bluetooth characteristic was read */
         public static final String CHARACTERISTIC_READ=
                 "com.mbientlab.com.metawear.api.MetaWearBleService.Action.CHARACTERISTIC_READ";
+        /** Read the RSSI value of the remote device */
+        public static final String RSSI_READ=
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Action.RSSI_READ";
     }
     private class Extra {
+        /** Extra Intent information for the remote rssi value */
+        public static final String RSSI= 
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Extra.RSSI";
+        /** Extra Intent information for the service UUID */
         public static final String SERVICE_UUID= 
                 "com.mbientlab.com.metawear.api.MetaWearBleService.Extra.SERVICE_UUID";
         /** Extra Intent information for the characteristic UUID */
@@ -160,9 +167,7 @@ public class MetaWearBleService extends Service {
     private final static HashSet<DeviceCallbacks> deviceCallbacks= new HashSet<>();
     
     private boolean connected, isRecording= false;
-    private final HashMap<Register, EventTriggerBuilder> etBuilders= new HashMap<>();
-    private final HashSet<Byte> entryIds= new HashSet<>();
-    private Register recordingRegister;
+    private EventTriggerBuilder etBuilder;
     
     /** GATT connection to the ble device */
     private BluetoothGatt metaWearGatt;
@@ -189,6 +194,7 @@ public class MetaWearBleService extends Service {
         filter.addAction(Action.CHARACTERISTIC_READ);
         filter.addAction(Action.DEVICE_CONNECTED);
         filter.addAction(Action.DEVICE_DISCONNECTED);
+        filter.addAction(Action.RSSI_READ);
         return filter;
     }
     
@@ -235,6 +241,12 @@ public class MetaWearBleService extends Service {
                             it.receivedGATTCharacteristic(characteristic, (byte[])intent.getExtras().get(Extra.CHARACTERISTIC_VALUE));
                         }
                         break;
+                    case Action.RSSI_READ:
+                        int rssi= intent.getExtras().getInt(Extra.RSSI);
+                        for(DeviceCallbacks it: deviceCallbacks) {
+                            it.receivedRemoteRSSI(rssi);
+                        }
+                        break;
                     }
                 }
             };
@@ -245,7 +257,7 @@ public class MetaWearBleService extends Service {
     /** Interacts with the MetaWear board */
     private final MetaWearController controller= new MetaWearController() {
         private final HashMap<Module, ModuleController> modules= new HashMap<>();
-        
+                
         @Override
         public MetaWearController addModuleCallback(ModuleCallbacks callback) {
             byte moduleOpcode= callback.getModule().opcode;
@@ -271,45 +283,39 @@ public class MetaWearBleService extends Service {
         }
         
         @Override
-        public ModuleController getModuleController(Module module, boolean clean) {
+        public ModuleController getModuleController(Module module) {
             switch (module) {
             case ACCELEROMETER:
-                return getAccelerometerModule(clean);
+                return getAccelerometerModule();
             case DEBUG:
-                return getDebugModule(clean);
+                return getDebugModule();
             case GPIO:
-                return getGPIOModule(clean);
+                return getGPIOModule();
             case IBEACON:
-                return getIBeaconModule(clean);
+                return getIBeaconModule();
             case LED:
-                return getLEDDriverModule(clean);
+                return getLEDDriverModule();
             case MECHANICAL_SWITCH:
-                return getMechanicalSwitchModule(clean);
+                return getMechanicalSwitchModule();
             case NEO_PIXEL:
-                return getNeoPixelDriver(clean);
+                return getNeoPixelDriver();
             case TEMPERATURE:
-                return getTemperatureModule(clean);
+                return getTemperatureModule();
             case HAPTIC:
-                return getHapticModule(clean);
+                return getHapticModule();
             case EVENT:
-                return getEventModule(clean);
+                return getEventModule();
             case LOGGING:
-                return getLoggingModule(clean);
+                return getLoggingModule();
             case DATA_PROCESSOR:
-                return getDataProcessorModule(clean);
+                return getDataProcessorModule();
             }
             return null;
         }
-        @Override
-        public ModuleController getModuleController(Module module) {
-            return getModuleController(module, false);
-        }
 
-        private ModuleController getDataProcessorModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.DATA_PROCESSOR)) {
+        private ModuleController getDataProcessorModule() {
+            if (!modules.containsKey(Module.DATA_PROCESSOR)) {
                 modules.put(Module.DATA_PROCESSOR, new DataProcessor() {
-                    private final HashSet<Byte> notifyIds= new HashSet<>();
-                    
                     @Override
                     public void chainFilters(byte srcFilterId, byte srcSize,
                             FilterConfig config) {
@@ -357,25 +363,17 @@ public class MetaWearBleService extends Service {
                     @Override
                     public void removeFilter(byte filterId) {
                         writeRegister(Register.FILTER_REMOVE, filterId);
-                        notifyIds.remove(filterId);
                     }
 
                     @Override
                     public void enableFilterNotify(byte filterId) {
-                        if (notifyIds.isEmpty()) {
-                            writeRegister(Register.FILTER_NOTIFICATION, (byte) 1);
-                        }
+                        writeRegister(Register.FILTER_NOTIFICATION, (byte) 1);
                         writeRegister(Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 1);
-                        notifyIds.add(filterId);
                     }
 
                     @Override
                     public void disableFilterNotify(byte filterId) {
                         writeRegister(Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 0);
-                        notifyIds.remove(filterId);
-                        if (notifyIds.isEmpty()) {
-                            writeRegister(Register.FILTER_NOTIFICATION, (byte) 0);
-                        }
                     }
 
                     @Override
@@ -392,19 +390,19 @@ public class MetaWearBleService extends Service {
                     public void filterIdToObject(byte filterId) {
                         readRegister(Register.FILTER_CREATE, (byte) 1);
                     }
+
+                    @Override
+                    public void removeAllFilters() {
+                        for(byte filterId= 0; filterId < 16; filterId++) {
+                            writeRegister(Register.FILTER_REMOVE, filterId);
+                        }
+                    }
                 });
             }
             return modules.get(Module.DATA_PROCESSOR);
         }
-        private ModuleController getEventModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.EVENT)) {
-                internalCallbacks.put(Event.Register.ADD_ENTRY, new InternalCallback() {
-                    @Override
-                    public void process(byte[] data) {
-                        entryIds.add(data[2]);
-                    }
-                });
-                
+        private ModuleController getEventModule() {
+            if (!modules.containsKey(Module.EVENT)) {
                 modules.put(Module.EVENT, new Event() {
                     @Override
                     public void recordMacro(
@@ -418,29 +416,25 @@ public class MetaWearBleService extends Service {
                             byte index) {
                         isRecording= true;
                         
-                        etBuilders.put(srcReg, new EventTriggerBuilder(srcReg, index));
-                        recordingRegister= srcReg;
+                        etBuilder= new EventTriggerBuilder(srcReg, index);
                     }
 
                     @Override
                     public byte stopRecord() {
                         isRecording= false;
-                        for(EventInfo info: etBuilders.get(recordingRegister).getEventInfo()) {
+                        for(EventInfo info: etBuilder.getEventInfo()) {
                             writeRegister(Register.ADD_ENTRY, info.entry());
                             writeRegister(Register.EVENT_COMMAND, info.command());
                         }
                         
-                        return (byte) etBuilders.get(recordingRegister).getEventInfo().size();
+                        return (byte) etBuilder.getEventInfo().size();
                     }
 
                     @Override 
-                    public void clearMacros() {
-                        for(byte entryId: entryIds) {
-                            writeRegister(Register.REMOVE_ENTRY, entryId);
+                    public void removeMacros() {
+                        for(byte commandId= 0; commandId < 8; commandId++) {
+                            writeRegister(Register.REMOVE_ENTRY, commandId);
                         }
-                        
-                        entryIds.clear();
-                        etBuilders.clear();
                     }
 
                     @Override
@@ -462,12 +456,17 @@ public class MetaWearBleService extends Service {
                     public void disableModule() {
                         writeRegister(Event.Register.EVENT_ENABLE, (byte) 0);
                     }
+
+                    @Override
+                    public void removeCommand(byte commandId) {
+                        writeRegister(Register.REMOVE_ENTRY, commandId);
+                    }
                 });
             }
             return modules.get(Module.EVENT);
         }
-        private ModuleController getLoggingModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.LOGGING)) {
+        private ModuleController getLoggingModule() {
+            if (!modules.containsKey(Module.LOGGING)) {
                 modules.put(Module.LOGGING, new Logging() {
                     @Override
                     public void startLogging() {
@@ -514,13 +513,20 @@ public class MetaWearBleService extends Service {
                         writeRegister(Register.READOUT_PROGRESS, (byte) 1);
                         writeRegister(Register.READOUT, buffer.array());
                     }
+
+                    @Override
+                    public void removeAllTriggers() {
+                        for(byte triggerId= 0; triggerId < 8; triggerId++) {
+                            writeRegister(Register.REMOVE_TRIGGER, triggerId);
+                        }
+                    }
                     
                 });
             }
             return modules.get(Module.LOGGING);
         }
-        private ModuleController getAccelerometerModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.ACCELEROMETER)) {
+        private ModuleController getAccelerometerModule() {
+            if (!modules.containsKey(Module.ACCELEROMETER)) {
                 modules.put(Module.ACCELEROMETER, new Accelerometer() {
                     private static final float MMA8452Q_G_PER_STEP= (float) 0.063;
                     private final HashSet<Component> activeComponents= new HashSet<>();
@@ -577,7 +583,11 @@ public class MetaWearBleService extends Service {
                         activeNotifications.remove(component);
                         
                         if (!saveConfig) {
-                            configurations.remove(component);
+                            if (component == Component.DATA) {
+                                globalConfig= new byte[] {0, 0, 0x18, 0, 0};
+                            } else {
+                                configurations.remove(component);
+                            }
                         }
                     }
                     
@@ -588,6 +598,7 @@ public class MetaWearBleService extends Service {
                         
                         if (!saveConfig) {
                             configurations.clear();
+                            globalConfig= new byte[] {0, 0, 0x18, 0, 0};
                         }
                     }
                     
@@ -820,7 +831,6 @@ public class MetaWearBleService extends Service {
 
                     @Override
                     public SamplingConfig enableXYZSampling() {
-                        globalConfig= new byte[] {0, 0, 0x18, 0, 0};
                         activeComponents.add(Component.DATA);
                         activeNotifications.add(Component.DATA);
                         
@@ -853,14 +863,21 @@ public class MetaWearBleService extends Service {
                             }
 
                             @Override
+                            public SamplingConfig withHighPassFilter(byte cutoff) {
+                                globalConfig[0] |= 0x10;
+                                globalConfig[1] |= cutoff;
+                                return this;
+                            }
+                            
+                            @Override
                             public SamplingConfig withHighPassFilter() {
                                 globalConfig[0] |= 0x10;
                                 return this;
                             }
-
+                            
                             @Override
-                            public SamplingConfig withHighPassCutoff(byte frequency) {
-                                globalConfig[1] |= frequency;
+                            public SamplingConfig withoutHighPassFilter() {
+                                globalConfig[0] &= 0xef;
                                 return this;
                             }
                         };
@@ -869,8 +886,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.ACCELEROMETER);
         }
-        private ModuleController getDebugModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.DEBUG)) {
+        private ModuleController getDebugModule() {
+            if (!modules.containsKey(Module.DEBUG)) {
                 modules.put(Module.DEBUG, new Debug() {
                     @Override
                     public void resetDevice() {
@@ -884,8 +901,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.DEBUG);
         }
-        private ModuleController getGPIOModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.GPIO)) {
+        private ModuleController getGPIOModule() {
+            if (!modules.containsKey(Module.GPIO)) {
                 modules.put(Module.GPIO, new GPIO() {
                     @Override
                     public void readAnalogInput(byte pin, AnalogMode mode) {
@@ -911,8 +928,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.GPIO);
         }
-        private ModuleController getIBeaconModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.IBEACON)) {
+        private ModuleController getIBeaconModule() {
+            if (!modules.containsKey(Module.IBEACON)) {
                 modules.put(Module.IBEACON, new IBeacon() {
                     @Override
                     public void enableIBeacon() {
@@ -925,8 +942,9 @@ public class MetaWearBleService extends Service {
                     @Override
                     public IBeacon setUUID(UUID uuid) {
                         byte[] uuidBytes= ByteBuffer.wrap(new byte[16])
-                                .putLong(uuid.getMostSignificantBits())
+                                .order(ByteOrder.LITTLE_ENDIAN)
                                 .putLong(uuid.getLeastSignificantBits())
+                                .putLong(uuid.getMostSignificantBits())
                                 .array();
                         writeRegister(Register.ADVERTISEMENT_UUID, uuidBytes);
                         return this;
@@ -937,12 +955,12 @@ public class MetaWearBleService extends Service {
                     }
                     @Override
                     public IBeacon setMajor(short major) {
-                        writeRegister(Register.MAJOR, (byte)(major >> 8 & 0xff), (byte)(major & 0xff));
+                        writeRegister(Register.MAJOR, (byte)(major & 0xff), (byte)((major >> 8) & 0xff));
                         return this;
                     }
                     @Override
                     public IBeacon setMinor(short minor) {
-                        writeRegister(Register.MINOR, (byte)(minor >> 8 & 0xff), (byte)(minor & 0xff));
+                        writeRegister(Register.MINOR, (byte)(minor & 0xff), (byte)((minor >> 8) & 0xff));
                         return this;
                     }
                     @Override
@@ -957,15 +975,15 @@ public class MetaWearBleService extends Service {
                     }
                     @Override
                     public IBeacon setAdvertisingPeriod(short freq) {
-                        writeRegister(Register.ADVERTISEMENT_PERIOD, (byte)(freq >> 8 & 0xff), (byte)(freq & 0xff));
+                        writeRegister(Register.ADVERTISEMENT_PERIOD, (byte)(freq & 0xff), (byte)((freq >> 8) & 0xff));
                         return this;
                     }
                 });
             }
             return modules.get(Module.IBEACON);
         }
-        private ModuleController getLEDDriverModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.LED)) {
+        private ModuleController getLEDDriverModule() {
+            if (!modules.containsKey(Module.LED)) {
                 modules.put(Module.LED, new LED() {
                     public void play(boolean autoplay) {
                         writeRegister(Register.PLAY, (byte)(autoplay ? 2 : 1));
@@ -999,35 +1017,35 @@ public class MetaWearBleService extends Service {
 
                             @Override
                             public ChannelDataWriter withRiseTime(short time) {
-                                channelData[5]= (byte)(time >> 8);
+                                channelData[5]= (byte)((time >> 8) & 0xff);
                                 channelData[4]= (byte)(time & 0xff);
                                 return this;
                             }
 
                             @Override
                             public ChannelDataWriter withHighTime(short time) {
-                                channelData[7]= (byte)(time >> 8);
+                                channelData[7]= (byte)((time >> 8) & 0xff);
                                 channelData[6]= (byte)(time & 0xff);
                                 return this;
                             }
 
                             @Override
                             public ChannelDataWriter withFallTime(short time) {
-                                channelData[9]= (byte)(time >> 8);
+                                channelData[9]= (byte)((time >> 8) & 0xff);
                                 channelData[8]= (byte)(time & 0xff);
                                 return this;
                             }
 
                             @Override
                             public ChannelDataWriter withPulseDuration(short period) {
-                                channelData[11]= (byte)(period >> 8);
+                                channelData[11]= (byte)((period >> 8) & 0xff);
                                 channelData[10]= (byte)(period & 0xff);
                                 return this;
                             }
 
                             @Override
                             public ChannelDataWriter withPulseOffset(short offset) {
-                                channelData[13]= (byte)(offset >> 8);
+                                channelData[13]= (byte)((offset >> 8) & 0xff);
                                 channelData[12]= (byte)(offset & 0xff);
                                 return this;
                             }
@@ -1050,8 +1068,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.LED);
         }
-        private ModuleController getMechanicalSwitchModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.MECHANICAL_SWITCH)) {
+        private ModuleController getMechanicalSwitchModule() {
+            if (!modules.containsKey(Module.MECHANICAL_SWITCH)) {
                 modules.put(Module.MECHANICAL_SWITCH, new MechanicalSwitch() {
                     @Override
                     public void enableNotification() {
@@ -1065,8 +1083,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.MECHANICAL_SWITCH);
         }
-        private ModuleController getNeoPixelDriver(boolean clean) {
-            if (clean || !modules.containsKey(Module.NEO_PIXEL)) {
+        private ModuleController getNeoPixelDriver() {
+            if (!modules.containsKey(Module.NEO_PIXEL)) {
                 modules.put(Module.NEO_PIXEL, new NeoPixel() {
                     @Override
                     public void readStrandState(byte strand) {
@@ -1122,12 +1140,9 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.NEO_PIXEL);
         }
-        private ModuleController getTemperatureModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.TEMPERATURE)) {
+        private ModuleController getTemperatureModule() {
+            if (!modules.containsKey(Module.TEMPERATURE)) {
                 modules.put(Module.TEMPERATURE, new Temperature() {
-                    private final byte[] samplingConfig= new byte[] {0, 0, 0, 0, 0, 0, 0, 0};
-                    private boolean silent= false;
-                    
                     @Override
                     public void readTemperature() {
                         readRegister(Register.TEMPERATURE, (byte) 0);
@@ -1136,6 +1151,9 @@ public class MetaWearBleService extends Service {
                     @Override
                     public SamplingConfigBuilder enableSampling() {
                         return new SamplingConfigBuilder() {
+                            private final byte[] samplingConfig= new byte[] {0, 0, 0, 0, 0, 0, 0, 0};
+                            private boolean silent= false;
+                            
                             @Override
                             public SamplingConfigBuilder withSilentMode() {
                                 silent= true;
@@ -1191,8 +1209,7 @@ public class MetaWearBleService extends Service {
 
                     @Override
                     public void disableSampling() {
-                        Arrays.fill(samplingConfig, (byte) 0);
-                        writeRegister(Register.MODE, samplingConfig);
+                        writeRegister(Register.MODE, new byte[] {0, 0, 0, 0, 0, 0, 0, 0});
                         writeRegister(Register.TEMPERATURE, (byte) 0);
                         writeRegister(Register.DELTA_TEMP, (byte) 0);
                         writeRegister(Register.THRESHOLD_DETECT, (byte) 0);
@@ -1201,8 +1218,8 @@ public class MetaWearBleService extends Service {
             }
             return modules.get(Module.TEMPERATURE);
         }
-        private ModuleController getHapticModule(boolean clean) {
-            if (clean || !modules.containsKey(Module.HAPTIC)) {
+        private ModuleController getHapticModule() {
+            if (!modules.containsKey(Module.HAPTIC)) {
                 modules.put(Module.HAPTIC, new Haptic() {
                     @Override
                     public void startMotor(short pulseWidth) {
@@ -1237,6 +1254,13 @@ public class MetaWearBleService extends Service {
         }
         
         @Override
+        public void readRemoteRSSI() {
+            if (metaWearGatt != null) {
+                metaWearGatt.readRemoteRssi();
+            }
+        }
+        
+        @Override
         public boolean isConnected() {
             return connected;
         }
@@ -1248,10 +1272,14 @@ public class MetaWearBleService extends Service {
      * @see Characteristics.MetaWear#COMMAND
      */
     private void writeCommand() {
-        BluetoothGattService service= metaWearGatt.getService(GATTService.METAWEAR.uuid());
-        BluetoothGattCharacteristic command= service.getCharacteristic(MetaWear.COMMAND.uuid());
-        command.setValue(commandBytes.poll());
-        metaWearGatt.writeCharacteristic(command);
+        byte[] next= commandBytes.poll();
+        
+        if (metaWearGatt != null) {
+            BluetoothGattService service= metaWearGatt.getService(GATTService.METAWEAR.uuid());
+            BluetoothGattCharacteristic command= service.getCharacteristic(MetaWear.COMMAND.uuid());
+            command.setValue(next);
+            metaWearGatt.writeCharacteristic(command);
+        }
     }
 
     /**
@@ -1261,16 +1289,26 @@ public class MetaWearBleService extends Service {
      */
     private void readCharacteristic() {
         GATTCharacteristic charInfo= readCharUuids.poll();
-        BluetoothGattService service= metaWearGatt.getService(charInfo.gattService().uuid());
-
-        BluetoothGattCharacteristic characteristic= service.getCharacteristic(charInfo.uuid());
-        metaWearGatt.readCharacteristic(characteristic);
+        
+        if (metaWearGatt != null) {
+            BluetoothGattService service= metaWearGatt.getService(charInfo.gattService().uuid());
+    
+            BluetoothGattCharacteristic characteristic= service.getCharacteristic(charInfo.uuid());
+            metaWearGatt.readCharacteristic(characteristic);
+        }
     }
     
     /** MetaWear specific Bluetooth GATT callback */
-    private final BluetoothGattCallback metaWearGattCallback= new BluetoothGattCallback() {
+    private final BluetoothGattCallback metaWearGattCallback= new BluetoothGattCallback() {        
         private ArrayDeque<BluetoothGattCharacteristic> shouldNotify= new ArrayDeque<>();
         
+        @Override
+        public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
+            Intent intent= new Intent(Action.RSSI_READ);
+            intent.putExtra(Extra.RSSI, rssi);
+            sendBroadcast(intent);
+        }
+
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status,
                 int newState) {
@@ -1468,7 +1506,7 @@ public class MetaWearBleService extends Service {
         byte[] bleData= Registers.buildReadCommand(register, parameters);
         
         if (isRecording) {
-            etBuilders.get(recordingRegister).withDestRegister(register, 
+            etBuilder.withDestRegister(register, 
                     Arrays.copyOfRange(bleData, 2, bleData.length), true);
         } else {
             queueCommand(bleData);
@@ -1480,7 +1518,7 @@ public class MetaWearBleService extends Service {
         byte[] bleData= Registers.buildWriteCommand(register, data);
         
         if (isRecording) {
-            etBuilders.get(recordingRegister).withDestRegister(register, 
+            etBuilder.withDestRegister(register, 
                     Arrays.copyOfRange(bleData, 2, bleData.length), false);
         } else {
             queueCommand(bleData);

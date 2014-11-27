@@ -588,16 +588,23 @@ public interface Accelerometer extends ModuleController {
          */
         public SamplingConfig withOutputDataRate(OutputDataRate rate);
         /**
-         * Enables high-pass filter on the accleremoter axis data
+         * Enables high-pass filtering on the accelerometer axis data.  This version of the 
+         * function does not alter the cutoff setting
          * @return Calling object
          */
         public SamplingConfig withHighPassFilter();
         /**
-         * Set the high-pass filter cutoff frequency
-         * @param frequency Value between [0, 3] where 0 = highest freq and 3 = lowest freq
-         * @return
+         * Enables high-pass filtering on the accelerometer axis data
+         * @param cutoff Cutoff frequency setting between [0, 3] where 
+         * 0 = highest cutoff freq and 3 = lowest cutoff freq
+         * @return Calling object
          */
-        public SamplingConfig withHighPassCutoff(byte frequency);
+        public SamplingConfig withHighPassFilter(byte cutoff);
+        /**
+         * Disables high-pass filtering on the accelerometer axis data
+         * @return Calling object
+         */
+        public SamplingConfig withoutHighPassFilter();
     }
     
     /**

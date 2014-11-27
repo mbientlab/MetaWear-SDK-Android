@@ -240,7 +240,7 @@ public interface DataProcessor extends ModuleController {
     public void disableModule();
     /**
      * Reads attributes of the filter id.  When the data is ready, the 
-     * {@link Callbacks#receivedFilterObject(Filter)} callback function will be called
+     * {@link Callbacks#receivedFilterObject(DataProcessor.Filter)} callback function will be called
      * @param filterId ID of the filter to lookup
      */
     public void filterIdToObject(byte filterId);
@@ -278,6 +278,10 @@ public interface DataProcessor extends ModuleController {
      * @param filterId User id of the filter
      */
     public void removeFilter(byte filterId);
+    /**
+     * Remove all filters
+     */
+    public void removeAllFilters();
     /**
      * Enable notifications on a filter output.  Data from the filter will be pass in through 
      * the {@link Callbacks#receivedFilterOutput(byte, byte[])} function
