@@ -14,7 +14,7 @@
  * Software and/or its documentation for any purpose.
  *
  * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE 
- * PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+ * PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
  * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
  * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
  * MBIENTLAB OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT, NEGLIGENCE, 
@@ -54,8 +54,9 @@ public interface Temperature extends ModuleController {
             @Override public byte opcode() { return 0x1; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                byte[] reverse= new byte[] {data[3], data[2]};
-                float degrees= (float)(Short.valueOf(ByteBuffer.wrap(reverse).getShort()).floatValue() / 4.0);
+                short value= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+                float degrees= value * (data[4] == 0 ? 0.25f : 0.125f);
+                
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).receivedTemperature(degrees);
                 }
@@ -122,6 +123,11 @@ public interface Temperature extends ModuleController {
                     ((Callbacks)it).boundaryCrossed(threshold, current);
                 }
             }
+        },
+        THERMISTOR_MODE {
+            @Override public byte opcode() { return 0x5;}
+            @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
+                    byte[] data) { }            
         };
         
         @Override public Module module() { return Module.TEMPERATURE; }
@@ -191,9 +197,9 @@ public interface Temperature extends ModuleController {
          */
         public SamplingConfigBuilder withSampingPeriod(int period);
         /**
-         * Set the temperature delta.  A temperatur change exceeding the delta will 
+         * Set the temperature delta.  A temperature change exceeding the delta will 
          * trigger a call to {@link Callbacks#temperatureDeltaExceeded(float, float)}
-         * @param delta Change in temperature, in celsius, to detect
+         * @param delta Change in temperature, in Celsius, to detect
          * @return Calling object
          */
         public SamplingConfigBuilder withTemperatureDelta(float delta);
@@ -227,4 +233,15 @@ public interface Temperature extends ModuleController {
      */
     public void disableSampling();
     
+    /**
+     * Puts the board in thermistor mode, which uses the thermistor to measure the temperature 
+     * rather than the onboard temperature chip
+     * @param analogReadPin GPIO pin the thermistor is attached to
+     * @param pulldownPin GPIO pin that the pulldown resistor is attached to
+     */
+    public void enableThermistorMode(byte analogReadPin, byte pulldownPin);
+    /**
+     * Disables thermistor mode
+     */
+    public void disableThermistorMode();
 }

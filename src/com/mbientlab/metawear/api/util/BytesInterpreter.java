@@ -14,7 +14,7 @@
  * Software and/or its documentation for any purpose.
  *
  * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE 
- * PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+ * PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
  * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
  * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
  * MBIENTLAB OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT, NEGLIGENCE, 
@@ -40,7 +40,9 @@ import java.nio.ByteOrder;
 public class BytesInterpreter {
     /**
      * Convert raw accelerometer data into Gs based on its configuration.  This version is 
-     * for the values received from the receivedDataValue callback function
+     * for the values received from the receivedDataValue callback function.  Starting from 
+     * firmware v0.9.0, the accelerometer data is already converted to milli Gs.  You do not need 
+     * to use this function if you are on firmware 0.9.0 or higher.
      * @param dataConfig Byte array representing the configuration data
      * @param axisAccel Acceleration data as passed back in the callback function
      * @return Number of Gs the bytes represent
@@ -52,9 +54,11 @@ public class BytesInterpreter {
     }
     /**
      * Convert raw accelerometer data into Gs based on its configuration.  This version 
-     * is for processing the bytes as received from the metawear board.
+     * is for processing the bytes as received from the MetaWear board.  Starting from 
+     * firmware v0.9.0, the accelerometer data is already converted to milli Gs.  You do not need 
+     * to use this function if you are on firmware 0.9.0 or higher.
      * @param dataConfig Byte array representing the configuration data
-     * @param accelOutput Unprocessed acceleration data as received from the Metawear board 
+     * @param accelOutput Unprocessed acceleration data as received from the Metawear board
      * @return Number of Gs the bytes represent
      */
     public static float bytesToGs(byte[] dataConfig, byte[] accelOutput) {

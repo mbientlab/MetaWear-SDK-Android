@@ -14,7 +14,7 @@
  * Software and/or its documentation for any purpose.
  *
  * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE 
- * PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+ * PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
  * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
  * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
  * MBIENTLAB OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT, NEGLIGENCE, 
@@ -260,10 +260,12 @@ public interface Accelerometer extends ModuleController {
         public void receivedConfiguration(Component component, byte[] configuration) { }
         
         /**
-         * Called when the ble radio has received accelerometer motion data 
-         * @param x X component of acceleration, in raw bytes
-         * @param y Y component of acceleration, in raw bytes
-         * @param z Z component of acceleration, in raw bytes
+         * Called when the ble radio has received accelerometer motion data.  In firmware v0.9.0, 
+         * the accelerometer data will already be appropriately converted to milli Gs so there is 
+         * need to call {@link com.mbientlab.metawear.api.util.BytesInterpreter#bytesToGs(byte[], short)}
+         * @param x X component of acceleration, in milli Gs
+         * @param y Y component of acceleration, in milli Gs
+         * @param z Z component of acceleration, in milli Gs
          */
         public void receivedDataValue(short x, short y, short z) { }
         

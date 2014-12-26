@@ -14,7 +14,7 @@
  * Software and/or its documentation for any purpose.
  *
  * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE 
- * PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+ * PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
  * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
  * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
  * MBIENTLAB OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT, NEGLIGENCE, 
@@ -60,10 +60,16 @@ public interface Haptic extends ModuleController {
     }
     
     /**
-     * Start pulsing a motor
+     * Start pulsing a motor with a duty cycle of 100%
      * @param pulseWidth How long to run the motor (ms)
      */
     public void startMotor(short pulseWidth);
+    /**
+     * Start pulsing a motor
+     * @param dutyCycle Strength of the motor, between [0, 100] percent
+     * @param pulseWidth How long to run the motor (ms)
+     */
+    public void startMotor(float dutyCycle, short pulseWidth);
     /**
      * Start pulsing a buzzer
      * @param pulseWidth How long to run the buzzer (ms)

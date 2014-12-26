@@ -14,7 +14,7 @@
  * Software and/or its documentation for any purpose.
  *
  * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE 
- * PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+ * PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
  * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
  * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
  * MBIENTLAB OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT, NEGLIGENCE, 
@@ -65,6 +65,14 @@ public interface MetaWearController {
      * @author Eric Tsai
      */
     public static abstract class DeviceCallbacks {
+        public enum GattOperation {
+            CONNECTION_STATE_CHANGE,
+            DISCOVER_SERVICES,
+            DESCRIPTOR_WRITE,
+            CHARACTERISTIC_WRITE,
+            CHARACTERISTIC_READ,
+            RSSI_READ;
+        }
         /**
          * Bluetooth device connected
          */
@@ -84,6 +92,13 @@ public interface MetaWearController {
          * @param rssi RSSI value for the remote device
          */
         public void receivedRemoteRSSI(int rssi) { }
+        /**
+         * Called when a GATT operation returns an error
+         * @param gattOp GATT operation that returned the error
+         * @param status Status code returned in one of the 
+         * {@link android.bluetooth.BluetoothGattCallback} callback functions
+         */
+        public void gattError(GattOperation gattOp, int status) { }
     }
     
     /**
@@ -127,8 +142,44 @@ public interface MetaWearController {
      * @return The calling object
      */
     public MetaWearController addDeviceCallback(DeviceCallbacks callback);
-    
+    /**
+     * Remove all callbacks associated with this controller
+     */
+    public void clearCallbacks();
+    /**
+     * Remove specific module callback
+     * @param callback
+     */
     public void removeModuleCallback(ModuleCallbacks callback);
+    /**
+     * Remove specific device callback
+     * @param callback
+     */
     public void removeDeviceCallback(DeviceCallbacks callback);
+    
+    /**
+     * Connect to the board this controller is attached to
+     */
+    public void connect();
+    /**
+     * Close the connection to the board this controller is attached to
+     * @param notify True to make a call to the {@link DeviceCallbacks#disconnected()} 
+     * callback function
+     * @param cleanState True if any internal state associated with the board should be
+     * removed.
+     */
+    public void close(boolean notify, boolean cleanState);
+    /**
+     * Convenience function for calling {@link #close(boolean, boolean)} with (false, true)
+     */
+    public void close();
+    /**
+     * Restart the connection to the board this controller is attached to
+     */
+    public void reconnect();
+    /**
+     * Gets the connection statue to a board
+     * @return True if connected to a board
+     */
     public boolean isConnected();
 }

@@ -14,7 +14,7 @@
  * Software and/or its documentation for any purpose.
  *
  * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE 
- * PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+ * PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
  * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE, 
  * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
  * MBIENTLAB OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT, NEGLIGENCE, 
@@ -103,6 +103,22 @@ public interface GPIO extends ModuleController {
                     ((Callbacks)it).receivedDigitalInput(data[2]);
                 }
             }
+        },
+        SET_PIN_CHANGE {
+            @Override public byte opcode() { return 0x9; }
+        },
+        PIN_CHANGE_NOTIFY {
+            @Override public byte opcode() { return 0xa; }
+            @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
+                    byte[] data) {
+                for(ModuleCallbacks it: callbacks) {
+                    ((Callbacks)it).pinChangeDetected(data[2], data[3]);
+                }
+            }
+            
+        },
+        PIN_CHANGE_NOTIFY_ENABLE {
+            @Override public byte opcode() { return 0xb; }
         };
         
         public static Register[] values= Register.values();
@@ -133,6 +149,12 @@ public interface GPIO extends ModuleController {
          * @param value Either 0 or 1
          */
         public void receivedDigitalInput(byte value) { }
+        /**
+         * Called when the pin has changed state
+         * @param pin GPIO pin that was active
+         * @param state State that the pin is now in: 1 = high, 0 = low
+         */
+        public void pinChangeDetected(byte pin, byte state) { }
     }
 
     /**
@@ -228,4 +250,37 @@ public interface GPIO extends ModuleController {
      * @param mode Pull mode to use
      */
     public void setDigitalInput(byte pin, PullMode mode);
+    
+    /**
+     * Enumeration of conditions on when to notify the user of a pin's state change
+     * @author etsai
+     */
+    public enum ChangeType {
+        /** Disable state change detection */
+        DISABLED,
+        /** Notify on the rising edge during a change */
+        RISING,
+        /** Notify on the falling edge during a change */
+        FALLING,
+        /** Notify on any edge during a change */
+        ANY;
+    }
+    
+    /**
+     * Sets the pin change detection type
+     * @param pin GPIO pin to monitor
+     * @param type Change type to notify on
+     */
+    public void setPinChangeType(byte pin, ChangeType type);
+    /**
+     * Enable notifications on a pin state change.  Data and notifications will be passed 
+     * in through the {@link Callbacks#pinChangeDetected(byte, byte)} callback function
+     * @param pin GPIO pin number
+     */
+    public void enablePinChangeNotification(byte pin);
+    /**
+     * Disable notifications on pin state change.
+     * @param pin GPIO pin number
+     */
+    public void disablePinChangeNotification(byte pin);
 }
