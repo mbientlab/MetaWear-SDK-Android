@@ -98,7 +98,7 @@ public interface MetaWearController {
          * @param status Status code returned in one of the 
          * {@link android.bluetooth.BluetoothGattCallback} callback functions
          */
-        public void gattError(GattOperation gattOp, int status) { }
+        public void receivedGattError(GattOperation gattOp, int status) { }
     }
     
     /**

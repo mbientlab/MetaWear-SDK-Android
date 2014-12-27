@@ -263,7 +263,7 @@ public class MetaWearBleService extends Service {
                             int gattStatus= intent.getIntExtra(Extra.STATUS, -1);
                             DeviceCallbacks.GattOperation gattOp= (GattOperation) intent.getExtras().get(Extra.GATT_OPERATION);
                             for(DeviceCallbacks it: mwState.deviceCallbacks) {
-                                it.gattError(gattOp, gattStatus);
+                                it.receivedGattError(gattOp, gattStatus);
                             }
                             break;
                         case Action.NOTIFICATION_RECEIVED:
