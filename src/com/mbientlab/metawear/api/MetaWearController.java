@@ -156,7 +156,16 @@ public interface MetaWearController {
      * @param callback
      */
     public void removeDeviceCallback(DeviceCallbacks callback);
-    
+    /**
+     * Sets how to handle the device state when the board disconnects.  If the device state is 
+     * not retained, the state is reset and all references to the state are discarded upon 
+     * disconnecting.  Users can continue using the controller provided they obtained a controller 
+     * from {@link MetaWearBleService#getMetaWearController(android.bluetooth.BluetoothDevice)} 
+     * and reconnected to the board via the {@link #connect()} function
+     * @param retain False if internal state should be discarded when the device disconnects
+     */
+    public void setRetainState(boolean retain);
+
     /**
      * Connect to the board this controller is attached to
      */
@@ -165,18 +174,15 @@ public interface MetaWearController {
      * Close the connection to the board this controller is attached to
      * @param notify True to make a call to the {@link DeviceCallbacks#disconnected()} 
      * callback function
-     * @param cleanState True if any internal state associated with the board should be
      * removed.
      */
-    public void close(boolean notify, boolean cleanState);
+    public void close(boolean notify);
     /**
-     * Convenience function for calling {@link #close(boolean, boolean)} with (false, true)
+     * Reset the connection to the board this controller is attached to
+     * @param notify True to make a call to the {@link DeviceCallbacks#disconnected()} 
+     * callback function
      */
-    public void close();
-    /**
-     * Restart the connection to the board this controller is attached to
-     */
-    public void reconnect();
+    public void reconnect(boolean notify);
     /**
      * Gets the connection statue to a board
      * @return True if connected to a board

@@ -192,12 +192,19 @@ public class MetaWearBleService extends Service {
         public MetaWearState() {
             // TODO Auto-generated constructor stub
         }
+        
+        public void resetState() {
+            mwController.clearCallbacks();
+            shouldNotify.clear();
+            commandBytes.clear();
+            readCharUuids.clear();
+        }
 
         public BluetoothDevice mwBoard;
         public byte thermistorMode= 0;
         public EventTriggerBuilder etBuilder;
-        public boolean connected, isRecording= false;
-        public MetaWearController mwController= null;
+        public boolean connected, isRecording= false, retainState= true;
+        public MetaWearControllerImpl mwController= null;
         public BluetoothGatt mwGatt= null;
         public DeviceState deviceState= null;
         public final ArrayDeque<BluetoothGattCharacteristic> shouldNotify= new ArrayDeque<>();
@@ -280,6 +287,10 @@ public class MetaWearBleService extends Service {
                             for(DeviceCallbacks it: mwState.deviceCallbacks) {
                                 it.disconnected();
                             }
+                            if (!mwState.retainState) {
+                                mwState.resetState();
+                                metaWearStates.remove(mwState.mwBoard);
+                            }
                             break;
                         case Action.CHARACTERISTIC_READ:
                             UUID serviceUuid= (UUID)intent.getExtras().get(Extra.SERVICE_UUID), 
@@ -309,13 +320,6 @@ public class MetaWearBleService extends Service {
         } else {
             sendBroadcast(intent);
         }
-    }
-    
-    private MetaWearState gattToMwState(BluetoothGatt gatt) {
-        for(MetaWearState mwState: metaWearStates.values()) {
-            if (mwState.mwGatt == gatt) return mwState;
-        }
-        return null;
     }
     
     private void execGattAction() {
@@ -365,9 +369,15 @@ public class MetaWearBleService extends Service {
         });
         execGattAction();
     }
-    
-    /** MetaWear specific Bluetooth GATT callback */
-    private final BluetoothGattCallback metaWearGattCallback= new BluetoothGattCallback() {        
+
+    private abstract class MetaWearControllerImpl extends BluetoothGattCallback implements MetaWearController {
+        private final MetaWearState mwState;
+        private final HashMap<Module, ModuleController> modules= new HashMap<>();
+        
+        public MetaWearControllerImpl(MetaWearState mwState) {
+            this.mwState= mwState;
+        }
+        
         @Override
         public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
             Intent intent;
@@ -380,7 +390,7 @@ public class MetaWearBleService extends Service {
                 intent.putExtra(Extra.RSSI, rssi);
             }
             
-            intent.putExtra(Extra.BLUETOOTH_DEVICE, gattToMwState(gatt).mwBoard);
+            intent.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
             broadcastIntent(intent);
         }
 
@@ -389,7 +399,6 @@ public class MetaWearBleService extends Service {
                 int newState) {
             Intent intent= new Intent();
             boolean broadcast= true;
-            MetaWearState mwState= gattToMwState(gatt);
             
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 intent.setAction(Action.GATT_ERROR);
@@ -419,8 +428,6 @@ public class MetaWearBleService extends Service {
 
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            MetaWearState mwState= gattToMwState(gatt);
-            
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Intent intent= new Intent(Action.GATT_ERROR);
                 intent.putExtra(Extra.STATUS, status);
@@ -457,8 +464,6 @@ public class MetaWearBleService extends Service {
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt,
                 BluetoothGattDescriptor descriptor, int status) {
-            final MetaWearState mwState= gattToMwState(gatt);
-            
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Intent intent= new Intent(Action.GATT_ERROR);
                 intent.putExtra(Extra.STATUS, status);
@@ -492,7 +497,6 @@ public class MetaWearBleService extends Service {
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
-            final MetaWearState mwState= gattToMwState(gatt);
             Intent intent;
             
             if (status != BluetoothGatt.GATT_SUCCESS) {
@@ -525,7 +529,6 @@ public class MetaWearBleService extends Service {
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
-            final MetaWearState mwState= gattToMwState(gatt);
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Intent intent= new Intent(Action.GATT_ERROR);
                 intent.putExtra(Extra.STATUS, status);
@@ -549,7 +552,6 @@ public class MetaWearBleService extends Service {
                 Register mwRegister= Module.lookupModule(characteristic.getValue()[0])
                         .lookupRegister(characteristic.getValue()[1]);
                 
-                final MetaWearState mwState= gattToMwState(gatt);
                 byte[] bleData;
                 if (mwRegister == Temperature.Register.TEMPERATURE) {
                     bleData= Arrays.copyOf(characteristic.getValue(), characteristic.getValue().length + 1);
@@ -566,15 +568,6 @@ public class MetaWearBleService extends Service {
                     mwState.internalCallbacks.get(mwRegister).process(bleData);
                 }
             }
-        }
-    };
-
-    private abstract class MetaWearControllerImpl implements MetaWearController {
-        private final MetaWearState mwState;
-        private final HashMap<Module, ModuleController> modules= new HashMap<>();
-        
-        public MetaWearControllerImpl(MetaWearState mwState) {
-            this.mwState= mwState;
         }
         
         @Override
@@ -1627,13 +1620,17 @@ public class MetaWearBleService extends Service {
         public boolean isConnected() {
             return mwState.connected;
         }
+        
+        @Override
+        public void setRetainState(boolean retain) {
+            mwState.retainState= retain;
+        }
     };
     /**
      * Gets a controller for the MetaWear board, in single MetaWear mode.  The MetaWearController returned 
      * does not support the {@link MetaWearController#connect()}, 
-     * {@link MetaWearController#close(boolean, boolean)}, {@link MetaWearController#close()} 
-     * and {@link MetaWearController#reconnect()} functions.  You will need to use the deprecated variants 
-     * of those functions to modify the connection state.
+     * {@link MetaWearController#close(boolean)}, and {@link MetaWearController#reconnect(boolean)} functions.  
+     * You will need to use the deprecated variants of those functions to modify the connection state.
      * @return MetaWear controller, in single MetaWear mode, to interact with the board
      * @deprecated As of v1.3.  Use {@link #getMetaWearController(BluetoothDevice)} instead
      */
@@ -1649,17 +1646,12 @@ public class MetaWearBleService extends Service {
                     throw new UnsupportedOperationException("This function is not supported in single metawear mode");
                 }
                 @Override
-                public void reconnect() {
+                public void reconnect(boolean notify) {
                     throw new UnsupportedOperationException("This function is not supported in single metawear mode");
                 }
 
                 @Override
-                public void close(boolean notify, boolean cleanState) {
-                    throw new UnsupportedOperationException("This function is not supported in single metawear mode");
-                }
-
-                @Override
-                public void close() {
+                public void close(boolean notify) {
                     throw new UnsupportedOperationException("This function is not supported in single metawear mode");
                 }
             };
@@ -1669,8 +1661,8 @@ public class MetaWearBleService extends Service {
     }
     /**
      * Gets a controller for a specific MetaWear board.  Modifying connection state must be done with 
-     * the {{@link MetaWearController#connect()}, {@link MetaWearController#close(boolean, boolean)}, 
-     * {@link MetaWearController#close()} and {@link MetaWearController#reconnect()} functions rather 
+     * the {@link MetaWearController#connect()}, {@link MetaWearController#close(boolean)}, and 
+     * {@link MetaWearController#reconnect(boolean)} functions rather 
      * than their deprecated variants
      * @param mwBoard MetaWear board to interact with
      * @return Controller attached to the specific board
@@ -1684,36 +1676,38 @@ public class MetaWearBleService extends Service {
             mwState.mwController= new MetaWearControllerImpl(metaWearStates.get(mwBoard)) {
                 @Override
                 public void connect() {
-                    mwState.deviceState= null;
-                    mwState.mwGatt= mwState.mwBoard.connectGatt(MetaWearBleService.this, false, metaWearGattCallback);
+                    if (!isConnected()) {
+                        if (!metaWearStates.containsKey(mwBoard)) {
+                            metaWearStates.put(mwBoard, mwState);
+                        }
+                        mwState.deviceState= null;
+                        mwState.mwGatt= mwState.mwBoard.connectGatt(MetaWearBleService.this, false, this);
+                    }
                 }
                 
                 @Override
-                public void reconnect() {
-                    MetaWearBleService.this.close(mwState);
-                    mwState.mwGatt= mwState.mwBoard.connectGatt(MetaWearBleService.this, false, metaWearGattCallback);
+                public void reconnect(boolean notify) {
+                    close(notify);
+                    connect();
                 }
 
                 @Override
-                public void close(boolean notify, boolean cleanState) {
+                public void close(boolean notify) {
                     MetaWearBleService.this.close(mwState);
                     if (notify) {
                         Intent intent= new Intent(Action.DEVICE_DISCONNECTED);
                         intent.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
                         broadcastIntent(intent);
+                    } else {
+                        if (!mwState.retainState) {
+                            mwState.resetState();
+                            metaWearStates.remove(mwState.mwBoard);
+                        }
                     }
-                    if (cleanState) {
-                        metaWearStates.remove(mwBoard);
-                    }
-                }
-
-                @Override
-                public void close() {
-                    close(false, true);
                 }
             };
         }
-        return metaWearStates.get(mwBoard).mwController;
+        return mwState.mwController;
     }
     
     /**
@@ -1745,7 +1739,7 @@ public class MetaWearBleService extends Service {
             close(singleMwState);
             metaWearStates.clear();
             metaWearStates.put(metaWearBoard, singleMwState);
-            singleMwState.mwGatt= metaWearBoard.connectGatt(this, false, metaWearGattCallback);
+            singleMwState.mwGatt= metaWearBoard.connectGatt(this, false, singleMwState.mwController);
         } else {
             reconnect();
         }
@@ -1754,7 +1748,7 @@ public class MetaWearBleService extends Service {
     /**
      * Restarts the connection to a board.  This version of the function is for the old 
      * single MetaWear mode.  
-     * @deprecated As of v1.3.  Use {@link MetaWearController#reconnect()} and retrieve a MetaWearController 
+     * @deprecated As of v1.3.  Use {@link MetaWearController#reconnect(boolean)} and retrieve a MetaWearController 
      * with {@link #getMetaWearController(BluetoothDevice)}
      */
     @Deprecated
@@ -1765,15 +1759,14 @@ public class MetaWearBleService extends Service {
             singleMwState.connected= false;
             singleMwState.deviceState= null;
             
-            singleMwState.mwGatt= singleMwState.mwBoard.connectGatt(this, false, metaWearGattCallback);
+            singleMwState.mwGatt= singleMwState.mwBoard.connectGatt(this, false, singleMwState.mwController);
         }
     }
     /**
      * Disconnects from the board.  This version of the function is for the old 
      * single MetaWear mode.
-     * @deprecated As of v1.3.  Use {@link MetaWearController#close(boolean, boolean)} or 
-     * {@link MetaWearController#close()} and retrieve a MetaWearController 
-     * with {@link #getMetaWearController(BluetoothDevice)}
+     * @deprecated As of v1.3.  Use {@link MetaWearController#close(boolean)} and 
+     * retrieve a MetaWearController with {@link #getMetaWearController(BluetoothDevice)}
      */
     @Deprecated
     public void disconnect() {
@@ -1783,13 +1776,12 @@ public class MetaWearBleService extends Service {
     }
     
     /** 
-     * Close the GATT service and free up resources.  This version of the function is for the old 
+     * Close the GATT service and free up resources.  This version of the function is for
      * single MetaWear mode.  
-     * @param notify True if the {@link MetaWearController.DeviceCallbacks#disconnected()} function 
-     * should be called
-     * @deprecated As of v1.3.  Use {@link MetaWearController#close(boolean, boolean)} or 
-     * {@link MetaWearController#close()} and retrieve a MetaWearController 
-     * with {@link #getMetaWearController(BluetoothDevice)}
+     * @param notify True if the {@link MetaWearController.DeviceCallbacks#disconnected()} 
+     * function should be called
+     * @deprecated As of v1.3.  Use {@link MetaWearController#close(boolean)}  and retrieve 
+     * a MetaWearController with {@link #getMetaWearController(BluetoothDevice)}
      */
     @Deprecated
     public void close(boolean notify) {
@@ -1802,6 +1794,11 @@ public class MetaWearBleService extends Service {
                 Intent intent= new Intent(Action.DEVICE_DISCONNECTED);
                 intent.putExtra(Extra.BLUETOOTH_DEVICE, singleMwState.mwBoard);
                 broadcastIntent(intent);
+            } else {
+                if (!singleMwState.retainState) {
+                    singleMwState.resetState();
+                    metaWearStates.remove(singleMwState.mwBoard);
+                }
             }
         }
     }
@@ -1813,18 +1810,14 @@ public class MetaWearBleService extends Service {
             }
         
             mwState.deviceState= null;
-            mwState.shouldNotify.clear();
-            mwState.commandBytes.clear();
-            mwState.readCharUuids.clear();            
             mwState.connected= false;
         }
     }
     /**
-     * Close the GATT service and free up resources.  This version of the function is for the old 
+     * Close the GATT service and free up resources.  This version of the function is for  
      * single MetaWear mode.
-     * @deprecated As of v1.3.  Use {@link MetaWearController#close(boolean, boolean)} or 
-     * {@link MetaWearController#close()} and retrieve a MetaWearController 
-     * with {@link #getMetaWearController(BluetoothDevice)}
+     * @deprecated As of v1.3.  Use {@link MetaWearController#close(boolean)} and retrieve 
+     * a MetaWearController with {@link #getMetaWearController(BluetoothDevice)}
      */
     public void close() {
         close(false);
@@ -1846,18 +1839,18 @@ public class MetaWearBleService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
-        // TODO Auto-generated method stub
         return serviceBinder;
     }
 
     @Override
-    public boolean onUnbind(Intent intent) {
+    public void onDestroy() {
         for(Entry<BluetoothDevice, MetaWearState> it: metaWearStates.entrySet()) {
             close(it.getValue());
         }
         close(singleMwState);
         metaWearStates.clear();
-        return super.onUnbind(intent);
+        
+        super.onDestroy();
     }
 
     private void readRegister(MetaWearState mwState,
