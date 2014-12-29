@@ -92,7 +92,7 @@ public class MetaWearBleService extends Service {
     private class Action {
         /** An non-zero status was returned in a bt gatt callback function */
         public static final String GATT_ERROR=
-                "com.mbientlab.com.metawear.api.MetaWearBleService.Action.NGATT_ERROR";
+                "com.mbientlab.com.metawear.api.MetaWearBleService.Action.GATT_ERROR";
         /** Data was received from a MetaWear notification register */
         public static final String NOTIFICATION_RECEIVED=
                 "com.mbientlab.com.metawear.api.MetaWearBleService.Action.NOTIFICATION_RECEIVED";
@@ -110,6 +110,8 @@ public class MetaWearBleService extends Service {
                 "com.mbientlab.com.metawear.api.MetaWearBleService.Action.RSSI_READ";
     }
     private class Extra {
+        public static final String EXPLICIT_CLOSE=
+                "com.mbientlab.metawear.api.MetaWearBleService.Extra.EXPLICIT_CLOSE";
         public static final String BLUETOOTH_DEVICE=
                 "com.mbientlab.metawear.api.MetaWearBleService.Extra.BLUETOOTH_DEVICE";
         /** Extra intent information identifying the gatt operation */
@@ -203,7 +205,7 @@ public class MetaWearBleService extends Service {
         public BluetoothDevice mwBoard;
         public byte thermistorMode= 0;
         public EventTriggerBuilder etBuilder;
-        public boolean connected, isRecording= false, retainState= true;
+        public boolean connected, isRecording= false, retainState= true, readyToClose, notifyUser;
         public MetaWearControllerImpl mwController= null;
         public BluetoothGatt mwGatt= null;
         public DeviceState deviceState= null;
@@ -287,7 +289,9 @@ public class MetaWearBleService extends Service {
                             for(DeviceCallbacks it: mwState.deviceCallbacks) {
                                 it.disconnected();
                             }
-                            if (!mwState.retainState) {
+                            if (!intent.getBooleanExtra(Extra.EXPLICIT_CLOSE, false)) {
+                                mwState.mwController.close(false);
+                            } else if (!mwState.retainState) {
                                 mwState.resetState();
                                 metaWearStates.remove(mwState.mwBoard);
                             }
@@ -490,6 +494,8 @@ public class MetaWearBleService extends Service {
                 } else if (!mwState.readCharUuids.isEmpty()) {
                     mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
                     readCharacteristic(mwState);
+                } else if (mwState.readyToClose) {
+                    close(mwState.notifyUser);
                 }
             }
         }
@@ -522,6 +528,8 @@ public class MetaWearBleService extends Service {
                 } else if (!mwState.readCharUuids.isEmpty()) {
                     mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
                     readCharacteristic(mwState);
+                } else if (mwState.readyToClose) {
+                    close(mwState.notifyUser);
                 }
             }
         }
@@ -539,9 +547,13 @@ public class MetaWearBleService extends Service {
             
             if (!mwState.commandBytes.isEmpty()) writeCommand(mwState);
             else mwState.deviceState= DeviceState.READY;
-            if (mwState.deviceState == DeviceState.READY && !mwState.readCharUuids.isEmpty()) {
-                mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
-                readCharacteristic(mwState);
+            if (mwState.deviceState == DeviceState.READY) {
+                if (!mwState.readCharUuids.isEmpty()) {                
+                    mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
+                    readCharacteristic(mwState);
+                } else if (mwState.readyToClose) {
+                    close(mwState.notifyUser);
+                }
             }
         }
 
@@ -1654,6 +1666,10 @@ public class MetaWearBleService extends Service {
                 public void close(boolean notify) {
                     throw new UnsupportedOperationException("This function is not supported in single metawear mode");
                 }
+                @Override
+                public void close(boolean notify, boolean wait) {
+                    throw new UnsupportedOperationException("This function is not supported in single metawear mode");
+                }
             };
         }
         
@@ -1680,6 +1696,8 @@ public class MetaWearBleService extends Service {
                         if (!metaWearStates.containsKey(mwBoard)) {
                             metaWearStates.put(mwBoard, mwState);
                         }
+                        mwState.notifyUser= false;
+                        mwState.readyToClose= false;
                         mwState.deviceState= null;
                         mwState.mwGatt= mwState.mwBoard.connectGatt(MetaWearBleService.this, false, this);
                     }
@@ -1697,12 +1715,21 @@ public class MetaWearBleService extends Service {
                     if (notify) {
                         Intent intent= new Intent(Action.DEVICE_DISCONNECTED);
                         intent.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
+                        intent.putExtra(Extra.EXPLICIT_CLOSE, true);
                         broadcastIntent(intent);
                     } else {
                         if (!mwState.retainState) {
                             mwState.resetState();
                             metaWearStates.remove(mwState.mwBoard);
                         }
+                    }
+                }
+
+                @Override
+                public void close(boolean notify, boolean wait) {
+                    if (wait) {
+                        mwState.notifyUser= notify;
+                        mwState.readyToClose= true;
                     }
                 }
             };
@@ -1793,6 +1820,7 @@ public class MetaWearBleService extends Service {
             if (notify) {
                 Intent intent= new Intent(Action.DEVICE_DISCONNECTED);
                 intent.putExtra(Extra.BLUETOOTH_DEVICE, singleMwState.mwBoard);
+                intent.putExtra(Extra.EXPLICIT_CLOSE, true);
                 broadcastIntent(intent);
             } else {
                 if (!singleMwState.retainState) {
@@ -1856,26 +1884,30 @@ public class MetaWearBleService extends Service {
     private void readRegister(MetaWearState mwState,
             com.mbientlab.metawear.api.Register register,
             byte... parameters) {
-        byte[] bleData= Registers.buildReadCommand(register, parameters);
-        
-        if (mwState.isRecording) {
-            mwState.etBuilder.withDestRegister(register, 
-                    Arrays.copyOfRange(bleData, 2, bleData.length), true);
-        } else {
-            queueCommand(mwState, bleData);
+        if (!mwState.readyToClose) {
+            byte[] bleData= Registers.buildReadCommand(register, parameters);
+            
+            if (mwState.isRecording) {
+                mwState.etBuilder.withDestRegister(register, 
+                        Arrays.copyOfRange(bleData, 2, bleData.length), true);
+            } else {
+                queueCommand(mwState, bleData);
+            }
         }
     }
 
     private void writeRegister(MetaWearState mwState,
             com.mbientlab.metawear.api.Register register,
             byte... data) {
-        byte[] bleData= Registers.buildWriteCommand(register, data);
-        
-        if (mwState.isRecording) {
-            mwState.etBuilder.withDestRegister(register, 
-                    Arrays.copyOfRange(bleData, 2, bleData.length), false);
-        } else {
-            queueCommand(mwState, bleData);
+        if (!mwState.readyToClose) {
+            byte[] bleData= Registers.buildWriteCommand(register, data);
+            
+            if (mwState.isRecording) {
+                mwState.etBuilder.withDestRegister(register, 
+                        Arrays.copyOfRange(bleData, 2, bleData.length), false);
+            } else {
+                queueCommand(mwState, bleData);
+            }
         }
     }
 

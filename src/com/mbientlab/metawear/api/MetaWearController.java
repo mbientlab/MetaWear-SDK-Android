@@ -171,12 +171,19 @@ public interface MetaWearController {
      */
     public void connect();
     /**
+     * Immediately close the connection to the board this controller is attached to
+     * @param notify True to make a call to the {@link DeviceCallbacks#disconnected()} 
+     * callback function
+     */
+    public void close(boolean notify);
+    /**
      * Close the connection to the board this controller is attached to
      * @param notify True to make a call to the {@link DeviceCallbacks#disconnected()} 
      * callback function
-     * removed.
+     * @param wait True if any pending commands should be broadcasted before closing.  
+     * Any commands queued after this function call are ignored
      */
-    public void close(boolean notify);
+    public void close(boolean notify, boolean wait);
     /**
      * Reset the connection to the board this controller is attached to
      * @param notify True to make a call to the {@link DeviceCallbacks#disconnected()} 
