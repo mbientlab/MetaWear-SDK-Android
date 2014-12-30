@@ -223,7 +223,7 @@ public class MetaWearBleService extends Service {
     private boolean useLocalBroadcastMnger= false;
     private final ConcurrentLinkedQueue<GattAction> gattActions= new ConcurrentLinkedQueue<>();
     private MetaWearState singleMwState= null;
-    private MetaWearController singleController= null;
+    private MetaWearControllerImpl singleController= null;
     
     /**
      * Get the IntentFilter for actions broadcasted by the MetaWear service
@@ -1762,6 +1762,10 @@ public class MetaWearBleService extends Service {
             singleMwState.mwBoard= metaWearBoard;
         }
         
+        if (singleMwState.mwController == null) {
+            singleMwState.mwController= (MetaWearControllerImpl) getMetaWearController();
+        }
+        
         if (!metaWearStates.containsKey(metaWearBoard)) {
             close(singleMwState);
             metaWearStates.clear();
@@ -1780,9 +1784,11 @@ public class MetaWearBleService extends Service {
      */
     @Deprecated
     public void reconnect() {
-        if (singleMwState != null && singleMwState.mwBoard != null && singleMwState.mwGatt != null) {
-            singleMwState.mwGatt.close();
-            singleMwState.mwGatt= null;
+        if (singleMwState != null && singleMwState.mwBoard != null) {
+            if (singleMwState.mwGatt != null) {
+                singleMwState.mwGatt.close();
+                singleMwState.mwGatt= null;
+            }
             singleMwState.connected= false;
             singleMwState.deviceState= null;
             
