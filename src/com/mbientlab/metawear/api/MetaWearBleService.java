@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.mbientlab.metawear.api.GATT.GATTCharacteristic;
 import com.mbientlab.metawear.api.GATT.GATTService;
@@ -221,6 +222,7 @@ public class MetaWearBleService extends Service {
     private static final HashMap<BluetoothDevice, MetaWearState> metaWearStates= new HashMap<>();
     
     private boolean useLocalBroadcastMnger= false;
+    private final AtomicBoolean isExecGattActions= new AtomicBoolean(false);
     private final ConcurrentLinkedQueue<GattAction> gattActions= new ConcurrentLinkedQueue<>();
     private MetaWearState singleMwState= null;
     private MetaWearControllerImpl singleController= null;
@@ -289,9 +291,7 @@ public class MetaWearBleService extends Service {
                             for(DeviceCallbacks it: mwState.deviceCallbacks) {
                                 it.disconnected();
                             }
-                            if (!intent.getBooleanExtra(Extra.EXPLICIT_CLOSE, false)) {
-                                mwState.mwController.close(false);
-                            } else if (!mwState.retainState) {
+                            if (!mwState.retainState) {
                                 mwState.resetState();
                                 metaWearStates.remove(mwState.mwBoard);
                             }
@@ -328,6 +328,7 @@ public class MetaWearBleService extends Service {
     
     private void execGattAction() {
         if (!gattActions.isEmpty()) {
+            isExecGattActions.set(true);
             gattActions.poll().execAction();
         }
     }
@@ -341,15 +342,16 @@ public class MetaWearBleService extends Service {
             public void execAction() {
                 byte[] next= mwState.commandBytes.poll();
                 
-                if (mwState.mwGatt != null) {
+                if (next != null && mwState.mwGatt != null) {
                     BluetoothGattService service= mwState.mwGatt.getService(GATTService.METAWEAR.uuid());
                     BluetoothGattCharacteristic command= service.getCharacteristic(MetaWear.COMMAND.uuid());
                     command.setValue(next);
                     mwState.mwGatt.writeCharacteristic(command);
+                } else {
+                    execGattAction();
                 }
             }
         });
-        execGattAction();
     }
 
     /**
@@ -368,10 +370,11 @@ public class MetaWearBleService extends Service {
             
                     BluetoothGattCharacteristic characteristic= service.getCharacteristic(charInfo.uuid());
                     mwState.mwGatt.readCharacteristic(characteristic);
+                } else {
+                    execGattAction();
                 }
             }
         });
-        execGattAction();
     }
 
     private abstract class MetaWearControllerImpl extends BluetoothGattCallback implements MetaWearController {
@@ -463,11 +466,14 @@ public class MetaWearBleService extends Service {
                 }
             });
             execGattAction();
+            
         }
 
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt,
                 BluetoothGattDescriptor descriptor, int status) {
+            isExecGattActions.set(!gattActions.isEmpty());
+            
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Intent intent= new Intent(Action.GATT_ERROR);
                 intent.putExtra(Extra.STATUS, status);
@@ -475,7 +481,7 @@ public class MetaWearBleService extends Service {
                 intent.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
                 broadcastIntent(intent);
             }
-
+            
             if (!mwState.shouldNotify.isEmpty()) setupNotification(mwState);
             else mwState.deviceState= DeviceState.READY;
             
@@ -504,6 +510,7 @@ public class MetaWearBleService extends Service {
         public void onCharacteristicRead(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
             Intent intent;
+            isExecGattActions.set(!gattActions.isEmpty());
             
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 intent= new Intent(Action.GATT_ERROR);
@@ -532,11 +539,15 @@ public class MetaWearBleService extends Service {
                     close(mwState.notifyUser);
                 }
             }
+            
+            execGattAction();
         }
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
+            isExecGattActions.set(!gattActions.isEmpty());
+            
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Intent intent= new Intent(Action.GATT_ERROR);
                 intent.putExtra(Extra.STATUS, status);
@@ -555,6 +566,8 @@ public class MetaWearBleService extends Service {
                     close(mwState.notifyUser);
                 }
             }
+            
+            execGattAction();
         }
 
         @Override
@@ -1609,7 +1622,13 @@ public class MetaWearBleService extends Service {
             }
             if (mwState.deviceState == DeviceState.READY) {
                 mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
-                readCharacteristic(mwState);
+                
+                if (!isExecGattActions.get()) {
+                    readCharacteristic(mwState);
+                    execGattAction();
+                } else {
+                    readCharacteristic(mwState);
+                }
             }
         }
         @Override
@@ -1617,7 +1636,13 @@ public class MetaWearBleService extends Service {
             mwState.readCharUuids.add(Battery.BATTERY_LEVEL);
             if (mwState.deviceState == DeviceState.READY) {
                 mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
-                readCharacteristic(mwState);
+                
+                if (!isExecGattActions.get()) {
+                    readCharacteristic(mwState);
+                    execGattAction();
+                } else {
+                    readCharacteristic(mwState);
+                }
             }
         }
         
@@ -1696,6 +1721,8 @@ public class MetaWearBleService extends Service {
                         if (!metaWearStates.containsKey(mwBoard)) {
                             metaWearStates.put(mwBoard, mwState);
                         }
+                        MetaWearBleService.this.close(mwState);
+                        
                         mwState.notifyUser= false;
                         mwState.readyToClose= false;
                         mwState.deviceState= null;
@@ -1730,6 +1757,8 @@ public class MetaWearBleService extends Service {
                     if (wait) {
                         mwState.notifyUser= notify;
                         mwState.readyToClose= true;
+                    } else {
+                        close(notify);
                     }
                 }
             };
@@ -1926,7 +1955,14 @@ public class MetaWearBleService extends Service {
         mwState.commandBytes.add(command);
         if (mwState.deviceState == DeviceState.READY) {
             mwState.deviceState= DeviceState.WRITING_CHARACTERISTICS;
-            writeCommand(mwState);
+            
+            if (!isExecGattActions.get()) {
+                writeCommand(mwState);
+                execGattAction();
+            } else {
+                writeCommand(mwState);
+            }
+
         }
     }
 }
