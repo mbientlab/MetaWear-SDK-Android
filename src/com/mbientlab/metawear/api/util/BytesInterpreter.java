@@ -66,6 +66,29 @@ public class BytesInterpreter {
         
         return bytesToGs(dataConfig, output);
     }
+    /**
+     * Convert raw accelerometer data into Gs.  This version is for processing data  
+     * received from the logger and boards using firmware 0.9.0 or higher.
+     * @param accelOutput Bytes from the log entry
+     * @param offset Index offset to start the conversion from.  For 1 axis triggers, this 
+     * value should always be 0.  For 2 axis triggers (XY or YZ), use 0 for the first axis, 
+     * and 2 for the second axis.
+     * @return
+     */
+    public static float logBytesToGs(byte[] accelOutput, byte offset) {
+        short output= ByteBuffer.wrap(accelOutput, offset, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+        return output / 1000.0f;
+    }
+    /**
+     * Convert raw temperature data into Celsius
+     * @param tempOutput Byte representation of temperature data
+     * @param thermistorMode True if the data was recorded in thermistor mode
+     * @return Converted temperature in Celsius
+     */
+    public static float bytesToTemp(byte[] tempOutput, boolean thermistorMode) {
+        short temp= ByteBuffer.wrap(tempOutput).order(ByteOrder.LITTLE_ENDIAN).getShort();
+        return temp * (thermistorMode ? 0.125f : 0.25f);
+    }
     
     /**
      * Convert data into the switch state 

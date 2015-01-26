@@ -36,6 +36,7 @@ import com.mbientlab.metawear.api.Register;
 import com.mbientlab.metawear.api.controller.Accelerometer;
 import com.mbientlab.metawear.api.controller.Logging.Trigger;
 import com.mbientlab.metawear.api.controller.MechanicalSwitch;
+import com.mbientlab.metawear.api.controller.Temperature;
 
 /**
  * Collection of predefined triggers for the logging module
@@ -46,16 +47,29 @@ public enum LoggingTrigger implements Trigger {
     SWITCH {
         @Override public Register register() { return MechanicalSwitch.Register.SWITCH_STATE; }
     },
+    TEMPERATURE {
+        @Override public Register register() { return Temperature.Register.TEMPERATURE; }
+        @Override public byte length() {return 2;}
+    },
     /** Logs the X axis values of the accelerometer data output */
     ACCELEROMETER_X_AXIS {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
         @Override public byte length() { return 2; }
+    },
+    ACCELEROMETER_XY_AXIS {
+        @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
+        @Override public byte length() { return 4; }
     },
     /** Logs the Y axis values of the accelerometer data output */
     ACCELEROMETER_Y_AXIS {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
         @Override public byte offset() { return 2; }
         @Override public byte length() { return 2; }
+    },
+    ACCELEROMETER_YZ_AXIS {
+        @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
+        @Override public byte offset() { return 2; }
+        @Override public byte length() { return 4; }
     },
     /** Logs the Z axis values of the accelerometer data output */
     ACCELEROMETER_Z_AXIS {

@@ -330,6 +330,8 @@ public class MetaWearBleService extends Service {
         if (!gattActions.isEmpty()) {
             isExecGattActions.set(true);
             gattActions.poll().execAction();
+        } else {
+            isExecGattActions.set(false);
         }
     }
     /**
@@ -654,10 +656,52 @@ public class MetaWearBleService extends Service {
                 return getLoggingModule();
             case DATA_PROCESSOR:
                 return getDataProcessorModule();
+            case TIMER:
+                return getTimerModule();
             }
             return null;
         }
 
+        private ModuleController getTimerModule() {
+            if (!modules.containsKey(Module.TIMER)) {
+                modules.put(Module.TIMER, new Timer() {
+                    @Override
+                    public void addTimer(int period, short repeat, boolean delay) {
+                        ByteBuffer buffer= ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN);
+                        buffer.putInt(period).putShort(repeat).put((byte) (delay ? 1 : 0));
+                        
+                        writeRegister(mwState, Register.TIMER_ENTRY, buffer.array());
+                    }
+
+                    @Override
+                    public void startTimer(byte timerId) {
+                        writeRegister(mwState, Register.START, timerId);
+                    }
+
+                    @Override
+                    public void stopTimer(byte timerId) {
+                        writeRegister(mwState, Register.STOP, timerId);
+                    }
+
+                    @Override
+                    public void removeTimer(byte timerId) {
+                        writeRegister(mwState, Register.REMOVE, timerId);
+                    }
+
+                    @Override
+                    public void enableNotification(byte timerId) {
+                        writeRegister(mwState, Register.TIMER_NOTIFY, (byte) 1);
+                        writeRegister(mwState, Register.TIMER_NOTIFY_ENABLE, timerId, (byte) 1);
+                    }
+
+                    @Override
+                    public void disableNotification(byte timerId) {
+                        writeRegister(mwState, Register.TIMER_NOTIFY_ENABLE, timerId, (byte) 0);
+                    }
+                });
+            }
+            return modules.get(Module.TIMER);
+        }
         private ModuleController getDataProcessorModule() {
             if (!modules.containsKey(Module.DATA_PROCESSOR)) {
                 modules.put(Module.DATA_PROCESSOR, new DataProcessor() {

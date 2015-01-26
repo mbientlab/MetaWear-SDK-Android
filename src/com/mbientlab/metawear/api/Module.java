@@ -60,6 +60,7 @@ public enum Module {
     DATA_PROCESSOR((byte) 0x9, DataProcessor.Register.values()),
     EVENT((byte)0xa, Event.Register.values()),
     LOGGING((byte)0xb, Logging.Register.values()),
+    TIMER((byte)0xc, Timer.Register.values()),
     /** Debug mode for testing purposes */
     DEBUG((byte)0xfe, Debug.Register.values());
     
