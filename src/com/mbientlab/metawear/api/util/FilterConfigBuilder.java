@@ -109,8 +109,40 @@ public abstract class FilterConfigBuilder {
      * @see com.mbientlab.metawear.api.controller.DataProcessor.FilterType#PASSTHROUGH
      */
     public static class PassthroughBuilder extends FilterConfigBuilder {
+        /**
+         * Criteria that determines whether data is allowed to pass
+         * @author etsai
+         */
+        public enum Mode {
+            /** All data is passed through */
+            ALL,
+            /** Only pass data through if the reference is a non-zero value */
+            CONDITIONAL,
+            /** Only pass the nth entry through, as set by the reference value */
+            COUNT;
+        }
         public PassthroughBuilder() {
-            super(0, FilterType.PASSTHROUGH);
+            super(3, FilterType.PASSTHROUGH);
+        }
+        
+        /**
+         * Sets what kind of pass through mode the filter should use
+         * @param mode Pass through mode to use 
+         * @return Calling object
+         */
+        public PassthroughBuilder withMode(Mode mode) {
+            parameters[0]= (byte) mode.ordinal();
+            return this;
+        }
+        /**
+         * Sets the reference to determine if the pass through mode should let data through 
+         * @param reference Value for the pass through modes
+         * @return Calling object
+         */
+        public PassthroughBuilder withReference(short reference) {
+            parameters[1]= (byte)(reference & 0xff);
+            parameters[2]= (byte)((reference >> 8) & 0xff);
+            return this;
         }
     }
     
@@ -142,6 +174,23 @@ public abstract class FilterConfigBuilder {
          */
         public LowPassBuilder withSampleSize(byte nSamples) {
             parameters[1]= nSamples;
+            return this;
+        }
+    }
+    
+    public static class PeakDetectorBuilder extends FilterConfigBuilder {
+        public PeakDetectorBuilder() {
+            super(3, FilterType.PEAK_DETECTOR);
+        }
+        
+        public PeakDetectorBuilder withLookAhead(byte count) {
+            parameters[0]= count;
+            return this;
+        }
+        
+        public PeakDetectorBuilder withDelta(short delta) {
+            parameters[1]= (byte)(delta & 0xff);
+            parameters[2]= (byte)((delta >> 8) & 0xff);
             return this;
         }
     }
@@ -242,6 +291,11 @@ public abstract class FilterConfigBuilder {
      * @see com.mbientlab.metawear.api.controller.DataProcessor.FilterType#TIME_DELAY
      */
     public static class TimeDelayBuilder extends FilterConfigBuilder {
+        public enum FilterMode {
+            ABSOLUTE,
+            DIFFERENTIAL;
+        }
+        
         public TimeDelayBuilder() {
             super(5, FilterType.TIME_DELAY);
         }
@@ -252,7 +306,12 @@ public abstract class FilterConfigBuilder {
          * @return Calling object
          */
         public TimeDelayBuilder withDataSize(byte size) {
-            parameters[0]= (byte) (size - 1);
+            parameters[0]|= (byte) ((size - 1) & 0x7);
+            return this;
+        }
+        
+        public TimeDelayBuilder withFilterMode(FilterMode mode) {
+            parameters[0]|= (byte)((mode.ordinal() & 0x7) << 3);
             return this;
         }
         /**
@@ -361,6 +420,44 @@ public abstract class FilterConfigBuilder {
          */
         public SampleDelayBuilder withCollectionSize(byte size) {
             parameters[1]= size;
+            return this;
+        }
+    }
+    
+    /**
+     * Builder to configure the pulse detector filter
+     * @author Eric Tsai
+     * @see com.mbientlab.metawear.api.controller.DataProcessor.FilterType#PULSE_DETECTOR
+     */
+    public static class PulseDetectorBuilder extends FilterConfigBuilder {
+        public enum OutputMode {
+            PULSE_WIDTH,
+            PULSE_AREA,
+            PULSE_PEAK;
+        }
+        
+        public PulseDetectorBuilder() {
+            super(9, FilterType.PULSE_DETECTOR);
+        }
+        
+        public PulseDetectorBuilder withDataSize(byte size) {
+            parameters[0]= (byte) (size - 1);
+            return this;
+        }
+        
+        public PulseDetectorBuilder withOutputMode(OutputMode mode) {
+            parameters[2]= (byte) mode.ordinal();
+            return this;
+        }
+        public PulseDetectorBuilder withThreshold(int threshold) {
+            byte[] buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(threshold).array();
+            System.arraycopy(buffer, 0, parameters, 3, buffer.length);
+            
+            return this;
+        }
+        public PulseDetectorBuilder withWidth(short width) {
+            parameters[7]= (byte)(width & 0xff);
+            parameters[8]= (byte)((width >> 8) & 0xff);
             return this;
         }
     }

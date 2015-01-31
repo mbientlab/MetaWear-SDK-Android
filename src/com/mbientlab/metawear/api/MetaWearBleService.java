@@ -151,11 +151,21 @@ public class MetaWearBleService extends Service {
         private final Register srcReg;
         private final byte index;
         
+        private boolean hasParamConfig;
+        private byte length, offset, destOffset;
+        
         public EventTriggerBuilder(Register srcReg, byte index) {
             this.srcReg= srcReg;
             this.index= index;
+            hasParamConfig= false;
         }
         
+        public void setParameterConfig(byte length, byte offset, byte destOffset) {
+            hasParamConfig= true;
+            this.length= length;
+            this.offset= offset;
+            this.destOffset= destOffset;
+        }
         public EventTriggerBuilder withDestRegister(final Register destReg, final byte[] command, 
                 final boolean isRead) {
             entryBytes.add(new EventInfo() {
@@ -164,6 +174,12 @@ public class MetaWearBleService extends Service {
                     byte destOpcode= destReg.opcode();
                     if (isRead) {
                         destOpcode |= 0x80;
+                    }
+                    if (hasParamConfig) {
+                        return new byte[] {srcReg.module().opcode, srcReg.opcode(), index,
+                                destReg.module().opcode, destOpcode, (byte) command.length, 
+                                (byte) (0x01 | ((length << 1) & 0xff) | ((offset << 4) & 0xff)), 
+                                destOffset};
                     }
                     return new byte[] {srcReg.module().opcode, srcReg.opcode(), index,
                             destReg.module().opcode, destOpcode, (byte) command.length};
@@ -719,17 +735,27 @@ public class MetaWearBleService extends Service {
                         writeRegister(mwState, Register.FILTER_CREATE, attributes);
                     }
 
-                    @Override
-                    public void addFilter(Trigger trigger, FilterConfig config) {
+                    private void addFilter(boolean read, Trigger trigger, FilterConfig config) {
                         byte[] attributes= new byte[config.bytes().length + 5];
                         attributes[0]= trigger.register().module().opcode;
                         attributes[1]= trigger.register().opcode();
                         attributes[2]= trigger.index();
                         attributes[3]= (byte) (trigger.offset() | ((trigger.length() - 1) << 5));
                         attributes[4]= (byte) (config.type().ordinal() + 1);
+                        if (read) {
+                            attributes[1]|= 0x80;
+                        }
                         System.arraycopy(config.bytes(), 0, attributes, 5, config.bytes().length);
                         
                         writeRegister(mwState, Register.FILTER_CREATE, attributes);
+                    }
+                    @Override
+                    public void addReadFilter(Trigger trigger, FilterConfig config) {
+                        addFilter(true, trigger, config);
+                    }
+                    @Override
+                    public void addFilter(Trigger trigger, FilterConfig config) {
+                        addFilter(false, trigger, config);
                     }
 
                     @Override
@@ -747,6 +773,14 @@ public class MetaWearBleService extends Service {
                     @Override
                     public void resetFilterState(byte filterId) {
                         writeRegister(mwState, Register.FILTER_STATE, filterId);
+                    }
+                    
+                    @Override
+                    public void setFilterState(byte filterId, byte[] state) {
+                        byte[] mergedState= new byte[state.length + 1];
+                        mergedState[0]= filterId;
+                        System.arraycopy(state, 0, mergedState, 1, state.length);
+                        writeRegister(mwState, Register.FILTER_STATE, mergedState);
                     }
 
                     @Override
@@ -806,6 +840,17 @@ public class MetaWearBleService extends Service {
                         mwState.isRecording= true;
                         
                         mwState.etBuilder= new EventTriggerBuilder(srcReg, index);
+                    }
+                    
+                    @Override
+                    public void recordCommand(
+                            com.mbientlab.metawear.api.Register srcReg, 
+                            byte index, byte[] extra) {
+                        recordMacro(srcReg, index);
+                        
+                        if (extra.length >= 3) {
+                            mwState.etBuilder.setParameterConfig(extra[0], extra[1], extra[2]);
+                        }
                     }
 
                     @Override

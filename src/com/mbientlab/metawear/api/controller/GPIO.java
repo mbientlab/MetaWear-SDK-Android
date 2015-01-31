@@ -77,9 +77,11 @@ public interface GPIO extends ModuleController {
             @Override public byte opcode() { return 0x6; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short value= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+                short value= ByteBuffer.wrap(data, 3, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+                short oldValue= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 for(ModuleCallbacks it: callbacks) {
-                    ((Callbacks)it).receivedAnalogInputAsAbsValue(value);
+                    ((Callbacks)it).receivedAnalogInputAsAbsValue(oldValue);
+                    ((Callbacks)it).receivedAnalogInputAsAbsValue(data[2], value);
                 }
             }
         },
@@ -88,9 +90,11 @@ public interface GPIO extends ModuleController {
             @Override public byte opcode() { return 0x7; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short value= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+                short value= ByteBuffer.wrap(data, 3, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+                short oldValue= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 for(ModuleCallbacks it: callbacks) {
-                    ((Callbacks)it).receivedAnalogInputAsSupplyRatio(value);
+                    ((Callbacks)it).receivedAnalogInputAsSupplyRatio(oldValue);
+                    ((Callbacks)it).receivedAnalogInputAsSupplyRatio(data[2], value);
                 }
             }
         },
@@ -101,6 +105,7 @@ public interface GPIO extends ModuleController {
                     byte[] data) {
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).receivedDigitalInput(data[2]);
+                    ((Callbacks)it).receivedDigitalInput(data[2], data[3]);
                 }
             }
         },
@@ -135,20 +140,29 @@ public interface GPIO extends ModuleController {
         public final Module getModule() { return Module.GPIO; }
         
         /**
-         * Called when the analog input has been read as an absolute value
+         * Called when the analog input has been read as an absolute value.  This version is for firmware prior to v1.0.0.
          * @param value Value in mV
+         * @deprecated As of v1.4, use {@link #receivedAnalogInputAsAbsValue(byte, short)}.  
+         * Firmware v1.0.0 on broadcasts the gpio pin along with the analog data
          */
         public void receivedAnalogInputAsAbsValue(short value) { }
+        public void receivedAnalogInputAsAbsValue(byte pin, short value) { }
         /**
-         * Called when the analog input has been read as a supply ratio
+         * Called when the analog input has been read as a supply ratio.  This version is for firmware prior to v1.0.0.
          * @param value 10 bit representation of the voltage where 0 = 0V and 1023 = 3V
+         * @deprecated As of v1.4, use {@link #receivedAnalogInputAsSupplyRatio(byte, short)}.  
+         * Firmware v1.0.0 on broadcasts the gpio pin along with the analog data
          */
         public void receivedAnalogInputAsSupplyRatio(short value) { }
+        public void receivedAnalogInputAsSupplyRatio(byte pin, short value) { }
         /**
-         * Called when the digital input has been read
+         * Called when the digital input has been read.  This version is for firmware prior to v1.0.0.
          * @param value Either 0 or 1
+         * @deprecated As of v1.4, use {@link #receivedDigitalInput(byte, byte)}.  
+         * Firmware v1.0.0 on broadcasts the gpio pin along with the digital data
          */
         public void receivedDigitalInput(byte value) { }
+        public void receivedDigitalInput(byte pin, byte value) { }
         /**
          * Called when the pin has changed state
          * @param pin GPIO pin that was active

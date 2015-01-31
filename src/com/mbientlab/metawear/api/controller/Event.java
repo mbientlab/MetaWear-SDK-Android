@@ -187,6 +187,9 @@ public interface Event extends ModuleController {
      * @param index Register index to trigger the event
      */
     public void recordMacro(com.mbientlab.metawear.api.Register srcReg, byte index);
+    
+    public void recordCommand(com.mbientlab.metawear.api.Register srcReg, byte index, byte[] extra);
+    
     /**
      * Stop the macro recording
      * @return Number of commands

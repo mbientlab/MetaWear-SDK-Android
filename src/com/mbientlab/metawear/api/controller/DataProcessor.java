@@ -217,7 +217,7 @@ public interface DataProcessor extends ModuleController {
         /** Averages received data */
         LOW_PASS,
         NO_OP,
-        NO_OP_2,
+        PEAK_DETECTOR,
         /** Compares input data against a reference value */
         COMPARATOR,
         /** Performs root mean square over a set of data */
@@ -227,7 +227,8 @@ public interface DataProcessor extends ModuleController {
         /** Perform simple math operations on the data */
         MATH,
         /** Only allow data through once a certain amount has been accumulated */
-        SAMPLE_DELAY;
+        SAMPLE_DELAY,
+        PULSE_DETECTOR;
     }
     
     /**
@@ -262,6 +263,7 @@ public interface DataProcessor extends ModuleController {
      * @param config Configuration of the filter to add
      */
     public void addFilter(Trigger trigger, FilterConfig config);
+    public void addReadFilter(Trigger trigger, FilterConfig config);
     /**
      * Set the configuration of a filter
      * @param filterId ID of the filter to modify
@@ -273,6 +275,7 @@ public interface DataProcessor extends ModuleController {
      * @param filterId ID of the filter to reset
      */
     public void resetFilterState(byte filterId);
+    public void setFilterState(byte filterId, byte[]state);
     /**
      * Remove a filter
      * @param filterId User id of the filter
