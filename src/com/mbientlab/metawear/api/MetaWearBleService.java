@@ -30,9 +30,9 @@
  */
 package com.mbientlab.metawear.api;
 
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -42,6 +42,7 @@ import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.mbientlab.metawear.api.GATT.GATTCharacteristic;
 import com.mbientlab.metawear.api.GATT.GATTService;
@@ -67,6 +68,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Binder;
+import android.os.Build;
 import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
 
@@ -111,8 +113,6 @@ public class MetaWearBleService extends Service {
                 "com.mbientlab.com.metawear.api.MetaWearBleService.Action.RSSI_READ";
     }
     private class Extra {
-        public static final String EXPLICIT_CLOSE=
-                "com.mbientlab.metawear.api.MetaWearBleService.Extra.EXPLICIT_CLOSE";
         public static final String BLUETOOTH_DEVICE=
                 "com.mbientlab.metawear.api.MetaWearBleService.Extra.BLUETOOTH_DEVICE";
         /** Extra intent information identifying the gatt operation */
@@ -136,7 +136,7 @@ public class MetaWearBleService extends Service {
     }
     
     private interface GattAction {
-        public void execAction();
+        public boolean execAction();
     }
     private interface InternalCallback {
         public void process(byte[] data);
@@ -199,6 +199,7 @@ public class MetaWearBleService extends Service {
     }
    
     private final static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+    private final static int RECORDING_EVENT= 0x1, RECORDING_MACRO= 0x2;
     
     private class MetaWearState {
         public MetaWearState(BluetoothDevice mwBoard) {
@@ -214,21 +215,20 @@ public class MetaWearBleService extends Service {
         
         public void resetState() {
             mwController.clearCallbacks();
-            shouldNotify.clear();
-            commandBytes.clear();
-            readCharUuids.clear();
+            queuedGattActions.clear();
+            numGattActions.set(0);
+            numDescriptors.set(0);
         }
 
         public BluetoothDevice mwBoard;
-        public byte thermistorMode= 0;
+        public int isRecording= 0;
         public EventTriggerBuilder etBuilder;
-        public boolean connected, isRecording= false, retainState= true, readyToClose, notifyUser;
+        public boolean connected, retainState= true, readyToClose, notifyUser;
         public MetaWearControllerImpl mwController= null;
         public BluetoothGatt mwGatt= null;
         public DeviceState deviceState= null;
-        public final ArrayDeque<BluetoothGattCharacteristic> shouldNotify= new ArrayDeque<>();
-        public final ConcurrentLinkedQueue<byte[]> commandBytes= new ConcurrentLinkedQueue<>();
-        public final ConcurrentLinkedQueue<GATTCharacteristic> readCharUuids= new ConcurrentLinkedQueue<>();
+        public final AtomicInteger numGattActions= new AtomicInteger(0), numDescriptors= new AtomicInteger(0);
+        public final ConcurrentLinkedQueue<GattAction> queuedGattActions= new ConcurrentLinkedQueue<>();
         public final HashMap<Register, InternalCallback> internalCallbacks= new HashMap<>();
         public final HashMap<Byte, ArrayList<ModuleCallbacks>> moduleCallbackMap= new HashMap<>();
         public final HashSet<DeviceCallbacks> deviceCallbacks= new HashSet<>();
@@ -237,11 +237,11 @@ public class MetaWearBleService extends Service {
     /** GATT connection to the ble device */
     private static final HashMap<BluetoothDevice, MetaWearState> metaWearStates= new HashMap<>();
     
-    private boolean useLocalBroadcastMnger= false;
     private final AtomicBoolean isExecGattActions= new AtomicBoolean(false);
     private final ConcurrentLinkedQueue<GattAction> gattActions= new ConcurrentLinkedQueue<>();
     private MetaWearState singleMwState= null;
     private MetaWearControllerImpl singleController= null;
+    private LocalBroadcastManager localBroadcastMngr;
     
     /**
      * Get the IntentFilter for actions broadcasted by the MetaWear service
@@ -335,41 +335,23 @@ public class MetaWearBleService extends Service {
     }
     
     private void broadcastIntent(Intent intent) {
-        if (useLocalBroadcastMnger) {
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        if (localBroadcastMngr != null) {
+            localBroadcastMngr.sendBroadcast(intent);
         } else {
             sendBroadcast(intent);
         }
     }
     
-    private void execGattAction() {
-        if (!gattActions.isEmpty()) {
+    private void execGattAction(boolean fromCallback) {
+        if (!gattActions.isEmpty() && (fromCallback || !isExecGattActions.get())) {
             isExecGattActions.set(true);
-            gattActions.poll().execAction();
-        } else {
-            isExecGattActions.set(false);
-        }
-    }
-    /**
-     * Writes a command to MetaWear via the command register UUID
-     * @see Characteristics.MetaWear#COMMAND
-     */
-    private void writeCommand(final MetaWearState mwState) {
-        gattActions.add(new GattAction() {
-            @Override
-            public void execAction() {
-                byte[] next= mwState.commandBytes.poll();
-                
-                if (next != null && mwState.mwGatt != null) {
-                    BluetoothGattService service= mwState.mwGatt.getService(GATTService.METAWEAR.uuid());
-                    BluetoothGattCharacteristic command= service.getCharacteristic(MetaWear.COMMAND.uuid());
-                    command.setValue(next);
-                    mwState.mwGatt.writeCharacteristic(command);
-                } else {
-                    execGattAction();
-                }
+            boolean lastResult= false;
+            while(!gattActions.isEmpty() && (lastResult= gattActions.poll().execAction()) == false) { }
+            
+            if (!lastResult && gattActions.isEmpty()) {
+                isExecGattActions.set(false);
             }
-        });
+        }
     }
 
     /**
@@ -377,22 +359,29 @@ public class MetaWearBleService extends Service {
      * An intent with the action CHARACTERISTIC_READ will be broadcasted.
      * @see Action.BluetoothLe#ACTION_CHARACTERISTIC_READ
      */
-    private void readCharacteristic(final MetaWearState mwState) {
-        gattActions.add(new GattAction() {
+    private void readCharacteristic(final MetaWearState mwState, final GATTCharacteristic gattChar) {
+        queueGattAction(mwState, new GattAction() {
             @Override
-            public void execAction() {
-                GATTCharacteristic charInfo= mwState.readCharUuids.poll();
-                
+            public boolean execAction() {
                 if (mwState.mwGatt != null) {
-                    BluetoothGattService service= mwState.mwGatt.getService(charInfo.gattService().uuid());
+                    BluetoothGattService service= mwState.mwGatt.getService(gattChar.gattService().uuid());
             
-                    BluetoothGattCharacteristic characteristic= service.getCharacteristic(charInfo.uuid());
+                    BluetoothGattCharacteristic characteristic= service.getCharacteristic(gattChar.uuid());
                     mwState.mwGatt.readCharacteristic(characteristic);
-                } else {
-                    execGattAction();
+                    return true;
                 }
+                return false;
             }
         });
+    }
+    
+    private void queueGattAction(final MetaWearState mwState, GattAction action) {
+        mwState.numGattActions.incrementAndGet();
+        if (mwState.deviceState != DeviceState.READY) {
+            mwState.queuedGattActions.add(action);
+        } else {
+            gattActions.add(action);
+        }
     }
 
     private abstract class MetaWearControllerImpl extends BluetoothGattCallback implements MetaWearController {
@@ -438,7 +427,16 @@ public class MetaWearBleService extends Service {
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
                     intent.setAction(Action.DEVICE_DISCONNECTED);
-                    mwState.connected= false;
+                    if (mwState.numDescriptors.get() == 0 && mwState.numGattActions.get() == 0)  {
+                        if (mwState.mwGatt != null) {
+                            mwState.mwGatt.close();
+                            mwState.mwGatt= null;
+                        }
+                        mwState.deviceState= null;
+                        mwState.connected= false;
+                    } else {
+                        mwState.readyToClose= true;
+                    }
                     break;
                 default:
                     broadcast= false;
@@ -461,35 +459,35 @@ public class MetaWearBleService extends Service {
                 broadcastIntent(intent);
             } else {
                 for(BluetoothGattService service: gatt.getServices()) {
-                    for(BluetoothGattCharacteristic characteristic: service.getCharacteristics()) {
+                    for(final BluetoothGattCharacteristic characteristic: service.getCharacteristics()) {
                         int charProps = characteristic.getProperties();
                         if ((charProps & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
-                            mwState.shouldNotify.add(characteristic);
+                            mwState.numDescriptors.incrementAndGet();
+                            gattActions.add(new GattAction() {
+                                @Override
+                                public boolean execAction() {
+                                    if (mwState.mwGatt != null) {
+                                        mwState.mwGatt.setCharacteristicNotification(characteristic, true);
+                                        BluetoothGattDescriptor descriptor= characteristic.getDescriptor(CHARACTERISTIC_CONFIG);
+                                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                                        mwState.mwGatt.writeDescriptor(descriptor);
+                                        return true;
+                                    }
+                                    return false;
+                                }
+                            });
                         }
                     }
                 }
                 mwState.deviceState= DeviceState.ENABLING_NOTIFICATIONS;
-                setupNotification(mwState);
+                execGattAction(false);
             }
-        }
-
-        private void setupNotification(final MetaWearState mwState) {
-            gattActions.add(new GattAction() {
-                @Override
-                public void execAction() {
-                    mwState.mwGatt.setCharacteristicNotification(mwState.shouldNotify.peek(), true);
-                    BluetoothGattDescriptor descriptor= mwState.shouldNotify.poll().getDescriptor(CHARACTERISTIC_CONFIG);
-                    descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                    mwState.mwGatt.writeDescriptor(descriptor);
-                }
-            });
-            execGattAction();
-            
         }
 
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt,
                 BluetoothGattDescriptor descriptor, int status) {
+            mwState.numDescriptors.decrementAndGet();
             isExecGattActions.set(!gattActions.isEmpty());
             
             if (status != BluetoothGatt.GATT_SUCCESS) {
@@ -500,36 +498,26 @@ public class MetaWearBleService extends Service {
                 broadcastIntent(intent);
             }
             
-            if (!mwState.shouldNotify.isEmpty()) setupNotification(mwState);
-            else mwState.deviceState= DeviceState.READY;
-            
-            if (mwState.deviceState == DeviceState.READY) {
-                mwState.internalCallbacks.put(Temperature.Register.THERMISTOR_MODE, new InternalCallback() {
-                    @Override
-                    public void process(byte[] data) {
-                        mwState.thermistorMode= data[2];
-                        mwState.internalCallbacks.remove(Temperature.Register.THERMISTOR_MODE);
-                    }
-                });
-                readRegister(mwState, Temperature.Register.THERMISTOR_MODE);
-                if (!mwState.commandBytes.isEmpty()) {
-                    mwState.deviceState= DeviceState.WRITING_CHARACTERISTICS;
-                    writeCommand(mwState);
-                } else if (!mwState.readCharUuids.isEmpty()) {
-                    mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
-                    readCharacteristic(mwState);
-                } else if (mwState.readyToClose) {
+            if (mwState.numDescriptors.get() == 0) {
+                if (mwState.readyToClose) {
                     close(mwState.notifyUser);
+                } else {
+                    mwState.deviceState= DeviceState.READY;
+                    gattActions.addAll(mwState.queuedGattActions);
+                    mwState.queuedGattActions.clear();
                 }
             }
+            
+            execGattAction(true);
         }
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
-            Intent intent;
+            mwState.numGattActions.decrementAndGet();
             isExecGattActions.set(!gattActions.isEmpty());
             
+            Intent intent;
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 intent= new Intent(Action.GATT_ERROR);
                 intent.putExtra(Extra.STATUS, status);
@@ -543,27 +531,16 @@ public class MetaWearBleService extends Service {
             intent.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
             broadcastIntent(intent);
             
-            if (!mwState.readCharUuids.isEmpty()) readCharacteristic(mwState); 
-            else mwState.deviceState= DeviceState.READY;
-            
-            if (mwState.deviceState == DeviceState.READY) {
-                if (!mwState.commandBytes.isEmpty()) {
-                    mwState.deviceState= DeviceState.WRITING_CHARACTERISTICS;
-                    writeCommand(mwState);
-                } else if (!mwState.readCharUuids.isEmpty()) {
-                    mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
-                    readCharacteristic(mwState);
-                } else if (mwState.readyToClose) {
-                    close(mwState.notifyUser);
-                }
+            if (mwState.readyToClose && mwState.numGattActions.get() == 0) {
+                close(mwState.notifyUser);
             }
-            
-            execGattAction();
+            execGattAction(true);
         }
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
+            mwState.numGattActions.decrementAndGet();
             isExecGattActions.set(!gattActions.isEmpty());
             
             if (status != BluetoothGatt.GATT_SUCCESS) {
@@ -574,18 +551,10 @@ public class MetaWearBleService extends Service {
                 broadcastIntent(intent);
             }
             
-            if (!mwState.commandBytes.isEmpty()) writeCommand(mwState);
-            else mwState.deviceState= DeviceState.READY;
-            if (mwState.deviceState == DeviceState.READY) {
-                if (!mwState.readCharUuids.isEmpty()) {                
-                    mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
-                    readCharacteristic(mwState);
-                } else if (mwState.readyToClose) {
-                    close(mwState.notifyUser);
-                }
+            if (mwState.readyToClose && mwState.numGattActions.get() == 0) {
+                close(mwState.notifyUser);
             }
-            
-            execGattAction();
+            execGattAction(true);
         }
 
         @Override
@@ -595,20 +564,13 @@ public class MetaWearBleService extends Service {
                 Register mwRegister= Module.lookupModule(characteristic.getValue()[0])
                         .lookupRegister(characteristic.getValue()[1]);
                 
-                byte[] bleData;
-                if (mwRegister == Temperature.Register.TEMPERATURE) {
-                    bleData= Arrays.copyOf(characteristic.getValue(), characteristic.getValue().length + 1);
-                    bleData[bleData.length - 1]= mwState.thermistorMode;
-                } else {
-                    bleData= characteristic.getValue();
-                }
                 Intent intent= new Intent(Action.NOTIFICATION_RECEIVED);
-                intent.putExtra(Extra.CHARACTERISTIC_VALUE, bleData);
+                intent.putExtra(Extra.CHARACTERISTIC_VALUE, characteristic.getValue());
                 intent.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
                 broadcastIntent(intent);
                 
                 if (mwState.internalCallbacks.containsKey(mwRegister)) {
-                    mwState.internalCallbacks.get(mwRegister).process(bleData);
+                    mwState.internalCallbacks.get(mwRegister).process(characteristic.getValue());
                 }
             }
         }
@@ -674,10 +636,183 @@ public class MetaWearBleService extends Service {
                 return getDataProcessorModule();
             case TIMER:
                 return getTimerModule();
+            case I2C:
+                return getI2CModule();
+            case SETTINGS:
+                return getSettingsModule();
+            case MACRO:
+                return getMacroModule();
             }
             return null;
         }
 
+        private ModuleController getMacroModule() {
+            if (!modules.containsKey(Module.MACRO)) {
+                modules.put(Module.MACRO, new Macro() {
+                    @Override
+                    public void enableMacros() {
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte) 1);
+                    }
+                    
+                    @Override
+                    public void disableMacros() {
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte) 0);
+                    }
+                    
+                    @Override
+                    public void recordMacro(boolean executeOnBoot) {
+                        queueRegisterAction(mwState, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, 
+                                true, Register.ADD_MACRO, (byte) (executeOnBoot ? 1 : 0));
+                        mwState.isRecording|= RECORDING_MACRO;
+                    }
+
+                    @Override
+                    public void stopRecord() {
+                        mwState.isRecording&= ~RECORDING_MACRO;
+                        queueRegisterAction(mwState, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                                true, Register.END_MACRO);
+                    }
+
+                    @Override
+                    public void readMacroInfo(byte macroId) {
+                        queueRegisterAction(mwState, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                                false, Register.ADD_MACRO, macroId);
+                    }
+                    
+                    @Override
+                    public void readMacroCommand(byte macroId, byte commandNum) {
+                        queueRegisterAction(mwState, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                                false, Register.ADD_COMMAND, macroId, commandNum);
+                    }
+                    
+                    @Override
+                    public void executeMacro(byte macroId) {
+                        queueRegisterAction(mwState, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                                true, Register.EXEC_MACRO, macroId);
+                    }
+
+                    @Override
+                    public void enableProgressNotfiy(byte macroId) {
+                        queueRegisterAction(mwState, true, Register.MACRO_NOTIFY, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.MACRO_NOTIFY_ENABLE, macroId, (byte) 1);
+                    }
+                    
+                    @Override
+                    public void disableProgressNotfiy(byte macroId) {
+                        queueRegisterAction(mwState, true, Register.MACRO_NOTIFY_ENABLE, macroId, (byte) 0);
+                    }
+
+                    @Override
+                    public void eraseMacros() {
+                        queueRegisterAction(mwState, true, Register.ERASE_ALL);
+                    }
+                });
+            }
+            return modules.get(Module.MACRO);
+        }
+        private ModuleController getSettingsModule() {
+            if (!modules.containsKey(Module.SETTINGS)) {
+                modules.put(Module.SETTINGS, new Settings() {
+                    @Override
+                    public Settings setDeviceName(String name) {
+                        try {
+                            queueRegisterAction(mwState, true, Register.DEVICE_NAME, name.getBytes("US-ASCII"));
+                        } catch (UnsupportedEncodingException e) {
+                            queueRegisterAction(mwState, true, Register.DEVICE_NAME, name.getBytes());
+                        }
+                        return this;
+                    }
+
+                    @Override
+                    public Settings setAdvertisingInterval(short interval, byte timeout) {
+                        byte[] params= new byte[] {(byte) (interval & 0xff), 
+                                (byte) ((interval >> 8) & 0xff), timeout};
+                        queueRegisterAction(mwState, true, Register.ADVERTISING_INTERVAL, params);
+                        return this;
+                    }
+
+                    @Override
+                    public Settings setTXPower(byte power) {
+                        queueRegisterAction(mwState, true, Register.TX_POWER, power);
+                        return this;
+                    }
+
+                    @Override
+                    public void removeBond() {
+                        queueRegisterAction(mwState, true, Register.DELETE_BOND, (byte) 1);
+                    }
+
+                    @Override
+                    public void keepBond() {
+                        queueRegisterAction(mwState, true, Register.DELETE_BOND, (byte) 0);
+                    }
+
+                    @Override
+                    public void startAdvertisement() {
+                        queueRegisterAction(mwState, true, Register.START_ADVERTISEMENT);
+                    }
+
+                    @Override
+                    public void initiateBonding() {
+                        queueRegisterAction(mwState, true, Register.INIT_BOND);
+                    }
+
+                    @Override
+                    public void readDeviceName() {
+                        queueRegisterAction(mwState, false, Register.DEVICE_NAME);
+                    }
+
+                    @Override
+                    public void readAdvertisingParams() {
+                        queueRegisterAction(mwState, false, Register.ADVERTISING_INTERVAL);
+                    }
+
+                    @Override
+                    public void readTxPower() {
+                        queueRegisterAction(mwState, false, Register.TX_POWER);
+                    }
+                });
+            };
+            return modules.get(Module.SETTINGS);
+        }
+        private ModuleController getI2CModule() {
+            if (!modules.containsKey(Module.I2C)) {
+                modules.put(Module.I2C, new I2C() {
+                    @Override
+                    public void writeData(byte deviceAddr, byte registerAddr,
+                            byte index, byte[] data) {
+                        byte[] params= new byte[data.length + 4];
+                        params[0]= deviceAddr;
+                        params[1]= registerAddr;
+                        params[2]= index;
+                        params[3]= (byte) data.length;
+                        System.arraycopy(data, 0, params, 4, data.length);
+                        
+                        queueRegisterAction(mwState, true, Register.READ_WRITE, params);
+                    }
+
+                    @Override
+                    public void readData(byte deviceAddr, byte registerAddr,
+                            byte index, byte numBytes) {
+                        queueRegisterAction(mwState, false, Register.READ_WRITE, deviceAddr, registerAddr,
+                                index, numBytes);
+                    }
+
+                    @Override
+                    public void writeData(byte deviceAddr, byte registerAddr,
+                            byte[] data) {
+                        writeData(deviceAddr, registerAddr, (byte) 0xff, data);
+                    }
+
+                    @Override
+                    public void readData(byte deviceAddr, byte registerAddr,
+                            byte numBytes) {
+                        readData(deviceAddr, registerAddr, (byte) 0xff, numBytes);
+                    }
+                });
+            }
+            return modules.get(Module.I2C);
+        }
         private ModuleController getTimerModule() {
             if (!modules.containsKey(Module.TIMER)) {
                 modules.put(Module.TIMER, new Timer() {
@@ -686,33 +821,33 @@ public class MetaWearBleService extends Service {
                         ByteBuffer buffer= ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN);
                         buffer.putInt(period).putShort(repeat).put((byte) (delay ? 1 : 0));
                         
-                        writeRegister(mwState, Register.TIMER_ENTRY, buffer.array());
+                        queueRegisterAction(mwState, true, Register.TIMER_ENTRY, buffer.array());
                     }
 
                     @Override
                     public void startTimer(byte timerId) {
-                        writeRegister(mwState, Register.START, timerId);
+                        queueRegisterAction(mwState, true, Register.START, timerId);
                     }
 
                     @Override
                     public void stopTimer(byte timerId) {
-                        writeRegister(mwState, Register.STOP, timerId);
+                        queueRegisterAction(mwState, true, Register.STOP, timerId);
                     }
 
                     @Override
                     public void removeTimer(byte timerId) {
-                        writeRegister(mwState, Register.REMOVE, timerId);
+                        queueRegisterAction(mwState, true, Register.REMOVE, timerId);
                     }
 
                     @Override
                     public void enableNotification(byte timerId) {
-                        writeRegister(mwState, Register.TIMER_NOTIFY, (byte) 1);
-                        writeRegister(mwState, Register.TIMER_NOTIFY_ENABLE, timerId, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.TIMER_NOTIFY, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.TIMER_NOTIFY_ENABLE, timerId, (byte) 1);
                     }
 
                     @Override
                     public void disableNotification(byte timerId) {
-                        writeRegister(mwState, Register.TIMER_NOTIFY_ENABLE, timerId, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.TIMER_NOTIFY_ENABLE, timerId, (byte) 0);
                     }
                 });
             }
@@ -732,7 +867,7 @@ public class MetaWearBleService extends Service {
                         attributes[4]= (byte)(config.type().ordinal() + 1);
                         
                         System.arraycopy(config.bytes(), 0, attributes, 5, config.bytes().length);
-                        writeRegister(mwState, Register.FILTER_CREATE, attributes);
+                        queueRegisterAction(mwState, true, Register.FILTER_CREATE, attributes);
                     }
 
                     private void addFilter(boolean read, Trigger trigger, FilterConfig config) {
@@ -747,7 +882,7 @@ public class MetaWearBleService extends Service {
                         }
                         System.arraycopy(config.bytes(), 0, attributes, 5, config.bytes().length);
                         
-                        writeRegister(mwState, Register.FILTER_CREATE, attributes);
+                        queueRegisterAction(mwState, true, Register.FILTER_CREATE, attributes);
                     }
                     @Override
                     public void addReadFilter(Trigger trigger, FilterConfig config) {
@@ -767,12 +902,12 @@ public class MetaWearBleService extends Service {
                         bleData[1]= (byte) (config.type().ordinal() + 1);
                         
                         System.arraycopy(config.bytes(), 0, bleData, 2, config.bytes().length);
-                        writeRegister(mwState, Register.FILTER_CONFIGURATION, bleData);
+                        queueRegisterAction(mwState, true, Register.FILTER_CONFIGURATION, bleData);
                     }
                     
                     @Override
                     public void resetFilterState(byte filterId) {
-                        writeRegister(mwState, Register.FILTER_STATE, filterId);
+                        queueRegisterAction(mwState, true, Register.FILTER_STATE, filterId);
                     }
                     
                     @Override
@@ -780,45 +915,43 @@ public class MetaWearBleService extends Service {
                         byte[] mergedState= new byte[state.length + 1];
                         mergedState[0]= filterId;
                         System.arraycopy(state, 0, mergedState, 1, state.length);
-                        writeRegister(mwState, Register.FILTER_STATE, mergedState);
+                        queueRegisterAction(mwState, true, Register.FILTER_STATE, mergedState);
                     }
 
                     @Override
                     public void removeFilter(byte filterId) {
-                        writeRegister(mwState, Register.FILTER_REMOVE, filterId);
+                        queueRegisterAction(mwState, true, Register.FILTER_REMOVE, filterId);
                     }
 
                     @Override
                     public void enableFilterNotify(byte filterId) {
-                        writeRegister(mwState, Register.FILTER_NOTIFICATION, (byte) 1);
-                        writeRegister(mwState, Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.FILTER_NOTIFICATION, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 1);
                     }
 
                     @Override
                     public void disableFilterNotify(byte filterId) {
-                        writeRegister(mwState, Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.FILTER_NOTIFY_ENABLE, filterId, (byte) 0);
                     }
 
                     @Override
                     public void enableModule() {
-                        writeRegister(mwState, Register.ENABLE, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte) 1);
                     }
 
                     @Override
                     public void disableModule() {
-                        writeRegister(mwState, Register.ENABLE, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte) 0);
                     }
 
                     @Override
                     public void filterIdToObject(byte filterId) {
-                        readRegister(mwState, Register.FILTER_CREATE, (byte) 1);
+                        queueRegisterAction(mwState, false, Register.FILTER_CREATE, (byte) 1);
                     }
 
                     @Override
                     public void removeAllFilters() {
-                        for(byte filterId= 0; filterId < 16; filterId++) {
-                            writeRegister(mwState, Register.FILTER_REMOVE, filterId);
-                        }
+                        queueRegisterAction(mwState, true, Register.FILTER_REMOVE_ALL);
                     }
                 });
             }
@@ -837,7 +970,7 @@ public class MetaWearBleService extends Service {
                     public void recordMacro(
                             com.mbientlab.metawear.api.Register srcReg,
                             byte index) {
-                        mwState.isRecording= true;
+                        mwState.isRecording|= RECORDING_EVENT;
                         
                         mwState.etBuilder= new EventTriggerBuilder(srcReg, index);
                     }
@@ -855,45 +988,45 @@ public class MetaWearBleService extends Service {
 
                     @Override
                     public byte stopRecord() {
-                        mwState.isRecording= false;
+                        mwState.isRecording&= ~RECORDING_EVENT;
                         for(EventInfo info: mwState.etBuilder.getEventInfo()) {
-                            writeRegister(mwState, Register.ADD_ENTRY, info.entry());
-                            writeRegister(mwState, Register.EVENT_COMMAND, info.command());
+                            queueRegisterAction(mwState, true, Register.ADD_ENTRY, info.entry());
+                            queueRegisterAction(mwState, true, Register.EVENT_COMMAND, info.command());
                         }
                         
-                        return (byte) mwState.etBuilder.getEventInfo().size();
+                        byte numEntries= (byte) mwState.etBuilder.getEventInfo().size();
+                        mwState.etBuilder= null;
+                        return numEntries;
                     }
 
                     @Override 
                     public void removeMacros() {
-                        for(byte commandId= 0; commandId < 8; commandId++) {
-                            writeRegister(mwState, Register.REMOVE_ENTRY, commandId);
-                        }
+                        queueRegisterAction(mwState, true, Register.REMOVE_ALL_ENTRIES);
                     }
 
                     @Override
                     public void commandIdToObject(byte commandId) {
-                        readRegister(mwState, Register.ADD_ENTRY, (byte) 1);
+                        queueRegisterAction(mwState, false, Register.ADD_ENTRY, (byte) 1);
                     }
 
                     @Override
                     public void readCommandBytes(byte commandId) {
-                        readRegister(mwState, Register.EVENT_COMMAND, (byte) 1);
+                        queueRegisterAction(mwState, false, Register.EVENT_COMMAND, (byte) 1);
                     }
 
                     @Override
                     public void enableModule() {
-                        writeRegister(mwState, Event.Register.EVENT_ENABLE, (byte) 1);
+                        queueRegisterAction(mwState, true, Event.Register.EVENT_ENABLE, (byte) 1);
                     }
 
                     @Override
                     public void disableModule() {
-                        writeRegister(mwState, Event.Register.EVENT_ENABLE, (byte) 0);
+                        queueRegisterAction(mwState, true, Event.Register.EVENT_ENABLE, (byte) 0);
                     }
 
                     @Override
                     public void removeCommand(byte commandId) {
-                        writeRegister(mwState, Register.REMOVE_ENTRY, commandId);
+                        queueRegisterAction(mwState, true, Register.REMOVE_ENTRY, commandId);
                     }
                 });
             }
@@ -904,38 +1037,52 @@ public class MetaWearBleService extends Service {
                 modules.put(Module.LOGGING, new Logging() {
                     @Override
                     public void startLogging() {
-                        writeRegister(mwState, Register.ENABLE, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte) 1);
                     }
 
                     @Override
                     public void stopLogging() {
-                        writeRegister(mwState, Register.ENABLE, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte) 0);
                     }
 
+                    private void addTrigger(boolean read, Trigger triggerObj) {
+                        byte registerOp= triggerObj.register().opcode();
+                        if (read) {
+                            registerOp|= 0x80;
+                        }
+                        queueRegisterAction(mwState, true, Register.ADD_TRIGGER, 
+                                triggerObj.register().module().opcode, 
+                                registerOp, triggerObj.index(), 
+                                (byte) (triggerObj.offset() | ((triggerObj.length() - 1) << 5)));
+                    }
                     @Override
                     public void addTrigger(Trigger triggerObj) {
-                        writeRegister(mwState, Register.ADD_TRIGGER, triggerObj.register().module().opcode, triggerObj.register().opcode(), 
-                                triggerObj.index(), (byte) (triggerObj.offset() | ((triggerObj.length() - 1) << 5)));
+                        addTrigger(false, triggerObj);
+                    }
+                    
+                    @Override
+                    public void addReadTrigger(Trigger triggerObj) {
+                        addTrigger(true, triggerObj);
                     }
 
                     @Override
                     public void triggerIdToObject(byte triggerId) {
-                        readRegister(mwState, Register.ADD_TRIGGER, triggerId);
+                        queueRegisterAction(mwState, false, Register.ADD_TRIGGER, triggerId);
                     }
 
                     @Override
                     public void removeTrigger(byte triggerId) {
-                        writeRegister(mwState, Register.REMOVE_TRIGGER, triggerId);
+                        queueRegisterAction(mwState, true, Register.REMOVE_TRIGGER, triggerId);
                     }
 
                     @Override
                     public void readReferenceTick() {
-                        readRegister(mwState, Register.TIME, (byte) 0);
+                        queueRegisterAction(mwState, false, Register.TIME, (byte) 0);
                     }
 
                     @Override
                     public void readTotalEntryCount() {
-                        readRegister(mwState, Register.LENGTH, (byte) 0);
+                        queueRegisterAction(mwState, false, Register.LENGTH, (byte) 0);
                     }
 
                     @Override
@@ -943,18 +1090,19 @@ public class MetaWearBleService extends Service {
                         ByteBuffer buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
                         buffer.putShort((short) (nEntries & 0xffff)).putShort((short) (notifyIncrement & 0xffff));
                         
-                        writeRegister(mwState, Register.READOUT_NOTIFY, (byte) 1);
-                        writeRegister(mwState, Register.READOUT_PROGRESS, (byte) 1);
-                        writeRegister(mwState, Register.READOUT, buffer.array());
+                        queueRegisterAction(mwState, true, Register.READOUT_NOTIFY, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.READOUT_PROGRESS, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.READOUT, buffer.array());
                     }
 
                     @Override
                     public void removeAllTriggers() {
-                        for(byte triggerId= 0; triggerId < 8; triggerId++) {
-                            writeRegister(mwState, Register.REMOVE_TRIGGER, triggerId);
-                        }
+                        queueRegisterAction(mwState, true, Register.REMOVE_ALL_TRIGGERS);
                     }
                     
+                    public void removeLogEntries(short nEntries) {
+                        queueRegisterAction(mwState, true, Register.REMOVE_ENTRIES, (byte) (nEntries & 0xff), (byte)((nEntries >> 8) & 0xff));
+                    }
                 });
             }
             return modules.get(Module.LOGGING);
@@ -966,17 +1114,18 @@ public class MetaWearBleService extends Service {
                     private final HashSet<Component> activeComponents= new HashSet<>();
                     private final HashSet<Component> activeNotifications= new HashSet<>();
                     private final HashMap<Component, byte[]> configurations= new HashMap<>();
-                    private OutputDataRate accelOdr= OutputDataRate.ODR_100_HZ;;
+                    private OutputDataRate accelOdr= OutputDataRate.ODR_100_HZ;
                     private byte[] globalConfig= new byte[] {0, 0, 0x18, 0, 0};
+                    private float tapDuration= 60.f, tapLatency= 200.f, tapWindow= 300.f;
                     
                     @Override
                     public void enableComponent(Component component, boolean notify) {
                         if (notify) {
                             enableNotification(component);
                         } else {
-                            writeRegister(mwState, Register.GLOBAL_ENABLE, (byte)0);
-                            writeRegister(mwState, component.enable, (byte)1);
-                            writeRegister(mwState, Register.GLOBAL_ENABLE, (byte)1);
+                            queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)0);
+                            queueRegisterAction(mwState, true, component.enable, (byte)1);
+                            queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)1);
                         }
                     }
                     @Override
@@ -986,29 +1135,29 @@ public class MetaWearBleService extends Service {
                     
                     @Override
                     public void enableNotification(Component component) {
-                        writeRegister(mwState, Register.GLOBAL_ENABLE, (byte)0);
-                        writeRegister(mwState, component.enable, (byte)1);
-                        writeRegister(mwState, component.status, (byte)1);
-                        writeRegister(mwState, Register.GLOBAL_ENABLE, (byte)1);
+                        queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)0);
+                        queueRegisterAction(mwState, true, component.enable, (byte)1);
+                        queueRegisterAction(mwState, true, component.status, (byte)1);
+                        queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)1);
                     }
 
                     @Override
                     public void disableNotification(Component component) {
-                        writeRegister(mwState, Register.GLOBAL_ENABLE, (byte)0);
-                        writeRegister(mwState, component.enable, (byte)0);
-                        writeRegister(mwState, component.status, (byte)0);
-                        writeRegister(mwState, Register.GLOBAL_ENABLE, (byte)1);
+                        queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)0);
+                        queueRegisterAction(mwState, true, component.enable, (byte)0);
+                        queueRegisterAction(mwState, true, component.status, (byte)0);
+                        queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)1);
                     }
 
                     @Override
                     public void readComponentConfiguration(Component component) {
-                        readRegister(mwState, component.config, (byte)0);
+                        queueRegisterAction(mwState, false, component.config, (byte)0);
                     }
 
                     @Override
                     public void setComponentConfiguration(Component component,
                             byte[] data) {
-                        writeRegister(mwState, component.config, data);
+                        queueRegisterAction(mwState, true, component.config, data);
                     }
 
                     @Override
@@ -1037,7 +1186,7 @@ public class MetaWearBleService extends Service {
                     }
                     
                     @Override
-                    public ThresholdConfig enableTapDetection(TapType type, Axis axis) {
+                    public TapConfig enableTapDetection(TapType type, Axis axis) {
                         byte[] tapConfig;
                         
                         if (!configurations.containsKey(Component.PULSE)) {
@@ -1061,7 +1210,7 @@ public class MetaWearBleService extends Service {
                         activeComponents.add(Component.PULSE);
                         activeNotifications.add(Component.PULSE);
                         
-                        return new ThresholdConfig() {
+                        return new TapConfig() {
                             @Override
                             public ThresholdConfig withThreshold(float gravity) {
                                 byte nSteps= (byte) (gravity / MMA8452Q_G_PER_STEP);
@@ -1082,6 +1231,24 @@ public class MetaWearBleService extends Service {
                             @Override
                             public byte[] getBytes() {
                                 return configurations.get(Component.PULSE);
+                            }
+
+                            @Override
+                            public TapConfig withDuration(float duration) {
+                                tapDuration= duration;
+                                return this;
+                            }
+
+                            @Override
+                            public TapConfig withLatency(float latency) {
+                                tapLatency= latency;
+                                return this;
+                            }
+
+                            @Override
+                            public TapConfig withWindow(float window) {
+                                tapWindow= window;
+                                return this;
                             }
                         };
                     }
@@ -1219,9 +1386,9 @@ public class MetaWearBleService extends Service {
                                         config[2]= (byte) (Math.max(100 / (10 * multiplier), 20));
                                         break;
                                     case PULSE:
-                                        config[5]= (byte) (Math.min(Math.max(60 / (2.5 * multiplier), 5), 0.625));
-                                        config[6]= (byte) (Math.min(Math.max(200 / (5 * multiplier), 10), 1.25));
-                                        config[7]= (byte) (Math.min(Math.max(300 / (5 * multiplier), 10), 1.25));
+                                        config[5]= (byte) (Math.min(Math.max(tapDuration / (2.5 * multiplier), 5), 0.625));
+                                        config[6]= (byte) (Math.min(Math.max(tapLatency / (5 * multiplier), 10), 1.25));
+                                        config[7]= (byte) (Math.min(Math.max(tapWindow / (5 * multiplier), 10), 1.25));
                                         break;
                                     case TRANSIENT:
                                         config[3]= (byte) (Math.max(50 / (10 * multiplier), 20));
@@ -1233,33 +1400,33 @@ public class MetaWearBleService extends Service {
                                 setComponentConfiguration(active, config);
                             }
                             
-                            writeRegister(mwState, active.enable, (byte)1);
+                            queueRegisterAction(mwState, true, active.enable, (byte)1);
                             if (activeNotifications.contains(active)) {
-                                writeRegister(mwState, active.status, (byte)1);
+                                queueRegisterAction(mwState, true, active.status, (byte)1);
                             }
                         }
                         
                         setComponentConfiguration(Component.DATA, globalConfig);
-                        writeRegister(mwState, Register.GLOBAL_ENABLE, (byte)1);
+                        queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)1);
                     }
                     
                     public void stopComponents() {
-                        writeRegister(mwState, Register.GLOBAL_ENABLE, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte) 0);
                         
                         for(Component active: activeComponents) {
-                            writeRegister(mwState, active.enable, (byte)0);
-                            writeRegister(mwState, active.status, (byte)0);
+                            queueRegisterAction(mwState, true, active.enable, (byte)0);
+                            queueRegisterAction(mwState, true, active.status, (byte)0);
                         }
                     }
                     
                     public void resetAll() {
                         disableAllDetection(false);
                         
-                        writeRegister(mwState, Register.GLOBAL_ENABLE, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte) 0);
                         
                         for(Component it: Component.values()) {
-                            writeRegister(mwState, it.enable, (byte)0);
-                            writeRegister(mwState, it.status, (byte)0);
+                            queueRegisterAction(mwState, true, it.enable, (byte)0);
+                            queueRegisterAction(mwState, true, it.status, (byte)0);
                         }
                     }
 
@@ -1325,11 +1492,18 @@ public class MetaWearBleService extends Service {
                 modules.put(Module.DEBUG, new Debug() {
                     @Override
                     public void resetDevice() {
-                        writeRegister(mwState, Register.RESET_DEVICE);
+                        queueRegisterAction(mwState, true, Register.RESET_DEVICE);
                     }
+                    
                     @Override
                     public void jumpToBootloader() {
-                        writeRegister(mwState, Register.JUMP_TO_BOOTLOADER);
+                        queueRegisterAction(mwState, true, Register.JUMP_TO_BOOTLOADER);
+                    }
+                    
+                    @Override
+                    public void resetAfterGarbageCollect() {
+                        queueRegisterAction(mwState, true, Register.DELAYED_RESET);
+                        queueRegisterAction(mwState, true, Register.GAP_DISCONNECT);
                     }
                 });
             }
@@ -1340,36 +1514,36 @@ public class MetaWearBleService extends Service {
                 modules.put(Module.GPIO, new GPIO() {
                     @Override
                     public void readAnalogInput(byte pin, AnalogMode mode) {
-                        readRegister(mwState, mode.register, pin);
+                        queueRegisterAction(mwState, false, mode.register, pin);
                     }
                     @Override
                     public void readDigitalInput(byte pin) {
-                        readRegister(mwState, Register.READ_DIGITAL_INPUT, pin);
+                        queueRegisterAction(mwState, false, Register.READ_DIGITAL_INPUT, pin);
                     }
                     @Override
                     public void setDigitalOutput(byte pin) {
-                        writeRegister(mwState, Register.SET_DIGITAL_OUTPUT, pin);
+                        queueRegisterAction(mwState, true, Register.SET_DIGITAL_OUTPUT, pin);
                     }
                     @Override
                     public void clearDigitalOutput(byte pin) {
-                        writeRegister(mwState, Register.CLEAR_DIGITAL_OUTPUT, pin);
+                        queueRegisterAction(mwState, true, Register.CLEAR_DIGITAL_OUTPUT, pin);
                     }                
                     @Override
                     public void setDigitalInput(byte pin, PullMode mode) {
-                        writeRegister(mwState, mode.register, pin);
+                        queueRegisterAction(mwState, true, mode.register, pin);
                     }
                     @Override
                     public void setPinChangeType(byte pin, ChangeType type) {
-                        writeRegister(mwState, Register.SET_PIN_CHANGE, pin, (byte) type.ordinal());
+                        queueRegisterAction(mwState, true, Register.SET_PIN_CHANGE, pin, (byte) type.ordinal());
                     }
                     @Override
                     public void enablePinChangeNotification(byte pin) {
-                        writeRegister(mwState, Register.PIN_CHANGE_NOTIFY, (byte) 1);
-                        writeRegister(mwState, Register.PIN_CHANGE_NOTIFY_ENABLE, pin, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.PIN_CHANGE_NOTIFY, (byte) 1);
+                        queueRegisterAction(mwState, true, Register.PIN_CHANGE_NOTIFY_ENABLE, pin, (byte) 1);
                     }
                     @Override
                     public void disablePinChangeNotification(byte pin) {
-                        writeRegister(mwState, Register.PIN_CHANGE_NOTIFY_ENABLE, pin, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.PIN_CHANGE_NOTIFY_ENABLE, pin, (byte) 0);
                     }
                 });
             }
@@ -1380,11 +1554,11 @@ public class MetaWearBleService extends Service {
                 modules.put(Module.IBEACON, new IBeacon() {
                     @Override
                     public void enableIBeacon() {
-                        writeRegister(mwState, Register.ENABLE, (byte)1);                    
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte)1);                    
                     }
                     @Override
                     public void disableIBecon() {
-                        writeRegister(mwState, Register.ENABLE, (byte)0);
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte)0);
                     }
                     @Override
                     public IBeacon setUUID(UUID uuid) {
@@ -1393,36 +1567,36 @@ public class MetaWearBleService extends Service {
                                 .putLong(uuid.getLeastSignificantBits())
                                 .putLong(uuid.getMostSignificantBits())
                                 .array();
-                        writeRegister(mwState, Register.ADVERTISEMENT_UUID, uuidBytes);
+                        queueRegisterAction(mwState, true, Register.ADVERTISEMENT_UUID, uuidBytes);
                         return this;
                     }
                     @Override
                     public void readSetting(Register register) {
-                        readRegister(mwState, register);
+                        queueRegisterAction(mwState, false, register);
                     }
                     @Override
                     public IBeacon setMajor(short major) {
-                        writeRegister(mwState, Register.MAJOR, (byte)(major & 0xff), (byte)((major >> 8) & 0xff));
+                        queueRegisterAction(mwState, true, Register.MAJOR, (byte)(major & 0xff), (byte)((major >> 8) & 0xff));
                         return this;
                     }
                     @Override
                     public IBeacon setMinor(short minor) {
-                        writeRegister(mwState, Register.MINOR, (byte)(minor & 0xff), (byte)((minor >> 8) & 0xff));
+                        queueRegisterAction(mwState, true, Register.MINOR, (byte)(minor & 0xff), (byte)((minor >> 8) & 0xff));
                         return this;
                     }
                     @Override
                     public IBeacon setCalibratedRXPower(byte power) {
-                        writeRegister(mwState, Register.RX_POWER, power);
+                        queueRegisterAction(mwState, true, Register.RX_POWER, power);
                         return this;
                     }
                     @Override
                     public IBeacon setTXPower(byte power) {
-                        writeRegister(mwState, Register.TX_POWER, power);
+                        queueRegisterAction(mwState, true, Register.TX_POWER, power);
                         return this;
                     }
                     @Override
                     public IBeacon setAdvertisingPeriod(short freq) {
-                        writeRegister(mwState, Register.ADVERTISEMENT_PERIOD, (byte)(freq & 0xff), (byte)((freq >> 8) & 0xff));
+                        queueRegisterAction(mwState, true, Register.ADVERTISEMENT_PERIOD, (byte)(freq & 0xff), (byte)((freq >> 8) & 0xff));
                         return this;
                     }
                 });
@@ -1433,13 +1607,13 @@ public class MetaWearBleService extends Service {
             if (!modules.containsKey(Module.LED)) {
                 modules.put(Module.LED, new LED() {
                     public void play(boolean autoplay) {
-                        writeRegister(mwState, Register.PLAY, (byte)(autoplay ? 2 : 1));
+                        queueRegisterAction(mwState, true, Register.PLAY, (byte)(autoplay ? 2 : 1));
                     }
                     public void pause() {
-                        writeRegister(mwState, Register.PLAY, (byte)0);
+                        queueRegisterAction(mwState, true, Register.PLAY, (byte)0);
                     }
                     public void stop(boolean resetChannels) {
-                        writeRegister(mwState, Register.STOP, (byte)(resetChannels ? 1 : 0));
+                        queueRegisterAction(mwState, true, Register.STOP, (byte)(resetChannels ? 1 : 0));
                     }
                     
                     public ChannelDataWriter setColorChannel(final ColorChannel color) {
@@ -1507,7 +1681,7 @@ public class MetaWearBleService extends Service {
                             public void commit() {
                                 channelData[0]= (byte)(color.ordinal());
                                 channelData[1]= 0x2;    ///< Keep it set to flash for now
-                                writeRegister(mwState, Register.MODE, channelData);
+                                queueRegisterAction(mwState, true, Register.MODE, channelData);
                             }
                         };
                     }
@@ -1520,11 +1694,11 @@ public class MetaWearBleService extends Service {
                 modules.put(Module.MECHANICAL_SWITCH, new MechanicalSwitch() {
                     @Override
                     public void enableNotification() {
-                        writeRegister(mwState, Register.SWITCH_STATE, (byte)1);
+                        queueRegisterAction(mwState, true, Register.SWITCH_STATE, (byte)1);
                     }
                     @Override
                     public void disableNotification() {
-                        writeRegister(mwState, Register.SWITCH_STATE, (byte)0);
+                        queueRegisterAction(mwState, true, Register.SWITCH_STATE, (byte)0);
                     }
                 });
             }
@@ -1535,52 +1709,52 @@ public class MetaWearBleService extends Service {
                 modules.put(Module.NEO_PIXEL, new NeoPixel() {
                     @Override
                     public void readStrandState(byte strand) {
-                        readRegister(mwState, Register.INITIALIZE, strand);
+                        queueRegisterAction(mwState, false, Register.INITIALIZE, strand);
                     }
                     @Override
                     public void readHoldState(byte strand) {
-                        readRegister(mwState, Register.HOLD, strand);
+                        queueRegisterAction(mwState, false, Register.HOLD, strand);
                     }
                     @Override
                     public void readPixelState(byte strand, byte pixel) {
-                        readRegister(mwState, Register.PIXEL, strand, pixel);
+                        queueRegisterAction(mwState, false, Register.PIXEL, strand, pixel);
                     }
                     @Override
                     public void readRotationState(byte strand) {
-                        readRegister(mwState, Register.ROTATE, strand);
+                        queueRegisterAction(mwState, false, Register.ROTATE, strand);
                     }
                     @Override
                     public void initializeStrand(byte strand, ColorOrdering ordering,
                             StrandSpeed speed, byte ioPin, byte length) {
-                        writeRegister(mwState, Register.INITIALIZE, strand, 
+                        queueRegisterAction(mwState, true, Register.INITIALIZE, strand, 
                                 (byte)(speed.ordinal() << 2 | ordering.ordinal()), ioPin, length);
                         
                     }
                     @Override
                     public void holdStrand(byte strand, byte holdState) {
-                        writeRegister(mwState, Register.HOLD, strand, holdState);
+                        queueRegisterAction(mwState, true, Register.HOLD, strand, holdState);
                         
                     }
                     @Override
                     public void clearStrand(byte strand, byte start, byte end) {
-                        writeRegister(mwState, Register.CLEAR, strand, start, end);
+                        queueRegisterAction(mwState, true, Register.CLEAR, strand, start, end);
                         
                     }
                     @Override
                     public void setPixel(byte strand, byte pixel, byte red,
                             byte green, byte blue) {
-                        writeRegister(mwState, Register.PIXEL, strand, pixel, red, green, blue);
+                        queueRegisterAction(mwState, true, Register.PIXEL, strand, pixel, red, green, blue);
                         
                     }
                     @Override
                     public void rotateStrand(byte strand, RotationDirection direction, byte repetitions,
                             short delay) {
-                        writeRegister(mwState, Register.ROTATE, strand, (byte)direction.ordinal(), repetitions, 
+                        queueRegisterAction(mwState, true, Register.ROTATE, strand, (byte)direction.ordinal(), repetitions, 
                                 (byte)(delay & 0xff), (byte)(delay >> 8 & 0xff));
                     }
                     @Override
                     public void deinitializeStrand(byte strand) {
-                        writeRegister(mwState, Register.DEINITIALIZE, strand);
+                        queueRegisterAction(mwState, true, Register.DEINITIALIZE, strand);
                         
                     }
                 });
@@ -1592,7 +1766,7 @@ public class MetaWearBleService extends Service {
                 modules.put(Module.TEMPERATURE, new Temperature() {
                     @Override
                     public void readTemperature() {
-                        readRegister(mwState, Register.TEMPERATURE, (byte) 0);
+                        queueRegisterAction(mwState, false, Register.TEMPERATURE, (byte) 0);
                     }
 
                     @Override
@@ -1644,11 +1818,11 @@ public class MetaWearBleService extends Service {
 
                             @Override
                             public void commit() {
-                                writeRegister(mwState, Register.MODE, samplingConfig);
+                                queueRegisterAction(mwState, true, Register.MODE, samplingConfig);
                                 if (!silent) {
-                                    writeRegister(mwState, Register.TEMPERATURE, (byte) 1);
-                                    writeRegister(mwState, Register.DELTA_TEMP, (byte) 1);
-                                    writeRegister(mwState, Register.THRESHOLD_DETECT, (byte) 1);
+                                    queueRegisterAction(mwState, true, Register.TEMPERATURE, (byte) 1);
+                                    queueRegisterAction(mwState, true, Register.DELTA_TEMP, (byte) 1);
+                                    queueRegisterAction(mwState, true, Register.THRESHOLD_DETECT, (byte) 1);
                                 }
                             }
                         };
@@ -1656,22 +1830,20 @@ public class MetaWearBleService extends Service {
 
                     @Override
                     public void disableSampling() {
-                        writeRegister(mwState, Register.MODE, new byte[] {0, 0, 0, 0, 0, 0, 0, 0});
-                        writeRegister(mwState, Register.TEMPERATURE, (byte) 0);
-                        writeRegister(mwState, Register.DELTA_TEMP, (byte) 0);
-                        writeRegister(mwState, Register.THRESHOLD_DETECT, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.MODE, new byte[] {0, 0, 0, 0, 0, 0, 0, 0});
+                        queueRegisterAction(mwState, true, Register.TEMPERATURE, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.DELTA_TEMP, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.THRESHOLD_DETECT, (byte) 0);
                     }
                     
                     @Override
                     public void enableThermistorMode(byte analogReadPin, byte pulldownPin) {
-                        mwState.thermistorMode= (byte) 1;
-                        writeRegister(mwState, Register.THERMISTOR_MODE, (byte) 1, analogReadPin, pulldownPin);
+                        queueRegisterAction(mwState, true, Register.THERMISTOR_MODE, (byte) 1, analogReadPin, pulldownPin);
                     }
                     
                     @Override
                     public void disableThermistorMode() {
-                        mwState.thermistorMode= (byte) 0;
-                        writeRegister(mwState, Register.THERMISTOR_MODE, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.THERMISTOR_MODE, (byte) 0);
                     }
                 });
             }
@@ -1690,14 +1862,14 @@ public class MetaWearBleService extends Service {
 
                     @Override
                     public void startBuzzer(short pulseWidth) {
-                        writeRegister(mwState, Register.PULSE, (byte)127, (byte)(pulseWidth & 0xff), 
+                        queueRegisterAction(mwState, true, Register.PULSE, (byte)127, (byte)(pulseWidth & 0xff), 
                                 (byte)((pulseWidth >> 8) & 0xff), (byte)1);
                     }
 
                     @Override
                     public void startMotor(float dutyCycle, short pulseWidth) {
                         short converted= (short)((dutyCycle / 100.f) * 248);
-                        writeRegister(mwState, Register.PULSE, (byte)(converted & 0xff), (byte)(pulseWidth & 0xff), 
+                        queueRegisterAction(mwState, true, Register.PULSE, (byte)(converted & 0xff), (byte)(pulseWidth & 0xff), 
                                 (byte)((pulseWidth >> 8) & 0xff), (byte)0);
                     }
                 });
@@ -1707,32 +1879,15 @@ public class MetaWearBleService extends Service {
         @Override
         public void readDeviceInformation() {
             for(GATTCharacteristic it: DeviceInformation.values()) {
-                mwState.readCharUuids.add(it);
+                readCharacteristic(mwState, it);
             }
-            if (mwState.deviceState == DeviceState.READY) {
-                mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
-                
-                if (!isExecGattActions.get()) {
-                    readCharacteristic(mwState);
-                    execGattAction();
-                } else {
-                    readCharacteristic(mwState);
-                }
-            }
+            
+            execGattAction(false);
         }
         @Override
         public void readBatteryLevel() {
-            mwState.readCharUuids.add(Battery.BATTERY_LEVEL);
-            if (mwState.deviceState == DeviceState.READY) {
-                mwState.deviceState= DeviceState.READING_CHARACTERISTICS;
-                
-                if (!isExecGattActions.get()) {
-                    readCharacteristic(mwState);
-                    execGattAction();
-                } else {
-                    readCharacteristic(mwState);
-                }
-            }
+            readCharacteristic(mwState, Battery.BATTERY_LEVEL);
+            execGattAction(false);
         }
         
         @Override
@@ -1778,10 +1933,14 @@ public class MetaWearBleService extends Service {
 
                 @Override
                 public void close(boolean notify) {
-                    throw new UnsupportedOperationException("This function is not supported in single metawear mode");
+                    MetaWearBleService.this.close(notify);
                 }
                 @Override
                 public void close(boolean notify, boolean wait) {
+                    throw new UnsupportedOperationException("This function is not supported in single metawear mode");
+                }
+                @Override
+                public void waitToClose(boolean notify) {
                     throw new UnsupportedOperationException("This function is not supported in single metawear mode");
                 }
             };
@@ -1810,8 +1969,6 @@ public class MetaWearBleService extends Service {
                         if (!metaWearStates.containsKey(mwBoard)) {
                             metaWearStates.put(mwBoard, mwState);
                         }
-                        MetaWearBleService.this.close(mwState);
-                        
                         mwState.notifyUser= false;
                         mwState.readyToClose= false;
                         mwState.deviceState= null;
@@ -1827,11 +1984,12 @@ public class MetaWearBleService extends Service {
 
                 @Override
                 public void close(boolean notify) {
+                    if (!isConnected()) return;
+
                     MetaWearBleService.this.close(mwState);
                     if (notify) {
                         Intent intent= new Intent(Action.DEVICE_DISCONNECTED);
                         intent.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
-                        intent.putExtra(Extra.EXPLICIT_CLOSE, true);
                         broadcastIntent(intent);
                     } else {
                         if (!mwState.retainState) {
@@ -1850,6 +2008,12 @@ public class MetaWearBleService extends Service {
                         close(notify);
                     }
                 }
+                
+                @Override
+                public void waitToClose(boolean notify) {
+                    mwState.notifyUser= notify;
+                    mwState.readyToClose= true;
+                }
             };
         }
         return mwState.mwController;
@@ -1860,9 +2024,25 @@ public class MetaWearBleService extends Service {
      * to all receivers 
      * @param useFlag True if {@link android.support.v4.content.LocalBroadcastManager} should 
      * be used to broadcast intents
+     * @deprecated As of v1.4, use {@link #clearLocalBroadcastManager()} and 
+     * {@link #useLocalBroadcastManager(LocalBroadcastManager)} instead 
      */
+    @Deprecated
     public void useLocalBroadcasterManager(boolean useFlag) {
-        useLocalBroadcastMnger= useFlag;
+        localBroadcastMngr= (useFlag) ? LocalBroadcastManager.getInstance(this) : null;
+    }
+    /**
+     * Clears the stored local broadcast manager, which reverts to using the Service's intent broadcaster
+     */
+    public void clearLocalBroadcastManager() {
+        localBroadcastMngr= null;
+    }
+    /**
+     * Has the service broadcast intents with a {@link android.support.v4.content.LocalBroadcastManager} 
+     * @param localBroadcastMngr Local broadcast manager to use
+     */
+    public void useLocalBroadcastManager(final LocalBroadcastManager localBroadcastMngr) {
+        this.localBroadcastMngr= localBroadcastMngr;
     }
     
     /**
@@ -1944,7 +2124,6 @@ public class MetaWearBleService extends Service {
             if (notify) {
                 Intent intent= new Intent(Action.DEVICE_DISCONNECTED);
                 intent.putExtra(Extra.BLUETOOTH_DEVICE, singleMwState.mwBoard);
-                intent.putExtra(Extra.EXPLICIT_CLOSE, true);
                 broadcastIntent(intent);
             } else {
                 if (!singleMwState.retainState) {
@@ -2004,54 +2183,78 @@ public class MetaWearBleService extends Service {
         
         super.onDestroy();
     }
+    
+    private void queueRegisterAction(final MetaWearState mwState, boolean write, Register register, byte ... parameters) {
+        queueRegisterAction(mwState, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE, write, register, parameters);
+    }
 
-    private void readRegister(MetaWearState mwState,
-            com.mbientlab.metawear.api.Register register,
-            byte... parameters) {
+    private static final byte MACRO_MAX_LENGTH= 18;
+    private void queueRegisterAction(final MetaWearState mwState, int desiredWriteType, boolean write, 
+            Register register, byte ... parameters) {
         if (!mwState.readyToClose) {
-            byte[] bleData= Registers.buildReadCommand(register, parameters);
-            
-            if (mwState.isRecording) {
+            byte[] command= (write) ? Registers.buildWriteCommand(register, parameters) : 
+                    Registers.buildReadCommand(register, parameters);
+            byte[] macroBytes= null;
+       
+            if ((mwState.isRecording & RECORDING_EVENT) == RECORDING_EVENT) {
                 mwState.etBuilder.withDestRegister(register, 
-                        Arrays.copyOfRange(bleData, 2, bleData.length), true);
+                        Arrays.copyOfRange(command, 2, command.length), !write);
+            } else if ((mwState.isRecording & RECORDING_MACRO) == RECORDING_MACRO) {
+                if (command.length > MACRO_MAX_LENGTH) {
+                    byte lengthDiff= (byte) (command.length - MACRO_MAX_LENGTH);
+                    macroBytes= new byte[lengthDiff + 2];
+                    macroBytes[0]= Module.MACRO.opcode;
+                    macroBytes[1]= Macro.Register.PARTIAL_COMMAND.opcode();
+                    System.arraycopy(command, 0, macroBytes, 2, lengthDiff);
+                    queueCommand(mwState, macroBytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+                    
+                    macroBytes= new byte[MACRO_MAX_LENGTH + 2];
+                    macroBytes[0]= Module.MACRO.opcode;
+                    macroBytes[1]= Macro.Register.ADD_COMMAND.opcode();
+                    System.arraycopy(command, lengthDiff, macroBytes, 2, MACRO_MAX_LENGTH);
+                    queueCommand(mwState, macroBytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+                } else {
+                    macroBytes= new byte[command.length + 2];
+                    macroBytes[0]= Module.MACRO.opcode;
+                    macroBytes[1]= Macro.Register.ADD_COMMAND.opcode();
+                    System.arraycopy(command, 0, macroBytes, 2, command.length);
+                    queueCommand(mwState, macroBytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+                }
             } else {
-                queueCommand(mwState, bleData);
+                queueCommand(mwState, command, desiredWriteType);
             }
         }
     }
-
-    private void writeRegister(MetaWearState mwState,
-            com.mbientlab.metawear.api.Register register,
-            byte... data) {
-        if (!mwState.readyToClose) {
-            byte[] bleData= Registers.buildWriteCommand(register, data);
-            
-            if (mwState.isRecording) {
-                mwState.etBuilder.withDestRegister(register, 
-                        Arrays.copyOfRange(bleData, 2, bleData.length), false);
-            } else {
-                queueCommand(mwState, bleData);
+    
+    private void queueCommand(final MetaWearState mwState, final byte[] bleData, final int writeType) {
+        queueGattAction(mwState, new GattAction() {
+            @Override
+            public boolean execAction() {
+                if (mwState.mwGatt != null) {
+                    BluetoothGattService service= mwState.mwGatt.getService(GATTService.METAWEAR.uuid());
+                    BluetoothGattCharacteristic command= service.getCharacteristic(MetaWear.COMMAND.uuid());
+                    command.setWriteType(writeType);
+                    command.setValue(bleData);
+                    mwState.mwGatt.writeCharacteristic(command);
+                    if (writeType == BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT && 
+                            Build.VERSION.SDK_INT == Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                        ///< For some reason, SDK 18 doesn't implement write with response so we'll 
+                        ///< delay the flow for 100ms.  This value is what worked on a 2013 Nexus 7 
+                        ///< tablet running Android 4.3
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e) {
+                            ///< Not good if we end up here
+                            e.printStackTrace();
+                        }
+                    }
+                    return true;
+                }
+                return false;
             }
-        }
+        });
+        
+        execGattAction(false);
     }
 
-    /**
-     * @param module
-     * @param registerOpcode
-     * @param data
-     */
-    private void queueCommand(MetaWearState mwState, byte[] command) {
-        mwState.commandBytes.add(command);
-        if (mwState.deviceState == DeviceState.READY) {
-            mwState.deviceState= DeviceState.WRITING_CHARACTERISTICS;
-            
-            if (!isExecGattActions.get()) {
-                writeCommand(mwState);
-                execGattAction();
-            } else {
-                writeCommand(mwState);
-            }
-
-        }
-    }
 }

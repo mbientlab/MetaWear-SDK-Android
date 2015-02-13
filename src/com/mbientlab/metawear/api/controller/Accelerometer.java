@@ -465,7 +465,7 @@ public interface Accelerometer extends ModuleController {
      * @see Callbacks#singleTapDetected(Accelerometer.MovementData)
      * @see Callbacks#doubleTapDetected(Accelerometer.MovementData)
      */
-    public ThresholdConfig enableTapDetection(TapType type, Axis axis);
+    public TapConfig enableTapDetection(TapType type, Axis axis);
     /**
      * Enable shake detection.  When a shake motion is detected along the given axis, 
      * the {@link Callbacks#shakeDetected(Accelerometer.MovementData)} callback 
@@ -546,6 +546,33 @@ public interface Accelerometer extends ModuleController {
          * @return Calling object
          */
         public ThresholdConfig withThreshold(float gravity);
+    }
+    /**
+     * Configure attributes for tap detection
+     * @author Eric Tsai
+     */
+    public interface TapConfig extends ThresholdConfig {
+        /**
+        * Sets the pulse time limit 
+        * @param duration Max time, in ms, a pulse event has to exceed the threshold and 
+        * return below the threshold
+        * @return Calling object
+        */
+        public TapConfig withDuration(float duration);
+        /**
+        * Set the latency value
+        * @param latency Wait time, in ms, between the end of the 1st shock and
+        * when the 2nd shock can be detected
+        * @return Calling object
+        */
+        public TapConfig withLatency(float latency);
+        /**
+        * Set the window value
+        * @param window Time, in ms, in which a second shock must begin after
+        * the latency expires
+        * @return Calling object
+        */
+        public TapConfig withWindow(float window);
     }
     
     /**

@@ -46,6 +46,10 @@ import static com.mbientlab.metawear.api.Module.GPIO;
  * @author Eric Tsai
  */
 public interface GPIO extends ModuleController {
+    public static final byte ANALOG_DATA_SIZE= 2;
+    public static final byte DIGITAL_DATA_SIZE= 1;
+    public static final byte PIN_CHANGE_NOTIFY_SIZE= 1;
+    
     /**
      * Enumeration of registers under the GPIO module
      * @author Eric Tsai
@@ -141,11 +145,16 @@ public interface GPIO extends ModuleController {
         
         /**
          * Called when the analog input has been read as an absolute value.  This version is for firmware prior to v1.0.0.
-         * @param value Value in mV
+         * @param value Voltage in mV
          * @deprecated As of v1.4, use {@link #receivedAnalogInputAsAbsValue(byte, short)}.  
          * Firmware v1.0.0 on broadcasts the gpio pin along with the analog data
          */
         public void receivedAnalogInputAsAbsValue(short value) { }
+        /**
+         * Called when the analog value of a GPIO pin has been read as an absolute value.
+         * @param pin GPIO pin the data is from
+         * @param value Voltage in mV
+         */
         public void receivedAnalogInputAsAbsValue(byte pin, short value) { }
         /**
          * Called when the analog input has been read as a supply ratio.  This version is for firmware prior to v1.0.0.
@@ -154,6 +163,11 @@ public interface GPIO extends ModuleController {
          * Firmware v1.0.0 on broadcasts the gpio pin along with the analog data
          */
         public void receivedAnalogInputAsSupplyRatio(short value) { }
+        /**
+         * Called when the analog value of a GPIO pin has been read as a supply ratio
+         * @param pin GPIO pin the data is from
+         * @param value 10 bit representation of the voltage where 0 = 0V and 1023 = 3V
+         */
         public void receivedAnalogInputAsSupplyRatio(byte pin, short value) { }
         /**
          * Called when the digital input has been read.  This version is for firmware prior to v1.0.0.
@@ -162,6 +176,11 @@ public interface GPIO extends ModuleController {
          * Firmware v1.0.0 on broadcasts the gpio pin along with the digital data
          */
         public void receivedDigitalInput(byte value) { }
+        /**
+         * Called when the digital value of a GPIO pin has been read
+         * @param pin GPIO pin the data is from
+         * @param value 0 for low, 1 for high
+         */
         public void receivedDigitalInput(byte pin, byte value) { }
         /**
          * Called when the pin has changed state

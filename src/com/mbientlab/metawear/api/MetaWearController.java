@@ -182,8 +182,17 @@ public interface MetaWearController {
      * callback function
      * @param wait True if any pending commands should be broadcasted before closing.  
      * Any commands queued after this function call are ignored
+     * @deprecated As of v1.4, use the {@link #waitToClose(boolean)} method instead
      */
+    @Deprecated
     public void close(boolean notify, boolean wait);
+    /**
+     * Wait for queued BLE commands to finish communicating with the board before closing 
+     * the connection 
+     * @param notify True to make a call to the {@link DeviceCallbacks#disconnected()} 
+     * call back function
+     */
+    public void waitToClose(boolean notify);
     /**
      * Reset the connection to the board this controller is attached to
      * @param notify True to make a call to the {@link DeviceCallbacks#disconnected()} 

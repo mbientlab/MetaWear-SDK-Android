@@ -95,6 +95,9 @@ public interface Event extends ModuleController {
         /** Remove a command entry */
         REMOVE_ENTRY {
             @Override public byte opcode() { return 0x4; }
+        },
+        REMOVE_ALL_ENTRIES {
+            @Override public byte opcode() { return 0x5; }
         };
 
         /* (non-Javadoc)
@@ -187,7 +190,14 @@ public interface Event extends ModuleController {
      * @param index Register index to trigger the event
      */
     public void recordMacro(com.mbientlab.metawear.api.Register srcReg, byte index);
-    
+    /**
+     * Experimental function for the Event module that can use variables in place of hardcoded 
+     * values for a recorded command.  Currently, this method is for simply recording one 
+     * command.  The function is still WIP and will be further refined in later releases.
+     * @param srcReg Register to trigger the event
+     * @param index Register index to trigger the event
+     * @param extra Extra data to define the variable parameters 
+     */
     public void recordCommand(com.mbientlab.metawear.api.Register srcReg, byte index, byte[] extra);
     
     /**

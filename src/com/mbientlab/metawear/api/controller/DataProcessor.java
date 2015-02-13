@@ -144,6 +144,9 @@ public interface DataProcessor extends ModuleController {
         /** Enables output notification from a filter */
         FILTER_NOTIFY_ENABLE {
             @Override public byte opcode() { return 0x7; }
+        },
+        FILTER_REMOVE_ALL {
+            @Override public byte opcode() { return 0x8; }
         };
 
         /* (non-Javadoc)
@@ -259,10 +262,16 @@ public interface DataProcessor extends ModuleController {
      * to a length of 8 bytes. When the filter has been added, the 
      * {@link Callbacks#receivedFilterId(byte)} callback function will be called 
      * with a user id representing the new filter
-     * @param trigger Trigger to filter data on
+     * @param trigger Source trigger to filter data from
      * @param config Configuration of the filter to add
      */
     public void addFilter(Trigger trigger, FilterConfig config);
+    /**
+     * Add a filter that operates on date received from a read operation.  All other 
+     * operation is the same as {@link #addFilter(Trigger, FilterConfig)}  
+     * @param trigger Source trigger to filter data from
+     * @param config Configuration of the filter to add
+     */
     public void addReadFilter(Trigger trigger, FilterConfig config);
     /**
      * Set the configuration of a filter
@@ -275,7 +284,13 @@ public interface DataProcessor extends ModuleController {
      * @param filterId ID of the filter to reset
      */
     public void resetFilterState(byte filterId);
-    public void setFilterState(byte filterId, byte[]state);
+    /**
+     * Modify the internal state of the filter.  This function is still a WIP as info about 
+     * the filters' states has not yet been exposed.
+     * @param filterId ID of the filter to modify
+     * @param state New state for the filter to use
+     */
+    public void setFilterState(byte filterId, byte[] state);
     /**
      * Remove a filter
      * @param filterId User id of the filter

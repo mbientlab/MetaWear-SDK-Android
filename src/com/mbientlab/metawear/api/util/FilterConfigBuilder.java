@@ -177,7 +177,10 @@ public abstract class FilterConfigBuilder {
             return this;
         }
     }
-    
+    /**
+     * Builder to configure the peak detector filter
+     * @author Eric Tsai
+     */
     public static class PeakDetectorBuilder extends FilterConfigBuilder {
         public PeakDetectorBuilder() {
             super(3, FilterType.PEAK_DETECTOR);
@@ -291,8 +294,14 @@ public abstract class FilterConfigBuilder {
      * @see com.mbientlab.metawear.api.controller.DataProcessor.FilterType#TIME_DELAY
      */
     public static class TimeDelayBuilder extends FilterConfigBuilder {
+        /**
+         * Filter modes for the time delay filter
+         * @author Eric Tsai
+         */
         public enum FilterMode {
+            /** No change in the input value */
             ABSOLUTE,
+            /** Return the difference between the current and previous value */
             DIFFERENTIAL;
         }
         
@@ -309,7 +318,11 @@ public abstract class FilterConfigBuilder {
             parameters[0]|= (byte) ((size - 1) & 0x7);
             return this;
         }
-        
+        /**
+         * Set the filter mode for transforming the input
+         * @param mode Filter mode to use
+         * @return Calling object
+         */
         public TimeDelayBuilder withFilterMode(FilterMode mode) {
             parameters[0]|= (byte)((mode.ordinal() & 0x7) << 3);
             return this;

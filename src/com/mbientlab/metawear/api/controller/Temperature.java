@@ -54,8 +54,7 @@ public interface Temperature extends ModuleController {
             @Override public byte opcode() { return 0x1; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short value= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                float degrees= value * (data[4] == 0 ? 0.25f : 0.125f);
+                float degrees= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() * 0.125f;
                 
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).receivedTemperature(degrees);

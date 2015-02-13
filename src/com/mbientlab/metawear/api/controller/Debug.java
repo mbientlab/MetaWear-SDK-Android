@@ -56,6 +56,14 @@ public interface Debug extends ModuleController {
         /** Switch to bootloader mode */
         JUMP_TO_BOOTLOADER {
             @Override public byte opcode() { return 0x2; }
+        },
+        /** Reset after garbage collection has been performed */
+        DELAYED_RESET {
+            @Override public byte opcode() { return 0x5; }
+        },
+        /** Have the board initiate a disconnect event */
+        GAP_DISCONNECT {
+            @Override public byte opcode() { return 0x6; }
         };
         
         @Override public Module module() { return DEBUG; }
@@ -66,5 +74,13 @@ public interface Debug extends ModuleController {
     public void resetDevice();
     /** Restart the board in bootloader mode */
     public void jumpToBootloader();
+    /**
+     * Restart the board after performing garbage collection.  This method should be 
+     * used in lieu of {@link #resetDevice()} if a user wishes to restart the board 
+     * after erasing macros or log entries.
+     * @see Logging#removeLogEntries(short)
+     * @see Macro#eraseMacros()
+     */
+    public void resetAfterGarbageCollect();
     
 }

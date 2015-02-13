@@ -73,14 +73,14 @@ public class BytesInterpreter {
      * @param offset Index offset to start the conversion from.  For 1 axis triggers, this 
      * value should always be 0.  For 2 axis triggers (XY or YZ), use 0 for the first axis, 
      * and 2 for the second axis.
-     * @return
+     * @return Number of Gs the bytes represent
      */
     public static float logBytesToGs(byte[] accelOutput, byte offset) {
         short output= ByteBuffer.wrap(accelOutput, offset, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
         return output / 1000.0f;
     }
     /**
-     * Convert raw temperature data into Celsius
+     * Convert raw temperature data into Celsius.  This method is for firmware prior to v1.0.0. 
      * @param tempOutput Byte representation of temperature data
      * @param thermistorMode True if the data was recorded in thermistor mode
      * @return Converted temperature in Celsius
@@ -88,6 +88,14 @@ public class BytesInterpreter {
     public static float bytesToTemp(byte[] tempOutput, boolean thermistorMode) {
         short temp= ByteBuffer.wrap(tempOutput).order(ByteOrder.LITTLE_ENDIAN).getShort();
         return temp * (thermistorMode ? 0.125f : 0.25f);
+    }
+    /**
+     * This version of the function is for data received from firmware v1.0.0
+     * @param tempOutput Byte representation of the temp data from the logger
+     * @return Converted temperature in Celsius
+     */
+    public static float bytesToTemp(byte[] tempOutput) {
+        return bytesToTemp(tempOutput, true);
     }
     
     /**

@@ -39,7 +39,8 @@ import com.mbientlab.metawear.api.controller.MechanicalSwitch;
 import com.mbientlab.metawear.api.controller.Temperature;
 
 /**
- * Collection of predefined triggers for the logging module
+ * Collection of predefined triggers for the logging module.  These triggers can also be used 
+ * for the DataProcessor class.
  * @author Eric Tsai
  */
 public enum LoggingTrigger implements Trigger {

@@ -61,6 +61,9 @@ public enum Module {
     EVENT((byte)0xa, Event.Register.values()),
     LOGGING((byte)0xb, Logging.Register.values()),
     TIMER((byte)0xc, Timer.Register.values()),
+    I2C((byte) 0xd, com.mbientlab.metawear.api.controller.I2C.Register.values()),
+    MACRO((byte) 0xf, Macro.Register.values()),
+    SETTINGS((byte) 0x11, Settings.Register.values()),
     /** Debug mode for testing purposes */
     DEBUG((byte)0xfe, Debug.Register.values());
     

@@ -197,6 +197,12 @@ public interface Logging extends ModuleController {
                     }
                 }
             }
+        },
+        REMOVE_ENTRIES {
+            @Override public byte opcode() { return 0x9; }
+        },
+        REMOVE_ALL_TRIGGERS {
+            @Override public byte opcode() { return 0xa; }
         };
 
         @Override public Module module() { return Module.LOGGING; }
@@ -307,6 +313,8 @@ public interface Logging extends ModuleController {
      * @author Eric Tsai
      */
     public abstract class LogEntry {
+        /** Conversation between tick and time, in millseconds */
+        private final double TICK_TIME_STEP= (48.0 / 32768.0) * 1000.0;
         /**
          * ID of the trigger the entry is for
          */
@@ -316,17 +324,27 @@ public interface Logging extends ModuleController {
          */
         public abstract long tick();
         /**
-         * Get the timestamp of when the event was recorded.  A ReferenceTick object is provided 
-         * by the {@link Callbacks#receivedReferenceTick(Logging.ReferenceTick)} callback function
+         * Get the timestamp of when the event was recorded.  A reference point 
+         * can be retrieved by calling {@link Logging#readReferenceTick()}
          * @param reference Reference point used to convert the tick count into a timestamp
+         * @return Calendar object represnting the timestamp of the log entry
          * @see Logging#readReferenceTick()
          */
         public Calendar timestamp(ReferenceTick reference) {
-            final double TICK_TIME_STEP= (48 / 32768.0) * 1000;
             Calendar copy= (Calendar) reference.timestamp().clone();
             
             copy.add(Calendar.MILLISECOND, (int) ((tick() - reference.tickCount()) * TICK_TIME_STEP)); 
             return copy;
+        }
+        /**
+         * Compute the time difference between this log entry and another log entry.  This version 
+         * does not require retrieving a reference tick with the {@link Logging#readReferenceTick()} 
+         * method. 
+         * @param reference Reference point the offset is based from
+         * @return Time offset, in milliseconds, from a reference point
+         */
+        public double offset(LogEntry reference) {
+            return (tick() - reference.tick()) * TICK_TIME_STEP;
         }
         /**
          * Recorded data from the register
@@ -353,6 +371,12 @@ public interface Logging extends ModuleController {
      */
     public void addTrigger(Trigger triggerObj);
     /**
+     * Add a trigger to the logging module that records data from a read operation.  All 
+     * other functionality is the same as {@link #addTrigger(Trigger)}
+     * @param triggerObj Trigger to log
+     */
+    public void addReadTrigger(Trigger triggerObj);
+    /**
      * Converts a trigger id to its corresponding trigger attributes.  When the attribute is 
      * received, the receivedTriggerObject callback function will be called
      * @param triggerId Trigger id to lookup
@@ -370,8 +394,8 @@ public interface Logging extends ModuleController {
     public void removeAllTriggers();
 
     /**
-     * Retrieve a tick reference from the MetaWear board.  When the data is received, the readReferenceTick 
-     * callback function will be called
+     * Retrieve a tick reference from the MetaWear board.  When the data is received, 
+     * the readReferenceTick callback function will be called
      * @see Callbacks#receivedReferenceTick(Logging.ReferenceTick)
      */
     public void readReferenceTick();
@@ -392,5 +416,11 @@ public interface Logging extends ModuleController {
      * @see Callbacks#receivedDownloadProgress(int)
      */
     public void downloadLog(int nEntries, int notifyIncrement);
-
+    /**
+     * Remove entries from the logger.  The erase operation will not be performed until 
+     * you disconnect from the board.  If you wish to reset the board after the erase operation, 
+     * use the {@link Debug#resetAfterGarbageCollect()} method.
+     * @param nEntries Number of entries to remove, between [0, 65535]
+     */
+    public void removeLogEntries(short nEntries);
 }
