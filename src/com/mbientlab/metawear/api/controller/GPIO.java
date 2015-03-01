@@ -149,6 +149,7 @@ public interface GPIO extends ModuleController {
          * @deprecated As of v1.4, use {@link #receivedAnalogInputAsAbsValue(byte, short)}.  
          * Firmware v1.0.0 on broadcasts the gpio pin along with the analog data
          */
+        @Deprecated
         public void receivedAnalogInputAsAbsValue(short value) { }
         /**
          * Called when the analog value of a GPIO pin has been read as an absolute value.
@@ -162,6 +163,7 @@ public interface GPIO extends ModuleController {
          * @deprecated As of v1.4, use {@link #receivedAnalogInputAsSupplyRatio(byte, short)}.  
          * Firmware v1.0.0 on broadcasts the gpio pin along with the analog data
          */
+        @Deprecated
         public void receivedAnalogInputAsSupplyRatio(short value) { }
         /**
          * Called when the analog value of a GPIO pin has been read as a supply ratio
@@ -175,6 +177,7 @@ public interface GPIO extends ModuleController {
          * @deprecated As of v1.4, use {@link #receivedDigitalInput(byte, byte)}.  
          * Firmware v1.0.0 on broadcasts the gpio pin along with the digital data
          */
+        @Deprecated
         public void receivedDigitalInput(byte value) { }
         /**
          * Called when the digital value of a GPIO pin has been read

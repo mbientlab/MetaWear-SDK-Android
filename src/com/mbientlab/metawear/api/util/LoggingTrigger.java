@@ -77,6 +77,9 @@ public enum LoggingTrigger implements Trigger {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
         @Override public byte offset() { return 4; }
         @Override public byte length() { return 2; }
+    },
+    ACCELEROMETER_ORIENTATION {
+        @Override public Register register() { return Accelerometer.Register.ORIENTATION_VALUE; }
     };
     
     /**

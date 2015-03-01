@@ -51,7 +51,6 @@ import com.mbientlab.metawear.api.MetaWearController.DeviceCallbacks.GattOperati
 import com.mbientlab.metawear.api.MetaWearController.ModuleCallbacks;
 import com.mbientlab.metawear.api.characteristic.*;
 import com.mbientlab.metawear.api.controller.*;
-import com.mbientlab.metawear.api.controller.Accelerometer.SamplingConfig.OutputDataRate;
 import com.mbientlab.metawear.api.controller.Logging.Trigger;
 import com.mbientlab.metawear.api.util.Registers;
 
@@ -200,6 +199,41 @@ public class MetaWearBleService extends Service {
    
     private final static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
     private final static int RECORDING_EVENT= 0x1, RECORDING_MACRO= 0x2;
+    private final static float[][] motionCountSteps, transientSteps;
+    private final static float[][][] pulseTmltSteps, pulseLtcySteps, pulseWindSteps;
+    private final static float[] sleepCountSteps;
+    
+    static {
+        motionCountSteps= new float[][] {
+                {1.25f, 2.5f, 5, 10, 20, 20, 20, 20},
+                {1.25f, 2.5f, 5, 10, 20, 80, 80, 80},
+                {1.25f, 2.5f, 2.5f, 2.5f, 2.5f, 2.5f, 2.5f, 2.5f},
+                {1.25f, 2.5f, 5, 10, 20, 80, 160, 160}
+        };
+        
+        pulseTmltSteps= new float[][][] {
+                {{0.625f, 0.625f, 1.25f, 2.5f, 5, 5, 5, 5},
+                {0.625f, 0.625f, 1.25f, 2.5f, 5, 20, 20, 20},
+                {0.625f, 0.625f, 0.625f, 0.625f, 0.625f, 0.625f, 0.625f, 0.625f},
+                {0.625f, 1.25f, 2.5f, 5, 10, 40, 40, 40}},
+                {{1.25f, 2.5f, 5, 10, 20, 20, 20, 20},
+                {1.25f, 2.5f, 5, 10, 20, 80, 80, 80},
+                {1.25f, 2.5f, 2.5f, 2.5f, 2.5f, 2.5f, 2.5f, 2.5f},
+                {1.25f, 2.5f, 5, 10, 20, 80, 160, 160}}
+        };
+        pulseLtcySteps= new float[2][4][8];
+        for(int i= 0; i < pulseTmltSteps.length; i++) {
+            for(int j= 0; j < pulseTmltSteps[i].length; j++) {
+                for(int k= 0; k < pulseTmltSteps[i][j].length; k++) {
+                    pulseLtcySteps[i][j][k]= pulseTmltSteps[i][j][k] * 2.f;    
+                }
+            }
+        }
+        pulseWindSteps= pulseLtcySteps;
+        transientSteps= motionCountSteps;
+        
+        sleepCountSteps= new float[] {320, 320, 320, 320, 320, 320, 320, 640};
+    }
     
     private class MetaWearState {
         public MetaWearState(BluetoothDevice mwBoard) {
@@ -220,6 +254,7 @@ public class MetaWearBleService extends Service {
             numDescriptors.set(0);
         }
 
+        public byte[] globalConfig= null;
         public BluetoothDevice mwBoard;
         public int isRecording= 0;
         public EventTriggerBuilder etBuilder;
@@ -502,6 +537,16 @@ public class MetaWearBleService extends Service {
                 if (mwState.readyToClose) {
                     close(mwState.notifyUser);
                 } else {
+                    mwState.internalCallbacks.put(Accelerometer.Register.DATA_SETTINGS, new InternalCallback() {
+                        @Override
+                        public void process(byte[] data) {                        
+                            mwState.globalConfig= new byte[data.length - 2];
+                            System.arraycopy(data, 2, mwState.globalConfig, 0, mwState.globalConfig.length);
+                            mwState.internalCallbacks.remove(Accelerometer.Register.DATA_SETTINGS);
+                        }
+                    });
+                    queueRegisterAction(mwState, false, Accelerometer.Register.DATA_SETTINGS);
+                    
                     mwState.deviceState= DeviceState.READY;
                     gattActions.addAll(mwState.queuedGattActions);
                     mwState.queuedGattActions.clear();
@@ -1114,8 +1159,6 @@ public class MetaWearBleService extends Service {
                     private final HashSet<Component> activeComponents= new HashSet<>();
                     private final HashSet<Component> activeNotifications= new HashSet<>();
                     private final HashMap<Component, byte[]> configurations= new HashMap<>();
-                    private OutputDataRate accelOdr= OutputDataRate.ODR_100_HZ;
-                    private byte[] globalConfig= new byte[] {0, 0, 0x18, 0, 0};
                     private float tapDuration= 60.f, tapLatency= 200.f, tapWindow= 300.f;
                     
                     @Override
@@ -1167,7 +1210,7 @@ public class MetaWearBleService extends Service {
                         
                         if (!saveConfig) {
                             if (component == Component.DATA) {
-                                globalConfig= new byte[] {0, 0, 0x18, 0, 0};
+                                mwState.globalConfig[2]= 0x18;
                             } else {
                                 configurations.remove(component);
                             }
@@ -1181,7 +1224,7 @@ public class MetaWearBleService extends Service {
                         
                         if (!saveConfig) {
                             configurations.clear();
-                            globalConfig= new byte[] {0, 0, 0x18, 0, 0};
+                            mwState.globalConfig[2]= 0x18;
                         }
                     }
                     
@@ -1197,15 +1240,13 @@ public class MetaWearBleService extends Service {
                             tapConfig[0] &= 0xc0;
                         }
                         
-                        switch (type) {
-                        case SINGLE_TAP:
+                        if (type == TapType.SINGLE_TAP || type == TapType.BOTH) {
                             tapConfig[0] |= 1 << (2 * axis.ordinal());
-                            break;
-                        case DOUBLE_TAP:
-                            tapConfig[0] |= 1 << (1 + 2 * axis.ordinal());
-                            break;
                         }
-                        
+                        if (type == TapType.DOUBLE_TAP || type == TapType.BOTH) {
+                            tapConfig[0] |= 1 << (1 + 2 * axis.ordinal());
+                        }
+
                         configurations.put(Component.PULSE, tapConfig);
                         activeComponents.add(Component.PULSE);
                         activeNotifications.add(Component.PULSE);
@@ -1248,6 +1289,16 @@ public class MetaWearBleService extends Service {
                             @Override
                             public TapConfig withWindow(float window) {
                                 tapWindow= window;
+                                return this;
+                            }
+
+                            @Override
+                            public TapConfig withLowPassFilter(boolean enabled) {
+                                if (enabled) {
+                                    mwState.globalConfig[1] |= 0x10;
+                                } else {
+                                    mwState.globalConfig[1] &= 0xef;
+                                }
                                 return this;
                             }
                         };
@@ -1371,32 +1422,30 @@ public class MetaWearBleService extends Service {
                     
                     
                     public void startComponents() {
-                        float multiplier= (float) Math.pow(2, accelOdr.ordinal() - OutputDataRate.ODR_100_HZ.ordinal());
+                        int accelOdr= (mwState.globalConfig[2] >> 3) & 0x3;
+                        int pwMode= (mwState.globalConfig[3] >> 3) & 0x3;
                         
                         for(Component active: activeComponents) {
                             if (configurations.containsKey(active)) {
                                 byte[] config= configurations.get(active);
                                 
-                                if (accelOdr != OutputDataRate.ODR_100_HZ) {
-                                    switch (active) {
-                                    case FREE_FALL:
-                                        config[3]= (byte) (Math.max(100 / (10 * multiplier), 20));
-                                        break;
-                                    case ORIENTATION:
-                                        config[2]= (byte) (Math.max(100 / (10 * multiplier), 20));
-                                        break;
-                                    case PULSE:
-                                        config[5]= (byte) (Math.min(Math.max(tapDuration / (2.5 * multiplier), 5), 0.625));
-                                        config[6]= (byte) (Math.min(Math.max(tapLatency / (5 * multiplier), 10), 1.25));
-                                        config[7]= (byte) (Math.min(Math.max(tapWindow / (5 * multiplier), 10), 1.25));
-                                        break;
-                                    case TRANSIENT:
-                                        config[3]= (byte) (Math.max(50 / (10 * multiplier), 20));
-                                        break;
-                                    default:
-                                        break;
-                                    }
+                                switch (active) {
+                                case FREE_FALL:
+                                    config[3]= (byte) (100 / motionCountSteps[pwMode][accelOdr]);
+                                    break;
+                                case PULSE:
+                                    int lpfEn= (mwState.globalConfig[1] & 0x10) >> 4;
+                                    config[5]= (byte) (tapDuration / pulseTmltSteps[lpfEn][pwMode][accelOdr]);
+                                    config[6]= (byte) (tapLatency / pulseLtcySteps[lpfEn][pwMode][accelOdr]);
+                                    config[7]= (byte) (tapWindow / pulseWindSteps[lpfEn][pwMode][accelOdr]);
+                                    break;
+                                case TRANSIENT:
+                                    config[3]= (byte)(50 / transientSteps[pwMode][accelOdr]);
+                                    break;
+                                default:
+                                    break;
                                 }
+                                
                                 setComponentConfiguration(active, config);
                             }
                             
@@ -1406,7 +1455,7 @@ public class MetaWearBleService extends Service {
                             }
                         }
                         
-                        setComponentConfiguration(Component.DATA, globalConfig);
+                        setComponentConfiguration(Component.DATA, mwState.globalConfig);
                         queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)1);
                     }
                     
@@ -1439,8 +1488,8 @@ public class MetaWearBleService extends Service {
                             @Override
                             public SamplingConfig withFullScaleRange(
                                     FullScaleRange range) {
-                                globalConfig[0] &= 0xfc; 
-                                globalConfig[0] |= range.ordinal();
+                                mwState.globalConfig[0] &= 0xfc; 
+                                mwState.globalConfig[0] |= range.ordinal();
                                 return this;
                             }
 
@@ -1452,36 +1501,61 @@ public class MetaWearBleService extends Service {
 
                             @Override
                             public SamplingConfig withOutputDataRate(OutputDataRate rate) {
-                                globalConfig[2] &= 0xc7;
-                                globalConfig[2] |= (rate.ordinal() << 3);
-                                accelOdr= rate;
+                                mwState.globalConfig[2] &= 0xc7;
+                                mwState.globalConfig[2] |= (rate.ordinal() << 3);
                                 return this;
                             }
 
                             @Override
                             public byte[] getBytes() {
-                                return globalConfig;
+                                return mwState.globalConfig;
                             }
 
                             @Override
                             public SamplingConfig withHighPassFilter(byte cutoff) {
-                                globalConfig[0] |= 0x10;
-                                globalConfig[1] |= cutoff;
+                                mwState.globalConfig[0] |= 0x10;
+                                mwState.globalConfig[1] |= cutoff;
                                 return this;
                             }
                             
                             @Override
                             public SamplingConfig withHighPassFilter() {
-                                globalConfig[0] |= 0x10;
+                                mwState.globalConfig[0] |= 0x10;
                                 return this;
                             }
                             
                             @Override
                             public SamplingConfig withoutHighPassFilter() {
-                                globalConfig[0] &= 0xef;
+                                mwState.globalConfig[0] &= 0xef;
                                 return this;
                             }
                         };
+                    }
+                    @Override
+                    public void enableAutoSleepMode() {
+                        mwState.globalConfig[3] |= 0x4;
+                        queueRegisterAction(mwState, true, Component.DATA.status, mwState.globalConfig);
+                    }
+                    @Override
+                    public void enableAutoSleepMode(SleepModeRate sleepRate, int timeout) {
+                        mwState.globalConfig[2] &= 0x3f;
+                        mwState.globalConfig[2] |= sleepRate.ordinal() << 6;
+                        mwState.globalConfig[4]= (byte)(timeout / sleepCountSteps[(mwState.globalConfig[2] >> 3) & 0x3]);
+                        enableAutoSleepMode();
+                    }
+                    @Override
+                    public void disableAutoSleepMode() {
+                        mwState.globalConfig[3] &= ~(0x4);
+                        queueRegisterAction(mwState, true, Component.DATA.status, mwState.globalConfig);
+                    }
+                    @Override
+                    public void setPowerMode(PowerMode mode) {
+                        mwState.globalConfig[3] &= ~(0x3 << 3);
+                        mwState.globalConfig[3] |= (mode.ordinal() << 3);
+                        
+                        mwState.globalConfig[3] &= ~0x3;
+                        mwState.globalConfig[3] |= mode.ordinal();
+                        queueRegisterAction(mwState, true, Component.DATA.status, mwState.globalConfig);
                     }
                 });
             }

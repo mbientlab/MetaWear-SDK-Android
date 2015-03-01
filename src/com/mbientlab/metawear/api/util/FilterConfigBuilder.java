@@ -265,9 +265,27 @@ public abstract class FilterConfigBuilder {
      */
     public static class RMSBuilder extends IOConfigBuilder {
         public RMSBuilder() {
-            super(1, FilterType.ROOT_MEAN_SQUARE);
+            super(2, FilterType.ROOT_MEAN_SQUARE);
         }
-        
+        /**
+         * Operation modes the RMS filter can be in
+         * @author Eric Tsai
+         */
+        public enum Mode {
+            /** Perform root mean square calculation */
+            RMS,
+            /** Perform root sum square calculation */
+            RSS;
+        }
+        /**
+         * Sets the operation mode
+         * @param mode Mode to use
+         * @return Calling object
+         */
+        public RMSBuilder withMode(Mode mode) {
+            parameters[1]= (byte) (mode.ordinal() & 0xf);
+            return this;
+        }
         /**
          * Sets the number of inputs used in the RMS calculation
          * @param nInputs Number of inputs, between [1, 8]
@@ -443,9 +461,16 @@ public abstract class FilterConfigBuilder {
      * @see com.mbientlab.metawear.api.controller.DataProcessor.FilterType#PULSE_DETECTOR
      */
     public static class PulseDetectorBuilder extends FilterConfigBuilder {
+        /**
+         * Types of output that the filter will return
+         * @author Eric Tsai
+         */
         public enum OutputMode {
+            /** Return the width of the pulse */
             PULSE_WIDTH,
+            /** Return the area of the pulse */
             PULSE_AREA,
+            /** Return the peak value of the pulse */
             PULSE_PEAK;
         }
         
@@ -453,21 +478,41 @@ public abstract class FilterConfigBuilder {
             super(9, FilterType.PULSE_DETECTOR);
         }
         
+        /**
+         * How many bytes each data is
+         * @param size Between 1 and 4 bytes
+         * @return Calling object
+         */
         public PulseDetectorBuilder withDataSize(byte size) {
             parameters[0]= (byte) (size - 1);
             return this;
         }
-        
+        /**
+         * Sets the output mode of the filter 
+         * @param mode  Output mode to use
+         * @return Calling object
+         */
         public PulseDetectorBuilder withOutputMode(OutputMode mode) {
             parameters[2]= (byte) mode.ordinal();
             return this;
         }
+        /**
+         * Sets the threshold of the filter.  The threshold is a value that the data points must 
+         * cross twice: once to go above it followed by going below it.
+         * @param threshold Value the data points must cross twice for a valid pulse 
+         * @return Calling object
+         */
         public PulseDetectorBuilder withThreshold(int threshold) {
             byte[] buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(threshold).array();
             System.arraycopy(buffer, 0, parameters, 3, buffer.length);
             
             return this;
         }
+        /**
+         * Number of data points to use in checking for a pulse
+         * @param width Number of data points
+         * @return Calling object
+         */
         public PulseDetectorBuilder withWidth(short width) {
             parameters[7]= (byte)(width & 0xff);
             parameters[8]= (byte)((width >> 8) & 0xff);

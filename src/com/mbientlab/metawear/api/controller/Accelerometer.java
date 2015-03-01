@@ -287,6 +287,7 @@ public interface Accelerometer extends ModuleController {
          * @deprecated As of v1.1, callback function was never properly implemented and 
          * has been replaced by {@link Callbacks#movementDetected(Accelerometer.MovementData)}
          */
+        @Deprecated
         public void stoppedFreeFall() { }
         
         /**
@@ -398,7 +399,8 @@ public interface Accelerometer extends ModuleController {
      */
     public enum TapType {
         SINGLE_TAP,
-        DOUBLE_TAP;
+        DOUBLE_TAP,
+        BOTH;
     }
     /**
      * Axes available for motion detection.  These axis entries are relative to the 
@@ -516,7 +518,49 @@ public interface Accelerometer extends ModuleController {
      * Resets configuration and stops detection for all components
      */
     public void resetAll();
+    /**
+     * Enables auto sleep mode on the accelerometer.  This method does not 
+     * change the sleep mode rate.
+     */
+    public void enableAutoSleepMode();
+    /**
+     * Enables auto sleep mode on the accelerometer.  This method enables auto sleep 
+     * and configures the relevant parameters
+     * @param sleepRate Data rate the accelerometer operates at while in sleep mode
+     * @param timeout how long the accelerometer should idle in active mode before switching 
+     * to sleep mode 
+     */
+    public void enableAutoSleepMode(SleepModeRate sleepRate, int timeout);
+    /**
+     * Disables auto sleep mode on the accelerometer
+     */
+    public void disableAutoSleepMode();
+    /**
+     * Sets the power mode of the accelerometer
+     * @param mode Power mode to use
+     */
+    public void setPowerMode(PowerMode mode);
     
+    /**
+     * Enumeration of sleep mode data rates 
+     * @author Eric Tsai
+     */
+    public enum SleepModeRate {
+        SMR_50_HZ,
+        SMR_12_5_HZ,
+        SMR_6_25_HZ,
+        SMR_1_56_HZ;
+    }
+    /**
+     * Enumeration of the available power modes on the accelerometer
+     * @author Eric Tsai
+     */
+    public enum PowerMode {
+        NORMAL,
+        LOW_NOISE_LOW_POWER,
+        HIGH_RES,
+        LOW_POWER
+    }
     /**
      * Provides optional configuration options to allow users to customize the 
      * accelerometer detection
@@ -573,6 +617,12 @@ public interface Accelerometer extends ModuleController {
         * @return Calling object
         */
         public TapConfig withWindow(float window);
+        /**
+         * Set how the tap detection should processes the data
+         * @param enabled True if low pass filter should be enabled for tap detection
+         * @return Calling object
+         */
+        public TapConfig withLowPassFilter(boolean enabled);
     }
     
     /**

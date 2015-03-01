@@ -33,6 +33,8 @@ package com.mbientlab.metawear.api.util;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+import com.mbientlab.metawear.api.controller.Accelerometer.Orientation;
+
 /**
  * Helper functions to convert bytes into meaningful data
  * @author Eric Tsai
@@ -105,5 +107,13 @@ public class BytesInterpreter {
      */
     public static boolean bytesToSwitchState(byte[] switchOutput) {
         return (switchOutput[0] & 0x1) == 0x1;
+    }
+    /**
+     * Convert byte to an Orientation enum entry
+     * @param orientationData Orientation data from the accelerometer
+     * @return Orientation enum entry corresponding to the input byte
+     */
+    public static Orientation byteToOrientation(byte orientationData) {
+        return Orientation.values()[(byte) (4 * (orientationData & 0x1) + ((orientationData >> 1) & 0x3))];
     }
 }
