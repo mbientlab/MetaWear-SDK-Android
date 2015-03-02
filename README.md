@@ -22,7 +22,7 @@ The API was created with Android Developer Tools v22.6.2-1085508. It is targeted
 The build will produce a jar file, **metawearapi.jar**, in the bin folder.
 
 ### Android Studio ###
-1. Select "Import Non-Android Studio project" and navigate to the folder with the API code  
+1. Select "Import project (Eclipse ADT, Gradle, etc.)" and navigate to the folder with the API code  
 2. Rename the destination directory to "MetaWearAPI"  
    * The default name will be <Android Studio Workspace>/MetaWear-AndroidAPI<version>  
 3. Set the source and target compatiblity to 1.7 from the "Module Settings" page  

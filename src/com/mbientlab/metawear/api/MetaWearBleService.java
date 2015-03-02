@@ -254,7 +254,6 @@ public class MetaWearBleService extends Service {
             numDescriptors.set(0);
         }
 
-        public byte[] globalConfig= null;
         public BluetoothDevice mwBoard;
         public int isRecording= 0;
         public EventTriggerBuilder etBuilder;
@@ -537,16 +536,6 @@ public class MetaWearBleService extends Service {
                 if (mwState.readyToClose) {
                     close(mwState.notifyUser);
                 } else {
-                    mwState.internalCallbacks.put(Accelerometer.Register.DATA_SETTINGS, new InternalCallback() {
-                        @Override
-                        public void process(byte[] data) {                        
-                            mwState.globalConfig= new byte[data.length - 2];
-                            System.arraycopy(data, 2, mwState.globalConfig, 0, mwState.globalConfig.length);
-                            mwState.internalCallbacks.remove(Accelerometer.Register.DATA_SETTINGS);
-                        }
-                    });
-                    queueRegisterAction(mwState, false, Accelerometer.Register.DATA_SETTINGS);
-                    
                     mwState.deviceState= DeviceState.READY;
                     gattActions.addAll(mwState.queuedGattActions);
                     mwState.queuedGattActions.clear();
@@ -1160,6 +1149,7 @@ public class MetaWearBleService extends Service {
                     private final HashSet<Component> activeNotifications= new HashSet<>();
                     private final HashMap<Component, byte[]> configurations= new HashMap<>();
                     private float tapDuration= 60.f, tapLatency= 200.f, tapWindow= 300.f;
+                    private final byte[] globalConfig= new byte[] {0, 0, 0x18, 0, 0};
                     
                     @Override
                     public void enableComponent(Component component, boolean notify) {
@@ -1210,7 +1200,9 @@ public class MetaWearBleService extends Service {
                         
                         if (!saveConfig) {
                             if (component == Component.DATA) {
-                                mwState.globalConfig[2]= 0x18;
+                                globalConfig[0]= 0x0;
+                                globalConfig[2]&= 0xc7;
+                                globalConfig[2]|= 0x18;
                             } else {
                                 configurations.remove(component);
                             }
@@ -1224,7 +1216,9 @@ public class MetaWearBleService extends Service {
                         
                         if (!saveConfig) {
                             configurations.clear();
-                            mwState.globalConfig[2]= 0x18;
+                            globalConfig[0]= 0x0;
+                            globalConfig[2]&= 0xc7;
+                            globalConfig[2]|= 0x18;
                         }
                     }
                     
@@ -1295,9 +1289,9 @@ public class MetaWearBleService extends Service {
                             @Override
                             public TapConfig withLowPassFilter(boolean enabled) {
                                 if (enabled) {
-                                    mwState.globalConfig[1] |= 0x10;
+                                    globalConfig[1] |= 0x10;
                                 } else {
-                                    mwState.globalConfig[1] &= 0xef;
+                                    globalConfig[1] &= 0xef;
                                 }
                                 return this;
                             }
@@ -1422,8 +1416,8 @@ public class MetaWearBleService extends Service {
                     
                     
                     public void startComponents() {
-                        int accelOdr= (mwState.globalConfig[2] >> 3) & 0x3;
-                        int pwMode= (mwState.globalConfig[3] >> 3) & 0x3;
+                        int accelOdr= (globalConfig[2] >> 3) & 0x3;
+                        int pwMode= (globalConfig[3] >> 3) & 0x3;
                         
                         for(Component active: activeComponents) {
                             if (configurations.containsKey(active)) {
@@ -1434,7 +1428,7 @@ public class MetaWearBleService extends Service {
                                     config[3]= (byte) (100 / motionCountSteps[pwMode][accelOdr]);
                                     break;
                                 case PULSE:
-                                    int lpfEn= (mwState.globalConfig[1] & 0x10) >> 4;
+                                    int lpfEn= (globalConfig[1] & 0x10) >> 4;
                                     config[5]= (byte) (tapDuration / pulseTmltSteps[lpfEn][pwMode][accelOdr]);
                                     config[6]= (byte) (tapLatency / pulseLtcySteps[lpfEn][pwMode][accelOdr]);
                                     config[7]= (byte) (tapWindow / pulseWindSteps[lpfEn][pwMode][accelOdr]);
@@ -1455,7 +1449,7 @@ public class MetaWearBleService extends Service {
                             }
                         }
                         
-                        setComponentConfiguration(Component.DATA, mwState.globalConfig);
+                        setComponentConfiguration(Component.DATA, globalConfig);
                         queueRegisterAction(mwState, true, Register.GLOBAL_ENABLE, (byte)1);
                     }
                     
@@ -1488,8 +1482,8 @@ public class MetaWearBleService extends Service {
                             @Override
                             public SamplingConfig withFullScaleRange(
                                     FullScaleRange range) {
-                                mwState.globalConfig[0] &= 0xfc; 
-                                mwState.globalConfig[0] |= range.ordinal();
+                                globalConfig[0] &= 0xfc; 
+                                globalConfig[0] |= range.ordinal();
                                 return this;
                             }
 
@@ -1501,61 +1495,61 @@ public class MetaWearBleService extends Service {
 
                             @Override
                             public SamplingConfig withOutputDataRate(OutputDataRate rate) {
-                                mwState.globalConfig[2] &= 0xc7;
-                                mwState.globalConfig[2] |= (rate.ordinal() << 3);
+                                globalConfig[2] &= 0xc7;
+                                globalConfig[2] |= (rate.ordinal() << 3);
                                 return this;
                             }
 
                             @Override
                             public byte[] getBytes() {
-                                return mwState.globalConfig;
+                                return globalConfig;
                             }
 
                             @Override
                             public SamplingConfig withHighPassFilter(byte cutoff) {
-                                mwState.globalConfig[0] |= 0x10;
-                                mwState.globalConfig[1] |= cutoff;
+                                globalConfig[0] |= 0x10;
+                                globalConfig[1] |= (cutoff & 0x3);
                                 return this;
                             }
                             
                             @Override
                             public SamplingConfig withHighPassFilter() {
-                                mwState.globalConfig[0] |= 0x10;
+                                globalConfig[0] |= 0x10;
                                 return this;
                             }
                             
                             @Override
                             public SamplingConfig withoutHighPassFilter() {
-                                mwState.globalConfig[0] &= 0xef;
+                                globalConfig[0] &= 0xef;
                                 return this;
                             }
                         };
                     }
                     @Override
                     public void enableAutoSleepMode() {
-                        mwState.globalConfig[3] |= 0x4;
-                        queueRegisterAction(mwState, true, Component.DATA.status, mwState.globalConfig);
+                        globalConfig[3] |= 0x4;
+                        queueRegisterAction(mwState, true, Component.DATA.status, globalConfig);
                     }
                     @Override
                     public void enableAutoSleepMode(SleepModeRate sleepRate, int timeout) {
-                        mwState.globalConfig[2] &= 0x3f;
-                        mwState.globalConfig[2] |= sleepRate.ordinal() << 6;
-                        mwState.globalConfig[4]= (byte)(timeout / sleepCountSteps[(mwState.globalConfig[2] >> 3) & 0x3]);
+                        globalConfig[2] &= 0x3f;
+                        globalConfig[2] |= sleepRate.ordinal() << 6;
+                        globalConfig[4]= (byte)(timeout / sleepCountSteps[(globalConfig[2] >> 3) & 0x3]);
                         enableAutoSleepMode();
                     }
                     @Override
                     public void disableAutoSleepMode() {
-                        mwState.globalConfig[3] &= ~(0x4);
-                        queueRegisterAction(mwState, true, Component.DATA.status, mwState.globalConfig);
+                        globalConfig[3] &= ~(0x4);
+                        queueRegisterAction(mwState, true, Component.DATA.status, globalConfig);
                     }
                     @Override
                     public void setPowerMode(PowerMode mode) {
-                        mwState.globalConfig[3] &= ~(0x3 << 3);
-                        mwState.globalConfig[3] |= (mode.ordinal() << 3);
+                        globalConfig[3] &= ~(0x3 << 3);
+                        globalConfig[3] |= (mode.ordinal() << 3);
                         
-                        mwState.globalConfig[3] &= ~0x3;
-                        mwState.globalConfig[3] |= mode.ordinal();
-                        queueRegisterAction(mwState, true, Component.DATA.status, mwState.globalConfig);
+                        globalConfig[3] &= ~0x3;
+                        globalConfig[3] |= mode.ordinal();
+                        queueRegisterAction(mwState, true, Component.DATA.status, globalConfig);
                     }
                 });
             }

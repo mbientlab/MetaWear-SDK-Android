@@ -65,6 +65,12 @@ public interface MetaWearController {
      * @author Eric Tsai
      */
     public static abstract class DeviceCallbacks {
+        /**
+         * Enumeration of GATT operations the 
+         * {@link DeviceCallbacks#receivedGattError(GattOperation, int) receivedGattError} 
+         * callback method reports
+         * @author Eric Tsai
+         */
         public enum GattOperation {
             CONNECTION_STATE_CHANGE,
             DISCOVER_SERVICES,
@@ -74,11 +80,11 @@ public interface MetaWearController {
             RSSI_READ;
         }
         /**
-         * Bluetooth device connected
+         * Bluetooth Le connection established
          */
         public void connected() { }
         /**
-         * Bluetooth device disconnected
+         * Bluetooth Le connection lost
          */
         public void disconnected() { }
         /**
