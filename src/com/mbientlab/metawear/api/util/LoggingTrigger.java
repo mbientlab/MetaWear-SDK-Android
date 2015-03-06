@@ -48,6 +48,7 @@ public enum LoggingTrigger implements Trigger {
     SWITCH {
         @Override public Register register() { return MechanicalSwitch.Register.SWITCH_STATE; }
     },
+    /** Logs data from the temperature sensor */
     TEMPERATURE {
         @Override public Register register() { return Temperature.Register.TEMPERATURE; }
         @Override public byte length() {return 2;}
@@ -57,6 +58,7 @@ public enum LoggingTrigger implements Trigger {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
         @Override public byte length() { return 2; }
     },
+    /** Logs the X and Y axis of the accelerometer */
     ACCELEROMETER_XY_AXIS {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
         @Override public byte length() { return 4; }
@@ -67,6 +69,7 @@ public enum LoggingTrigger implements Trigger {
         @Override public byte offset() { return 2; }
         @Override public byte length() { return 2; }
     },
+    /** Logs the Y and Z axis of the accelerometer */
     ACCELEROMETER_YZ_AXIS {
         @Override public Register register() { return Accelerometer.Register.DATA_VALUE; }
         @Override public byte offset() { return 2; }
@@ -78,6 +81,7 @@ public enum LoggingTrigger implements Trigger {
         @Override public byte offset() { return 4; }
         @Override public byte length() { return 2; }
     },
+    /** Logs the orientation data */
     ACCELEROMETER_ORIENTATION {
         @Override public Register register() { return Accelerometer.Register.ORIENTATION_VALUE; }
     };

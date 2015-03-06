@@ -52,17 +52,25 @@ public enum Module {
     TEMPERATURE((byte)0x4, Temperature.Register.values()),
     /** General purpose I/O*/
     GPIO((byte)0x5, com.mbientlab.metawear.api.controller.GPIO.Register.values()),
-    /** Neo pixel */
+    /** Controls NeoPixel strands connected to the board */
     NEO_PIXEL((byte)0x6, NeoPixel.Register.values()),
-    /** IBeacon  */
+    /** Configure IBeacon settings */
     IBEACON((byte)0x7, IBeacon.Register.values()),
+    /** Provides pulse width modulate for */
     HAPTIC((byte)0x8, Haptic.Register.values()),
+    /** Manipulates sensor data on the board */
     DATA_PROCESSOR((byte) 0x9, DataProcessor.Register.values()),
+    /** Connection sensor activity with commands to be executed */
     EVENT((byte)0xa, Event.Register.values()),
+    /** Offline logging for sensor data */
     LOGGING((byte)0xb, Logging.Register.values()),
+    /** Internal timer that sends periodic notifications */
     TIMER((byte)0xc, Timer.Register.values()),
+    /** Communicate with sensors connected via I2C */
     I2C((byte) 0xd, com.mbientlab.metawear.api.controller.I2C.Register.values()),
+    /** Programs commands to the board's flash memory */
     MACRO((byte) 0xf, Macro.Register.values()),
+    /** Manipujlates the advertisement settings */
     SETTINGS((byte) 0x11, Settings.Register.values()),
     /** Debug mode for testing purposes */
     DEBUG((byte)0xfe, Debug.Register.values());

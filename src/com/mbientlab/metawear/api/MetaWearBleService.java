@@ -68,6 +68,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
 
@@ -276,6 +277,17 @@ public class MetaWearBleService extends Service {
     private MetaWearState singleMwState= null;
     private MetaWearControllerImpl singleController= null;
     private LocalBroadcastManager localBroadcastMngr;
+    private final Handler gattChecker= new Handler();
+    private final int HANDLER_DELAY= 1000;
+    
+    private final Runnable gattForceExec= new Runnable() {
+        @Override
+        public void run() {
+            gattChecker.removeCallbacks(this);
+            execGattAction(true);
+        }
+    };
+
     
     /**
      * Get the IntentFilter for actions broadcasted by the MetaWear service
@@ -377,14 +389,19 @@ public class MetaWearBleService extends Service {
     }
     
     private void execGattAction(boolean fromCallback) {
-        if (!gattActions.isEmpty() && (fromCallback || !isExecGattActions.get())) {
-            isExecGattActions.set(true);
-            boolean lastResult= false;
-            while(!gattActions.isEmpty() && (lastResult= gattActions.poll().execAction()) == false) { }
-            
-            if (!lastResult && gattActions.isEmpty()) {
-                isExecGattActions.set(false);
+        if (!gattActions.isEmpty()) {
+            if (fromCallback || !isExecGattActions.get()) {
+                isExecGattActions.set(true);
+                boolean lastResult= false;
+                while(!gattActions.isEmpty() && (lastResult= gattActions.poll().execAction()) == false) { }
+                    
+                gattChecker.postDelayed(gattForceExec, HANDLER_DELAY);
+                if (!lastResult && gattActions.isEmpty()) {
+                    isExecGattActions.set(false);
+                }
             }
+        } else {
+            isExecGattActions.set(false);
         }
     }
 
@@ -428,6 +445,8 @@ public class MetaWearBleService extends Service {
         
         @Override
         public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
+            gattChecker.removeCallbacks(gattForceExec);
+            
             Intent intent;
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 intent= new Intent(Action.GATT_ERROR);
@@ -440,6 +459,7 @@ public class MetaWearBleService extends Service {
             
             intent.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
             broadcastIntent(intent);
+            execGattAction(true);
         }
 
         @Override
@@ -447,11 +467,15 @@ public class MetaWearBleService extends Service {
                 int newState) {
             Intent intent= new Intent();
             boolean broadcast= true;
-            
+
             if (status != BluetoothGatt.GATT_SUCCESS) {
+                if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    MetaWearBleService.this.close(mwState);
+                }
+                
                 intent.setAction(Action.GATT_ERROR);
                 intent.putExtra(Extra.GATT_OPERATION, DeviceCallbacks.GattOperation.CONNECTION_STATE_CHANGE);
-                intent.putExtra(Extra.STATUS, status);                
+                intent.putExtra(Extra.STATUS, status);
             } else {    
                 switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
@@ -461,16 +485,7 @@ public class MetaWearBleService extends Service {
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
                     intent.setAction(Action.DEVICE_DISCONNECTED);
-                    if (mwState.numDescriptors.get() == 0 && mwState.numGattActions.get() == 0)  {
-                        if (mwState.mwGatt != null) {
-                            mwState.mwGatt.close();
-                            mwState.mwGatt= null;
-                        }
-                        mwState.deviceState= null;
-                        mwState.connected= false;
-                    } else {
-                        mwState.readyToClose= true;
-                    }
+                    MetaWearBleService.this.close(mwState);
                     break;
                 default:
                     broadcast= false;
@@ -521,6 +536,7 @@ public class MetaWearBleService extends Service {
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt,
                 BluetoothGattDescriptor descriptor, int status) {
+            gattChecker.removeCallbacks(gattForceExec);
             mwState.numDescriptors.decrementAndGet();
             isExecGattActions.set(!gattActions.isEmpty());
             
@@ -548,6 +564,7 @@ public class MetaWearBleService extends Service {
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
+            gattChecker.removeCallbacks(gattForceExec);
             mwState.numGattActions.decrementAndGet();
             isExecGattActions.set(!gattActions.isEmpty());
             
@@ -574,6 +591,7 @@ public class MetaWearBleService extends Service {
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic, int status) {
+            gattChecker.removeCallbacks(gattForceExec);
             mwState.numGattActions.decrementAndGet();
             isExecGattActions.set(!gattActions.isEmpty());
             
@@ -1946,22 +1964,36 @@ public class MetaWearBleService extends Service {
         }
         @Override
         public void readDeviceInformation() {
-            for(GATTCharacteristic it: DeviceInformation.values()) {
-                readCharacteristic(mwState, it);
-            }
+            if (!mwState.readyToClose && mwState.connected) {
+                for(GATTCharacteristic it: DeviceInformation.values()) {
+                    readCharacteristic(mwState, it);
+                }
             
-            execGattAction(false);
+                execGattAction(false);
+            }
         }
         @Override
         public void readBatteryLevel() {
-            readCharacteristic(mwState, Battery.BATTERY_LEVEL);
-            execGattAction(false);
+            if (!mwState.readyToClose && mwState.connected) {
+                readCharacteristic(mwState, Battery.BATTERY_LEVEL);
+                execGattAction(false);
+            }
         }
         
         @Override
         public void readRemoteRSSI() {
-            if (mwState.mwGatt != null) {
-                mwState.mwGatt.readRemoteRssi();
+            if (!mwState.readyToClose && mwState.connected) {
+                queueGattAction(mwState, new GattAction() {
+                    @Override
+                    public boolean execAction() {
+                        if (mwState.mwGatt != null) {
+                            mwState.mwGatt.readRemoteRssi();
+                            return true;
+                        }
+                        return false;
+                    }
+                });
+                execGattAction(false);
             }
         }
         
