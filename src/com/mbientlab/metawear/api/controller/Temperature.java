@@ -193,8 +193,16 @@ public interface Temperature extends ModuleController {
          * Set the temperature sampling period
          * @param period How often to sample the temperature, in ms
          * @return Calling object
+         * @deprecated As of v1.6, use {@link #withSamplingPeriod(int)} as this method's name was mispelled 
          */
+        @Deprecated
         public SamplingConfigBuilder withSampingPeriod(int period);
+        /**
+         * Set the temperature sampling period
+         * @param period How often to sample the temperature, in ms
+         * @return Calling object
+         */
+        public SamplingConfigBuilder withSamplingPeriod(int period);
         /**
          * Set the temperature delta.  A temperature change exceeding the delta will 
          * trigger a call to {@link Callbacks#temperatureDeltaExceeded(float, float)}

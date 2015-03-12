@@ -1877,6 +1877,12 @@ public class MetaWearBleService extends Service {
                                 
                                 return this;
                             }
+                            
+                            @Override
+                            public SamplingConfigBuilder withSamplingPeriod(
+                                    int period) {
+                                return withSampingPeriod(period);
+                            }
 
                             @Override
                             public SamplingConfigBuilder withTemperatureDelta(

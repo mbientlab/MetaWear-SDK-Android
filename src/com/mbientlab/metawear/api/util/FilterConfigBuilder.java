@@ -89,7 +89,7 @@ public abstract class FilterConfigBuilder {
          * @return Calling object
          */
         public IOConfigBuilder withOutputSize(byte size) {
-            parameters[0]|= (size - 1);
+            parameters[0]|= (size - 1) & 0x3;
             return this;
         }
         /**
@@ -98,7 +98,7 @@ public abstract class FilterConfigBuilder {
          * @return Calling object
          */
         public IOConfigBuilder withInputSize(byte size) {
-            parameters[0]|= ((size - 1) << 2);
+            parameters[0]|= ((size - 1) & 0x3) << 2;
             return this;
         }
     }
@@ -250,10 +250,7 @@ public abstract class FilterConfigBuilder {
          */
         public ComparatorBuilder withReference(int reference) {
             byte[] buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(reference).array();
-            
-            for(int i= 0; i < buffer.length; i++) {
-                parameters[i + 3]= buffer[i];
-            }
+            System.arraycopy(buffer, 0, parameters, 3, buffer.length);
             return this;
         }
     }
@@ -283,7 +280,7 @@ public abstract class FilterConfigBuilder {
          * @return Calling object
          */
         public RMSBuilder withMode(Mode mode) {
-            parameters[1]= (byte) (mode.ordinal() & 0xf);
+            parameters[1]= (byte) (mode.ordinal() & 0x7);
             return this;
         }
         /**
@@ -292,7 +289,7 @@ public abstract class FilterConfigBuilder {
          * @return Calling object
          */
         public RMSBuilder withInputCount(byte nInputs) {
-            parameters[0]|= (nInputs - 1) << 4;
+            parameters[0]|= ((nInputs - 1) & 0x7) << 4;
             return this;
         }
         
@@ -352,8 +349,7 @@ public abstract class FilterConfigBuilder {
          */
         public TimeDelayBuilder withPeriod(int period) {
             byte[] buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(period).array();
-            
-            System.arraycopy(buffer, 0, parameters, 1, 4);
+            System.arraycopy(buffer, 0, parameters, 1, buffer.length);
             return this;
         }
     }
@@ -418,10 +414,7 @@ public abstract class FilterConfigBuilder {
          */
         public MathBuilder withOperand(int rhs) {
             byte[] buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(rhs).array();
-            
-            for(int i= 0; i < buffer.length; i++) {
-                parameters[i + 2]= buffer[i];
-            }
+            System.arraycopy(buffer, 0, parameters, 2, buffer.length);
             return this;
         }
     }
@@ -441,7 +434,7 @@ public abstract class FilterConfigBuilder {
          * @return Calling object
          */
         public SampleDelayBuilder withDataSize(byte size) {
-            parameters[0]= (byte) (size - 1);
+            parameters[0]= (byte) ((size - 1) & 0x3);
             return this;
         }
         /**
@@ -484,7 +477,7 @@ public abstract class FilterConfigBuilder {
          * @return Calling object
          */
         public PulseDetectorBuilder withDataSize(byte size) {
-            parameters[0]= (byte) (size - 1);
+            parameters[0]= (byte) ((size - 1) & 0x3);
             return this;
         }
         /**
@@ -516,6 +509,134 @@ public abstract class FilterConfigBuilder {
         public PulseDetectorBuilder withWidth(short width) {
             parameters[7]= (byte)(width & 0xff);
             parameters[8]= (byte)((width >> 8) & 0xff);
+            return this;
+        }
+    }
+    
+    /**
+     * Builder to configure the delta value filter
+     * @author Eric Tsai
+     * @see com.mbientlab.metawear.api.controller.DataProcessor.FilterType#DELTA_VALUE
+     */
+    public static class DeltaValueBuilder extends FilterConfigBuilder {
+        /**
+         * Type of output the filter will return
+         * @author Eric Tsai
+         */
+        public enum OutputMode {
+            /** Return the data as in */
+            ABSOLUTE,
+            /** Return the difference between the value and its reference point */
+            DIFFERENTIAL,
+            /** 1 if the difference is positive, -1 if negative */
+            BINARY;
+        }
+        
+        public DeltaValueBuilder() {
+            super(5, FilterType.DELTA_VALUE);
+        }
+        
+        /**
+         * Sets the size of the data
+         * @param size Between 1 and 4 bytes
+         * @return Calling object
+         */
+        public DeltaValueBuilder withDataSize(byte size) {
+            parameters[0]|= (size - 1) & 0x3;
+            return this;
+        }
+        /**
+         * Sets if the input should be treated as a signed value
+         * @return Calling object
+         */
+        public DeltaValueBuilder withSignedInput() {
+            parameters[0]|= 0x4;
+            return this;
+        }
+        /**
+         * Sets what the output of the filter will be
+         * @param mode Output mode to use
+         * @return Calling object
+         */
+        public DeltaValueBuilder withOutputMode(OutputMode mode) {
+            parameters[0]|= (mode.ordinal() << 3);
+            return this;
+        }
+        /**
+         * Sets what the difference must be for the filter to output a value
+         * @param delta Magnitude of the difference as an unsigned int 
+         * @return Calling object
+         */
+        public DeltaValueBuilder withDeltaMagnitude(int delta) {
+            byte[] buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(delta).array();
+            System.arraycopy(buffer, 0, parameters, 1, buffer.length);
+            return this;
+        }
+    }
+    /**
+     * Builder to configure the threshold filter
+     * @author Eric Tsai
+     * @see com.mbientlab.metawear.api.controller.DataProcessor.FilterType#THRESHOLD
+     */
+    public static class ThresholdBuilder extends FilterConfigBuilder {
+        /**
+         * Type of output the filter will return
+         * @author Eric Tsai
+         */
+        public enum OutputMode {
+            /** Returns the data as is */
+            ABSOLUTE,
+            /** 1 if the data rose above the threshold, -1 if it fell below it */
+            BINARY;
+        }
+        
+        public ThresholdBuilder() {
+            super(7, FilterType.THRESHOLD);
+        }
+        /**
+         * Sets the size of the data
+         * @param size Between 1 and 4 bytes
+         * @return Calling object
+         */
+        public ThresholdBuilder withDataSize(byte size) {
+            parameters[0]|= (size - 1) & 0x3;
+            return this;
+        }
+        /**
+         * Sets if the input should be treated as a signed value
+         * @return Calling object
+         */
+        public ThresholdBuilder withSignedInput() {
+            parameters[0]|= 0x4;
+            return this;
+        }
+        /**
+         * Sets what the output of the filter will be
+         * @param mode Output mode to use
+         * @return Calling object
+         */
+        public ThresholdBuilder withOutputMode(OutputMode mode) {
+            parameters[0]|= (mode.ordinal() << 3);
+            return this;
+        }
+        /**
+         * Sets the threshold that data needs to cross
+         * @param threshold Threshold value as a signed integer
+         * @return Calling object
+         */
+        public ThresholdBuilder withThreshold(int threshold) {
+            byte[] buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(threshold).array();
+            System.arraycopy(buffer, 0, parameters, 1, buffer.length);
+            return this;
+        }
+        /**
+         * Sets the hysteresis for crossing values to eliminate oscillation
+         * @param hysteresis Minimum number of data samples needed to for a threshold output 
+         * @return Calling object
+         */
+        public ThresholdBuilder withHysteresis(short hysteresis) {
+            parameters[5]= (byte)(hysteresis & 0xff);
+            parameters[6]= (byte)((hysteresis >> 8) & 0xff);
             return this;
         }
     }

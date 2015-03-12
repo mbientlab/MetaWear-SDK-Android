@@ -82,15 +82,19 @@ public interface GPIO extends ModuleController {
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
                 
-                short oldValue= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                for(ModuleCallbacks it: callbacks) {
-                    ((Callbacks)it).receivedAnalogInputAsAbsValue(oldValue);
-                }
-                
                 if (data.length >= 5) {
                     short value= ByteBuffer.wrap(data, 3, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                     for(ModuleCallbacks it: callbacks) {
+                        ((Callbacks)it).receivedAnalogInputAsAbsValue(value);
                         ((Callbacks)it).receivedAnalogInputAsAbsValue(data[2], value);
+                        ((Callbacks)it).receivedAnalogInputAsAbsReference(data[2], value);
+                    }
+                } else {
+                    short value= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+                    for(ModuleCallbacks it: callbacks) {
+                        ((Callbacks)it).receivedAnalogInputAsAbsValue(value);
+                        ((Callbacks)it).receivedAnalogInputAsAbsValue((byte) -1, value);
+                        ((Callbacks)it).receivedAnalogInputAsAbsReference((byte) -1, value);
                     }
                 }
             }
@@ -100,16 +104,19 @@ public interface GPIO extends ModuleController {
             @Override public byte opcode() { return 0x7; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                short oldValue= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                for(ModuleCallbacks it: callbacks) {
-                    ((Callbacks)it).receivedAnalogInputAsSupplyRatio(oldValue);
-                }
-                
                 if (data.length >= 5) {
                     short value= ByteBuffer.wrap(data, 3, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                     for(ModuleCallbacks it: callbacks) {
+                        ((Callbacks)it).receivedAnalogInputAsSupplyRatio(value);
                         ((Callbacks)it).receivedAnalogInputAsSupplyRatio(data[2], value);
                     }
+                } else {
+                    short value= ByteBuffer.wrap(data, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+                    for(ModuleCallbacks it: callbacks) {
+                        ((Callbacks)it).receivedAnalogInputAsSupplyRatio(value);
+                        ((Callbacks)it).receivedAnalogInputAsSupplyRatio((byte) -1, value);
+                    }
+                    
                 }
             }
         },
@@ -118,12 +125,15 @@ public interface GPIO extends ModuleController {
             @Override public byte opcode() { return 0x8; }
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                for(ModuleCallbacks it: callbacks) {
-                    ((Callbacks)it).receivedDigitalInput(data[2]);
-                }
                 if (data.length >= 4) {
                     for(ModuleCallbacks it: callbacks) {
+                        ((Callbacks)it).receivedDigitalInput(data[3]);
                         ((Callbacks)it).receivedDigitalInput(data[2], data[3]);
+                    }
+                } else {
+                    for(ModuleCallbacks it: callbacks) {
+                        ((Callbacks)it).receivedDigitalInput(data[2]);
+                        ((Callbacks)it).receivedDigitalInput((byte) -1, data[2]);
                     }
                 }
             }
@@ -170,8 +180,17 @@ public interface GPIO extends ModuleController {
          * Called when the analog value of a GPIO pin has been read as an absolute reference.
          * @param pin GPIO pin the data is from
          * @param value Voltage in mV
+         * @deprecated As of v1.6, use {@link #receivedAnalogInputAsAbsReference(byte, short)}.  
+         * This method was incorrectly named as it does not accurately reflect what the meaning of the data
          */
+        @Deprecated
         public void receivedAnalogInputAsAbsValue(byte pin, short value) { }
+        /**
+         * Called when the analog value of a GPIO pin has been read as an absolute reference.
+         * @param pin GPIO pin the data is from
+         * @param value Voltage in mV
+         */
+        public void receivedAnalogInputAsAbsReference(byte pin, short value) { }
         /**
          * Called when the analog input has been read as a supply ratio.  This version is for firmware prior to v1.0.0.
          * @param value 10 bit representation of the voltage where 0 = 0V and 1023 = 3V
@@ -181,7 +200,7 @@ public interface GPIO extends ModuleController {
         @Deprecated
         public void receivedAnalogInputAsSupplyRatio(short value) { }
         /**
-         * Called when the analog value of a GPIO pin has been read as an ADC value
+         * Called when the analog value of a GPIO pin has been read as a supply ratio (ADC value)
          * @param pin GPIO pin the data is from
          * @param value 10 bit representation of the voltage where 0 = 0V and 1023 = 3V
          */
@@ -274,15 +293,15 @@ public interface GPIO extends ModuleController {
      * will be called instead 
      * @param pin Pin to read
      * @param mode Read mode on the pin
-     * @see Callbacks#receivedAnalogInputAsAbsValue(short)
-     * @see Callbacks#receivedAnalogInputAsSupplyRatio(short)
+     * @see Callbacks#receivedAnalogInputAsAbsReference(byte, short)
+     * @see Callbacks#receivedAnalogInputAsSupplyRatio(byte, short)
      */
     public void readAnalogInput(byte pin, AnalogMode mode);
     /**
      * Read the value of a digital pin.
      * When data is available, GPIO.receivedDigitalInput will be called
      * @param pin Pin to read
-     * @see Callbacks#receivedDigitalInput(byte)
+     * @see Callbacks#receivedDigitalInput(byte, byte)
      */
     public void readDigitalInput(byte pin);
     /**

@@ -231,7 +231,15 @@ public interface DataProcessor extends ModuleController {
         MATH,
         /** Only allow data through once a certain amount has been accumulated */
         SAMPLE_DELAY,
-        PULSE_DETECTOR;
+        /** Detects and quantifies a pulse from a set of data points */
+        PULSE_DETECTOR,
+        /**
+         * Only allows data through such that the difference between the current and 
+         * reference exceeds a threshold
+         */
+        DELTA_VALUE,
+        /** Only allows data through that crosses a threshold (either above or below) */
+        THRESHOLD;
     }
     
     /**
