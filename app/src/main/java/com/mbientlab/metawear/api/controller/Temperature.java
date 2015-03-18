@@ -76,17 +76,17 @@ public interface Temperature extends ModuleController {
 
                     @Override
                     public float deltaDetection() {
-                        return (float) ((float) buffer.getShort(4) * 0.25);
+                        return buffer.getShort(4) * 0.125f;
                     }
 
                     @Override
                     public float lowerBound() {
-                        return (float) ((float) buffer.getShort(6) * 0.25);
+                        return buffer.getShort(6) * 0.125f;
                     }
 
                     @Override
                     public float upperBound() {
-                        return (float) ((float) buffer.getShort(8) * 0.25);
+                        return buffer.getShort(8) * 0.125f;
                     }
                 };
                 
@@ -101,8 +101,8 @@ public interface Temperature extends ModuleController {
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
                 final ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-                float reference= (float) ((float) buffer.getShort(2) * 0.25), 
-                        current= (float) ((float) buffer.getShort(4) * 0.25);
+                float reference= buffer.getShort(2) * 0.125f,
+                        current= buffer.getShort(4) * 0.125f;
                 
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).temperatureDeltaExceeded(reference, current);
@@ -115,8 +115,8 @@ public interface Temperature extends ModuleController {
             @Override public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
                 final ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-                float threshold= (float) ((float) buffer.getShort(2) * 0.25), 
-                        current= (float) ((float) buffer.getShort(4) * 0.25);
+                float threshold= buffer.getShort(2) * 0.125f,
+                        current= buffer.getShort(4) * 0.125f;
                 
                 for(ModuleCallbacks it: callbacks) {
                     ((Callbacks)it).boundaryCrossed(threshold, current);
@@ -230,6 +230,13 @@ public interface Temperature extends ModuleController {
      * will be called
      */
     public void readTemperature();
+
+    /**
+     * Read the temperature sampling configuration.  The data is passed back to the user via the
+     * receivedSamplingConfig callback function
+     * @see Callbacks#receivedSamplingConfig(com.mbientlab.metawear.api.controller.Temperature.SamplingConfig)
+     */
+    public void readSamplingConfig();
     /**
      * Enables temperature sampling and event detection
      * @return Builder to configure the sampling parameters

@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -265,7 +266,7 @@ public class MetaWearBleService extends Service {
         public final AtomicInteger numGattActions= new AtomicInteger(0), numDescriptors= new AtomicInteger(0);
         public final ConcurrentLinkedQueue<GattAction> queuedGattActions= new ConcurrentLinkedQueue<>();
         public final HashMap<Register, InternalCallback> internalCallbacks= new HashMap<>();
-        public final HashMap<Byte, ArrayList<ModuleCallbacks>> moduleCallbackMap= new HashMap<>();
+        public final HashMap<Byte, Collection<ModuleCallbacks>> moduleCallbackMap= new HashMap<>();
         public final HashSet<DeviceCallbacks> deviceCallbacks= new HashSet<>();
     }
     
@@ -469,13 +470,19 @@ public class MetaWearBleService extends Service {
             boolean broadcast= true;
 
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                if (Build.VERSION.SDK_INT == Build.VERSION_CODES.LOLLIPOP && newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    Intent dummy= new Intent();
+                    dummy.setAction(Action.DEVICE_DISCONNECTED);
+                    dummy.putExtra(Extra.BLUETOOTH_DEVICE, mwState.mwBoard);
                     MetaWearBleService.this.close(mwState);
+                    broadcastIntent(dummy);
+                    
+                    broadcast= false;
+                } else {
+                    intent.setAction(Action.GATT_ERROR);
+                    intent.putExtra(Extra.GATT_OPERATION, DeviceCallbacks.GattOperation.CONNECTION_STATE_CHANGE);
+                    intent.putExtra(Extra.STATUS, status);
                 }
-                
-                intent.setAction(Action.GATT_ERROR);
-                intent.putExtra(Extra.GATT_OPERATION, DeviceCallbacks.GattOperation.CONNECTION_STATE_CHANGE);
-                intent.putExtra(Extra.STATUS, status);
             } else {    
                 switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
@@ -631,7 +638,7 @@ public class MetaWearBleService extends Service {
         public MetaWearController addModuleCallback(ModuleCallbacks callback) {
             byte moduleOpcode= callback.getModule().opcode;
             if (!mwState.moduleCallbackMap.containsKey(moduleOpcode)) {
-                mwState.moduleCallbackMap.put(moduleOpcode, new ArrayList<ModuleCallbacks>());
+                mwState.moduleCallbackMap.put(moduleOpcode, new LinkedHashSet<ModuleCallbacks>());
             }
             mwState.moduleCallbackMap.get(moduleOpcode).add(callback);
             return this;
@@ -1856,6 +1863,11 @@ public class MetaWearBleService extends Service {
                     }
 
                     @Override
+                    public void readSamplingConfig() {
+                        queueRegisterAction(mwState, false, Register.MODE);
+                    }
+
+                    @Override
                     public SamplingConfigBuilder enableSampling() {
                         return new SamplingConfigBuilder() {
                             private final byte[] samplingConfig= new byte[] {0, 0, 0, 0, 0, 0, 0, 0};
@@ -1887,7 +1899,7 @@ public class MetaWearBleService extends Service {
                             @Override
                             public SamplingConfigBuilder withTemperatureDelta(
                                     float delta) {
-                                short tempTicks= (short) (delta * 4);
+                                short tempTicks= (short) (delta * 8);
                                 
                                 samplingConfig[3]= (byte)((tempTicks >> 8) & 0xff);
                                 samplingConfig[2]= (byte)(tempTicks & 0xff);
@@ -1898,7 +1910,7 @@ public class MetaWearBleService extends Service {
                             @Override
                             public SamplingConfigBuilder withTemperatureBoundary(
                                     float lower, float upper) {
-                                short lowerTicks= (short) (lower * 4), upperTicks= (short) (upper * 4);
+                                short lowerTicks= (short) (lower * 8), upperTicks= (short) (upper * 8);
                                 
                                 samplingConfig[5]= (byte)((lowerTicks >> 8) & 0xff);
                                 samplingConfig[4]= (byte)(lowerTicks & 0xff);
