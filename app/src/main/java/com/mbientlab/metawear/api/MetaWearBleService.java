@@ -878,7 +878,7 @@ public class MetaWearBleService extends Service {
                     @Override
                     public void addTimer(int period, short repeat, boolean delay) {
                         ByteBuffer buffer= ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN);
-                        buffer.putInt(period).putShort(repeat).put((byte) (delay ? 1 : 0));
+                        buffer.putInt(period).putShort(repeat).put((byte) (delay ? 0 : 1));
                         
                         queueRegisterAction(mwState, true, Register.TIMER_ENTRY, buffer.array());
                     }
@@ -1096,6 +1096,13 @@ public class MetaWearBleService extends Service {
                 modules.put(Module.LOGGING, new Logging() {
                     @Override
                     public void startLogging() {
+                        queueRegisterAction(mwState, true, Register.CIRCULAR_BUFFER, (byte) 0);
+                        queueRegisterAction(mwState, true, Register.ENABLE, (byte) 1);
+                    }
+
+                    @Override
+                    public void startLogging(boolean overwriteEntries) {
+                        queueRegisterAction(mwState, true, Register.CIRCULAR_BUFFER, overwriteEntries ? (byte) 1 : (byte) 0);
                         queueRegisterAction(mwState, true, Register.ENABLE, (byte) 1);
                     }
 
@@ -2129,8 +2136,12 @@ public class MetaWearBleService extends Service {
                 
                 @Override
                 public void waitToClose(boolean notify) {
-                    mwState.notifyUser= notify;
-                    mwState.readyToClose= true;
+                    if (mwState.numGattActions.get() == 0) {
+                        close(notify);
+                    } else {
+                        mwState.notifyUser = notify;
+                        mwState.readyToClose = true;
+                    }
                 }
             };
         }

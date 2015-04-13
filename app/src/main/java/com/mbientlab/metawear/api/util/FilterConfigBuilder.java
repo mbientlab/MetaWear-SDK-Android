@@ -384,7 +384,11 @@ public abstract class FilterConfigBuilder {
             /** Perform left shift */
             LEFT_SHIFT,
             /** Perform right shift */
-            RIGHT_SHIFT;
+            RIGHT_SHIFT,
+            /** Subtract the data */
+            SUBTRACT,
+            /** Calculates the absolute value */
+            ABS_VALUE;
         }
         public MathBuilder() {
             super(6, FilterType.MATH);

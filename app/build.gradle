@@ -7,8 +7,8 @@ android {
     defaultConfig {
         minSdkVersion 18
         targetSdkVersion 21
-        versionCode 15
-        versionName "1.6.19"
+        versionCode 16
+        versionName "1.7.0"
     }
 
     buildTypes {
@@ -24,5 +24,5 @@ android {
 }
 
 dependencies {
-    compile 'com.android.support:support-v4:21.0.3'
+    compile 'com.android.support:support-v4:22.0.0'
 }

@@ -32,7 +32,7 @@ public interface Timer extends ModuleController {
                 if ((data[1] & 0x80) == 0x80) {
                     int period= ByteBuffer.wrap(data, 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
                     short repeat= ByteBuffer.wrap(data, 6, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                    boolean delay= data[8] != 0;
+                    boolean delay= data[8] == 0;
                     
                     for(ModuleCallbacks it: callbacks) {
                         ((Callbacks) it).receivedTimerConfig(period, repeat, delay);

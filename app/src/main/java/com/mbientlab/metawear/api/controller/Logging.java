@@ -203,6 +203,9 @@ public interface Logging extends ModuleController {
         },
         REMOVE_ALL_TRIGGERS {
             @Override public byte opcode() { return 0xa; }
+        },
+        CIRCULAR_BUFFER {
+            @Override public byte opcode() { return 0xb; }
         };
 
         @Override public Module module() { return Module.LOGGING; }
@@ -353,9 +356,15 @@ public interface Logging extends ModuleController {
     }
 
     /**
-     * Start logging trigger events
+     * Start logging trigger events.  This version of the method will not overwrite older entries if
+     * the log is full
      */
     public void startLogging();
+    /**
+     * Start logging trigger events
+     * @param overwriteEntries True if the logger should overwrite previous entries if full
+     */
+    public void startLogging(boolean overwriteEntries);
     /**
      * Stop logging trigger events
      */
