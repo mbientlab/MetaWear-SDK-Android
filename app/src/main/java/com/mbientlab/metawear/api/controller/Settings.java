@@ -103,6 +103,12 @@ public interface Settings extends ModuleController {
         /** Initiates the Bluetooth bonding process */
         INIT_BOND {
             @Override public byte opcode() { return 0x6; }
+        },
+        SCAN_RESPONSE {
+            @Override public byte opcode() { return 0x7; }
+        },
+        PARTIAL_SCAN_RESPONSE {
+            @Override public byte opcode() { return 0x8; }
         };
         
         @Override public Module module() { return SETTINGS; }
@@ -190,4 +196,11 @@ public interface Settings extends ModuleController {
      * @return Calling object
      */
     public Settings setTXPower(byte power);
+
+    /**
+     * Set a custom scan response packet
+     * @param response Byte representation of the response
+     * @return Calling object
+     */
+    public Settings setScanResponse(byte[] response);
 }

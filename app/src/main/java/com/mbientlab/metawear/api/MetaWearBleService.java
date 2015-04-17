@@ -797,6 +797,21 @@ public class MetaWearBleService extends Service {
                     }
 
                     @Override
+                    public Settings setScanResponse(byte[] response) {
+                        if (response.length >= MW_COMMAND_LENGTH) {
+                            byte[] first= new byte[13], second= new byte[response.length - 13];
+                            System.arraycopy(response, 0, first, 0, first.length);
+                            System.arraycopy(response, first.length, second, 0, second.length);
+
+                            queueRegisterAction(mwState, true, Register.PARTIAL_SCAN_RESPONSE, first);
+                            queueRegisterAction(mwState, true, Register.SCAN_RESPONSE, second);
+                        } else {
+                            queueRegisterAction(mwState, true, Register.SCAN_RESPONSE, response);
+                        }
+                        return this;
+                    }
+
+                    @Override
                     public void removeBond() {
                         queueRegisterAction(mwState, true, Register.DELETE_BOND, (byte) 1);
                     }
@@ -2317,7 +2332,7 @@ public class MetaWearBleService extends Service {
         queueRegisterAction(mwState, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE, write, register, parameters);
     }
 
-    private static final byte MACRO_MAX_LENGTH= 18;
+    private static final byte MW_COMMAND_LENGTH = 18;
     private void queueRegisterAction(final MetaWearState mwState, int desiredWriteType, boolean write, 
             Register register, byte ... parameters) {
         if (!mwState.readyToClose) {
@@ -2329,18 +2344,18 @@ public class MetaWearBleService extends Service {
                 mwState.etBuilder.withDestRegister(register, 
                         Arrays.copyOfRange(command, 2, command.length), !write);
             } else if ((mwState.isRecording & RECORDING_MACRO) == RECORDING_MACRO) {
-                if (command.length > MACRO_MAX_LENGTH) {
-                    byte lengthDiff= (byte) (command.length - MACRO_MAX_LENGTH);
-                    macroBytes= new byte[lengthDiff + 2];
+                if (command.length >= MW_COMMAND_LENGTH) {
+                    final byte PARTIAL_LENGTH= 2;
+                    macroBytes= new byte[PARTIAL_LENGTH + 2];
                     macroBytes[0]= Module.MACRO.opcode;
                     macroBytes[1]= Macro.Register.PARTIAL_COMMAND.opcode();
-                    System.arraycopy(command, 0, macroBytes, 2, lengthDiff);
+                    System.arraycopy(command, 0, macroBytes, 2, PARTIAL_LENGTH);
                     queueCommand(mwState, macroBytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
                     
-                    macroBytes= new byte[MACRO_MAX_LENGTH + 2];
+                    macroBytes= new byte[command.length - PARTIAL_LENGTH + 2];
                     macroBytes[0]= Module.MACRO.opcode;
                     macroBytes[1]= Macro.Register.ADD_COMMAND.opcode();
-                    System.arraycopy(command, lengthDiff, macroBytes, 2, MACRO_MAX_LENGTH);
+                    System.arraycopy(command, PARTIAL_LENGTH, macroBytes, 2, macroBytes.length - 2);
                     queueCommand(mwState, macroBytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
                 } else {
                     macroBytes= new byte[command.length + 2];
