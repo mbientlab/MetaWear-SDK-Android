@@ -1,7 +1,3 @@
 <component name="CopyrightManager">
-  <settings default="MbientLab">
-    <module2copyright>
-      <element module="All" copyright="MbientLab" />
-    </module2copyright>
-  </settings>
+  <settings default="MbientLab" />
 </component>
