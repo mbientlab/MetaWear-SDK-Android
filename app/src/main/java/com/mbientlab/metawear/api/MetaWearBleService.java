@@ -394,7 +394,12 @@ public class MetaWearBleService extends Service {
             if (fromCallback || !isExecGattActions.get()) {
                 isExecGattActions.set(true);
                 boolean lastResult= false;
-                while(!gattActions.isEmpty() && (lastResult= gattActions.poll().execAction()) == false) { }
+                while(!gattActions.isEmpty()) {
+                    GattAction next= gattActions.poll();
+                    if (next != null) {
+                        lastResult = next.execAction();
+                    }
+                }
                     
                 gattChecker.postDelayed(gattForceExec, HANDLER_DELAY);
                 if (!lastResult && gattActions.isEmpty()) {

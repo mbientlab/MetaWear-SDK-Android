@@ -54,11 +54,13 @@ public interface I2C extends ModuleController {
             @Override
             public void notifyCallbacks(Collection<ModuleCallbacks> callbacks,
                     byte[] data) {
-                byte[] i2cData= new byte[data.length - 3]; 
-                System.arraycopy(data, 3, i2cData, 0, data.length - 3);
-                
-                for(ModuleCallbacks it: callbacks) {
-                    ((Callbacks) it).receivedI2CData(data[2], i2cData);
+                if (data.length > 3) {
+                    byte[] i2cData = new byte[data.length - 3];
+                    System.arraycopy(data, 3, i2cData, 0, data.length - 3);
+
+                    for (ModuleCallbacks it : callbacks) {
+                        ((Callbacks) it).receivedI2CData(data[2], i2cData);
+                    }
                 }
             }
         };

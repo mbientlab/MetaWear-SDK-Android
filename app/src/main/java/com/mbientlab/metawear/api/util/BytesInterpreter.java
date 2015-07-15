@@ -34,6 +34,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 import com.mbientlab.metawear.api.controller.Accelerometer.Orientation;
+import com.mbientlab.metawear.api.controller.Accelerometer.MovementData;
+import com.mbientlab.metawear.api.controller.Accelerometer.Axis;
 
 /**
  * Helper functions to convert bytes into meaningful data
@@ -115,5 +117,26 @@ public class BytesInterpreter {
      */
     public static Orientation byteToOrientation(byte orientationData) {
         return Orientation.values()[(byte) (4 * (orientationData & 0x1) + ((orientationData >> 1) & 0x3))];
+    }
+
+    /**
+     * Convert byte to a MovementData object
+     * @param movementData Free fall or motion data from the accelerometer
+     * @return MovementData object wrapping the motion data
+     */
+    public static MovementData byteToMovementData(final byte movementData) {
+        return new MovementData() {
+            @Override
+            public boolean isAboveThreshold(Axis axis) {
+                byte mask= (byte) (2 << (2 * axis.ordinal()));
+                return (movementData & mask) == mask;
+            }
+
+            @Override
+            public Direction getDirection(Axis axis) {
+                byte mask= (byte) (1 << (2 * axis.ordinal()));
+                return (movementData & mask) == mask ? Direction.NEGATIVE : Direction.POSITIVE;
+            }
+        };
     }
 }
