@@ -1,7 +1,7 @@
 # MetaWear Android API #
 
 ## Version ##
-1.9.0
+1.9.3
 
 ## About ##
 This project provides an Android API for interacting with the MetaWear board.  For more information on MetaWear platform, check out the MbientLab product page: [https://mbientlab.com/product/](https://mbientlab.com/product/)
@@ -22,7 +22,7 @@ Then, add the compile element to the dependencies closure in the module's **buil
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:1.9.0'
+    compile 'com.mbientlab:metawear:1.9.3'
 }
 ```
 
