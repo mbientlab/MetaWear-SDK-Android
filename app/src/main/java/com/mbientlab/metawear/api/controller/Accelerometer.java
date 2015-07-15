@@ -442,6 +442,19 @@ public interface Accelerometer extends ModuleController {
          */
         public Direction getDirection(Axis axis);
     }
+
+    /**
+     * Wrapper class encapsulating tap data received from the on-board logger.  This class is to help distinguish
+     * between single and double taps when reading logged tap data
+     * @author Eric Tsai
+     */
+    public interface TapData extends MovementData {
+        /**
+         * Checks the tap type
+         * @return True if the tap was a single tap, false if double tap
+         */
+        public boolean isSingleTap();
+    }
     
     /**
      * Disable detection for the accelerometer component.  If saveConfig is false, 

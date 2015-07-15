@@ -36,6 +36,7 @@ import java.nio.ByteOrder;
 import com.mbientlab.metawear.api.controller.Accelerometer.Orientation;
 import com.mbientlab.metawear.api.controller.Accelerometer.MovementData;
 import com.mbientlab.metawear.api.controller.Accelerometer.Axis;
+import com.mbientlab.metawear.api.controller.Accelerometer.TapData;
 
 /**
  * Helper functions to convert bytes into meaningful data
@@ -120,22 +121,67 @@ public class BytesInterpreter {
     }
 
     /**
-     * Convert byte to a MovementData object
-     * @param movementData Free fall or motion data from the accelerometer
+     * Convert byte representation motion data to MovementData object
+     * @param motionData Free fall or motion data from the accelerometer
      * @return MovementData object wrapping the motion data
      */
-    public static MovementData byteToMovementData(final byte movementData) {
+    public static MovementData byteToMotionData(final byte motionData) {
         return new MovementData() {
             @Override
             public boolean isAboveThreshold(Axis axis) {
                 byte mask= (byte) (2 << (2 * axis.ordinal()));
-                return (movementData & mask) == mask;
+                return (motionData & mask) == mask;
             }
 
             @Override
             public Direction getDirection(Axis axis) {
                 byte mask= (byte) (1 << (2 * axis.ordinal()));
-                return (movementData & mask) == mask ? Direction.NEGATIVE : Direction.POSITIVE;
+                return (motionData & mask) == mask ? Direction.NEGATIVE : Direction.POSITIVE;
+            }
+        };
+    }
+
+    /**
+     * Convert byte representation of shake data to a MovementData object
+     * @param shakeData Tap data from the accelerometer
+     * @return MovementData object wrapping the shake data
+     */
+    public static MovementData byteToShakeData(final byte shakeData) {
+        return new MovementData() {
+            @Override
+            public boolean isAboveThreshold(Axis axis) {
+                byte mask= (byte) (0x2 << (2 * axis.ordinal()));
+                return (shakeData & mask) == mask;
+            }
+
+            @Override
+            public Direction getDirection(Axis axis) {
+                return Direction.values()[(shakeData >> (2 * axis.ordinal())) & 0x1];
+            }
+        };
+    }
+
+    /**
+     * Convert byte representation of tap data to a TapData object
+     * @param tapData Tap data from the accelerometer
+     * @return TapData object wrapping the tap data
+     */
+    public static TapData byteToTapData(final byte tapData) {
+        return new TapData() {
+            @Override
+            public boolean isAboveThreshold(Axis axis) {
+                byte mask= (byte) (0x10 << axis.ordinal());
+                return (tapData & mask) == mask;
+            }
+
+            @Override
+            public Direction getDirection(Axis axis) {
+                return Direction.values()[(tapData >> axis.ordinal()) & 0x1];
+            }
+
+            @Override
+            public boolean isSingleTap() {
+                return (tapData & 0x8) != 0x8;
             }
         };
     }

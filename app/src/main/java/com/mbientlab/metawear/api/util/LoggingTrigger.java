@@ -85,13 +85,17 @@ public enum LoggingTrigger implements Trigger {
     ACCELEROMETER_ORIENTATION {
         @Override public Register register() { return Accelerometer.Register.ORIENTATION_VALUE; }
     },
-    /** Logs free fall or motion data */
+    /** Logs free fall or motion events */
     ACCELEROMETER_MOTION {
         @Override public Register register() { return Accelerometer.Register.FREE_FALL_VALUE; }
     },
-    /** Logs shake data */
+    /** Logs shake events */
     ACCELEROMETER_SHAKE {
         @Override public Register register() { return Accelerometer.Register.TRANSIENT_STATUS; }
+    },
+    /** Logs tap events */
+    ACCELEROMETER_TAP {
+        @Override public Register register() { return Accelerometer.Register.PULSE_STATUS; }
     };
     
     /**
