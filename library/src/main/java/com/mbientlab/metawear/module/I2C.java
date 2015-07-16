@@ -29,36 +29,28 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.module;
 
-import java.util.Map;
+import com.mbientlab.metawear.AsyncResult;
+import com.mbientlab.metawear.MetaWearBoard;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/15/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
+public interface I2C extends MetaWearBoard.Module {
+    /**
+     * Write data via the I2C bus without attaching a user id to the data.
+     * @param deviceAddr Device to write to
+     * @param registerAddr Device's register to write to
+     * @param data Data to write, up to 10 bytes
+     */
+    public void writeData(byte deviceAddr, byte registerAddr, byte[] data);
 
-    public interface MessageProcessor {
-        public void process(Message msg);
-    }
-
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
-    }
-
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
+    /**
+     * Read data via the I2C bus without a user id identifying the read data.
+     * @param deviceAddr Device to read from
+     * @param registerAddr Device's register to read
+     * @param numBytes Number of bytes to read
+     */
+    public AsyncResult<byte[]> readData(byte deviceAddr, byte registerAddr, byte numBytes);
 }

@@ -29,36 +29,25 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
-
-import java.util.Map;
+package com.mbientlab.metawear.impl.characteristic;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/14/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
+public enum MultiChannelTempRegister implements Register {
+    INFO {
+        @Override
+        public byte opcode() { return 0x0; }
+    },
+    TEMPERATURE {
+        @Override
+        public byte opcode() { return 0x1; }
+    },
+    MODE {
+        @Override
+        public byte opcode() { return 0x0; }
+    };
 
-    public interface MessageProcessor {
-        public void process(Message msg);
-    }
-
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
-    }
-
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
+    @Override
+    public byte moduleOpcode() { return 0x4; }
 }

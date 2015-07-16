@@ -29,36 +29,35 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.module;
 
-import java.util.Map;
+import com.mbientlab.metawear.AsyncResult;
+import com.mbientlab.metawear.MetaWearBoard;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/14/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
-
-    public interface MessageProcessor {
-        public void process(Message msg);
+public interface MultiChannelTemperature extends MetaWearBoard.Module {
+    public enum SourceType {
+        ON_DIE,
+        EXT_THERMISTOR,
+        BMP280,
+        PRESET_THERMISTOR
     }
 
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
+    public interface Source {
+        public byte driver();
+        public byte channel();
+        public SourceType type();
     }
 
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
+    public interface NrfDie extends Source { }
+    public interface ExtThermistor extends Source {
+        public void configure(byte analogReadPin, byte pulldownPin, boolean activeHigh);
+    }
+    public interface BMP280 extends Source { }
+    public interface PresetThermistor extends Source { }
 
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
+    public AsyncResult<Source[]> readSources();
+    public void readTemperature(Source src);
 }

@@ -31,34 +31,12 @@
 
 package com.mbientlab.metawear;
 
-import java.util.Map;
-
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/7/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
+public interface DataProcessor {
+    public interface StateEditor { }
 
-    public interface MessageProcessor {
-        public void process(Message msg);
-    }
-
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
-    }
-
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
+    public void setState(StateEditor editor);
+    public void modifyConfiguration(DataSignal.ProcessorConfig newConfig);
 }

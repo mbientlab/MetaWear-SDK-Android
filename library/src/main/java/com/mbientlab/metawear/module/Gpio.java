@@ -36,7 +36,7 @@ import com.mbientlab.metawear.MetaWearBoard;
 /**
  * Created by etsai on 6/18/2015.
  */
-public interface Gpio extends MetaWearBoard.GenericModule {
+public interface Gpio extends MetaWearBoard.Module {
     public enum AnalogReadMode {
         ABS_REFERENCE,
         ADC

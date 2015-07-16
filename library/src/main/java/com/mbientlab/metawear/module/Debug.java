@@ -36,7 +36,7 @@ import com.mbientlab.metawear.MetaWearBoard;
 /**
  * Created by etsai on 6/23/2015.
  */
-public interface Debug extends MetaWearBoard.GenericModule {
+public interface Debug extends MetaWearBoard.Module {
     public void resetDevice();
     public void jumpToBootloader();
     public void resetAfterGarbageCollect();

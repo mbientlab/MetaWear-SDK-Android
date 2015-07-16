@@ -31,6 +31,7 @@
 
 package com.mbientlab.metawear.processor;
 
+import com.mbientlab.metawear.DataProcessor;
 import com.mbientlab.metawear.DataSignal;
 
 import java.util.Map;
@@ -38,9 +39,18 @@ import java.util.Map;
 /**
  * Created by eric on 6/20/2015.
  */
-public class Accumulator implements DataSignal.DataTransformer {
+public class Accumulator implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "accumulator";
     public static final String FIELD_OUTPUT= "output";
+
+    public static class AccumulatorStateEditor implements DataProcessor.StateEditor {
+        public final Number newRunningSum;
+
+        public AccumulatorStateEditor(Number newRunningSum) {
+            this.newRunningSum= newRunningSum;
+        }
+    }
+
     public final Byte output;
 
     public Accumulator(Map<String, String> query) {

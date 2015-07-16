@@ -38,23 +38,27 @@ import java.nio.ByteOrder;
 import java.util.Calendar;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/8/2015.
  */
-public class MwrAccelAxisMessage extends Message {
-    private final short[] milliGs;
-    private final float[] accelGs;
+public class Bmi160AccelAxisMessage extends Message {
+    private final float[] axisG;
+    private final short[] axisMilliG;
+    private final int scale;
 
-    public MwrAccelAxisMessage(byte[] data) {
-        this(null, data);
+    public Bmi160AccelAxisMessage(byte[] data, int scale) {
+        this(null, data, scale);
     }
 
-    public MwrAccelAxisMessage(Calendar timestamp, byte[] data) {
+    public Bmi160AccelAxisMessage(Calendar timestamp, byte[] data, int scale) {
         super(timestamp, data);
 
+        this.scale= scale;
         ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-
-        milliGs= new short[] {buffer.getShort(), buffer.getShort(), buffer.getShort()};
-        accelGs= new float[] {milliGs[0] / 1000.f, milliGs[1] / 1000.f, milliGs[2] / 1000.f};
+        short x= buffer.getShort(), y= buffer.getShort(), z= buffer.getShort();
+        axisG = new float[] {((float) x) / scale,
+                ((float) y) / scale,
+                ((float) z) / scale};
+        axisMilliG= new short[] {(short) ((x * 1000) / scale), (short) ((y * 1000) / scale), (short) ((z * 1000) / scale)};
     }
 
     @Override
@@ -63,37 +67,42 @@ public class MwrAccelAxisMessage extends Message {
             return type.cast(new AccelAxisG() {
                 @Override
                 public float x() {
-                    return accelGs[0];
+                    return axisG[0];
                 }
 
                 @Override
                 public float y() {
-                    return accelGs[1];
+                    return axisG[1];
                 }
 
                 @Override
                 public float z() {
-                    return accelGs[2];
+                    return axisG[2];
                 }
             });
         } else if (type.equals(AccelAxisMilliG.class)) {
             return type.cast(new AccelAxisMilliG() {
                 @Override
                 public short x() {
-                    return milliGs[0];
+                    return axisMilliG[0];
                 }
 
                 @Override
                 public short y() {
-                    return milliGs[1];
+                    return axisMilliG[1];
                 }
 
                 @Override
                 public short z() {
-                    return milliGs[2];
+                    return axisMilliG[2];
                 }
             });
         }
         return super.getData(type);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("{%s, scale: %d", super.toString(), scale);
     }
 }

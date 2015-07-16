@@ -38,7 +38,7 @@ import java.util.Map;
 /**
  * Created by eric on 6/20/2015.
  */
-public class Rms implements DataSignal.DataTransformer {
+public class Rms implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "rms";
 
     public Rms(Map<String, String> query) { }

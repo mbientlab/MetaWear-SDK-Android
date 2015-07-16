@@ -29,36 +29,66 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.data;
 
-import java.util.Map;
+import com.mbientlab.metawear.Message;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Calendar;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/9/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
-
-    public interface MessageProcessor {
-        public void process(Message msg);
+public class Bmi160GyroMessage extends Message {
+    public interface GyroSpin {
+        public float x();
+        public float y();
+        public float z();
     }
 
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
+    private final float scale;
+    private final GyroSpin spin;
+
+    public Bmi160GyroMessage(byte[] data, float scale) {
+        this(null, data, scale);
     }
 
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
+    public Bmi160GyroMessage(Calendar timestamp, byte[] data, float scale) {
+        super(timestamp, data);
 
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
+        this.scale= scale;
 
-    public AsyncResult<RouteManager> commit();
+        ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        final float x= buffer.getShort() / scale, y= buffer.getShort() / scale, z= buffer.getShort() / scale;
+        spin= new GyroSpin() {
+            @Override
+            public float x() {
+                return x;
+            }
+
+            @Override
+            public float y() {
+                return y;
+            }
+
+            @Override
+            public float z() {
+                return z;
+            }
+        };
+    }
+
+    @Override
+    public <T> T getData(Class<T> type) {
+        if (type.equals(GyroSpin.class)) {
+            return type.cast(spin);
+        }
+        return super.getData(type);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("{%s, scale: %.1f", super.toString(), scale);
+    }
 }

@@ -43,6 +43,14 @@ public enum DataProcessorRegister implements Register {
         @Override
         public byte opcode() { return 0x3; }
     },
+    STATE {
+        @Override
+        public byte opcode() { return 0x4; }
+    },
+    PARAMETER {
+        @Override
+        public byte opcode() { return 0x5; }
+    },
     REMOVE {
         @Override
         public byte opcode() { return 0x6; }

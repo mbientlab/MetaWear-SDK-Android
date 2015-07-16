@@ -31,18 +31,16 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.MetaWearBoard;
-
 /**
  * Created by etsai on 6/19/2015.
  */
-public interface MwrAccelerometer extends MetaWearBoard.GenericModule {
+public interface Mma8452qAccelerometer extends Accelerometer {
     public void globalStart();
     public void globalStop();
 
     public SamplingConfig configureXYZSampling();
-    public void startXYZSampling();
-    public void stopXYZSampling();
+    public void startAxisSampling();
+    public void stopAxisSampling();
 
     public interface SamplingConfig {
         /**

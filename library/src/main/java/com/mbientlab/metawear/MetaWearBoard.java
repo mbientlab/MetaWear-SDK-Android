@@ -35,7 +35,7 @@ package com.mbientlab.metawear;
  * Created by etsai on 6/15/2015.
  */
 public interface MetaWearBoard {
-    public interface GenericModule { }
+    public interface Module { }
 
     public interface DeviceInformation {
         public String manufacturer();
@@ -50,7 +50,7 @@ public interface MetaWearBoard {
         public void failure(int status, Throwable error) { }
     }
 
-    public <T extends GenericModule> T getModule(Class<T> moduleClass);
+    public <T extends Module> T getModule(Class<T> moduleClass);
 
     public AsyncResult<DeviceInformation> readDeviceInformation();
     public AsyncResult<Integer> readRssi();

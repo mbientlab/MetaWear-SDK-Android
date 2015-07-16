@@ -29,36 +29,28 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.processor;
+
+import com.mbientlab.metawear.DataSignal;
 
 import java.util.Map;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/8/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
+public class Sample implements DataSignal.ProcessorConfig {
+    public static final String SCHEME_NAME= "sample";
+    public static final String FIELD_BIN_SIZE= "binSize";
 
-    public interface MessageProcessor {
-        public void process(Message msg);
+    public final byte binSize;
+
+    public Sample(Map<String, String> query) {
+        if (!query.containsKey(FIELD_BIN_SIZE)) {
+            throw new RuntimeException("Missing required field in URI: " + FIELD_BIN_SIZE);
+        }
+        binSize= Byte.valueOf(query.get(FIELD_BIN_SIZE));
     }
-
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
+    public Sample(byte binSize) {
+        this.binSize= binSize;
     }
-
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
 }

@@ -36,7 +36,7 @@ import com.mbientlab.metawear.MetaWearBoard;
 /**
  * Created by etsai on 6/18/2015.
  */
-public interface Led extends MetaWearBoard.GenericModule {
+public interface Led extends MetaWearBoard.Module {
     public enum ColorChannel {
         GREEN,
         RED,

@@ -38,6 +38,7 @@ import java.util.UUID;
  */
 public enum DevInfoCharacteristic {
     MANUFACTURER_NAME("29"),
+    MODULE_NUMBER("24"),
     SERIAL_NUMBER("25"),
     FIRMWARE_VERSION("26"),
     HARDWARE_VERSION("27");

@@ -31,6 +31,7 @@
 
 package com.mbientlab.metawear.processor;
 
+import com.mbientlab.metawear.DataProcessor;
 import com.mbientlab.metawear.DataSignal;
 
 import java.util.Map;
@@ -38,9 +39,11 @@ import java.util.Map;
 /**
  * Created by eric on 6/20/2015.
  */
-public class Average implements DataSignal.DataTransformer {
+public class Average implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "average";
     public static final String FIELD_SAMPLE_SIZE= "sampleSize";
+
+    public static class AverageStateEditor implements DataProcessor.StateEditor { }
 
     public final byte sampleSize;
 

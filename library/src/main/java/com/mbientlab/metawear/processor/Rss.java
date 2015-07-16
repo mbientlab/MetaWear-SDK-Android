@@ -38,7 +38,7 @@ import java.util.Map;
 /**
  * Created by etsai on 7/6/2015.
  */
-public class Rss implements DataSignal.DataTransformer {
+public class Rss implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "rss";
 
     public Rss(Map<String, String> query) { }

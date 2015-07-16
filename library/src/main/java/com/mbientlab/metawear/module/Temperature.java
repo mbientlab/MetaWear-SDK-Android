@@ -36,7 +36,7 @@ import com.mbientlab.metawear.MetaWearBoard;
 /**
  * Created by etsai on 6/18/2015.
  */
-public interface Temperature extends MetaWearBoard.GenericModule {
+public interface Temperature extends MetaWearBoard.Module {
     public void readTemperarure();
     public void enableThermistorMode(byte analogReadPin, byte pulldownPin);
     public void disableThermistorMode();

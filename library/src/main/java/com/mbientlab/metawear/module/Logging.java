@@ -36,7 +36,7 @@ import com.mbientlab.metawear.MetaWearBoard;
 /**
  * Created by etsai on 6/23/2015.
  */
-public interface Logging extends MetaWearBoard.GenericModule {
+public interface Logging extends MetaWearBoard.Module {
     public interface DownloadHandler {
         public void onProgressUpdate(int nEntriesLeft, int totalEntries);
     }

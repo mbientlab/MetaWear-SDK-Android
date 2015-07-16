@@ -29,36 +29,49 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.module;
 
-import java.util.Map;
+import com.mbientlab.metawear.AsyncResult;
+import com.mbientlab.metawear.MetaWearBoard;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/13/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
+public interface Settings extends MetaWearBoard.Module {
+    public AdvertisementConfigEditor edit();
 
-    public interface MessageProcessor {
-        public void process(Message msg);
+    public AsyncResult<AdvertisementConfig> readAdConfig();
+    /**
+     * Remove Bluetooth bond to the board on disconnect
+     */
+    public void removeBond();
+    /**
+     * Keep the bond on disconnect
+     */
+    public void keepBond();
+    /**
+     * Trigger the board to start advertising
+     */
+    public void startAdvertisement();
+    /**
+     * Triggers the board to initiate the Bluetooth bonding process with the
+     * connected Android device
+     */
+    public void initiateBonding();
+
+    public interface AdvertisementConfig {
+        public String deviceName();
+        public int interval();
+        public short timeout();
+        public byte txPower();
+        public byte[] scanResponse();
     }
 
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
+    public interface AdvertisementConfigEditor {
+        public AdvertisementConfigEditor withDeviceName(String name);
+        public AdvertisementConfigEditor withAdInterval(short interval, byte timeout);
+        public AdvertisementConfigEditor withTxPower(byte power);
+        public AdvertisementConfigEditor setScanResponse(byte[] response);
+        public void commit();
     }
-
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
 }

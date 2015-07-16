@@ -32,6 +32,7 @@
 package com.mbientlab.metawear.processor;
 
 import com.mbientlab.metawear.DataSignal;
+import com.mbientlab.metawear.MessageToken;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,7 +40,7 @@ import java.util.Map;
 /**
  * Created by eric on 6/20/2015.
  */
-public class Math implements DataSignal.DataTransformer {
+public class Math implements DataSignal.ProcessorConfig {
     private static final HashMap<String, Operation> opShortNames;
 
     static {
@@ -98,16 +99,19 @@ public class Math implements DataSignal.DataTransformer {
         public boolean requiresRhs() { return true; }
     }
 
+    public final MessageToken rhsToken;
     public final Number rhs;
     public final Operation mathOp;
     public final Boolean signed;
 
     public Math(Map<String, String> query) {
+        rhsToken = null;
+
         if (!query.containsKey(FIELD_OP)) {
             throw new RuntimeException("Missing required field in URI: " + FIELD_OP);
         }
-        if (opShortNames.containsKey(query.get(FIELD_OP))) {
-            mathOp = opShortNames.get(query.get(FIELD_OP));
+        if (opShortNames.containsKey(query.get(FIELD_OP).toLowerCase())) {
+            mathOp = opShortNames.get(query.get(FIELD_OP).toLowerCase());
         } else {
             mathOp = Enum.valueOf(Operation.class, query.get(FIELD_OP).toUpperCase());
         }
@@ -151,6 +155,18 @@ public class Math implements DataSignal.DataTransformer {
             this.rhs= 0;
         }
 
+        this.rhsToken = null;
+        this.mathOp = op;
+        this.signed= signed;
+    }
+
+    public Math(Operation op, MessageToken rhs, Boolean signed) {
+        if (op.requiresRhs() && rhs == null) {
+            throw new RuntimeException("rhs parameter must be a number for math operation " + op.toString());
+        }
+
+        this.rhsToken= rhs;
+        this.rhs= 0;
         this.mathOp = op;
         this.signed= signed;
     }
@@ -161,6 +177,10 @@ public class Math implements DataSignal.DataTransformer {
      * @param rhs Value on the right hand side fo the operation
      */
     public Math(Operation op, Number rhs) {
+        this(op, rhs, null);
+    }
+
+    public Math(Operation op, MessageToken rhs) {
         this(op, rhs, null);
     }
 }

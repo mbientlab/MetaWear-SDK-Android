@@ -33,45 +33,70 @@ package com.mbientlab.metawear.processor;
 
 import com.mbientlab.metawear.DataSignal;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Created by eric on 6/20/2015.
+ * Created by etsai on 7/8/2015.
  */
-public class Time implements DataSignal.ProcessorConfig {
-    public static final String SCHEME_NAME= "time";
-    public static final String FIELD_PERIOD= "period", FIELD_MODE= "mode";
+public class Threshold implements DataSignal.ProcessorConfig {
+    private static final HashMap<String, Mode> modeShortNames;
+    public static final String SCHEME_NAME= "threshold";
+    public static final String FIELD_LIMIT= "limit", FIELD_HYSTERESIS="hysteresis", FIELD_MODE= "mode";
 
-    public enum Mode {
-        /** No change in the input value */
-        ABSOLUTE,
-        /** Return the difference between the current and previous value */
-        DIFFERENTIAL
+    static {
+        modeShortNames= new HashMap<>();
+        modeShortNames.put("abs", Mode.ABSOLUTE);
+        modeShortNames.put("bin", Mode.BINARY);
     }
 
-    public final Mode mode;
-    public final int period;
+    public enum Mode {
+        ABSOLUTE,
+        BINARY
+    }
 
-    public Time(Map<String, String> query) {
-        if (!query.containsKey(FIELD_PERIOD)) {
-            throw new RuntimeException("Missing required field in URI: " + FIELD_PERIOD);
+    public final Number limit, hysteresis;
+    public final Mode mode;
+
+    public Threshold(Map<String, String> query) {
+        if (!query.containsKey(FIELD_LIMIT)) {
+            throw new RuntimeException("Missing required field in URI: " + FIELD_LIMIT);
         } else {
-            period= Integer.valueOf(query.get(FIELD_PERIOD));
+            if (query.get(FIELD_LIMIT).contains(".")) {
+                limit= Float.valueOf(query.get(FIELD_LIMIT));
+            } else {
+                limit= Integer.valueOf(query.get(FIELD_LIMIT));
+            }
+        }
+
+        if (query.containsKey(FIELD_HYSTERESIS)) {
+            if (query.get(FIELD_HYSTERESIS).contains(".")) {
+                hysteresis = Float.valueOf(query.get(FIELD_HYSTERESIS));
+            } else {
+                hysteresis = Integer.valueOf(query.get(FIELD_HYSTERESIS));
+            }
+        } else {
+            hysteresis= 0;
         }
 
         if (!query.containsKey(FIELD_MODE)) {
             throw new RuntimeException("Missing required field in URI: " + FIELD_MODE);
         } else {
-            mode= Enum.valueOf(Mode.class, query.get(FIELD_MODE).toUpperCase());
+            if (modeShortNames.containsKey(query.get(FIELD_MODE).toLowerCase())) {
+                mode = modeShortNames.get(query.get(FIELD_MODE).toLowerCase());
+            } else {
+                mode = Enum.valueOf(Mode.class, query.get(FIELD_MODE).toUpperCase());
+            }
         }
     }
 
-    /**
-     * Constructs a config object for a timer transformer or filter
-     * @param period How often to allow data through, in milliseconds
-     */
-    public Time(int period, Mode mode) {
-        this.period= period;
+    public Threshold(Number limit, Mode mode, Number hysteresis) {
+        this.limit= limit;
+        this.hysteresis= hysteresis;
         this.mode= mode;
+    }
+
+    public Threshold(Number limit, Mode mode) {
+        this(limit, mode, 0);
     }
 }

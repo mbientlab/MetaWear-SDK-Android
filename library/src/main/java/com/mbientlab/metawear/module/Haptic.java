@@ -29,36 +29,28 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.module;
 
-import java.util.Map;
+import com.mbientlab.metawear.MetaWearBoard;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/13/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
-
-    public interface MessageProcessor {
-        public void process(Message msg);
-    }
-
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
-    }
-
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
+public interface Haptic extends MetaWearBoard.Module {
+    /**
+     * Start pulsing a motor with a duty cycle of 100%
+     * @param pulseWidth How long to run the motor (ms)
+     */
+    public void startMotor(short pulseWidth);
+    /**
+     * Start pulsing a motor
+     * @param dutyCycle Strength of the motor, between [0, 100] percent
+     * @param pulseWidth How long to run the motor (ms)
+     */
+    public void startMotor(float dutyCycle, short pulseWidth);
+    /**
+     * Start pulsing a buzzer
+     * @param pulseWidth How long to run the buzzer (ms)
+     */
+    public void startBuzzer(short pulseWidth);
 }

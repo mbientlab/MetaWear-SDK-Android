@@ -38,5 +38,5 @@ public interface Connection {
     public interface ResponseListener {
         public void receivedResponse(byte[] response);
     }
-    public void sendCommand(byte[] command);
+    public void sendCommand(boolean writeMacro, byte[] command);
 }

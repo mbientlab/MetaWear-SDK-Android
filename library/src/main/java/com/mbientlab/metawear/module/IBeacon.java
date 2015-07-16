@@ -29,36 +29,40 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.module;
 
-import java.util.Map;
+import com.mbientlab.metawear.AsyncResult;
+import com.mbientlab.metawear.MetaWearBoard;
+
+import java.util.UUID;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/13/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
+public interface IBeacon extends MetaWearBoard.Module {
+    public IBeaconConfigEditor edit();
 
-    public interface MessageProcessor {
-        public void process(Message msg);
+    public void enable();
+    public void disable();
+
+    public interface IBeaconConfigEditor {
+        public IBeaconConfigEditor withUUID(UUID adUuid);
+        public IBeaconConfigEditor withMajor(short major);
+        public IBeaconConfigEditor withMinor(short minor);
+        public IBeaconConfigEditor withRxPower(byte power);
+        public IBeaconConfigEditor withTxPower(byte power);
+        public IBeaconConfigEditor withAdPeriod(short period);
+        public void commit();
     }
 
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
+    public interface Configuration {
+        public UUID adUuid();
+        public short major();
+        public short minor();
+        public byte rxPower();
+        public byte txPower();
+        public short adPeriod();
     }
 
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
+    public AsyncResult<Configuration> readConfiguration();
 }

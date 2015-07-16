@@ -46,6 +46,7 @@ import android.util.Log;
 
 import com.mbientlab.metawear.AsyncResult;
 import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.impl.characteristic.MacroRegister;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -63,7 +64,7 @@ public class MetaWearBleService extends Service {
     private final static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"),
             METAWEAR_SERVICE= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A"),
             METAWEAR_COMMAND= UUID.fromString("326A9001-85CB-9195-D9DD-464CFBBAE75A"),
-            METAWEAR_NOTIFY= UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A");;
+            METAWEAR_NOTIFY= UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A");
 
     private enum GattActionKey {
         NONE,
@@ -131,7 +132,12 @@ public class MetaWearBleService extends Service {
                 if (key == gattKey || !isExecActions.get()) {
                     isExecActions.set(true);
                     boolean lastResult= false;
-                    while(!actions.isEmpty() && (lastResult= actions.poll().execute()) == false) { }
+                    do {
+                        Action next= actions.poll();
+                        if (next != null) {
+                            lastResult = !next.execute();
+                        }
+                    } while(!actions.isEmpty() && lastResult);
 
                     if (!lastResult && actions.isEmpty()) {
                         isExecActions.set(false);
@@ -150,15 +156,15 @@ public class MetaWearBleService extends Service {
             this.gatt= newGatt;
         }
 
-        @Override
-        public void sendCommand(final byte[] command) {
+        private void queueCommand(final int writeType, final byte[] command) {
             gattManager.queueAction(new Action() {
                 @Override
                 public boolean execute() {
                     if (gatt != null && gattConnectionStates.get(gatt.getDevice()).isReady.get()) {
                         gattManager.setExpectedGattKey(GattActionKey.CHAR_WRITE);
-                        BluetoothGattService service= gatt.getService(METAWEAR_SERVICE);
-                        BluetoothGattCharacteristic mwCmdChar= service.getCharacteristic(METAWEAR_COMMAND);
+                        BluetoothGattService service = gatt.getService(METAWEAR_SERVICE);
+                        BluetoothGattCharacteristic mwCmdChar = service.getCharacteristic(METAWEAR_COMMAND);
+                        mwCmdChar.setWriteType(writeType);
                         mwCmdChar.setValue(command);
                         gatt.writeCharacteristic(mwCmdChar);
                         return true;
@@ -166,6 +172,38 @@ public class MetaWearBleService extends Service {
                     return false;
                 }
             });
+        }
+        @Override
+        public void sendCommand(boolean writeMacro, byte[] command) {
+            if (writeMacro) {
+                byte[] macroBytes;
+
+                if (command.length >= DefaultMetaWearBoard.MW_COMMAND_LENGTH) {
+                    final byte PARTIAL_LENGTH= 2;
+                    macroBytes= new byte[PARTIAL_LENGTH + 2];
+                    macroBytes[0]= MacroRegister.ADD_PARTIAL.moduleOpcode();
+                    macroBytes[1]= MacroRegister.ADD_PARTIAL.opcode();
+                    System.arraycopy(command, 0, macroBytes, 2, PARTIAL_LENGTH);
+                    queueCommand(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, macroBytes);
+
+                    macroBytes= new byte[command.length - PARTIAL_LENGTH + 2];
+                    macroBytes[0]= MacroRegister.ADD_COMMAND.moduleOpcode();
+                    macroBytes[1]= MacroRegister.ADD_COMMAND.opcode();
+                    System.arraycopy(command, PARTIAL_LENGTH, macroBytes, 2, macroBytes.length - 2);
+                    queueCommand(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, macroBytes);
+                } else {
+                    macroBytes= new byte[command.length + 2];
+                    macroBytes[0]= MacroRegister.ADD_COMMAND.moduleOpcode();
+                    macroBytes[1]= MacroRegister.ADD_COMMAND.opcode();
+                    System.arraycopy(command, 0, macroBytes, 2, command.length);
+                    queueCommand(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, macroBytes);
+                }
+            } else {
+                queueCommand(command[0] == MacroRegister.ENABLE.moduleOpcode() ?
+                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
+                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                        command);
+            }
             gattManager.executeNext(GattActionKey.NONE);
         }
     }
@@ -451,17 +489,36 @@ public class MetaWearBleService extends Service {
         }
 
         @Override
-        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+        public void onDescriptorWrite(final BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
             gattManager.updateExecActionsState();
 
-            GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
+            final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
             if (status != 0) {
                 state.connectionHandler.failure(status, new RuntimeException(String.format(Locale.US, "Error writing descriptors (%d)", status)));
             } else {
                 int newCount= state.nDescriptors.decrementAndGet();
                 if (newCount == 0) {
-                    state.isReady.set(true);
-                    state.connectionHandler.connected();
+                    gattManager.queueAction(new Action() {
+                        @Override
+                        public boolean execute() {
+                            if (gatt != null && state.isConnected.get()) {
+                                gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
+                                BluetoothGattService service= gatt.getService(DevInfoCharacteristic.MODULE_NUMBER.serviceUuid());
+                                BluetoothGattCharacteristic moduleNumberChar= service.getCharacteristic(DevInfoCharacteristic.MODULE_NUMBER.uuid());
+                                if (moduleNumberChar == null) {
+                                    ///< @TODO is this still accurate for newer firmware on old MetaWear R boards?
+                                    ///< If no module number characteristic, assume is MetaWearR
+                                    mwBoards.get(gatt.getDevice()).setModuleNumber(Constant.METAWEAR_R_MODULE);
+                                    state.isReady.set(true);
+                                    state.connectionHandler.connected();
+                                    return false;
+                                }
+                                gatt.readCharacteristic(moduleNumberChar);
+                                return true;
+                            }
+                            return false;
+                        }
+                    });
                 }
             }
 
@@ -485,8 +542,17 @@ public class MetaWearBleService extends Service {
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             gattManager.updateExecActionsState();
-            mwBoards.get(gatt.getDevice()).onCharacteristicRead(characteristic, status);
             gattManager.executeNext(GattActionKey.CHAR_READ);
+
+            if (characteristic.getService().getUuid().equals(DevInfoCharacteristic.MODULE_NUMBER.serviceUuid()) &&
+                    characteristic.getUuid().equals(DevInfoCharacteristic.MODULE_NUMBER.uuid())) {
+                final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
+                mwBoards.get(gatt.getDevice()).setModuleNumber(new String(characteristic.getValue()));
+                state.isReady.set(true);
+                state.connectionHandler.connected();
+            } else {
+                mwBoards.get(gatt.getDevice()).onCharacteristicRead(characteristic, status);
+            }
         }
     };
 

@@ -36,4 +36,7 @@ package com.mbientlab.metawear;
  */
 public interface RouteManager {
     public void remove();
+
+    public DataProcessor getDataProcessor(String procKey);
+    public Subscription getSubscription(String subKey);
 }

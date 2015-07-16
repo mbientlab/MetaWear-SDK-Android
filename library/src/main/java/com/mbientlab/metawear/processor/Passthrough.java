@@ -31,17 +31,25 @@
 
 package com.mbientlab.metawear.processor;
 
+import com.mbientlab.metawear.DataProcessor;
 import com.mbientlab.metawear.DataSignal;
 
 import java.util.Map;
-import java.util.MissingResourceException;
 
 /**
  * Created by eric on 6/20/2015.
  */
-public class Passthrough implements DataSignal.DataFilter {
+public class Passthrough implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "passthrough";
     public static final String FIELD_MODE= "mode", FIELD_VALUE= "value";
+
+    public static class PassthroughStateEditor implements DataProcessor.StateEditor {
+        public final short newValue;
+
+        public PassthroughStateEditor(short newValue) {
+            this.newValue= newValue;
+        }
+    }
 
     /**
      * Operation modes for the passthrough filter

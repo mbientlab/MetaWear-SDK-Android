@@ -38,13 +38,16 @@ import com.mbientlab.metawear.DataSignal;
 /**
  * Created by etsai on 6/23/2015.
  */
-public interface Timer extends MetaWearBoard.GenericModule {
+public interface Timer extends MetaWearBoard.Module {
+    public interface Task {
+        public void execute();
+    }
     public interface Controller {
         public void start();
         public void stop();
         public void remove();
 
-        public void monitor(DataSignal.ActivityMonitor monitor);
+        public void schedule(Task timerTask);
     }
 
     public AsyncResult<Controller> createTimer(int period, short repeat, boolean delay);

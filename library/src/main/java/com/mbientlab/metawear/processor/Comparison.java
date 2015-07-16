@@ -32,13 +32,14 @@
 package com.mbientlab.metawear.processor;
 
 import com.mbientlab.metawear.DataSignal;
+import com.mbientlab.metawear.MessageToken;
 
 import java.util.Map;
 
 /**
  * Created by eric on 6/20/2015.
  */
-public class Comparison implements DataSignal.DataFilter {
+public class Comparison implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "comparison";
     public final static String FIELD_OP= "operation", FIELD_SIGNED= "signed", FIELD_REFERENCE="reference";
 
@@ -60,11 +61,14 @@ public class Comparison implements DataSignal.DataFilter {
         GTE,
     }
 
+    public final MessageToken referenceToken;
     public final Boolean signed;
     public final Operation compareOp;
     public final Number reference;
 
     public Comparison(Map<String, String> query) {
+        referenceToken= null;
+
         if (!query.containsKey(FIELD_OP)) {
             throw new RuntimeException("Missing required field in URI: " + FIELD_OP);
         } else {
@@ -97,6 +101,10 @@ public class Comparison implements DataSignal.DataFilter {
         this(op, reference, null);
     }
 
+    public Comparison(Operation op, MessageToken reference) {
+        this(op, reference, null);
+    }
+
     /**
      * Constructs a config object with user explicitly requesting a signed or unsigned comparison
      * @param op Comparison operation to filter on
@@ -106,6 +114,14 @@ public class Comparison implements DataSignal.DataFilter {
     public Comparison(Operation op, Number reference, Boolean signed) {
         this.compareOp= op;
         this.reference= reference;
+        this.referenceToken= null;
+        this.signed= signed;
+    }
+
+    public Comparison(Operation op, MessageToken reference, Boolean signed) {
+        this.compareOp= op;
+        this.reference= 0;
+        this.referenceToken= reference;
         this.signed= signed;
     }
 }

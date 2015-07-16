@@ -32,6 +32,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Gpio;
+import com.mbientlab.metawear.module.MultiChannelTemperature;
 
 /**
  * Created by etsai on 6/16/2015.
@@ -40,7 +41,10 @@ public interface RouteBuilder {
     public DataSignal fromSwitch();
     public DataSignal fromTemperature();
     public DataSignal fromAccelAxis();
+    public DataSignal fromGsr(byte channel);
+    public DataSignal fromGyro();
     public DataSignal fromAnalogGpio(byte pin, Gpio.AnalogReadMode mode);
     public DataSignal fromDigitalIn(byte pin);
     public DataSignal fromGpioPinNotify(byte pin);
+    public DataSignal fromTemperature(MultiChannelTemperature.Source src);
 }

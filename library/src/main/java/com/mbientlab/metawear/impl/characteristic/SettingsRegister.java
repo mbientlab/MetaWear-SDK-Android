@@ -29,36 +29,51 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
-
-import java.util.Map;
+package com.mbientlab.metawear.impl.characteristic;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/13/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
+public enum SettingsRegister implements Register {
+    /** Sets / Reads the device name */
+    DEVICE_NAME {
+        @Override
+        public byte opcode() { return 0x1; }
+    },
+    /** Advertisement parameters */
+    ADVERTISING_INTERVAL {
+        @Override
+        public byte opcode() { return 0x2; }
+    },
+    /** Tx Power */
+    TX_POWER {
+        @Override
+        public byte opcode() { return 0x3; }
+    },
+    /** Sets bonding state on disconnect */
+    DELETE_BOND {
+        @Override
+        public byte opcode() { return 0x4; }
+    },
+    /** Starts an advertisement */
+    START_ADVERTISEMENT {
+        @Override
+        public byte opcode() { return 0x5; }
+    },
+    /** Initiates the Bluetooth bonding process */
+    INIT_BOND {
+        @Override
+        public byte opcode() { return 0x6; }
+    },
+    SCAN_RESPONSE {
+        @Override
+        public byte opcode() { return 0x7; }
+    },
+    PARTIAL_SCAN_RESPONSE {
+        @Override
+        public byte opcode() { return 0x8; }
+    };
 
-    public interface MessageProcessor {
-        public void process(Message msg);
-    }
-
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
-    }
-
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
+    @Override
+    public byte moduleOpcode() { return 0x11; }
 }

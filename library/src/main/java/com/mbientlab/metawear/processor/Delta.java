@@ -31,47 +31,70 @@
 
 package com.mbientlab.metawear.processor;
 
+import com.mbientlab.metawear.DataProcessor;
 import com.mbientlab.metawear.DataSignal;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Created by eric on 6/20/2015.
+ * Created by etsai on 7/8/2015.
  */
-public class Time implements DataSignal.ProcessorConfig {
-    public static final String SCHEME_NAME= "time";
-    public static final String FIELD_PERIOD= "period", FIELD_MODE= "mode";
+public class Delta implements DataSignal.ProcessorConfig {
+    private static final HashMap<String, Mode> modeShortNames;
+    public final static String SCHEME_NAME= "delta";
+    public final static String FIELD_MODE= "mode", FIELD_THRESHOLD = "threshold";
 
+    static {
+        modeShortNames= new HashMap<>();
+        modeShortNames.put("abs", Mode.ABSOLUTE);
+        modeShortNames.put("diff", Mode.DIFFERENTIAL);
+        modeShortNames.put("bin", Mode.BINARY);
+    }
+
+    public static class DeltaStateEditor implements DataProcessor.StateEditor {
+        public final Number newPreviousValue;
+
+        public DeltaStateEditor(Number newPrevValue) {
+            this.newPreviousValue= newPrevValue;
+        }
+    }
     public enum Mode {
-        /** No change in the input value */
+        /** Return the data as is */
         ABSOLUTE,
-        /** Return the difference between the current and previous value */
-        DIFFERENTIAL
+        /** Return the difference between the value and its reference point */
+        DIFFERENTIAL,
+        /** 1 if the difference is positive, -1 if negative */
+        BINARY
     }
 
     public final Mode mode;
-    public final int period;
+    public final Number threshold;
 
-    public Time(Map<String, String> query) {
-        if (!query.containsKey(FIELD_PERIOD)) {
-            throw new RuntimeException("Missing required field in URI: " + FIELD_PERIOD);
-        } else {
-            period= Integer.valueOf(query.get(FIELD_PERIOD));
-        }
-
+    public Delta(Map<String, String> query) {
         if (!query.containsKey(FIELD_MODE)) {
             throw new RuntimeException("Missing required field in URI: " + FIELD_MODE);
         } else {
-            mode= Enum.valueOf(Mode.class, query.get(FIELD_MODE).toUpperCase());
+            if (modeShortNames.containsKey(query.get(FIELD_MODE).toLowerCase())) {
+                mode = modeShortNames.get(query.get(FIELD_MODE).toLowerCase());
+            } else {
+                mode = Enum.valueOf(Mode.class, query.get(FIELD_MODE).toUpperCase());
+            }
+        }
+
+        if (!query.containsKey(FIELD_THRESHOLD)) {
+            throw new RuntimeException("Missing required field in URI: " + FIELD_THRESHOLD);
+        } else {
+            if (query.get(FIELD_THRESHOLD).contains(".")) {
+                threshold = Float.valueOf(query.get(FIELD_THRESHOLD));
+            } else {
+                threshold = Integer.valueOf(query.get(FIELD_THRESHOLD));
+            }
         }
     }
 
-    /**
-     * Constructs a config object for a timer transformer or filter
-     * @param period How often to allow data through, in milliseconds
-     */
-    public Time(int period, Mode mode) {
-        this.period= period;
-        this.mode= mode;
+    public Delta(Mode mode, Number threshold) {
+        this.mode = mode;
+        this.threshold = threshold;
     }
 }

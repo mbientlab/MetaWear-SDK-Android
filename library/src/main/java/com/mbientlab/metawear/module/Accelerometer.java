@@ -29,36 +29,20 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.module;
 
-import java.util.Map;
+import com.mbientlab.metawear.MetaWearBoard;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/9/2015.
  */
-public interface DataSignal {
-    public DataSignal split();
-    public DataSignal branch();
-    public DataSignal end();
+public interface Accelerometer extends MetaWearBoard.Module {
+    public void setOutputDataRate(float frequency);
+    public void setAxisSamplingRange(float range);
 
-    public interface MessageProcessor {
-        public void process(Message msg);
-    }
+    public void startAxisSampling();
+    public void stopAxisSampling();
 
-    public interface ActivityMonitor {
-        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
-    }
-
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
-    public DataSignal monitor(ActivityMonitor monitor);
-
-    public interface ProcessorConfig {}
-    public DataSignal process(String key, ProcessorConfig config);
-    public DataSignal process(ProcessorConfig config);
-    public DataSignal process(String configUri);
-    public DataSignal process(String key, String configUri);
-
-    public AsyncResult<RouteManager> commit();
+    public void globalStart();
+    public void globalStop();
 }
