@@ -132,12 +132,11 @@ public class MetaWearBleService extends Service {
                 if (key == gattKey || !isExecActions.get()) {
                     isExecActions.set(true);
                     boolean lastResult= false;
-                    do {
-                        Action next= actions.poll();
-                        if (next != null) {
-                            lastResult = !next.execute();
-                        }
-                    } while(!actions.isEmpty() && lastResult);
+                    try {
+                        while (!actions.isEmpty() && !(lastResult = actions.poll().execute())) { }
+                    } catch (NullPointerException ex) {
+                        lastResult= false;
+                    }
 
                     if (!lastResult && actions.isEmpty()) {
                         isExecActions.set(false);
