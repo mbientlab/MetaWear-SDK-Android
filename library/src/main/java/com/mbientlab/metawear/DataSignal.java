@@ -31,6 +31,8 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.DataProcessor;
+
 import java.util.Map;
 
 /**
@@ -49,9 +51,8 @@ public interface DataSignal {
         public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData);
     }
 
-    public DataSignal log(MessageProcessor processor);
-    public DataSignal subscribe(MessageProcessor processor);
-    public DataSignal subscribe(String key, MessageProcessor processor);
+    public DataSignal log(String key);
+    public DataSignal subscribe(String key);
     public DataSignal monitor(ActivityMonitor monitor);
 
     public interface ProcessorConfig {}

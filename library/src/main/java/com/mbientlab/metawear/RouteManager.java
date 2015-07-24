@@ -32,11 +32,15 @@
 package com.mbientlab.metawear;
 
 /**
- * Created by etsai on 6/17/2015.
+ * Created by etsai on 7/23/2015.
  */
 public interface RouteManager {
-    public void remove();
+    public byte id();
 
-    public DataProcessor getDataProcessor(String procKey);
-    public Subscription getSubscription(String subKey);
+    public void remove();
+    public boolean isActive();
+
+    public void removeProcessor(String subscriptionKey);
+    public void assignProcessor(String subscriptionKey, DataSignal.MessageProcessor processor);
+    public void assignLogProcessor(String logKey, DataSignal.MessageProcessor processor);
 }

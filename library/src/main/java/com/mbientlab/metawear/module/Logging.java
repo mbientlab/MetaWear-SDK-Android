@@ -33,14 +33,22 @@ package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.MetaWearBoard;
 
+import java.util.Calendar;
+
 /**
  * Created by etsai on 6/23/2015.
  */
 public interface Logging extends MetaWearBoard.Module {
-    public interface DownloadHandler {
-        public void onProgressUpdate(int nEntriesLeft, int totalEntries);
+    public abstract class DownloadHandler {
+        public void onProgressUpdate(int nEntriesLeft, int totalEntries) { }
+        public void receivedUnknownLogEntry(byte logId, Calendar timestamp, byte[] data) { }
     }
+
+    public void startLogging();
+    public void startLogging(boolean overwrite);
+    public void stopLogging();
+
     public void downloadLog(float notifyProgress, DownloadHandler handler);
-    public void setCircularBufferMode(boolean enable);
-    public void removeEntries();
+
+    public void clearEntries();
 }

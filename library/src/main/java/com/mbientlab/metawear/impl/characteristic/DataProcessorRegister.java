@@ -58,6 +58,10 @@ public enum DataProcessorRegister implements Register {
     NOTIFY_ENABLE {
         @Override
         public byte opcode() { return 0x7; }
+    },
+    REMOVE_ALL {
+        @Override
+        public byte opcode() { return 0x8; }
     };
 
     @Override

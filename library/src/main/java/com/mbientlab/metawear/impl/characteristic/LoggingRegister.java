@@ -71,6 +71,9 @@ public enum LoggingRegister implements Register {
         @Override
         public byte opcode() { return 0x9; }
     },
+    REMOVE_ALL {
+        public byte opcode() { return 0xa; }
+    },
     CIRCULAR_BUFFER {
         @Override
         public byte opcode() { return 0xb; }

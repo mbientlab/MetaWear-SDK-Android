@@ -31,8 +31,6 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.MetaWearBoard;
-
 import java.util.HashMap;
 
 /**

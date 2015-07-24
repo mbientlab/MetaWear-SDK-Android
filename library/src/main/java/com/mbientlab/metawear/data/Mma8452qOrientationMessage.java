@@ -32,35 +32,32 @@
 package com.mbientlab.metawear.data;
 
 import com.mbientlab.metawear.Message;
+import com.mbientlab.metawear.module.Mma8452qAccelerometer.Orientation;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Calendar;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/21/2015.
  */
-public class MwrAccelCombinedAxisMessage extends Message {
-    private final ByteBuffer buffer;
+public class Mma8452qOrientationMessage extends Message {
+    private final Orientation orientation;
 
-    public MwrAccelCombinedAxisMessage(byte[] data) {
+    public Mma8452qOrientationMessage(byte[] data) {
         this(null, data);
     }
 
-    public MwrAccelCombinedAxisMessage(Calendar timestamp, byte[] data) {
+    public Mma8452qOrientationMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
-        buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+
+        orientation= Orientation.values()[(4 * (data[0] & 0x1) + ((data[0] >> 1) & 0x3))];
     }
 
     @Override
     public <T> T getData(Class<T> type) {
-        short milliGs= buffer.getShort();
-
-        if (type.equals(Short.class)) {
-            return type.cast(milliGs);
-        } else if (type.equals(Float.class)) {
-            return type.cast(milliGs / 1000.f);
+        if (type.equals(Orientation.class)) {
+            return type.cast(orientation);
         }
+
         return super.getData(type);
     }
 }

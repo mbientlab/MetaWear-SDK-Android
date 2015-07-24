@@ -2,7 +2,7 @@
 
 The MetaWear Android API is undergoing a major overhaul to improve the ease of use of the API.  Since this library is currently in a beta state, there may be many breaking changes in between releases leading up to the official v2.0.0 release.
 
-As of beta 03, the major changes from API v1.x are:
+Major changes from API v1.x are:
 
 1. Background service no longer communicates to apps via a BroadcastReceiver.  All asynchronous responses are executed in the background.  
    * UI tasks in callback functions need to be explicitly run on the UI thread  
@@ -27,7 +27,7 @@ Then, add the MetaWear v2.0.0 beta library as a compile dependency.  The 2.0.0 b
 
 ```gradle
 ///< in the module's build.gradle file
-compile 'com.mbientlab:metawear:2.0.0-beta.03'
+compile 'com.mbientlab:metawear:2.0.0-beta.04'
 ```
 
 Once your project has synced with the updated Gradle files, declare the MetaWear service in the AndroidManifest.xml file.

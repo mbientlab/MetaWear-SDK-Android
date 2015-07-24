@@ -29,14 +29,38 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.data;
+
+import com.mbientlab.metawear.Message;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Calendar;
 
 /**
- * Created by etsai on 7/7/2015.
+ * Created by etsai on 6/16/2015.
  */
-public interface DataProcessor {
-    public interface StateEditor { }
+public class Mma8452qCombinedAxisMessage extends Message {
+    private final ByteBuffer buffer;
 
-    public void setState(StateEditor editor);
-    public void modifyConfiguration(DataSignal.ProcessorConfig newConfig);
+    public Mma8452qCombinedAxisMessage(byte[] data) {
+        this(null, data);
+    }
+
+    public Mma8452qCombinedAxisMessage(Calendar timestamp, byte[] data) {
+        super(timestamp, data);
+        buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+    }
+
+    @Override
+    public <T> T getData(Class<T> type) {
+        short milliGs= buffer.getShort();
+
+        if (type.equals(Short.class)) {
+            return type.cast(milliGs);
+        } else if (type.equals(Float.class)) {
+            return type.cast(milliGs / 1000.f);
+        }
+        return super.getData(type);
+    }
 }

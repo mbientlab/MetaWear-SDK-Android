@@ -31,8 +31,8 @@
 
 package com.mbientlab.metawear.processor;
 
-import com.mbientlab.metawear.DataProcessor;
 import com.mbientlab.metawear.DataSignal;
+import com.mbientlab.metawear.module.DataProcessor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,10 +52,10 @@ public class Delta implements DataSignal.ProcessorConfig {
         modeShortNames.put("bin", Mode.BINARY);
     }
 
-    public static class DeltaStateEditor implements DataProcessor.StateEditor {
+    public static class StateEditor implements DataProcessor.StateEditor {
         public final Number newPreviousValue;
 
-        public DeltaStateEditor(Number newPrevValue) {
+        public StateEditor(Number newPrevValue) {
             this.newPreviousValue= newPrevValue;
         }
     }

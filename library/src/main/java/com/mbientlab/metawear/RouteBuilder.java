@@ -41,6 +41,10 @@ public interface RouteBuilder {
     public DataSignal fromSwitch();
     public DataSignal fromTemperature();
     public DataSignal fromAccelAxis();
+    public DataSignal fromTap();
+    public DataSignal fromMovement();
+    public DataSignal fromOrientation();
+    public DataSignal fromShake();
     public DataSignal fromGsr(byte channel);
     public DataSignal fromGyro();
     public DataSignal fromAnalogGpio(byte pin, Gpio.AnalogReadMode mode);

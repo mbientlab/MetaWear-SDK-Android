@@ -50,6 +50,54 @@ public enum MwrAccelerometerRegister implements Register {
     DATA_VALUE {
         @Override
         public byte opcode() { return 0x4; }
+    },
+    MOVEMENT_ENABLE {
+        @Override
+        public byte opcode() { return 0x5; }
+    },
+    MOVEMENT_CONFIG {
+        @Override
+        public byte opcode() { return 0x6; }
+    },
+    MOVEMENT_VALUE {
+        @Override
+        public byte opcode() { return 0x7; }
+    },
+    ORIENTATION_ENABLE {
+        @Override
+        public byte opcode() { return 0x8; }
+    },
+    ORIENTATION_CONFIG {
+        @Override
+        public byte opcode() { return 0x9; }
+    },
+    ORIENTATION_VALUE {
+        @Override
+        public byte opcode() { return 0xa; }
+    },
+    PULSE_ENABLE {
+        @Override
+        public byte opcode() { return 0xb; }
+    },
+    PULSE_CONFIG {
+        @Override
+        public byte opcode() { return 0xc; }
+    },
+    PULSE_STATUS {
+        @Override
+        public byte opcode() { return 0xd; }
+    },
+    SHAKE_ENABLE {
+        @Override
+        public byte opcode() { return 0xe; }
+    },
+    SHAKE_CONFIG {
+        @Override
+        public byte opcode() { return 0xf; }
+    },
+    SHAKE_STATUS {
+        @Override
+        public byte opcode() { return 0x10; }
     };
 
     @Override

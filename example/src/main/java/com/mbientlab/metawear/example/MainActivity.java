@@ -37,6 +37,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.os.IBinder;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
@@ -49,9 +50,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.mbientlab.metawear.AsyncResult;
-import com.mbientlab.metawear.DataProcessor;
 import com.mbientlab.metawear.MessageToken;
 import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.RouteManager;
 import com.mbientlab.metawear.data.AccelAxisG;
 import com.mbientlab.metawear.data.AccelAxisMilliG;
 import com.mbientlab.metawear.data.Bmi160GyroMessage;
@@ -61,18 +62,21 @@ import com.mbientlab.metawear.processor.*;
 import com.mbientlab.metawear.processor.Math;
 import com.mbientlab.metawear.DataSignal;
 import com.mbientlab.metawear.Message;
-import com.mbientlab.metawear.RouteManager;
 
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import static com.mbientlab.metawear.AsyncResult.CompletionHandler;
 import static com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler;
 
 
 public class MainActivity extends ActionBarActivity implements ServiceConnection {
+    private static String SHARED_PREF_KEY= "com.mbientlab.metawear.example.MainActivity", ROUTE_STATE= "route_state", ROUTE_ID= "route_id";
+
     private MetaWearBoard mwBoard;
+    private SharedPreferences sharedPrefs;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,6 +85,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
 
         getApplicationContext().bindService(new Intent(this, MetaWearBleService.class),
                 this, Context.BIND_AUTO_CREATE);
+        sharedPrefs= getSharedPreferences(SHARED_PREF_KEY, Context.MODE_PRIVATE);
     }
 
     @Override
@@ -231,58 +236,64 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
     }
 
     private boolean accelSetup= false;
-    private AsyncResult<RouteManager> accelManager;
     public void accelerometerMe(View v) {
         final Switch mySwitch= (Switch) v;
         if (mySwitch.isChecked()) {
             if (!accelSetup) {
-                accelManager= mwBoard.routeData().fromAccelAxis().subscribe(new DataSignal.MessageProcessor() {
-                    @Override
-                    public void process(Message msg) {
-                        final AccelAxisG axisData = msg.getData(AccelAxisG.class);
-                        Log.i("test", String.format("Stream: %.3f,%.3f,%.3f", axisData.x(), axisData.y(), axisData.z()));
-                        MainActivity.this.runOnUiThread(new Runnable() {
+                mwBoard.routeData().fromAccelAxis().subscribe("accelSub").log("accelLogger").commit()
+                        .onComplete(new CompletionHandler<RouteManager>() {
                             @Override
-                            public void run() {
-                                ((TextView) findViewById(R.id.textView3)).setText(String.format("%.3f,%.3f,%.3f", axisData.x(), axisData.y(), axisData.z()));
+                            public void success(RouteManager result) {
+                                result.assignProcessor("accelSub", new DataSignal.MessageProcessor() {
+                                    @Override
+                                    public void process(Message msg) {
+                                        final AccelAxisG axisData = msg.getData(AccelAxisG.class);
+                                        Log.i("test", String.format("Stream: %.3f,%.3f,%.3f", axisData.x(), axisData.y(), axisData.z()));
+                                        MainActivity.this.runOnUiThread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                ((TextView) findViewById(R.id.textView3)).setText(String.format("%.3f,%.3f,%.3f", axisData.x(), axisData.y(), axisData.z()));
+                                            }
+                                        });
+                                    }
+                                });
+                                result.assignLogProcessor("accelLogger", new DataSignal.MessageProcessor() {
+                                    @Override
+                                    public void process(Message msg) {
+                                        final AccelAxisG axisData = msg.getData(AccelAxisG.class);
+                                        Log.i("test", String.format("Log: %.3f,%.3f,%.3f", axisData.x(), axisData.y(), axisData.z()));
+                                    }
+                                });
+                                Accelerometer genericAccel= mwBoard.getModule(Accelerometer.class);
+                                genericAccel.setOutputDataRate(50.f);
+                                genericAccel.setAxisSamplingRange(8.f);
+
+                                genericAccel.startAxisSampling();
+                                genericAccel.globalStart();
+                            }
+
+                            @Override
+                            public void failure(Throwable error) {
+                                Log.e("test", "Error committing route", error);
+                                accelSetup= false;
                             }
                         });
-                    }
-                }).log(new DataSignal.MessageProcessor() {
-                    @Override
-                    public void process(Message msg) {
-                        final AccelAxisG axisData = msg.getData(AccelAxisG.class);
-                        Log.i("test", String.format("Log: %.3f,%.3f,%.3f", axisData.x(), axisData.y(), axisData.z()));
-                    }
-                }).commit();
                 accelSetup= true;
+                mwBoard.getModule(Logging.class).startLogging();
+            } else {
+                mwBoard.getModule(Logging.class).stopLogging();
+                mwBoard.getModule(Logging.class).startLogging();
+                Accelerometer genericAccel= mwBoard.getModule(Accelerometer.class);
+
+                genericAccel.startAxisSampling();
+                genericAccel.globalStart();
             }
-            accelManager.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    Accelerometer genericAccel= mwBoard.getModule(Accelerometer.class);
-                    genericAccel.setOutputDataRate(50.f);
-                    genericAccel.setAxisSamplingRange(8.f);
 
-                    genericAccel.startAxisSampling();
-                    genericAccel.globalStart();
-                }
-
-                @Override
-                public void failure(Throwable error) {
-                    Log.e("test", "Error committing route", error);
-                    accelSetup= false;
-                }
-            });
         } else {
-            accelManager.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    Accelerometer genericAccel= mwBoard.getModule(Accelerometer.class);
-                    genericAccel.stopAxisSampling();
-                    genericAccel.globalStop();
-                }
-            });
+            mwBoard.getModule(Logging.class).stopLogging();
+            Accelerometer genericAccel= mwBoard.getModule(Accelerometer.class);
+            genericAccel.stopAxisSampling();
+            genericAccel.globalStop();
         }
     }
 
@@ -296,111 +307,147 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
     }
 
     private Timer.Controller timerTempResult;
-    private AsyncResult<RouteManager> tempManager;
+    private boolean tempSetup= false;
     public void temperatureMe(View v) {
         final Switch mySwitch= (Switch) v;
         if (mySwitch.isChecked()) {
-            mwBoard.getModule(Timer.class).createTimer(1000, (short) -1, true).onComplete(new CompletionHandler<Timer.Controller>() {
-                @Override
-                public void success(Timer.Controller result) {
-                    result.schedule(new Timer.Task() {
-                        @Override
-                        public void execute() {
-                            mwBoard.getModule(Temperature.class).readTemperarure();
-                        }
-                    });
-                    timerTempResult= result;
-                }
-            });
+            if (!tempSetup) {
+                mwBoard.getModule(Timer.class).scheduleTask(new Timer.Task() {
+                    @Override
+                    public void commands() {
+                        mwBoard.getModule(Temperature.class).readTemperarure();
+                    }
+                }, 1000, false).onComplete(new CompletionHandler<Timer.Controller>() {
+                    @Override
+                    public void success(Timer.Controller result) {
+                        timerTempResult = result;
+                        timerTempResult.start();
+                    }
+                });
 
-            tempManager= mwBoard.routeData().fromTemperature().subscribe(new DataSignal.MessageProcessor() {
-                @Override
-                public void process(final Message msg) {
-                    Log.i("test", String.format("%.3f C", msg.getData(Float.class)));
-                    MainActivity.this.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            ((TextView) findViewById(R.id.textView4)).setText(String.format("%.3f C", msg.getData(Float.class)));
+                mwBoard.routeData().fromTemperature().subscribe("tempC")
+                        .split()
+                            .branch()
+                                .process(new Math(Math.Operation.MULTIPLY, 18))
+                                .process(new Math(Math.Operation.DIVIDE, 10))
+                                .process(new Math(Math.Operation.ADD, 32.f)).subscribe("tempF")
+                            .branch()
+                                .process("math?operation=add&rhs=273.15").subscribe("tempK")
+                        .end()
+                .commit().onComplete(new CompletionHandler<RouteManager>() {
+                    @Override
+                    public void success(RouteManager result) {
+                        result.assignProcessor("tempC", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(final Message msg) {
+                                Log.i("test", String.format("%.3f C", msg.getData(Float.class)));
+                                MainActivity.this.runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        ((TextView) findViewById(R.id.textView4)).setText(String.format("%.3f C", msg.getData(Float.class)));
+                                    }
+                                });
+                            }
+                        });
+                        result.assignProcessor("tempF", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                Log.i("test", String.format("%.3f F", msg.getData(Float.class)));
+                            }
+                        });
+                        result.assignProcessor("tempK", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                Log.i("test", String.format("%.3f K", msg.getData(Float.class)));
+                            }
+                        });
+                        mwBoard.getModule(Temperature.class).enableThermistorMode((byte) 0, (byte) 1);
+                        if (timerTempResult != null) {
+                            timerTempResult.start();
                         }
-                    });
-                }
-            }).split()
-                .branch()
-                    .process(new Math(Math.Operation.MULTIPLY, 18))
-                    .process(new Math(Math.Operation.DIVIDE, 10))
-                    .process(new Math(Math.Operation.ADD, 32.f)).subscribe(new DataSignal.MessageProcessor() {
-                        @Override
-                        public void process(Message msg) {
-                            Log.i("test", String.format("%.3f F", msg.getData(Float.class)));
-                        }
-                    })
-                .branch()
-                    .process("math?operation=add&rhs=273.15").subscribe(new DataSignal.MessageProcessor() {
-                        @Override
-                        public void process(Message msg) {
-                            Log.i("test", String.format("%.3f K", msg.getData(Float.class)));
-                        }
-                    })
-            .end()
-            .commit();
-            tempManager.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    mwBoard.getModule(Temperature.class).enableThermistorMode((byte) 0, (byte) 1);
-                    timerTempResult.start();
-                }
-            });
+                    }
+                });
+                tempSetup= true;
+            } else {
+                timerTempResult.start();
+            }
         } else {
-            mwBoard.getModule(Temperature.class).disableThermistorMode();
-            timerTempResult.remove();
-            tempManager.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    result.remove();
-                }
-            });
+            timerTempResult.stop();
         }
     }
 
-    private boolean processSetup= false;
-    private AsyncResult<RouteManager> processManager;
+    private byte routeId= -1;
+    public void programRouteMe(View v) {
+        final Led ledModule= mwBoard.getModule(Led.class);
+        final SharedPreferences.Editor editor = sharedPrefs.edit();
+
+        mwBoard.getModule(Macro.class).record(new Macro.CodeBlock() {
+            @Override
+            public void commands() {
+                ledModule.writeChannelAttributes(Led.ColorChannel.BLUE)
+                        .withRiseTime((short) 0).withPulseDuration((short) 1000)
+                        .withRepeatCount((byte) 5).withHighTime((short) 500)
+                        .withHighIntensity((byte) 16).withLowIntensity((byte) 16)
+                        .commit();
+                mwBoard.routeData().fromAccelAxis()
+                        .process(new Time(5000, Time.Mode.ABSOLUTE)).log("accelAxisLogger")
+                        .process(new Rms()).log("accelRmsLogger")
+                .commit().onComplete(new CompletionHandler<RouteManager>() {
+                    @Override
+                    public void success(RouteManager result) {
+                        routeId= result.id();
+                        editor.putInt(ROUTE_ID, result.id());
+                    }
+                });
+                ledModule.play(false);
+            }
+        }).onComplete(new CompletionHandler<Byte>() {
+            @Override
+            public void success(Byte result) {
+                final String state = new String(mwBoard.serializeState());
+                editor.putString(ROUTE_STATE, state);
+                editor.commit();
+                Log.i("test", state);
+            }
+        });
+
+    }
+
+    public void syncMe(View v) {
+        String stateString= sharedPrefs.getString(ROUTE_STATE, "");
+        if (!stateString.isEmpty()) {
+            mwBoard.deserializeState(stateString.getBytes());
+            routeId= (byte) sharedPrefs.getInt(ROUTE_ID, -1);
+
+        }
+    }
+
     public void filterMe(View v) {
         final Switch mySwitch= (Switch) v;
         if (mySwitch.isChecked()) {
-            if (!processSetup) {
-                processManager= mwBoard.routeData().fromAccelAxis()
-                        .process(new Time(5000, Time.Mode.ABSOLUTE)).log(new DataSignal.MessageProcessor() {
-                            @Override
-                            public void process(Message msg) {
-                                AccelAxisMilliG milliG= msg.getData(AccelAxisMilliG.class);
-                                Log.i("test", String.format("XYZ Axis: (%d, %d, %d)", milliG.x(), milliG.y(), milliG.z()));
-                            }
-                        })
-                        .process(new Rms()).log(new DataSignal.MessageProcessor() {
-                            @Override
-                            public void process(Message msg) {
-                                Log.i("test", String.format("RMS: %d", msg.getData(Short.class)));
-                            }
-                        }).commit();
-                processSetup= true;
-            }
-            processManager.onComplete(new CompletionHandler<RouteManager>() {
+            Accelerometer accelModule= mwBoard.getModule(Accelerometer.class);
+            accelModule.startAxisSampling();
+            accelModule.globalStart();
+
+            RouteManager manager= mwBoard.getRouteManager(routeId);
+
+            manager.assignLogProcessor("accelAxisLogger", new DataSignal.MessageProcessor() {
                 @Override
-                public void success(RouteManager result) {
-                    Accelerometer accelModule= mwBoard.getModule(Accelerometer.class);
-                    accelModule.startAxisSampling();
-                    accelModule.globalStart();
+                public void process(Message msg) {
+                    AccelAxisMilliG milliG = msg.getData(AccelAxisMilliG.class);
+                    Log.i("test", String.format("XYZ Axis: (%d, %d, %d)", milliG.x(), milliG.y(), milliG.z()));
+                }
+            });
+            manager.assignLogProcessor("accelRmsLogger", new DataSignal.MessageProcessor() {
+                @Override
+                public void process(Message msg) {
+                    Log.i("test", String.format("RMS: %d", msg.getData(Short.class)));
                 }
             });
         } else {
-            processManager.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    Accelerometer accelModule= mwBoard.getModule(Accelerometer.class);
-                    accelModule.globalStop();
-                    accelModule.stopAxisSampling();
-                }
-            });
+            Accelerometer accelModule= mwBoard.getModule(Accelerometer.class);
+            accelModule.globalStop();
+            accelModule.stopAxisSampling();
         }
     }
 
@@ -411,7 +458,12 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         if (mySwitch.isChecked()) {
             analogRoute= mwBoard.routeData().fromAnalogGpio((byte) 0, Gpio.AnalogReadMode.ADC)
                     .process("mathprocesser", "math?operation=mult&rhs=1")
-                    .subscribe(new DataSignal.MessageProcessor() {
+                    .subscribe("analog_gpio")
+                    .commit();
+            analogRoute.onComplete(new CompletionHandler<RouteManager>() {
+                @Override
+                public void success(RouteManager result) {
+                    result.assignProcessor("analog_gpio", new DataSignal.MessageProcessor() {
                         @Override
                         public void process(final Message msg) {
                             MainActivity.this.runOnUiThread(new Runnable() {
@@ -421,234 +473,26 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                 }
                             });
                         }
-                    }).commit();
-            analogRoute.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(final RouteManager result) {
+                    });
                     mwBoard.getModule(Gpio.class).clearDigitalOut((byte) 1);
                     switchRoute= mwBoard.routeData().fromSwitch().monitor(new DataSignal.ActivityMonitor() {
                         @Override
                         public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData) {
-                            result.getDataProcessor("mathprocesser")
-                                    .modifyConfiguration(new Math(Math.Operation.MULTIPLY, signalData));
+                            processors.get("mathprocesser").modifyConfiguration(new Math(Math.Operation.MULTIPLY, signalData));
                         }
                     }).commit();
-                }
-            });
-            timerController= mwBoard.getModule(Timer.class).createTimer(500, (short) -1, false);
-            timerController.onComplete(new CompletionHandler<Timer.Controller>() {
-                @Override
-                public void success(Timer.Controller result) {
-                    result.schedule(new Timer.Task() {
-                        @Override
-                        public void execute() {
-                            mwBoard.getModule(Gpio.class).readAnalogIn((byte) 0, Gpio.AnalogReadMode.ADC);
-                        }
-                    });
-                    result.start();
-                }
-            });
-        } else {
-            timerController.onComplete(new CompletionHandler<Timer.Controller>() {
-                @Override
-                public void success(Timer.Controller result) {
-                    result.stop();
-                    result.remove();
-                }
-            });
-            analogRoute.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    result.remove();
-                }
-            });
-            switchRoute.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    result.remove();
-                }
-            });
-        }
-    }
-
-    private AsyncResult<RouteManager> programMngr;
-    public void programMe(View v) {
-        final Switch mwSwitch= (Switch) v;
-
-        if (mwSwitch.isChecked()) {
-            programMngr = mwBoard.routeData().fromSwitch().process("accumprocesser", "accumulator").process("math?operation=modulus&rhs=2")
-                    .split()
-                    .branch()
-                    .process("comparison?operation=eq&reference=1").monitor(new DataSignal.ActivityMonitor() {
-                        @Override
-                        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData) {
-                            Led ledCtrllr = mwBoard.getModule(Led.class);
-                            ledCtrllr.writeChannelAttributes(Led.ColorChannel.BLUE)
-                                    .withRiseTime((short) 0).withPulseDuration((short) 1000)
-                                    .withRepeatCount((byte) -1).withHighTime((short) 500)
-                                    .withHighIntensity((byte) 16).withLowIntensity((byte) 16)
-                                    .commit();
-                            ledCtrllr.play(false);
-                        }
-                    })
-                    .branch()
-                    .process("comparison?operation=eq&reference=0").monitor(new DataSignal.ActivityMonitor() {
-                        @Override
-                        public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData) {
-                            mwBoard.getModule(Led.class).stop(true);
-                        }
-                    })
-                    .end()
-                    .commit();
-        } else {
-            programMngr.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    result.remove();
-                }
-            });
-        }
-
-    }
-
-    public void resetMe(View v) {
-        mwBoard.getModule(Debug.class).resetDevice();
-    }
-
-    private AsyncResult<RouteManager> gyroRoute;
-    private boolean gyroSetup= false;
-    public void gyroMe(View v) {
-        final Switch mySwitch= (Switch) v;
-        if (mySwitch.isChecked()) {
-            if (!gyroSetup) {
-                gyroRoute = mwBoard.routeData().fromGyro().subscribe(new DataSignal.MessageProcessor() {
-                    @Override
-                    public void process(Message msg) {
-                        final Bmi160GyroMessage.GyroSpin spinData = msg.getData(Bmi160GyroMessage.GyroSpin.class);
-
-                        Log.i("test", String.format("Gyro: %.3f,%.3f,%.3f", spinData.x(), spinData.y(), spinData.z()));
-                        MainActivity.this.runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                ((TextView) findViewById(R.id.textView7)).setText(String.format("%.3f,%.3f,%.3f", spinData.x(), spinData.y(), spinData.z()));
-                            }
-                        });
-                    }
-                }).log(new DataSignal.MessageProcessor() {
-                    @Override
-                    public void process(Message msg) {
-                        final Bmi160GyroMessage.GyroSpin spinData = msg.getData(Bmi160GyroMessage.GyroSpin.class);
-
-                        Log.i("test", String.format("Log Gyro: %.3f,%.3f,%.3f", spinData.x(), spinData.y(), spinData.z()));
-                    }
-                }).commit();
-                gyroSetup= true;
-            }
-            gyroRoute.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    Bmi160Gyro gyroModule= mwBoard.getModule(Bmi160Gyro.class);
-                    gyroModule.configure().withOutputDataRate(Bmi160Gyro.OutputDataRate.ODR_25_HZ)
-                            .withFullScaleRange(Bmi160Gyro.FullScaleRange.FSR_125)
-                            .commit();
-                    gyroModule.globalStart();
-                }
-            });
-        } else {
-            gyroRoute.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    mwBoard.getModule(Bmi160Gyro.class).globalStop();
-                }
-            });
-        }
-    }
-
-    private AsyncResult<RouteManager> gsrRoute;
-    private boolean gsrSetup= false;
-    public void gsrMe(View v) {
-        if (!gsrSetup) {
-            gsrRoute= mwBoard.routeData().fromGsr((byte) 0).subscribe(new DataSignal.MessageProcessor() {
-                @Override
-                public void process(Message msg) {
-                    final Long conductance= msg.getData(Long.class);
-                    Log.i("test", String.format("Conductance: %d", conductance));
-                    MainActivity.this.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            ((TextView) findViewById(R.id.textView8)).setText(String.format("%d", conductance));
-                        }
-                    });
-                }
-            }).commit();
-            mwBoard.getModule(Gsr.class).calibrate();
-            gsrSetup= true;
-        }
-        mwBoard.getModule(Gsr.class).readConductance((byte) 0);
-    }
-
-    private AsyncResult<RouteManager> passthroughRoute, anotherSwitchRoute;
-    private AsyncResult<Timer.Controller> anotherTimerCtrllr;
-    public void passthroughMe(View v) {
-        final Switch mySwitch= (Switch) v;
-        if (mySwitch.isChecked()) {
-            passthroughRoute= mwBoard.routeData().fromTemperature()
-                    .process("pt", new Passthrough(Passthrough.Mode.COUNT, (short) 8))
-                        .subscribe(new DataSignal.MessageProcessor() {
-                            @Override
-                            public void process(Message msg) {
-                                Float temp= msg.getData(Float.class);
-                                Log.i("test", String.format("Passthrough temp: %.3f", temp));
-                            }
-                        })
-                    .split()
-                        .branch().process(new Delta(Delta.Mode.DIFFERENTIAL, 2.f))
-                            .subscribe(new DataSignal.MessageProcessor() {
-                                @Override
-                                public void process(Message msg) {
-                                    Log.i("test", String.format("Delta temp: %.3f", msg.getData(Float.class)));
-                                }
-                            })
-                        .branch().process(new Threshold(30.f, Threshold.Mode.ABSOLUTE))
-                            .subscribe(new DataSignal.MessageProcessor() {
-                                @Override
-                                public void process(Message msg) {
-                                    Log.i("test", String.format("Upper threshold crossed: %.3f", msg.getData(Float.class)));
-                                }
-                            })
-                        .branch().process(new Threshold(28.f, Threshold.Mode.ABSOLUTE))
-                            .subscribe(new DataSignal.MessageProcessor() {
-                                @Override
-                                public void process(Message msg) {
-                                    Log.i("test", String.format("Lower threshold crossed: %.3f", msg.getData(Float.class)));
-                                }
-                            })
-                    .end()
-                    .commit();
-            passthroughRoute.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(final RouteManager result) {
-                    anotherSwitchRoute= mwBoard.routeData().fromSwitch()
-                            .monitor(new DataSignal.ActivityMonitor() {
-                                @Override
-                                public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData) {
-                                    result.getDataProcessor("pt").setState(new Passthrough.PassthroughStateEditor((short) 8));
-                                }
-                            }).commit();
-                    anotherSwitchRoute.onComplete(new CompletionHandler<RouteManager>() {
+                    switchRoute.onComplete(new CompletionHandler<RouteManager>() {
                         @Override
                         public void success(RouteManager result) {
-                            anotherTimerCtrllr= mwBoard.getModule(Timer.class).createTimer(500, (short) -1, true);
-                            anotherTimerCtrllr.onComplete(new CompletionHandler<Timer.Controller>() {
+                            timerController= mwBoard.getModule(Timer.class).scheduleTask(new Timer.Task() {
+                                @Override
+                                public void commands() {
+                                    mwBoard.getModule(Gpio.class).readAnalogIn((byte) 0, Gpio.AnalogReadMode.ADC);
+                                }
+                            }, 500, false);
+                            timerController.onComplete(new CompletionHandler<Timer.Controller>() {
                                 @Override
                                 public void success(Timer.Controller result) {
-                                    mwBoard.getModule(Temperature.class).enableThermistorMode((byte) 0, (byte) 1);
-                                    result.schedule(new Timer.Task() {
-                                        @Override
-                                        public void execute() {
-                                            mwBoard.getModule(Temperature.class).readTemperarure();
-                                        }
-                                    });
                                     result.start();
                                 }
                             });
@@ -657,23 +501,230 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                 }
             });
         } else {
-            passthroughRoute.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    result.remove();
-                }
-            });
-            anotherSwitchRoute.onComplete(new CompletionHandler<RouteManager>() {
-                @Override
-                public void success(RouteManager result) {
-                    result.remove();
-                }
-            });
-            anotherTimerCtrllr.onComplete(new CompletionHandler<Timer.Controller>() {
+            try {
+                analogRoute.result().remove();
+                switchRoute.result().remove();
+            } catch (ExecutionException e) {
+                Log.i("test", "Exception in route", e);
+            } catch (InterruptedException e) {
+                Log.i("test", "Result not ready");
+            }
+            timerController.onComplete(new CompletionHandler<Timer.Controller>() {
                 @Override
                 public void success(Timer.Controller result) {
                     result.stop();
                     result.remove();
+                }
+            });
+        }
+    }
+
+    public void programMe(View v) {
+        final Switch mwSwitch= (Switch) v;
+
+        if (mwSwitch.isChecked()) {
+            mwBoard.routeData().fromSwitch()
+                    .process("accumprocesser", "accumulator")
+                    .process("math?operation=modulus&rhs=2")
+                    .split()
+                        .branch().process("comparison?operation=eq&reference=1").monitor(new DataSignal.ActivityMonitor() {
+                            @Override
+                            public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData) {
+                                Led ledCtrllr = mwBoard.getModule(Led.class);
+                                ledCtrllr.writeChannelAttributes(Led.ColorChannel.BLUE)
+                                        .withRiseTime((short) 0).withPulseDuration((short) 1000)
+                                        .withRepeatCount((byte) -1).withHighTime((short) 500)
+                                        .withHighIntensity((byte) 16).withLowIntensity((byte) 16)
+                                        .commit();
+                                ledCtrllr.play(false);
+                            }
+                        })
+                        .branch().process("comparison?operation=eq&reference=0").monitor(new DataSignal.ActivityMonitor() {
+                            @Override
+                            public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData) {
+                                mwBoard.getModule(Led.class).stop(true);
+                            }
+                        })
+                    .end()
+            .commit();
+        } else {
+            mwBoard.removeRoutes();
+        }
+
+    }
+
+    public void resetMe(View v) {
+        mwBoard.getModule(Debug.class).resetDevice();
+    }
+    public void removeMe(View v) {
+        mwBoard.removeRoutes();
+        mwBoard.getModule(Timer.class).removeTimers();
+    }
+
+    private boolean gyroSetup= false;
+    public void gyroMe(View v) {
+        final Switch mySwitch= (Switch) v;
+        if (mySwitch.isChecked()) {
+            if (!gyroSetup) {
+                mwBoard.routeData().fromGyro().subscribe("gyroAxisSub").log("gyroAxisLogger")
+                        .commit().onComplete(new CompletionHandler<RouteManager>() {
+                    @Override
+                    public void success(RouteManager result) {
+                        result.assignProcessor("gyroAxisSub", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                final Bmi160GyroMessage.GyroSpin spinData = msg.getData(Bmi160GyroMessage.GyroSpin.class);
+
+                                Log.i("test", String.format("Gyro: %.3f,%.3f,%.3f", spinData.x(), spinData.y(), spinData.z()));
+                                MainActivity.this.runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        ((TextView) findViewById(R.id.textView7)).setText(String.format("%.3f,%.3f,%.3f", spinData.x(), spinData.y(), spinData.z()));
+                                    }
+                                });
+                            }
+                        });
+                        result.assignLogProcessor("gyroAxisLogger", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                final Bmi160GyroMessage.GyroSpin spinData = msg.getData(Bmi160GyroMessage.GyroSpin.class);
+
+                                Log.i("test", String.format("Log Gyro: %.3f,%.3f,%.3f", spinData.x(), spinData.y(), spinData.z()));
+                            }
+                        });
+                        Bmi160Gyro gyroModule = mwBoard.getModule(Bmi160Gyro.class);
+                        gyroModule.configure().withOutputDataRate(Bmi160Gyro.OutputDataRate.ODR_25_HZ)
+                                .withFullScaleRange(Bmi160Gyro.FullScaleRange.FSR_125)
+                                .commit();
+                        gyroModule.globalStart();
+                    }
+                });
+                gyroSetup= true;
+            } else {
+                mwBoard.getModule(Logging.class).startLogging();
+                Bmi160Gyro gyroModule = mwBoard.getModule(Bmi160Gyro.class);
+                gyroModule.configure().withOutputDataRate(Bmi160Gyro.OutputDataRate.ODR_25_HZ)
+                        .withFullScaleRange(Bmi160Gyro.FullScaleRange.FSR_125)
+                        .commit();
+                gyroModule.globalStart();
+            }
+        } else {
+            mwBoard.getModule(Logging.class).stopLogging();
+            mwBoard.getModule(Bmi160Gyro.class).globalStop();
+        }
+    }
+
+    private boolean gsrSetup= false;
+    public void gsrMe(View v) {
+        if (!gsrSetup) {
+            mwBoard.routeData().fromGsr((byte) 0).subscribe("gsr_sub")
+                    .commit().onComplete(new CompletionHandler<RouteManager>() {
+                @Override
+                public void success(RouteManager result) {
+                    result.assignProcessor("gsr_sub", new DataSignal.MessageProcessor() {
+                        @Override
+                        public void process(Message msg) {
+                            final Long conductance = msg.getData(Long.class);
+                            Log.i("test", String.format("Conductance: %d", conductance));
+                            MainActivity.this.runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    ((TextView) findViewById(R.id.textView8)).setText(String.format("%d", conductance));
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+            mwBoard.getModule(Gsr.class).calibrate();
+            gsrSetup= true;
+        }
+        mwBoard.getModule(Gsr.class).readConductance((byte) 0);
+    }
+
+    private AsyncResult<Timer.Controller> anotherTimerCtrllr;
+    private boolean passthroughTempSetup= false;
+    public void passthroughMe(View v) {
+        final Switch mySwitch= (Switch) v;
+        if (mySwitch.isChecked()) {
+            if (!passthroughTempSetup) {
+                mwBoard.routeData().fromTemperature()
+                        .process("pt", new Passthrough(Passthrough.Mode.COUNT, (short) 8))
+                        .subscribe("passthrough_temp")
+                        .split()
+                            .branch().process(new Delta(Delta.Mode.DIFFERENTIAL, 2.f)).subscribe("differential_temp")
+                            .branch().process(new Threshold(30.f, Threshold.Mode.ABSOLUTE)).subscribe("upper_ths_temp")
+                            .branch().process(new Threshold(28.f, Threshold.Mode.ABSOLUTE)).subscribe("lower_ths_temp")
+                        .end()
+                .commit().onComplete(new CompletionHandler<RouteManager>() {
+                    @Override
+                    public void success(final RouteManager result) {
+                        result.assignProcessor("passthrough_temp", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                Float temp = msg.getData(Float.class);
+                                Log.i("test", String.format("Passthrough temp: %.3f", temp));
+                            }
+                        });
+                        result.assignProcessor("differential_temp", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                Log.i("test", String.format("Delta temp: %.3f", msg.getData(Float.class)));
+                            }
+                        });
+                        result.assignProcessor("upper_ths_temp", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                Log.i("test", String.format("Upper threshold crossed: %.3f", msg.getData(Float.class)));
+                            }
+                        });
+                        result.assignProcessor("lower_ths_temp", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                Log.i("test", String.format("Lower threshold crossed: %.3f", msg.getData(Float.class)));
+                            }
+                        });
+                        mwBoard.routeData().fromSwitch()
+                                .monitor(new DataSignal.ActivityMonitor() {
+                                    @Override
+                                    public void onSignalActive(Map<String, DataProcessor> processors, MessageToken signalData) {
+                                        processors.get("pt").setState(new Passthrough.StateEditor((short) 8));
+                                    }
+                                })
+                        .commit().onComplete(new CompletionHandler<RouteManager>() {
+                            @Override
+                            public void success(RouteManager result) {
+                                anotherTimerCtrllr= mwBoard.getModule(Timer.class).scheduleTask(new Timer.Task() {
+                                    @Override
+                                    public void commands() {
+                                        mwBoard.getModule(Temperature.class).readTemperarure();
+                                    }
+                                }, 500, false);
+                                anotherTimerCtrllr.onComplete(new CompletionHandler<Timer.Controller>() {
+                                    @Override
+                                    public void success(Timer.Controller result) {
+                                        mwBoard.getModule(Temperature.class).enableThermistorMode((byte) 0, (byte) 1);
+                                        result.start();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+                passthroughTempSetup= true;
+            } else {
+                anotherTimerCtrllr.onComplete(new CompletionHandler<Timer.Controller>() {
+                    @Override
+                    public void success(Timer.Controller result) {
+                        result.start();
+                    }
+                });
+            }
+        } else {
+            anotherTimerCtrllr.onComplete(new CompletionHandler<Timer.Controller>() {
+                @Override
+                public void success(Timer.Controller result) {
+                    result.stop();
                 }
             });
         }
@@ -755,36 +806,39 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                         @Override
                         public void success(MultiChannelTemperature.Source[] result) {
                             preset = result[1];
-                            multiTemp = mwBoard.routeData().fromTemperature(preset).subscribe(new DataSignal.MessageProcessor() {
-                                @Override
-                                public void process(Message msg) {
-                                    Log.i("test", String.format("Preset thermistor: %.3f", msg.getData(Float.class)));
-                                }
-                            }).commit();
+                            multiTemp = mwBoard.routeData().fromTemperature(preset).subscribe("multi_thermistor").commit();
 
                             onDie = result[0];
-                            onDieTemp = mwBoard.routeData().fromTemperature(onDie).subscribe(new DataSignal.MessageProcessor() {
-                                @Override
-                                public void process(Message msg) {
-                                    Log.i("test", String.format("on-die temperature: %.3f", msg.getData(Float.class)));
-                                }
-                            }).commit();
+                            onDieTemp = mwBoard.routeData().fromTemperature(onDie).subscribe("multi_on_die").commit();
                             multitempSetup = true;
 
                             multiTemp.onComplete(new CompletionHandler<RouteManager>() {
                                 @Override
                                 public void success(RouteManager result) {
+                                    result.assignProcessor("multi_thermistor", new DataSignal.MessageProcessor() {
+                                        @Override
+                                        public void process(Message msg) {
+                                            Log.i("test", String.format("Preset thermistor: %.3f", msg.getData(Float.class)));
+                                        }
+                                    });
                                     mwBoard.getModule(MultiChannelTemperature.class).readTemperature(onDie);
                                 }
                             });
                             onDieTemp.onComplete(new CompletionHandler<RouteManager>() {
                                 @Override
                                 public void success(RouteManager result) {
+                                    result.assignProcessor("multi_on_die", new DataSignal.MessageProcessor() {
+                                        @Override
+                                        public void process(Message msg) {
+                                            Log.i("test", String.format("on-die temperature: %.3f", msg.getData(Float.class)));
+                                        }
+                                    });
                                     mwBoard.getModule(MultiChannelTemperature.class).readTemperature(preset);
                                 }
                             });
                         }
                     });
+            multitempSetup= true;
         } else {
             multiTemp.onComplete(new CompletionHandler<RouteManager>() {
                 @Override
@@ -818,25 +872,200 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
 
     public void macroMe(View v) {
         Macro macroModule= mwBoard.getModule(Macro.class);
-        Led ledModule= mwBoard.getModule(Led.class);
+        final Led ledModule= mwBoard.getModule(Led.class);
 
-        macroModule.record(true).onComplete(new CompletionHandler<Byte>() {
+        macroModule.record(new Macro.CodeBlock() {
+            @Override
+            public void commands() {
+                ledModule.writeChannelAttributes(Led.ColorChannel.BLUE)
+                        .withRiseTime((short) 0).withPulseDuration((short) 1000)
+                        .withRepeatCount((byte) 5).withHighTime((short) 500)
+                        .withHighIntensity((byte) 16).withLowIntensity((byte) 16)
+                        .commit();
+                ledModule.play(false);
+            }
+        }).onComplete(new CompletionHandler<Byte>() {
             @Override
             public void success(Byte result) {
                 Log.i("test", "Macro Id: " + result);
             }
         });
-        ledModule.writeChannelAttributes(Led.ColorChannel.BLUE)
-                .withRiseTime((short) 0).withPulseDuration((short) 1000)
-                .withRepeatCount((byte) 5).withHighTime((short) 500)
-                .withHighIntensity((byte) 16).withLowIntensity((byte) 16)
-                .commit();
-        ledModule.play(false);
-        macroModule.stop();
     }
 
     public void clearMacroMe(View v) {
         mwBoard.getModule(Macro.class).eraseMacros();
         mwBoard.getModule(Debug.class).resetAfterGarbageCollect();
+    }
+
+    public void serializeMe(View v) {
+        byte[] state= mwBoard.serializeState();
+        Log.i("test", new String(state));
+    }
+
+    private boolean orientationSetup= false;
+    public void orientationMe(View v) {
+        final Switch mySwitch= (Switch) v;
+        Mma8452qAccelerometer accelModule= mwBoard.getModule(Mma8452qAccelerometer.class);
+
+        if (mySwitch.isChecked()) {
+            if (!orientationSetup) {
+                mwBoard.routeData().fromOrientation().subscribe("orientation_sub").log("orientation_log")
+                        .commit().onComplete(new CompletionHandler<RouteManager>() {
+                    @Override
+                    public void success(RouteManager result) {
+                        result.assignProcessor("orientation_sub", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                final String orientation = msg.getData(Mma8452qAccelerometer.Orientation.class).toString();
+                                Log.i("test", String.format(Locale.US, "Stream orientation: %s", orientation));
+                                MainActivity.this.runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        ((TextView) findViewById(R.id.textView9)).setText(orientation);
+                                    }
+                                });
+                            }
+                        });
+                        result.assignLogProcessor("orientation_log", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                Log.i("test", String.format(Locale.US, "Log orientation: %s", msg.getData(Mma8452qAccelerometer.Orientation.class).toString()));
+                            }
+                        });
+                    }
+                });
+                orientationSetup= true;
+            }
+            mwBoard.getModule(Logging.class).startLogging();
+            accelModule.startOrientationDetection();
+            accelModule.globalStart();
+        } else {
+            mwBoard.getModule(Logging.class).stopLogging();
+            accelModule.globalStop();
+            accelModule.stopOrientationDetection();
+        }
+    }
+
+    private boolean tapSetup;
+    public void tapMe(View v) {
+        final Switch mySwitch= (Switch) v;
+        Mma8452qAccelerometer accelModule= mwBoard.getModule(Mma8452qAccelerometer.class);
+
+        if (mySwitch.isChecked()) {
+            if (!tapSetup) {
+                mwBoard.routeData().fromTap().subscribe("tap_sub")
+                .commit().onComplete(new CompletionHandler<RouteManager>() {
+                    @Override
+                    public void success(RouteManager result) {
+                        result.assignProcessor("tap_sub", new DataSignal.MessageProcessor() {
+                            @Override
+                            public void process(Message msg) {
+                                final Mma8452qAccelerometer.TapData tapData = msg.getData(Mma8452qAccelerometer.TapData.class);
+
+                                MainActivity.this.runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        switch (tapData.type()) {
+                                            case SINGLE:
+                                                ((TextView) findViewById(R.id.textView10)).setText("single tap");
+                                                break;
+                                            case DOUBLE:
+                                                ((TextView) findViewById(R.id.textView10)).setText("double tap");
+                                                break;
+                                        }
+
+                                    }
+                                });
+                                Log.i("test", tapData.toString());
+                            }
+                        });
+                    }
+                });
+                tapSetup = true;
+            }
+            accelModule.configureTapDetection(Mma8452qAccelerometer.TapType.DOUBLE, Mma8452qAccelerometer.TapType.SINGLE).commit();
+            accelModule.startTapDetection();
+            accelModule.globalStart();
+        } else {
+            accelModule.globalStop();
+            accelModule.stopTapDetection();
+        }
+    }
+
+    public boolean shakeSetup;
+    public int shakeCount= 0;
+    public void shakeMe(View v) {
+        final Switch mySwitch= (Switch) v;
+        Mma8452qAccelerometer accelModule= mwBoard.getModule(Mma8452qAccelerometer.class);
+
+        if (mySwitch.isChecked()) {
+            if (!shakeSetup) {
+                mwBoard.routeData().fromShake().subscribe("shake_sub").commit()
+                        .onComplete(new CompletionHandler<RouteManager>() {
+                            @Override
+                            public void success(RouteManager result) {
+                                result.assignProcessor("shake_sub", new DataSignal.MessageProcessor() {
+                                    @Override
+                                    public void process(Message msg) {
+                                        shakeCount++;
+                                        final Mma8452qAccelerometer.MovementData shakeData = msg.getData(Mma8452qAccelerometer.MovementData.class);
+                                        Log.i("test", shakeData.toString());
+                                        MainActivity.this.runOnUiThread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                ((TextView) findViewById(R.id.textView11)).setText("shake " + shakeCount);
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                shakeSetup= true;
+            }
+
+            accelModule.startShakeDetection();
+            accelModule.globalStart();
+        } else {
+            accelModule.globalStop();
+            accelModule.stopShakeDetection();
+        }
+    }
+
+    public boolean moveSetup;
+    public void moveMe(View v) {
+        final Switch mySwitch= (Switch) v;
+        Mma8452qAccelerometer accelModule= mwBoard.getModule(Mma8452qAccelerometer.class);
+
+        if(mySwitch.isChecked()) {
+            if (!moveSetup) {
+                mwBoard.routeData().fromMovement().subscribe("move_sub").commit()
+                        .onComplete(new CompletionHandler<RouteManager>() {
+                            @Override
+                            public void success(RouteManager result) {
+                                result.assignProcessor("move_sub", new DataSignal.MessageProcessor() {
+                                    @Override
+                                    public void process(Message msg) {
+                                        final Mma8452qAccelerometer.MovementData shakeData = msg.getData(Mma8452qAccelerometer.MovementData.class);
+                                        Log.i("test", shakeData.toString());
+                                        MainActivity.this.runOnUiThread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                ((TextView) findViewById(R.id.textView12)).setText("motion");
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                moveSetup= true;
+            }
+
+            accelModule.configureMovementDetection(Mma8452qAccelerometer.MovementType.FREE_FALL).setAxes(Mma8452qAccelerometer.Axis.Z).commit();
+            accelModule.startMovementDetection();
+            accelModule.globalStart();
+        } else {
+            accelModule.globalStop();
+            accelModule.stopMovementDetection();
+        }
     }
 }

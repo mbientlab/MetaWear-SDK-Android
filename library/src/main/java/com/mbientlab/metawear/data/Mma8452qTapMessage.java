@@ -32,67 +32,65 @@
 package com.mbientlab.metawear.data;
 
 import com.mbientlab.metawear.Message;
+import com.mbientlab.metawear.module.Mma8452qAccelerometer;
+import com.mbientlab.metawear.module.Mma8452qAccelerometer.Axis;
+import com.mbientlab.metawear.module.Mma8452qAccelerometer.TapData;
+import com.mbientlab.metawear.module.Mma8452qAccelerometer.TapType;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Calendar;
 
 /**
- * Created by etsai on 6/16/2015.
+ * Created by etsai on 7/21/2015.
  */
-public class MwrAccelAxisMessage extends Message {
-    private final short[] milliGs;
-    private final float[] accelGs;
+public class Mma8452qTapMessage extends Message {
+    private final Mma8452qAccelerometer.TapData tapData;
 
-    public MwrAccelAxisMessage(byte[] data) {
+    public Mma8452qTapMessage(byte[] data) {
         this(null, data);
     }
 
-    public MwrAccelAxisMessage(Calendar timestamp, byte[] data) {
+    public Mma8452qTapMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        final byte pulseSrc= data[0];
+        tapData= new TapData() {
+            @Override
+            public boolean crossedThreshold(Axis axis) {
+                byte mask= (byte) (0x10 << axis.ordinal());
+                return (pulseSrc & mask) == mask;
+            }
 
-        milliGs= new short[] {buffer.getShort(), buffer.getShort(), buffer.getShort()};
-        accelGs= new float[] {milliGs[0] / 1000.f, milliGs[1] / 1000.f, milliGs[2] / 1000.f};
+            @Override
+            public Polarity polarity(Axis axis) {
+                return Polarity.values()[(pulseSrc >> axis.ordinal()) & 0x1];
+            }
+
+            @Override
+            public TapType type() {
+                return (pulseSrc & 0x8) == 0x8 ? TapType.DOUBLE : TapType.SINGLE;
+            }
+
+            @Override
+            public String toString() {
+                boolean first= true;
+                StringBuilder builder= new StringBuilder();
+
+                builder.append("{");
+                for(Axis it: Axis.values()) {
+                    builder.append(String.format("%sAxis%s:{crossedThreshold: %s, polarity: %s, type: %s}",
+                            (first ? "" : ", "), it.toString(), crossedThreshold(it), polarity(it), type()));
+                    first= false;
+                }
+                builder.append("}");
+                return builder.toString();
+            }
+        };
     }
 
     @Override
     public <T> T getData(Class<T> type) {
-        if (type.equals(AccelAxisG.class)) {
-            return type.cast(new AccelAxisG() {
-                @Override
-                public float x() {
-                    return accelGs[0];
-                }
-
-                @Override
-                public float y() {
-                    return accelGs[1];
-                }
-
-                @Override
-                public float z() {
-                    return accelGs[2];
-                }
-            });
-        } else if (type.equals(AccelAxisMilliG.class)) {
-            return type.cast(new AccelAxisMilliG() {
-                @Override
-                public short x() {
-                    return milliGs[0];
-                }
-
-                @Override
-                public short y() {
-                    return milliGs[1];
-                }
-
-                @Override
-                public short z() {
-                    return milliGs[2];
-                }
-            });
+        if (type.equals(TapData.class)) {
+            return type.cast(tapData);
         }
         return super.getData(type);
     }

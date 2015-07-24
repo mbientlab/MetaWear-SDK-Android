@@ -46,7 +46,11 @@ public enum EventRegister implements Register {
     REMOVE {
         @Override
         public byte opcode() { return 0x4; }
-    };;
+    },
+    REMOVE_ALL {
+        @Override
+        public byte opcode() { return 0x5; }
+    };
 
     @Override
     public byte moduleOpcode() { return 0xa; }

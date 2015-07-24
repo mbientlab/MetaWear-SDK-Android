@@ -29,30 +29,64 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear.impl;
+package com.mbientlab.metawear.data;
 
-import java.util.UUID;
+import com.mbientlab.metawear.Message;
+import com.mbientlab.metawear.module.Mma8452qAccelerometer.Axis;
+import com.mbientlab.metawear.module.Mma8452qAccelerometer.MovementData;
+
+import java.util.Calendar;
 
 /**
- * Created by etsai on 6/15/2015.
+ * Created by etsai on 7/21/2015.
  */
-public enum DevInfoCharacteristic {
-    MANUFACTURER_NAME("29"),
-    MODEL_NUMBER("24"),
-    SERIAL_NUMBER("25"),
-    FIRMWARE_VERSION("26"),
-    HARDWARE_VERSION("27");
+public class Mma8452qMovementMessage extends Message {
+    private final MovementData movementData;
 
-    private final UUID uuid;
-    private DevInfoCharacteristic(String uuidPart) {
-        uuid= UUID.fromString(String.format("00002a%s-0000-1000-8000-00805f9b34fb", uuidPart));
+    public Mma8452qMovementMessage(byte[] data) {
+        this(null, data);
     }
 
-    public UUID uuid() {
-        return uuid;
+    public Mma8452qMovementMessage(Calendar timestamp, byte[] data) {
+        super(timestamp, data);
+
+        final byte ffMtSrc= data[0];
+
+        movementData= new MovementData() {
+            @Override
+            public boolean crossedThreshold(Axis axis) {
+                byte mask= (byte) (2 << (2 * axis.ordinal()));
+                return (ffMtSrc & mask) == mask;
+            }
+
+            @Override
+            public Polarity polarity(Axis axis) {
+                byte mask= (byte) (1 << (2 * axis.ordinal()));
+                return (ffMtSrc & mask) == mask ? Polarity.NEGATIVE : Polarity.POSITIVE;
+            }
+
+            @Override
+            public String toString() {
+                boolean first= true;
+                StringBuilder builder= new StringBuilder();
+
+                builder.append("{");
+                for(Axis it: Axis.values()) {
+                    builder.append(String.format("%sAxis%s:{crossedThreshold: %s, polarity: %s}",
+                            (first ? "" : ", "), it.toString(), crossedThreshold(it), polarity(it)));
+                    first= false;
+                }
+                builder.append("}");
+                return builder.toString();
+            }
+        };
     }
 
-    public UUID serviceUuid() {
-        return UUID.fromString(String.format("0000%s-0000-1000-8000-00805f9b34fb", "180a"));
+    @Override
+    public <T> T getData(Class<T> type) {
+        if (type.equals(MovementData.class)) {
+            return type.cast(movementData);
+        }
+        return super.getData(type);
     }
 }

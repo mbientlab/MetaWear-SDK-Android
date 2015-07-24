@@ -31,6 +31,8 @@
 
 package com.mbientlab.metawear;
 
+import java.util.concurrent.ExecutionException;
+
 /**
  * Created by etsai on 6/15/2015.
  */
@@ -41,4 +43,6 @@ public interface AsyncResult<T> {
     }
 
     public void onComplete(CompletionHandler<T> handler);
+    public boolean isCompleted();
+    public T result() throws ExecutionException, InterruptedException;
 }

@@ -55,8 +55,8 @@
             android:text="Disconnect"
             android:id="@+id/button2"
             android:onClick="disconnectMe"
-            android:layout_below="@+id/button"
-            android:layout_alignParentStart="true" />
+            android:layout_alignParentTop="true"
+            android:layout_centerHorizontal="true" />
 
         <Button
             android:layout_width="wrap_content"
@@ -125,7 +125,7 @@
             android:text="Read Temp"
             android:onClick="temperatureMe"
             android:id="@+id/switch5"
-            android:layout_below="@+id/switch2"
+            android:layout_below="@+id/button15"
             android:layout_alignParentStart="true"
             android:checked="false" />
 
@@ -142,10 +142,10 @@
             android:layout_height="wrap_content"
             android:text="Filter"
             android:id="@+id/switch2"
-            android:layout_below="@+id/switch6"
             android:onClick="filterMe"
-            android:layout_alignParentStart="true"
-            android:checked="false" />
+            android:checked="false"
+            android:layout_below="@+id/textView7"
+            android:layout_alignParentEnd="true" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -261,8 +261,8 @@
             android:text="Motor"
             android:id="@+id/button9"
             android:onClick="motorMe"
-            android:layout_below="@+id/button7"
-            android:layout_alignParentStart="true" />
+            android:layout_below="@+id/switch8"
+            android:layout_toEndOf="@+id/switch7" />
 
         <Switch
             android:layout_width="wrap_content"
@@ -318,6 +318,115 @@
             android:onClick="clearMacroMe"
             android:layout_below="@+id/button12"
             android:layout_toEndOf="@+id/button13" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Program"
+            android:onClick="programRouteMe"
+            android:id="@+id/button15"
+            android:layout_below="@+id/switch6"
+            android:layout_alignParentStart="true" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sync"
+            android:onClick="syncMe"
+            android:id="@+id/button16"
+            android:layout_alignBottom="@+id/button15"
+            android:layout_alignEnd="@+id/button14" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Serialize"
+            android:onClick="serializeMe"
+            android:id="@+id/button17"
+            android:layout_alignParentTop="true"
+            android:layout_alignEnd="@+id/textView" />
+
+        <Switch
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Orientation"
+            android:onClick="orientationMe"
+            android:id="@+id/switch10"
+            android:layout_below="@+id/button13"
+            android:layout_alignParentStart="true"
+            android:checked="false" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:id="@+id/textView9"
+            android:layout_above="@+id/switch11"
+            android:layout_alignParentEnd="true" />
+
+        <Switch
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tap"
+            android:id="@+id/switch11"
+            android:onClick="tapMe"
+            android:layout_below="@+id/switch10"
+            android:layout_alignParentStart="true"
+            android:checked="false" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:id="@+id/textView10"
+            android:layout_below="@+id/textView9"
+            android:layout_alignParentEnd="true" />
+
+        <Switch
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Shake"
+            android:layout_below="@+id/switch11"
+            android:id="@+id/switch12"
+            android:onClick="shakeMe"
+            android:layout_alignParentStart="true"
+            android:checked="false" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:id="@+id/textView11"
+            android:layout_below="@+id/textView10"
+            android:layout_alignEnd="@+id/textView10"
+            android:text="Big Boo" />
+
+        <Switch
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Movement"
+            android:onClick="moveMe"
+            android:id="@+id/switch13"
+            android:layout_below="@+id/switch12"
+            android:layout_alignParentStart="true" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:text="Large Text"
+            android:id="@+id/textView12"
+            android:layout_below="@+id/switch12"
+            android:layout_alignParentEnd="true" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Remove Routes"
+            android:onClick="removeMe"
+            android:id="@+id/button18"
+            android:layout_above="@+id/button6"
+            android:layout_centerHorizontal="true" />
 
     </RelativeLayout>
 </ScrollView>

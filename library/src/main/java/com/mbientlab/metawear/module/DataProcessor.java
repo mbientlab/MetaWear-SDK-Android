@@ -31,28 +31,14 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.AsyncResult;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.DataSignal;
 
 /**
- * Created by etsai on 6/23/2015.
+ * Created by etsai on 7/20/2015.
  */
-public interface Timer extends MetaWearBoard.Module {
-    public interface Task {
-        public void commands();
-    }
+public interface DataProcessor {
+    public interface StateEditor { }
 
-    public interface Controller {
-        public byte id();
-        public void start();
-        public void stop();
-        public void remove();
-        public boolean isActive();
-    }
-
-    public AsyncResult<Controller> scheduleTask(Task mwTask, int period, boolean delay);
-    public AsyncResult<Controller> scheduleTask(Task mwTask, int period, boolean delay, short repetitions);
-
-    public void removeTimers();
-    public Controller getController(byte controllerId);
+    public void setState(StateEditor editor);
+    public void modifyConfiguration(DataSignal.ProcessorConfig newConfig);
 }

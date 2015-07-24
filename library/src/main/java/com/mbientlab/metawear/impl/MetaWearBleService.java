@@ -75,7 +75,7 @@ public class MetaWearBleService extends Service {
     }
 
     private class GattConnectionState {
-        public String manufacturer= null, serialNumber= null, firmwareVersion= null, hardwareVersion= null;
+        public String manufacturer= null, serialNumber= null, firmwareVersion= null, hardwareVersion= null, modelNumber= null;
 
         public final AtomicInteger nDescriptors= new AtomicInteger(0);
         public final AtomicBoolean isConnected= new AtomicBoolean(false), isReady= new AtomicBoolean(false);
@@ -92,9 +92,10 @@ public class MetaWearBleService extends Service {
                 @Override public String serialNumber() { return serialNumber; }
                 @Override public String firmwareVersion() { return firmwareVersion; }
                 @Override public String hardwareVersion() { return hardwareVersion; }
+                @Override public String modelNumber() { return modelNumber; }
                 @Override public String toString() {
-                    return String.format("{manufacturer: %s, serialNumber: %s, firmwareVersion: %s, hardwareVersion: %s}",
-                            manufacturer, serialNumber, firmwareVersion, hardwareVersion);
+                    return String.format("{manufacturer: %s, serialNumber: %s, firmwareVersion: %s, hardwareVersion: %s, modelNumber: %s}",
+                            manufacturer, serialNumber, firmwareVersion, hardwareVersion, modelNumber);
                 }
             };
         }
@@ -107,6 +108,7 @@ public class MetaWearBleService extends Service {
             serialNumber= null;
             firmwareVersion= null;
             hardwareVersion= null;
+            modelNumber= null;
         }
     }
     private interface Action {
@@ -411,6 +413,7 @@ public class MetaWearBleService extends Service {
                 case BluetoothProfile.STATE_CONNECTED:
                     gattConnectionStates.get(gatt.getDevice()).isConnected.set(status == 0);
                     if (status != 0) {
+                        mwBoards.get(gatt.getDevice()).close();
                         state.connectionHandler.failure(status, new RuntimeException(
                                 String.format(Locale.US, "Error connecting to gatt server (%d)", status)));
                     } else {
@@ -425,6 +428,7 @@ public class MetaWearBleService extends Service {
                     if (state.connectionHandler != null) {
                         state.connectionHandler.disconnected();
                     }
+                    mwBoards.get(gatt.getDevice()).close();
                     break;
             }
         }
@@ -433,6 +437,7 @@ public class MetaWearBleService extends Service {
         public void onServicesDiscovered(final BluetoothGatt gatt, int status) {
             if (status != 0) {
                 GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
+                mwBoards.get(gatt.getDevice()).close();
                 state.isConnected.set(false);
                 state.connectionHandler.failure(status, new RuntimeException(
                         String.format(Locale.US, "Error discovering Bluetooth services (%d)", status)));
@@ -493,6 +498,8 @@ public class MetaWearBleService extends Service {
 
             final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
             if (status != 0) {
+                mwBoards.get(gatt.getDevice()).close();
+                state.isConnected.set(false);
                 state.connectionHandler.failure(status, new RuntimeException(String.format(Locale.US, "Error writing descriptors (%d)", status)));
             } else {
                 int newCount= state.nDescriptors.decrementAndGet();
@@ -502,12 +509,12 @@ public class MetaWearBleService extends Service {
                         public boolean execute() {
                             if (gatt != null && state.isConnected.get()) {
                                 gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
-                                BluetoothGattService service= gatt.getService(DevInfoCharacteristic.MODULE_NUMBER.serviceUuid());
-                                BluetoothGattCharacteristic moduleNumberChar= service.getCharacteristic(DevInfoCharacteristic.MODULE_NUMBER.uuid());
+                                BluetoothGattService service= gatt.getService(DevInfoCharacteristic.MODEL_NUMBER.serviceUuid());
+                                BluetoothGattCharacteristic moduleNumberChar= service.getCharacteristic(DevInfoCharacteristic.MODEL_NUMBER.uuid());
                                 if (moduleNumberChar == null) {
                                     ///< @TODO is this still accurate for newer firmware on old MetaWear R boards?
                                     ///< If no module number characteristic, assume is MetaWearR
-                                    mwBoards.get(gatt.getDevice()).setModuleNumber(Constant.METAWEAR_R_MODULE);
+                                    mwBoards.get(gatt.getDevice()).setModelNumber(Constant.METAWEAR_R_MODULE);
                                     state.isReady.set(true);
                                     state.connectionHandler.connected();
                                     return false;
@@ -543,10 +550,11 @@ public class MetaWearBleService extends Service {
             gattManager.updateExecActionsState();
             gattManager.executeNext(GattActionKey.CHAR_READ);
 
-            if (characteristic.getService().getUuid().equals(DevInfoCharacteristic.MODULE_NUMBER.serviceUuid()) &&
-                    characteristic.getUuid().equals(DevInfoCharacteristic.MODULE_NUMBER.uuid())) {
+            if (characteristic.getService().getUuid().equals(DevInfoCharacteristic.MODEL_NUMBER.serviceUuid()) &&
+                    characteristic.getUuid().equals(DevInfoCharacteristic.MODEL_NUMBER.uuid())) {
                 final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
-                mwBoards.get(gatt.getDevice()).setModuleNumber(new String(characteristic.getValue()));
+                state.modelNumber= new String(characteristic.getValue());
+                mwBoards.get(gatt.getDevice()).setModelNumber(state.modelNumber);
                 state.isReady.set(true);
                 state.connectionHandler.connected();
             } else {

@@ -31,8 +31,8 @@
 
 package com.mbientlab.metawear.processor;
 
-import com.mbientlab.metawear.DataProcessor;
 import com.mbientlab.metawear.DataSignal;
+import com.mbientlab.metawear.module.DataProcessor;
 
 import java.util.Map;
 
@@ -43,10 +43,10 @@ public class Accumulator implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "accumulator";
     public static final String FIELD_OUTPUT= "output";
 
-    public static class AccumulatorStateEditor implements DataProcessor.StateEditor {
+    public static class StateEditor implements DataProcessor.StateEditor {
         public final Number newRunningSum;
 
-        public AccumulatorStateEditor(Number newRunningSum) {
+        public StateEditor(Number newRunningSum) {
             this.newRunningSum= newRunningSum;
         }
     }

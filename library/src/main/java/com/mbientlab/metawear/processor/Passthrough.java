@@ -31,8 +31,8 @@
 
 package com.mbientlab.metawear.processor;
 
-import com.mbientlab.metawear.DataProcessor;
 import com.mbientlab.metawear.DataSignal;
+import com.mbientlab.metawear.module.DataProcessor;
 
 import java.util.Map;
 
@@ -43,10 +43,10 @@ public class Passthrough implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "passthrough";
     public static final String FIELD_MODE= "mode", FIELD_VALUE= "value";
 
-    public static class PassthroughStateEditor implements DataProcessor.StateEditor {
+    public static class StateEditor implements DataProcessor.StateEditor {
         public final short newValue;
 
-        public PassthroughStateEditor(short newValue) {
+        public StateEditor(short newValue) {
             this.newValue= newValue;
         }
     }

@@ -29,12 +29,71 @@
  * contact MbientLab Inc, at www.mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.data;
+
+import com.mbientlab.metawear.Message;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Calendar;
 
 /**
- * Created by etsai on 7/15/2015.
+ * Created by etsai on 6/16/2015.
  */
-public interface Subscription {
-    public boolean isSubscribed();
-    public void unsubscribe();
+public class Mma8452qAxisMessage extends Message {
+    private final short[] milliGs;
+    private final float[] accelGs;
+
+    public Mma8452qAxisMessage(byte[] data) {
+        this(null, data);
+    }
+
+    public Mma8452qAxisMessage(Calendar timestamp, byte[] data) {
+        super(timestamp, data);
+
+        ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+
+        milliGs= new short[] {buffer.getShort(), buffer.getShort(), buffer.getShort()};
+        accelGs= new float[] {milliGs[0] / 1000.f, milliGs[1] / 1000.f, milliGs[2] / 1000.f};
+    }
+
+    @Override
+    public <T> T getData(Class<T> type) {
+        if (type.equals(AccelAxisG.class)) {
+            return type.cast(new AccelAxisG() {
+                @Override
+                public float x() {
+                    return accelGs[0];
+                }
+
+                @Override
+                public float y() {
+                    return accelGs[1];
+                }
+
+                @Override
+                public float z() {
+                    return accelGs[2];
+                }
+            });
+        } else if (type.equals(AccelAxisMilliG.class)) {
+            return type.cast(new AccelAxisMilliG() {
+                @Override
+                public short x() {
+                    return milliGs[0];
+                }
+
+                @Override
+                public short y() {
+                    return milliGs[1];
+                }
+
+                @Override
+                public short z() {
+                    return milliGs[2];
+                }
+            });
+        }
+        return super.getData(type);
+    }
 }

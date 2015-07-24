@@ -38,10 +38,13 @@ import com.mbientlab.metawear.MetaWearBoard;
  * Created by etsai on 7/15/2015.
  */
 public interface Macro extends MetaWearBoard.Module {
-    public AsyncResult<Byte> record(boolean execOnBoot);
-    public void stop();
+    public abstract class CodeBlock {
+        public boolean execOnBoot() { return true; }
+        public abstract void commands();
+    }
 
-    public void execute(byte macroId);
+    public AsyncResult<Void> execute(byte macroId);
+    public AsyncResult<Byte> record(CodeBlock block);
 
     public void eraseMacros();
 }

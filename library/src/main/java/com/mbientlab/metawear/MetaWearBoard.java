@@ -39,6 +39,7 @@ public interface MetaWearBoard {
 
     public interface DeviceInformation {
         public String manufacturer();
+        public String modelNumber();
         public String serialNumber();
         public String firmwareVersion();
         public String hardwareVersion();
@@ -61,5 +62,10 @@ public interface MetaWearBoard {
     public void disconnect();
     public boolean isConnected();
 
+    public RouteManager getRouteManager(byte id);
+    public void removeRoutes();
     public RouteBuilder routeData();
+
+    public byte[] serializeState();
+    public void deserializeState(byte[] state);
 }

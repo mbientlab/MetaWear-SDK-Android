@@ -34,6 +34,7 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.AsyncResult;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -76,5 +77,22 @@ public class AsyncResultImpl<T> implements AsyncResult<T> {
                 }
             }
         }
+    }
+
+    @Override
+    public boolean isCompleted() {
+        return completed.get();
+    }
+
+    @Override
+    public T result() throws ExecutionException, InterruptedException {
+        if (!completed.get()) {
+            throw new InterruptedException("Task not yet completed");
+        }
+
+        if (exception != null) {
+            throw new ExecutionException("Received exception when executing task", exception);
+        }
+        return result;
     }
 }
