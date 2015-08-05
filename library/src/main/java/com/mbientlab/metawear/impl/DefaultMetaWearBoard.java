@@ -1,43 +1,36 @@
 /*
- * Copyright 2015 MbientLab Inc. All rights reserved.
+ * Copyright 2014-2015 MbientLab Inc. All rights reserved.
  *
- * IMPORTANT: Your use of this Software is limited to those specific rights
- * granted under the terms of a software license agreement between the user who
- * downloaded the software, his/her employer (which must be your employer) and
- * MbientLab Inc, (the "License").  You may not use this Software unless you
- * agree to abide by the terms of the License which can be found at
- * www.mbientlab.com/terms . The License limits your use, and you acknowledge,
- * that the  Software may not be modified, copied or distributed and can be used
- * solely and exclusively in conjunction with a MbientLab Inc, product.  Other
- * than for the foregoing purpose, you may not use, reproduce, copy, prepare
- * derivative works of, modify, distribute, perform, display or sell this
- * Software and/or its documentation for any purpose.
+ * IMPORTANT: Your use of this Software is limited to those specific rights granted under the terms of a software
+ * license agreement between the user who downloaded the software, his/her employer (which must be your
+ * employer) and MbientLab Inc, (the "License").  You may not use this Software unless you agree to abide by the
+ * terms of the License which can be found at www.mbientlab.com/terms.  The License limits your use, and you
+ * acknowledge, that the Software may be modified, copied, and distributed when used in conjunction with an
+ * MbientLab Inc, product.  Other than for the foregoing purpose, you may not use, reproduce, copy, prepare
+ * derivative works of, modify, distribute, perform, display or sell this Software and/or its documentation for any
+ * purpose.
  *
- * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE
- * PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE,
- * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL
- * MBIENTLAB OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT, NEGLIGENCE,
- * STRICT LIABILITY, CONTRIBUTION, BREACH OF WARRANTY, OR OTHER LEGAL EQUITABLE
- * THEORY ANY DIRECT OR INDIRECT DAMAGES OR EXPENSES INCLUDING BUT NOT LIMITED
- * TO ANY INCIDENTAL, SPECIAL, INDIRECT, PUNITIVE OR CONSEQUENTIAL DAMAGES, LOST
- * PROFITS OR LOST DATA, COST OF PROCUREMENT OF SUBSTITUTE GOODS, TECHNOLOGY,
- * SERVICES, OR ANY CLAIMS BY THIRD PARTIES (INCLUDING BUT NOT LIMITED TO ANY
- * DEFENSE THEREOF), OR OTHER SIMILAR COSTS.
+ * YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE PROVIDED "AS IS" WITHOUT WARRANTY
+ * OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE,
+ * NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL MBIENTLAB OR ITS LICENSORS BE LIABLE OR
+ * OBLIGATED UNDER CONTRACT, NEGLIGENCE, STRICT LIABILITY, CONTRIBUTION, BREACH OF WARRANTY, OR OTHER LEGAL EQUITABLE
+ * THEORY ANY DIRECT OR INDIRECT DAMAGES OR EXPENSES INCLUDING BUT NOT LIMITED TO ANY INCIDENTAL, SPECIAL, INDIRECT,
+ * PUNITIVE OR CONSEQUENTIAL DAMAGES, LOST PROFITS OR LOST DATA, COST OF PROCUREMENT OF SUBSTITUTE GOODS, TECHNOLOGY,
+ * SERVICES, OR ANY CLAIMS BY THIRD PARTIES (INCLUDING BUT NOT LIMITED TO ANY DEFENSE THEREOF), OR OTHER SIMILAR COSTS.
  *
- * Should you have any questions regarding your right to use this Software,
- * contact MbientLab Inc, at www.mbientlab.com.
+ * Should you have any questions regarding your right to use this Software, contact MbientLab via email:
+ * hello@mbientlab.com.
  */
 
 package com.mbientlab.metawear.impl;
 
-import com.mbientlab.metawear.AsyncResult;
+import com.mbientlab.metawear.AsyncOperation;
+import com.mbientlab.metawear.data.Bmp280AltitudeMessage;
 import com.mbientlab.metawear.DataSignal;
 import com.mbientlab.metawear.Message;
-import com.mbientlab.metawear.MessageToken;
 import com.mbientlab.metawear.MetaWearBoard;
-import com.mbientlab.metawear.RouteBuilder;
 import com.mbientlab.metawear.RouteManager;
+import com.mbientlab.metawear.UnsupportedModuleException;
 import com.mbientlab.metawear.impl.characteristic.*;
 import com.mbientlab.metawear.module.*;
 import com.mbientlab.metawear.processor.*;
@@ -50,14 +43,17 @@ import org.json.JSONObject;
 import java.io.UnsupportedEncodingException;
 import java.lang.Math;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Stack;
@@ -117,20 +113,34 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
     }
 
+    private static String createUnsupportedModuleMsg(Class<?> moduleClass, String modelNumber) {
+        return String.format("Module \'%s\' not supported for this board (module= %s)", moduleClass.getSimpleName(), modelNumber);
+    }
+    private static String createUnsupportedModuleMsg(Class<?> moduleClass) {
+        return String.format("Module \'%s\' not supported for this firmware version", moduleClass.getSimpleName());
+    }
+    private static String createMinVersionMsg(Class<?> moduleClass, Version minVersion) {
+        return String.format("Module \'%s\' requires min firmware version \'%s\'", moduleClass.getSimpleName(), minVersion.toString());
+    }
+
     public final static byte MW_COMMAND_LENGTH = 18;
+
+    private static final byte X_OFFSET= 0, Y_OFFSET= 2, Z_OFFSET= 4;
     private static final String JSON_FIELD_MSG_CLASS= "message_class", JSON_FIELD_LOG= "logs", JSON_FIELD_ROUTE= "route",
             JSON_FIELD_SUBSCRIBERS="subscribers", JSON_FIELD_NAME= "name", JSON_FIELD_TIMER= "timers", JSON_FIELD_CMD_IDS="cmd_ids",
             JSON_FIELD_MMA8452Q_ODR= "mma8452q_odr", JSON_FIELD_BMI160_ACC_RANGE= "bmi160_acc_range", JSON_FIELD_BMI160_GRYO_RANGE= "bmi160_gyro_range",
             JSON_FIELD_ROUTE_MANAGER= "route_managers";
     private final static double TICK_TIME_STEP= (48.0 / 32768.0) * 1000.0;
     private static final HashMap<String, Class<? extends DataSignal.ProcessorConfig>> processorSchemes;
+    private static final HashMap<Class<? extends Message>, Class<? extends Message>> unsignedToSigned, signedToUnsigned;
+    private static final HashSet<Class<? extends Message>> bmi160GyroMessageClasses, bmi160AccMessageClasses;
 
     static {
         processorSchemes= new HashMap<>();
         processorSchemes.put(Accumulator.SCHEME_NAME, Accumulator.class);
         processorSchemes.put(Average.SCHEME_NAME, Average.class);
         processorSchemes.put(Delta.SCHEME_NAME, Delta.class);
-        processorSchemes.put(com.mbientlab.metawear.processor.Math.SCHEME_NAME, com.mbientlab.metawear.processor.Math.class);
+        processorSchemes.put(Maths.SCHEME_NAME, Maths.class);
         processorSchemes.put(Rms.SCHEME_NAME, Rms.class);
         processorSchemes.put(Rss.SCHEME_NAME, Rss.class);
         processorSchemes.put(Time.SCHEME_NAME, Time.class);
@@ -138,52 +148,64 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         processorSchemes.put(Comparison.SCHEME_NAME, Comparison.class);
         processorSchemes.put(Passthrough.SCHEME_NAME, Passthrough.class);
         processorSchemes.put(Sample.SCHEME_NAME, Sample.class);
+        processorSchemes.put(Counter.SCHEME_NAME, Counter.class);
+        processorSchemes.put(Pulse.SCHEME_NAME, Pulse.class);
+
+        unsignedToSigned= new HashMap<>();
+        unsignedToSigned.put(UnsignedMessage.class, SignedMessage.class);
+        unsignedToSigned.put(Bmi160SingleAxisUnsignedMessage.class, Bmi160SingleAxisMessage.class);
+        unsignedToSigned.put(Mma8452qSingleAxisUnsignedMessage.class, Mma8452qSingleAxisMessage.class);
+
+        signedToUnsigned= new HashMap<>();
+        signedToUnsigned.put(SignedMessage.class, UnsignedMessage.class);
+        signedToUnsigned.put(Bmi160SingleAxisMessage.class, Bmi160SingleAxisUnsignedMessage.class);
+        signedToUnsigned.put(Mma8452qSingleAxisMessage.class, Mma8452qSingleAxisUnsignedMessage.class);
+
+        bmi160AccMessageClasses= new HashSet<>();
+        bmi160AccMessageClasses.add(Bmi160SingleAxisUnsignedMessage.class);
+        bmi160AccMessageClasses.add(Bmi160SingleAxisMessage.class);
+        bmi160AccMessageClasses.add(Bmi160ThreeAxisMessage.class);
+
+        bmi160GyroMessageClasses= new HashSet<>();
+        bmi160GyroMessageClasses.add(Bmi160SingleAxisUnsignedGyroMessage.class);
+        bmi160GyroMessageClasses.add(Bmi160SingleAxisGyroMessage.class);
+        bmi160GyroMessageClasses.add(Bmi160ThreeAxisGyroMessage.class);
     }
 
-    protected final Connection conn;
-
     private interface IdCreator {
-        public void execute();
-        public void receivedId(byte id);
+        void execute();
+        void receivedId(byte id);
     }
 
     private interface EventListener {
-        public void receivedCommandId(byte id);
-        public void onCommandWrite();
+        void receivedCommandId(byte id);
+        void onCommandWrite();
     }
 
     private interface ReferenceTick {
-        public long tickCount();
-        public Calendar timestamp();
+        long tickCount();
+        Calendar timestamp();
     }
 
     private interface RouteHandler {
-        public void addId();
-        public void receivedId(byte id);
-    }
-
-    private interface Subscription {
-        public static final String JSON_FIELD_NOTIFY_BYTES= "notify", JSON_FIELD_SILENCE_BYTES= "silence", JSON_FIELD_HEADER= "header";
-
-        public void unsubscribe();
-        public void resubscribe(DataSignal.MessageProcessor processor);
-        public JSONObject serializeState();
+        void addId();
+        void receivedId(byte id);
     }
 
     private class RouteManagerImpl implements RouteManager {
         private static final String JSON_FIELD_ID= "id", JSON_FIELD_FILTER_IDS="filter_ids", JSON_FIELD_ROUTE_SUB_KEYS= "sub_keys",
                 JSON_FIELD_ROUTE_LOG_KEYS= "log_keys";
 
-        private byte routeId= -1;
+        private int routeId= -1;
         private final HashSet<Byte> filterIds= new HashSet<>();
-        private final HashSet<String> subscriberKeys= new HashSet<>(), loggerKeys= new HashSet<>(), routeDpKeys = new HashSet<>();
+        private final HashSet<String> subscriptionKeys = new HashSet<>(), loggerKeys= new HashSet<>(), routeDpKeys = new HashSet<>();
         private final HashSet<Byte> routeEventCmdIds = new HashSet<>();
         private boolean active= true;
 
         public RouteManagerImpl() { }
 
         public RouteManagerImpl(JSONObject state) throws JSONException {
-            routeId= (byte) state.getInt(JSON_FIELD_ID);
+            routeId= state.getInt(JSON_FIELD_ID);
 
             JSONArray loggerKeysState= state.getJSONArray(JSON_FIELD_ROUTE_LOG_KEYS);
             for(byte i= 0; i < loggerKeysState.length(); i++) {
@@ -192,7 +214,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
             JSONArray subKeysState= state.getJSONArray(JSON_FIELD_ROUTE_SUB_KEYS);
             for(byte i= 0; i < subKeysState.length(); i++) {
-                subscriberKeys.add(subKeysState.getString(i));
+                subscriptionKeys.add(subKeysState.getString(i));
             }
 
             JSONArray eventCmdIdsState= state.getJSONArray(JSON_FIELD_CMD_IDS);
@@ -207,11 +229,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         public JSONObject serializeState() throws JSONException {
-            return new JSONObject().put(JSON_FIELD_ROUTE_LOG_KEYS, new JSONArray(loggerKeys)).put(JSON_FIELD_ROUTE_SUB_KEYS, new JSONArray(subscriberKeys))
+            return new JSONObject().put(JSON_FIELD_ROUTE_LOG_KEYS, new JSONArray(loggerKeys)).put(JSON_FIELD_ROUTE_SUB_KEYS, new JSONArray(subscriptionKeys))
                     .put(JSON_FIELD_CMD_IDS, new JSONArray(routeEventCmdIds)).put(JSON_FIELD_ID, routeId).put(JSON_FIELD_FILTER_IDS, new JSONArray(filterIds));
         }
 
-        public void setRouteId(byte id) {
+        public void setRouteId(int id) {
             routeId= id;
             dataRoutes.put(routeId, this);
         }
@@ -222,7 +244,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public byte id() {
+        public Collection<String> getStreamKeys() {
+            return Collections.unmodifiableSet(subscriptionKeys);
+        }
+
+        @Override
+        public int id() {
             return routeId;
         }
 
@@ -233,11 +260,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             }
 
             active= false;
-            for(String key: subscriberKeys) {
+            for(String key: subscriptionKeys) {
                 dataSubscriptions.get(key).unsubscribe();
                 dataSubscriptions.remove(key);
             }
-            subscriberKeys.clear();
+            subscriptionKeys.clear();
 
             for(String key: loggerKeys) {
                 dataLoggerKeys.get(key).remove();
@@ -265,48 +292,53 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void removeProcessor(String subscriptionKey) {
-            if (active) {
-                if (subscriberKeys.contains(subscriptionKey)) {
-                    dataSubscriptions.get(subscriptionKey).unsubscribe();
-                } else {
-                    throw new RuntimeException("Subscriber key: \"" + subscriptionKey + "\' not found");
-                }
+        public boolean unsubscribe(String streamKey) {
+            if (active && subscriptionKeys.contains(streamKey)) {
+                dataSubscriptions.get(streamKey).unsubscribe();
+                return true;
             }
-
+            return false;
         }
 
         @Override
-        public void assignProcessor(String subscriptionKey, DataSignal.MessageProcessor processor) {
+        public boolean subscribe(String streamKey, MessageHandler processor) {
             if (active) {
-                if (!subscriberKeys.contains(subscriptionKey) && !dataSubscriptions.containsKey(subscriptionKey)) {
-                    throw new RuntimeException("Subscriber key: \'" + subscriptionKey + "\' not found");
+                if (!subscriptionKeys.contains(streamKey) && !dataSubscriptions.containsKey(streamKey) || !dataRoutes.containsKey(routeId)) {
+                    return false;
                 }
 
-                if (!dataRoutes.containsKey(routeId)) {
-                    throw new RuntimeException("Route already removed");
-                }
-
-                dataSubscriptions.get(subscriptionKey).resubscribe(processor);
+                dataSubscriptions.get(streamKey).resubscribe(processor);
+                return true;
             }
+            return false;
         }
 
         @Override
-        public void assignLogProcessor(String logKey, DataSignal.MessageProcessor processor) {
-            if (active) {
-                if (!loggerKeys.contains(logKey) && !dataLoggerKeys.containsKey(logKey)) {
-                    throw new RuntimeException("Subscriber key: \'" + logKey + "\' not found");
-                }
+        public Collection<String> getLogKeys() {
+            return Collections.unmodifiableSet(loggerKeys);
+        }
 
-                if (!dataRoutes.containsKey(routeId)) {
-                    throw new RuntimeException("Route already removed");
+        @Override
+        public boolean setLogMessageHandler(String logKey, MessageHandler processor) {
+            if (active) {
+                if (!loggerKeys.contains(logKey) && !dataLoggerKeys.containsKey(logKey) || !dataRoutes.containsKey(routeId)) {
+                    return false;
                 }
 
                 dataLoggerKeys.get(logKey).attach(processor);
+                return true;
             }
+            return false;
         }
     }
 
+    private interface Subscription {
+        String JSON_FIELD_NOTIFY_BYTES= "notify", JSON_FIELD_SILENCE_BYTES= "silence", JSON_FIELD_HEADER= "header";
+
+        void unsubscribe();
+        void resubscribe(RouteManager.MessageHandler processor);
+        JSONObject serializeState();
+    }
     private class ProcessorSubscription extends SensorSubscription {
         public ProcessorSubscription(JSONObject state) throws JSONException {
             super(state);
@@ -323,7 +355,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void resubscribe(DataSignal.MessageProcessor processor) {
+        public void resubscribe(RouteManager.MessageHandler processor) {
             if (nProcSubscribers == 0) {
                 writeRegister(DataProcessorRegister.NOTIFY, (byte) 0x1);
             }
@@ -361,7 +393,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void resubscribe(DataSignal.MessageProcessor processor) {
+        public void resubscribe(RouteManager.MessageHandler processor) {
             conn.sendCommand(false, notifyBytes);
             responseProcessors.put(header, processor);
         }
@@ -376,7 +408,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         public static final String JSON_FIELD_LOGGER_IDS = "ids", JSON_FIELD_HANDLER_CLASS= "handler_class", JSON_FIELD_LOG_KEY= "key";
 
         private final Class<? extends Message> msgClass;
-        private DataSignal.MessageProcessor logProcessor;
+        private RouteManager.MessageHandler logProcessor;
         private final String key;
 
         public Loggable(String key, Class<? extends Message> msgClass) {
@@ -388,17 +420,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             try {
                 Message logMsg;
 
-                if (msgClass.equals(Bmi160AccelAxisMessage.class)) {
-                    logMsg= new Bmi160AccelAxisMessage(timestamp, data, bmi160AccRange.scale());
-                } else if (msgClass.equals(Bmi160GyroMessage.class)) {
-                    logMsg= new Bmi160GyroMessage(timestamp, data, bmi160GyroRange.scale());
+                if (bmi160AccMessageClasses.contains(msgClass)) {
+                    Constructor<?> cTor = msgClass.getConstructor(Calendar.class, byte[].class, float.class);
+                    logMsg= (Message) cTor.newInstance(timestamp, data, bmi160AccRange.scale());
+                } else if (bmi160GyroMessageClasses.contains(msgClass)) {
+                    Constructor<?> cTor = msgClass.getConstructor(Calendar.class, byte[].class, float.class);
+                    logMsg= (Message) cTor.newInstance(timestamp, data, bmi160GyroRange.scale());
                 } else {
                     Constructor<?> cTor= msgClass.getConstructor(Calendar.class, byte[].class);
                     logMsg= (Message) cTor.newInstance(timestamp, data);
                 }
 
                 logProcessor.process(logMsg);
-            } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException ex) {
+            } catch (Exception ex) {
                 throw new RuntimeException("Cannot instantiate message class", ex);
             }
         }
@@ -410,7 +444,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         }
 
-        public void attach(DataSignal.MessageProcessor processor) {
+        public void attach(RouteManager.MessageHandler processor) {
             logProcessor= processor;
         }
 
@@ -445,11 +479,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             dataLoggers.remove(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, logId));
         }
     }
-    private class AccelerometerLoggable extends Loggable {
+    private class ThreeAxisLoggable extends Loggable {
         private final byte xyId, zId;
         private Queue<byte[]> xyLogEntries = new LinkedList<>(), zLogEntries = new LinkedList<>();
 
-        public AccelerometerLoggable(String key, byte xyId, byte zId, Class<? extends Message> msgClass) {
+        public ThreeAxisLoggable(String key, byte xyId, byte zId, Class<? extends Message> msgClass) {
             super(key, msgClass);
             this.xyId= xyId;
             this.zId= zId;
@@ -458,7 +492,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             dataLoggers.put(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, zId), this);
         }
 
-        public AccelerometerLoggable(JSONObject state) throws JSONException, ClassNotFoundException {
+        public ThreeAxisLoggable(JSONObject state) throws JSONException, ClassNotFoundException {
             this(state.getString(JSON_FIELD_LOG_KEY), (byte) state.getJSONArray(JSON_FIELD_LOGGER_IDS).getInt(0),
                     (byte) state.getJSONArray(JSON_FIELD_LOGGER_IDS).getInt(1),
                     (Class<Message>) Class.forName(state.getString(JSON_FIELD_MSG_CLASS)));
@@ -496,17 +530,61 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
     }
 
-    private class RouteBuilderImpl implements RouteBuilder, EventListener, RouteHandler {
-        private AsyncResultImpl<RouteManager> commitResult;
-        private DataSource routeSource;
+    private class RouteBuilder implements EventListener, RouteHandler {
+        private AsyncOperation<RouteManager> commitResult;
         private byte nExpectedCmds= 0;
 
         private final RouteManagerImpl manager= new RouteManagerImpl();
         private final Stack<DataSignalImpl> branches= new Stack<>();
         private final Queue<IdCreator> creators= new LinkedList<>();
-        private final HashMap<DataSignalImpl, DataSignal.ActivityMonitor> signalMonitors= new HashMap<>();
+        private final HashMap<DataSignalImpl, DataSignal.ActivityHandler> signalMonitors= new HashMap<>();
 
-        private abstract class DataSignalImpl implements DataSignal, MessageToken, Subscription {
+        private class InvalidDataSignal implements DataSignal {
+            private final Throwable error;
+
+            public InvalidDataSignal(Throwable error) {
+                this.error= error;
+            }
+
+            @Override
+            public DataSignal split() { return this; }
+
+            @Override
+            public DataSignal branch() { return this; }
+
+            @Override
+            public DataSignal end() { return this; }
+
+            @Override
+            public DataSignal log(String key) { return this; }
+
+            @Override
+            public DataSignal stream(String key) { return this; }
+
+            @Override
+            public DataSignal monitor(ActivityHandler handler) { return this; }
+
+            @Override
+            public DataSignal process(String key, ProcessorConfig config) { return this; }
+
+            @Override
+            public DataSignal process(ProcessorConfig config) { return this; }
+
+            @Override
+            public DataSignal process(String configUri) { return this; }
+
+            @Override
+            public DataSignal process(String key, String configUri) { return this; }
+
+            @Override
+            public AsyncOperation<RouteManager> commit() {
+                commitResult= conn.createAsyncOperation();
+                manager.remove();
+                conn.setResultReady(commitResult, null, error);
+                return commitResult;
+            }
+        }
+        private abstract class DataSignalImpl implements DataSignal, DataSignal.DataToken, Subscription {
             protected DataSignalImpl parent;
             protected Class<? extends Message> msgClass;
             protected final byte outputSize;
@@ -530,70 +608,70 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             @Override
             public DataSignal end() {
                 branches.pop();
+                final Throwable error= new UnsupportedOperationException("Route has ended, can only commit");
                 return branches.isEmpty() ? new DataSignal() {
                     @Override
                     public DataSignal split() {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
                     public DataSignal branch() {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
                     public DataSignal end() {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
                     public DataSignal log(String key) {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
-                    public DataSignal subscribe(String key) {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                    public DataSignal stream(String key) {
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
-                    public DataSignal monitor(ActivityMonitor monitor) {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                    public DataSignal monitor(ActivityHandler handler) {
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
                     public DataSignal process(String key, ProcessorConfig config) {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
                     public DataSignal process(ProcessorConfig config) {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
                     public DataSignal process(String configUri) {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
                     public DataSignal process(String key, String configUri) {
-                        throw new UnsupportedOperationException("Route has ended, can only commit");
+                        return new InvalidDataSignal(error);
                     }
 
                     @Override
-                    public AsyncResult<RouteManager> commit() {
+                    public AsyncOperation<RouteManager> commit() {
                         return DataSignalImpl.this.commit();
                     }
-                }
-                : branches.peek();
+                } : branches.peek();
             }
 
             @Override
             public DataSignal process(String key, ProcessorConfig config) {
                 ProcessedDataSignal newDataSignal= (ProcessedDataSignal) process(config, this);
                 if (dataProcessors.containsKey(key)) {
-                    throw new RuntimeException("Processor configuration key \'" + key + "\' already present");
+                    return new InvalidDataSignal(new RuntimeException("Processor configuration key \'" + key + "\' already present"));
                 }
                 manager.routeDpKeys.add(key);
                 dataProcessors.put(key, newDataSignal);
@@ -614,11 +692,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         Map<String, String> query= uriSplit.length > 1 ? parseQuery(uriSplit[1]) : new HashMap<String, String>();
                         Constructor<?> cTor = processorSchemes.get(uriSplit[0]).getConstructor(Map.class);
                         return process((ProcessorConfig) cTor.newInstance(query));
-                    } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
-                        throw new RuntimeException("Error instantiating data filter \'" + uriSplit[0] + "\'", e);
+                    } catch (Exception e) {
+                        return new InvalidDataSignal(new RuntimeException("Error instantiating data filter \'" + uriSplit[0] + "\'", e));
                     }
                 } else {
-                    throw new RuntimeException("Processor configuration scheme \'" + uriSplit[0] + "\' not recognized");
+                    return new InvalidDataSignal(new RuntimeException("Processor configuration scheme \'" + uriSplit[0] + "\' not recognized"));
                 }
             }
 
@@ -626,7 +704,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             public DataSignal process(String key, String configUri) {
                 ProcessedDataSignal newDataSignal= (ProcessedDataSignal) process(configUri);
                 if (dataProcessors.containsKey(key)) {
-                    throw new RuntimeException("Processor configuration key \'" + key + "\' already present");
+                    return new InvalidDataSignal(new RuntimeException("Processor configuration key \'" + key + "\' already present"));
                 }
                 manager.routeDpKeys.add(key);
                 dataProcessors.put(key, newDataSignal);
@@ -668,7 +746,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                     @Override
                     public void receivedId(byte id) {
-                        Loggable newLogger= new StandardLoggable(key, id, msgClass);
+                        Loggable newLogger = new StandardLoggable(key, id, msgClass);
 
                         if (dataLoggerKeys.containsKey(key)) {
                             throw new RuntimeException("Duplicate logging keys found: " + key);
@@ -683,30 +761,30 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
 
             @Override
-            public DataSignal subscribe(String key) {
+            public DataSignal stream(String key) {
                 dataSubscriptions.put(key, this);
-                manager.subscriberKeys.add(key);
+                manager.subscriptionKeys.add(key);
                 return this;
             }
 
             @Override
-            public DataSignal monitor(ActivityMonitor monitor) {
-                signalMonitors.put(this, monitor);
+            public DataSignal monitor(ActivityHandler handler) {
+                signalMonitors.put(this, handler);
                 return this;
             }
 
             @Override
-            public AsyncResult<RouteManager> commit() {
-                commitResult= new AsyncResultImpl<>();
+            public AsyncOperation<RouteManager> commit() {
+                commitResult= conn.createAsyncOperation();
 
                 if (isConnected()) {
-                    pendingRoutes.add(RouteBuilderImpl.this);
+                    pendingRoutes.add(RouteBuilder.this);
                     if (!commitRoutes.get()) {
                         commitRoutes.set(true);
                         pendingRoutes.peek().addId();
                     }
                 } else {
-                    commitResult.setResult(null, new RuntimeException("Not connected to a MetaWear board"));
+                    conn.setResultReady(commitResult, null, new RuntimeException("Not connected to a MetaWear board"));
                 }
 
                 return commitResult;
@@ -743,11 +821,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         }
 
                         @Override
-                        public void setState(StateEditor editor) {
-                            if (!(editor instanceof Passthrough.StateEditor)) {
-                                throw new ClassCastException("Passthrough filter can only be configured with a PassthroughState object");
+                        public void setState(State newState) {
+                            if (!(newState instanceof Passthrough.State)) {
+                                throw new ClassCastException("Passthrough state can only be modified with a Passthrough.State object");
                             }
-                            super.setState(editor);
+                            super.setState(newState);
                         }
 
                         @Override
@@ -795,13 +873,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         }
 
                         @Override
-                        public void setState(StateEditor editor) {
+                        public void setState(State newState) {
                             throw new UnsupportedOperationException("Cannot change comparison filter state");
                         }
                     };
                 } else if (config instanceof Time) {
                     final Time params = (Time) config;
-                    newProcessor = new StaticProcessedDataSignal(outputSize, msgClass) {
+
+                    Class<? extends Message> nextMsgClass= msgClass;
+                    if (params.mode == Time.OutputMode.DIFFERENTIAL && unsignedToSigned.containsKey(msgClass)) {
+                        nextMsgClass= unsignedToSigned.get(msgClass);
+                    }
+
+                    newProcessor = new StaticProcessedDataSignal(outputSize, nextMsgClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -827,14 +911,14 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                         @Override
                         public boolean isSigned() {
-                            return (params.mode == Time.Mode.DIFFERENTIAL) || super.isSigned();
+                            return params.mode == Time.OutputMode.ABSOLUTE && parent.isSigned();
                         }
                     };
                 } else if (config instanceof Sample) {
                     final Sample params = (Sample) config;
                     newProcessor = new StaticProcessedDataSignal(outputSize, msgClass) {
                         @Override
-                        public void setState(StateEditor editor) {
+                        public void setState(State newState) {
                             throw new UnsupportedOperationException("Cannot change sample processor state");
                         }
 
@@ -860,10 +944,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     };
                 } else if (config instanceof Threshold) {
                     final Threshold params = (Threshold) config;
-                    final byte size= (params.mode == Threshold.Mode.BINARY) ? 1 : outputSize;
-                    final Class<? extends Message> nextClass= (params.mode == Threshold.Mode.BINARY) ? Message.class : msgClass;
+                    final byte size= (params.mode == Threshold.OutputMode.BINARY) ? 1 : outputSize;
+                    final Class<? extends Message> nextClass= (params.mode == Threshold.OutputMode.BINARY) ? SignedMessage.class : msgClass;
 
-                    newProcessor = new StaticProcessedDataSignal(size, nextClass) {
+                    newProcessor = new ProcessedDataSignal(size, nextClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -884,7 +968,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         }
 
                         @Override
-                        public void setState(StateEditor editor) {
+                        public void setState(State newState) {
                             throw new UnsupportedOperationException("Cannot change threshold filter state");
                         }
 
@@ -898,15 +982,59 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                         @Override
                         public boolean isSigned() {
-                            return (params.mode == Threshold.Mode.BINARY) || super.isSigned();
+                            return params.mode == Threshold.OutputMode.BINARY || parent.isSigned();
+                        }
+
+                        @Override
+                        public Number numberToFirmwareUnits(Number input) {
+                            if (params.mode == Threshold.OutputMode.BINARY) {
+                                return super.numberToFirmwareUnits(input);
+                            }
+                            return parent.numberToFirmwareUnits(input);
+                        }
+
+                        @Override
+                        public DataSignal process(ProcessorConfig config) {
+                            if (params.mode == Threshold.OutputMode.BINARY) {
+                                return super.process(config);
+                            }
+                            return parent.process(config, this);
+                        }
+
+                        @Override
+                        public DataSignal log(String key) {
+                            if (params.mode == Threshold.OutputMode.BINARY) {
+                                super.log(key, this);
+                            } else {
+                                parent.log(key, this);
+                            }
+                            return this;
                         }
                     };
                 } else if (config instanceof Delta) {
                     final Delta params = (Delta) config;
-                    final byte size = (params.mode == Delta.Mode.BINARY) ? 1 : outputSize;
-                    final Class<? extends Message> nextClass = (params.mode == Delta.Mode.BINARY) ? Message.class : msgClass;
+                    final byte size = (params.mode == Delta.OutputMode.BINARY) ? 1 : outputSize;
+                    final Class<? extends Message> nextClass;
 
-                    newProcessor = new StaticProcessedDataSignal(size, nextClass) {
+                    switch(params.mode) {
+                        case ABSOLUTE:
+                            nextClass= msgClass;
+                            break;
+                        case DIFFERENTIAL:
+                            if (unsignedToSigned.containsKey(msgClass)) {
+                                nextClass= unsignedToSigned.get(msgClass);
+                            } else {
+                                nextClass= msgClass;
+                            }
+                            break;
+                        case BINARY:
+                            nextClass= SignedMessage.class;
+                            break;
+                        default:
+                            throw new RuntimeException("Only here to quiet compiler error");
+                    }
+
+                    newProcessor = new ProcessedDataSignal(size, nextClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -926,11 +1054,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         }
 
                         @Override
-                        public void setState(StateEditor editor) {
-                            if (!(editor instanceof Delta.StateEditor)) {
-                                throw new ClassCastException("Delta transformer can only be configured with a DeltaState object");
+                        public void setState(State newState) {
+                            if (!(newState instanceof Delta.State)) {
+                                throw new ClassCastException("Delta processor state can only be modified with a Delta.State object");
                             }
-                            super.setState(editor);
+                            super.setState(newState);
                         }
 
                         @Override
@@ -944,7 +1072,33 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                         @Override
                         public boolean isSigned() {
-                            return (params.mode != Delta.Mode.ABSOLUTE) || super.isSigned();
+                            return params.mode == Delta.OutputMode.ABSOLUTE && parent.isSigned();
+                        }
+
+                        @Override
+                        public Number numberToFirmwareUnits(Number input) {
+                            if (params.mode == Delta.OutputMode.BINARY) {
+                                return super.numberToFirmwareUnits(input);
+                            }
+                            return parent.numberToFirmwareUnits(input);
+                        }
+
+                        @Override
+                        public DataSignal process(ProcessorConfig config) {
+                            if (params.mode == Delta.OutputMode.BINARY) {
+                                return super.process(config);
+                            }
+                            return parent.process(config, this);
+                        }
+
+                        @Override
+                        public DataSignal log(String key) {
+                            if (params.mode == Delta.OutputMode.BINARY) {
+                                super.log(key, this);
+                            } else {
+                                parent.log(key, this);
+                            }
+                            return this;
                         }
                     };
                 } else if (config instanceof Accumulator) {
@@ -968,11 +1122,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         }
 
                         @Override
-                        public void setState(StateEditor editor) {
-                            if (!(editor instanceof Accumulator.StateEditor)) {
-                                throw new RuntimeException("Accumulator transformer can only be configured with an AccumulatorState object");
+                        public void setState(State newState) {
+                            if (!(newState instanceof Accumulator.State)) {
+                                throw new RuntimeException("Accumulator state can only be modified with an Accumulator.State object");
                             }
-                            super.setState(editor);
+                            super.setState(newState);
                         }
 
                         @Override
@@ -983,6 +1137,37 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         @Override
                         public void modifyConfiguration(ProcessorConfig newConfig) {
                             throw new UnsupportedOperationException("Cannot change accumulator configuration");
+                        }
+                    };
+                } else if (config instanceof Counter) {
+                    final Counter params= (Counter) config;
+                    newProcessor= new ProcessedDataSignal(params.output, UnsignedMessage.class) {
+                        @Override
+                        public byte[] getFilterConfig() {
+                            return processorConfigToBytes(params);
+                        }
+
+                        @Override
+                        protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
+                            return new byte[]{0x2, (byte) (((this.outputSize - 1) & 0x3) | (((parent.outputSize - 1) & 0x3) << 2) | 0x40)};
+                        }
+
+                        @Override
+                        public boolean isSigned() {
+                            return false;
+                        }
+
+                        @Override
+                        public void setState(State newState) {
+                            if (!(newState instanceof Counter.State)) {
+                                throw new RuntimeException("Counter state can only be configured with an Counter.State object");
+                            }
+                            super.setState(newState);
+                        }
+
+                        @Override
+                        public void modifyConfiguration(ProcessorConfig newConfig) {
+                            throw new UnsupportedOperationException("Cannot change counter configuration");
                         }
                     };
                 } else if (config instanceof Average) {
@@ -1011,11 +1196,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         }
 
                         @Override
-                        public void setState(StateEditor editor) {
-                            if (!(editor instanceof Average.StateEditor)) {
-                                throw new RuntimeException("Average transformer can only be configured with an AverageState object");
+                        public void setState(State newState) {
+                            if (!(newState instanceof Average.State)) {
+                                throw new RuntimeException("Average state can only be modified with an Average.State object");
                             }
-                            super.setState(editor);
+                            super.setState(newState);
                         }
 
                         @Override
@@ -1027,9 +1212,30 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                             super.modifyConfiguration(newConfig);
                         }
                     };
-                } else if (config instanceof com.mbientlab.metawear.processor.Math) {
-                    final com.mbientlab.metawear.processor.Math params = (com.mbientlab.metawear.processor.Math) config;
-                    newProcessor = new ProcessedDataSignal((byte) 4, msgClass) {
+                } else if (config instanceof Maths) {
+                    final Maths params = (Maths) config;
+                    Class<? extends Message> nextMsgClass;
+
+                    switch (params.mathOp) {
+                        case SUBTRACT:
+                            if (unsignedToSigned.containsKey(msgClass)) {
+                                nextMsgClass = unsignedToSigned.get(msgClass);
+                            } else {
+                                nextMsgClass = msgClass;
+                            }
+                            break;
+                        case ABS_VALUE:
+                        case SQRT:
+                            if (signedToUnsigned.containsKey(msgClass)) {
+                                nextMsgClass = signedToUnsigned.get(msgClass);
+                            } else {
+                                nextMsgClass = msgClass;
+                            }
+                            break;
+                        default:
+                            nextMsgClass = msgClass;
+                    }
+                    newProcessor = new ProcessedDataSignal((byte) 4, nextMsgClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1037,18 +1243,18 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
-                            com.mbientlab.metawear.processor.Math mathConfig = (com.mbientlab.metawear.processor.Math) newConfig;
-                            byte signedMask = (byte) (mathConfig.signed == null ? (isSigned() ? 0x10 : 0x0) : (mathConfig.signed ? 0x10 : 0x0));
+                            Maths mathsConfig = (Maths) newConfig;
+                            byte signedMask = (byte) (mathsConfig.signed == null ? (isSigned() ? 0x10 : 0x0) : (mathsConfig.signed ? 0x10 : 0x0));
                             Number firmwareRhs;
 
-                            switch (mathConfig.mathOp) {
+                            switch (mathsConfig.mathOp) {
                                 case ADD:
                                 case SUBTRACT:
                                 case MODULUS:
-                                    firmwareRhs = numberToFirmwareUnits(mathConfig.rhs);
+                                    firmwareRhs = numberToFirmwareUnits(mathsConfig.rhs);
                                     break;
                                 default:
-                                    firmwareRhs = mathConfig.rhs;
+                                    firmwareRhs = mathsConfig.rhs;
                             }
 
                             ///< Do not allow the math operation to be changed
@@ -1060,8 +1266,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                         @Override
                         public boolean isSigned() {
-                            return !(params.mathOp == com.mbientlab.metawear.processor.Math.Operation.ABS_VALUE ||
-                                    params.mathOp == com.mbientlab.metawear.processor.Math.Operation.SQRT);
+                            return !(params.mathOp == Maths.Operation.ABS_VALUE ||
+                                    params.mathOp == Maths.Operation.SQRT);
                         }
 
                         @Override
@@ -1070,19 +1276,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         }
 
                         @Override
-                        public void setState(StateEditor editor) {
+                        public void setState(State newState) {
                             throw new UnsupportedOperationException("Cannot change math transformer state");
                         }
 
                         @Override
                         public void modifyConfiguration(ProcessorConfig newConfig) {
-                            if (!(newConfig instanceof com.mbientlab.metawear.processor.Math)) {
+                            if (!(newConfig instanceof Maths)) {
                                 throw new ClassCastException("Can only swap the current configuration with another math configuration");
                             }
 
-                            com.mbientlab.metawear.processor.Math newMathTransformer = (com.mbientlab.metawear.processor.Math) newConfig;
-                            if (newMathTransformer.rhsToken != null) {
-                                eventParams = newMathTransformer.rhsToken;
+                            Maths newMathsTransformer = (Maths) newConfig;
+                            if (newMathsTransformer.rhsToken != null) {
+                                eventParams = newMathsTransformer.rhsToken;
                                 eventDestOffset = 4;
                             }
 
@@ -1090,12 +1296,92 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                             eventParams = null;
                         }
                     };
+                } else if (config instanceof Pulse) {
+                    final Pulse params= (Pulse) config;
+                    final byte newOutputSize;
+                    final Class<? extends Message> newMessageClass;
+
+                    switch(params.mode) {
+                        case WIDTH:
+                            newOutputSize= 2;
+                            newMessageClass= UnsignedMessage.class;
+                            break;
+                        case AREA:
+                            newOutputSize= 4;
+                            newMessageClass= msgClass;
+                            break;
+                        case PEAK:
+                            newOutputSize= outputSize;
+                            newMessageClass= msgClass;
+                            break;
+                        default:
+                            throw new RuntimeException("Added to clear IDE error");
+                    }
+
+                    newProcessor= new ProcessedDataSignal(newOutputSize, newMessageClass) {
+                        @Override
+                        public byte[] getFilterConfig() {
+                            return processorConfigToBytes(params);
+                        }
+
+                        @Override
+                        protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
+                            Pulse pulseConfig= (Pulse) newConfig;
+                            Number firmwareThs= numberToFirmwareUnits(pulseConfig.threshold);
+
+                            ///< Do not allow output type to switch
+                            ByteBuffer buffer= ByteBuffer.allocate(10).put((byte) 0xb).put(parent.outputSize).put((byte) 0).put((byte) params.mode.ordinal())
+                                    .putInt(firmwareThs.intValue()).putShort(pulseConfig.width);
+                            return buffer.array();
+                        }
+
+                        @Override
+                        public boolean isSigned() {
+                            return params.mode != Pulse.OutputMode.WIDTH && parent.isSigned();
+                        }
+
+                        @Override
+                        public Number numberToFirmwareUnits(Number input) {
+                            if (params.mode == Pulse.OutputMode.WIDTH) {
+                                return super.numberToFirmwareUnits(input);
+                            }
+                            return parent.numberToFirmwareUnits(input);
+                        }
+
+                        @Override
+                        public DataSignal process(ProcessorConfig config) {
+                            if (params.mode == Pulse.OutputMode.WIDTH) {
+                                return super.process(config);
+                            }
+                            return parent.process(config, this);
+                        }
+
+                        @Override
+                        public DataSignal log(String key) {
+                            if (params.mode == Pulse.OutputMode.WIDTH) {
+                                super.log(key, this);
+                            } else {
+                                parent.log(key, this);
+                            }
+                            return this;
+                        }
+
+                        @Override
+                        public void modifyConfiguration(ProcessorConfig newConfig) {
+                            if (!(newConfig instanceof Pulse)) {
+                                throw new ClassCastException("Can only swap the current configuration with another pulse configuration");
+                            }
+
+                            super.modifyConfiguration(newConfig);
+                        }
+                    };
+
                 } else if (config instanceof Rms) {
-                    throw new UnsupportedOperationException("Cannot attach rms transformer to single component data");
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach rms transformer to single component data"));
                 } else if (config instanceof Rss) {
-                    throw new UnsupportedOperationException("Cannot attach rss transformer to single component data");
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach rss transformer to single component data"));
                 } else {
-                    throw new ClassCastException("Unrecognized DataFilter subtype: \'" + config.getClass().toString() + "\'");
+                    return new InvalidDataSignal(new ClassCastException("Unrecognized ProcessorConfig subtype: \'" + config.getClass().toString() + "\'"));
                 }
 
                 postFilterCreate(newProcessor, parent);
@@ -1111,7 +1397,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 byte[] triggerCfg= new byte[eventCfg.length + 1];
 
                 System.arraycopy(eventCfg, 0, triggerCfg, 0, eventCfg.length);
-                triggerCfg[eventCfg.length]= (byte) ((outputSize - 1) << 5);
+                triggerCfg[eventCfg.length]= (byte) (((outputSize - 1) << 5) | offset());
                 return triggerCfg;
             }
 
@@ -1123,10 +1409,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         public abstract class DataSource extends DataSignalImpl {
             private final ResponseHeader header;
+            private final boolean readHeader;
 
-            protected DataSource(byte outputSize, Class<? extends Message> msgClass, ResponseHeader header) {
+            protected DataSource(byte outputSize, Class<? extends Message> msgClass, ResponseHeader header, boolean readHeader) {
                 super(outputSize, msgClass);
                 this.header= header;
+                this.readHeader= readHeader;
+            }
+
+            protected DataSource(byte outputSize, Class<? extends Message> msgClass, ResponseHeader header) {
+                this(outputSize, msgClass, header, false);
             }
 
             @Override
@@ -1135,9 +1427,14 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             }
 
             @Override
-            public void resubscribe(MessageProcessor processor) {
+            public void resubscribe(RouteManager.MessageHandler processor) {
                 enableNotifications();
                 responseProcessors.put(header, processor);
+            }
+
+            @Override
+            public byte[] getEventConfig() {
+                return new byte[] {header.module, (byte) ((readHeader ? 0x80 : 0x0) | header.register), header.id};
             }
 
             @Override
@@ -1176,9 +1473,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
             @Override
             public void enableNotifications() {
-                if (nProcSubscribers == 0) {
-                    writeRegister(DataProcessorRegister.NOTIFY, (byte) 0x1);
-                }
+                writeRegister(DataProcessorRegister.NOTIFY, (byte) 0x1);
+
                 nProcSubscribers++;
                 writeRegister(DataProcessorRegister.NOTIFY_ENABLE, header.id, (byte) 0x1);
 
@@ -1187,7 +1483,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
             @Override
             public void unsubscribe() {
-                writeRegister(DataProcessorRegister.NOTIFY_ENABLE, header.id, (byte) 0);
+                if (header != null) {
+                    writeRegister(DataProcessorRegister.NOTIFY_ENABLE, header.id, (byte) 0);
+                }
                 nProcSubscribers--;
                 if (nProcSubscribers == 0) {
                     writeRegister(DataProcessorRegister.NOTIFY, (byte) 0x0);
@@ -1196,7 +1494,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             }
 
             @Override
-            public void resubscribe(MessageProcessor processor) {
+            public void resubscribe(RouteManager.MessageHandler processor) {
                 enableNotifications();
                 responseProcessors.put(header, processor);
             }
@@ -1210,24 +1508,25 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             }
 
             @Override
-            public void setState(StateEditor editor) {
+            public void setState(State newState) {
                 byte[] stateBytes;
 
-                if (editor instanceof Accumulator.StateEditor) {
-                    Number firmware= numberToFirmwareUnits(((Accumulator.StateEditor) editor).newRunningSum);
+                if (newState instanceof Accumulator.State) {
+                    Number firmware= numberToFirmwareUnits(((Accumulator.State) newState).newRunningSum);
 
                     stateBytes= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(firmware.intValue()).array();
-                } else if (editor instanceof Average.StateEditor) {
+                } else if (newState instanceof Average.State) {
                     stateBytes= new byte[0];
-                } else if (editor instanceof Delta.StateEditor) {
-                    Number firmware= numberToFirmwareUnits(((Delta.StateEditor) editor).newPreviousValue);
+                } else if (newState instanceof Delta.State) {
+                    Number firmware= numberToFirmwareUnits(((Delta.State) newState).newPreviousValue);
 
                     stateBytes= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(firmware.intValue()).array();
-                } else if (editor instanceof Passthrough.StateEditor) {
-                    stateBytes= ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN)
-                            .putShort(((Passthrough.StateEditor) editor).newValue).array();
+                } else if (newState instanceof Passthrough.State) {
+                    stateBytes = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(((Passthrough.State) newState).newValue).array();
+                } else if (newState instanceof Counter.State) {
+                    stateBytes= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(((Counter.State) newState).newCount).array();
                 } else {
-                    throw new ClassCastException("Unrecognized state editor: \'" + editor.getClass() + "\'");
+                    throw new ClassCastException("Unrecognized state editor: \'" + newState.getClass() + "\'");
                 }
 
                 byte[] parameters= new byte[stateBytes.length + 1];
@@ -1305,36 +1604,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             }
         }
 
-        @Override
-        public DataSignal fromSwitch() {
-            routeSource= new DataSource((byte) 1, SwitchMessage.class, new ResponseHeader(SwitchRegister.STATE)) {
-                @Override
-                public boolean isSigned() {
-                    return false;
-                }
-
-                @Override
-                public void enableNotifications() {
-                    writeRegister(SwitchRegister.STATE, (byte) 1);
-                }
-
-                @Override
-                public byte[] getEventConfig() {
-                    return new byte[] {SwitchRegister.STATE.moduleOpcode(), SwitchRegister.STATE.opcode(), (byte) 0xff};
-                }
-
-                @Override
-                public void unsubscribe() {
-                    writeRegister(SwitchRegister.STATE, (byte) 0);
-                    super.unsubscribe();
-                }
-            };
-            return routeSource;
-        }
-
-        @Override
-        public DataSignal fromTemperature() {
-            routeSource= new DataSource((byte) 2, TemperatureMessage.class, new ResponseHeader(TemperatureRegister.VALUE)) {
+        public DataSignal fromSingleChannelTemp() {
+            return new DataSource((byte) 2, TemperatureMessage.class, new ResponseHeader(TemperatureRegister.VALUE), true) {
                 @Override
                 public Number numberToFirmwareUnits(Number input) {
                     return input.floatValue() * 8.0f;
@@ -1347,21 +1618,55 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                 @Override
                 public void enableNotifications() { }
-
-                @Override
-                public byte[] getEventConfig() {
-                    return new byte[] {TemperatureRegister.VALUE.moduleOpcode(), (byte) (0x80 | TemperatureRegister.VALUE.opcode()), (byte) 0xff};
-                }
             };
-            return routeSource;
         }
 
-        private abstract class AccelerometerDataSource extends DataSource {
+        public DataSignal fromMultiChannelTemp(final MultiChannelTemperature.Source src) {
+            return new DataSource((byte) 2, TemperatureMessage.class, new ResponseHeader(MultiChannelTempRegister.TEMPERATURE, src.channel()), true) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * 8.0f;
+                }
+
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
+
+                @Override
+                public void enableNotifications() { }
+
+            };
+        }
+
+        public DataSignal fromSwitch() {
+            return new DataSource((byte) 1, UnsignedMessage.class, new ResponseHeader(SwitchRegister.STATE)) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SwitchRegister.STATE, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SwitchRegister.STATE, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
+        private abstract class ThreeAxisDataSource extends DataSource {
             private final byte XY_LENGTH = 4, Z_OFFSET = XY_LENGTH;
             private byte xyId = -1, zId = -1;
+            private final Class<? extends UnsignedMessage> singleAxisClass;
 
-            private AccelerometerDataSource(byte outputSize, Class<? extends Message> msgClass, ResponseHeader header) {
-                super(outputSize, msgClass, header);
+            private ThreeAxisDataSource(Class<? extends Message> msgClass, Class<? extends UnsignedMessage> singleAxisClass, ResponseHeader header) {
+                super((byte) 6, msgClass, header);
+                this.singleAxisClass= singleAxisClass;
             }
 
             @Override
@@ -1372,20 +1677,22 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             @Override
             protected DataSignal process(ProcessorConfig config, final DataSignalImpl parent) {
                 if (config instanceof Comparison) {
-                    throw new UnsupportedOperationException("Cannot compare raw accelerometer axis data");
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot compare three axis data"));
                 } else if (config instanceof Sample) {
-                    throw new UnsupportedOperationException("Cannot attach sample filter to raw accelerometer axis data");
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach sample filter to three axis data"));
                 } else if (config instanceof Accumulator) {
-                    throw new UnsupportedOperationException("Cannot accumulate raw accelerometer axis data");
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot accumulate three axis data"));
                 } else if (config instanceof Average) {
-                    throw new UnsupportedOperationException("Cannot average raw accelerometer axis data");
-                } else if (config instanceof com.mbientlab.metawear.processor.Math) {
-                    throw new UnsupportedOperationException("Cannot perform arithmetic operations on raw accelerometer axis data");
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot average three axis data"));
+                } else if (config instanceof Maths) {
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot perform arithmetic operations on three axis data"));
                 } else if (config instanceof Delta) {
-                    throw new UnsupportedOperationException("Cannot attach delta transformer to raw accelerometer axis data");
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach delta transformer to three axis data"));
+                } else if (config instanceof Pulse) {
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot detect pulses on three axis data"));
                 } else if (config instanceof Rms || config instanceof Rss) {
                     final byte nInputs = 3, rmsMode = (byte) (config instanceof Rms ? 0 : 1);
-                    ProcessedDataSignal newProcessor = new ProcessedDataSignal((byte) 2, Mma8452qCombinedAxisMessage.class) {
+                    ProcessedDataSignal newProcessor = new ProcessedDataSignal((byte) 2, singleAxisClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(null);
@@ -1404,7 +1711,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         }
 
                         @Override
-                        public void setState(StateEditor editor) {
+                        public void setState(State newState) {
                             throw new UnsupportedOperationException("Cannot change rms/rss transformer state");
                         }
 
@@ -1438,7 +1745,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         xyId = id;
 
                         if (xyId != -1 && zId != -1) {
-                            Loggable newLogger= new AccelerometerLoggable(key, xyId, zId, msgClass);
+                            Loggable newLogger= new ThreeAxisLoggable(key, xyId, zId, msgClass);
                             if (dataLoggerKeys.containsKey(key)) {
                                 throw new RuntimeException("Duplicate logging keys found: " + key);
                             } else {
@@ -1464,7 +1771,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         zId = id;
 
                         if (xyId != -1 && zId != -1) {
-                            Loggable newLogger= new AccelerometerLoggable(key, xyId, zId, msgClass);
+                            Loggable newLogger = new ThreeAxisLoggable(key, xyId, zId, msgClass);
                             if (dataLoggerKeys.containsKey(key)) {
                                 throw new RuntimeException("Duplicate logging keys found: " + key);
                             } else {
@@ -1477,221 +1784,240 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 return this;
             }
         }
-        @Override
-        public DataSignal fromAccelAxis() {
-            if (modelNumber.equals(Constant.METAWEAR_RG_MODULE)) {
-                routeSource = new AccelerometerDataSource((byte) 6, Bmi160AccelAxisMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.DATA_INTERRUPT)) {
-                    @Override
-                    public void unsubscribe() {
-                        writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT, (byte) 0);
-                        super.unsubscribe();
-                    }
+        private class SingleAxisDataSource extends DataSource {
+            private final byte dataOffset;
+            private final Register dataRegister;
 
-                    @Override
-                    public void enableNotifications() {
-                        writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT, (byte) 0x1);
-                    }
-
-                    @Override
-                    public byte[] getEventConfig() {
-                        return new byte[] {Bmi160AccelerometerRegister.DATA_INTERRUPT.moduleOpcode(), Bmi160AccelerometerRegister.DATA_INTERRUPT.opcode(),
-                                (byte) 0xff};
-                    }
-
-                    @Override
-                    public Number numberToFirmwareUnits(Number input) {
-                        return input.floatValue() * bmi160AccRange.scale();
-                    }
-                };
-            } else {
-                routeSource = new AccelerometerDataSource((byte) 6, Mma8452qAxisMessage.class, new ResponseHeader(MwrAccelerometerRegister.DATA_VALUE)) {
-                    @Override
-                    public void enableNotifications() {
-                        writeRegister(MwrAccelerometerRegister.DATA_VALUE, (byte) 1);
-                    }
-
-                    @Override
-                    public void unsubscribe() {
-                        writeRegister(MwrAccelerometerRegister.DATA_VALUE, (byte) 0);
-                        super.unsubscribe();
-                    }
-
-                    @Override
-                    public byte[] getEventConfig() {
-                        return new byte[]{MwrAccelerometerRegister.DATA_VALUE.moduleOpcode(), MwrAccelerometerRegister.DATA_VALUE.opcode(),
-                                (byte) 0xff};
-                    }
-                };
-            }
-            return routeSource;
-        }
-
-        @Override
-        public DataSignal fromTap() {
-            if (modelNumber.equals(Constant.METAWEAR_R_MODULE)) {
-                return new DataSource((byte) 1, Mma8452qTapMessage.class, new ResponseHeader(MwrAccelerometerRegister.PULSE_STATUS)) {
-                    @Override
-                    public boolean isSigned() { return false; }
-
-                    @Override
-                    public void enableNotifications() {
-                        writeRegister(MwrAccelerometerRegister.PULSE_STATUS, (byte) 1);
-                    }
-
-                    @Override
-                    public byte[] getEventConfig() {
-                        return new byte[] {MwrAccelerometerRegister.PULSE_STATUS.moduleOpcode(), MwrAccelerometerRegister.PULSE_STATUS.opcode(),
-                                (byte) 0xff};
-                    }
-
-                    @Override
-                    public void unsubscribe() {
-                        writeRegister(MwrAccelerometerRegister.PULSE_STATUS, (byte) 0);
-                        super.unsubscribe();
-                    }
-                };
+            protected SingleAxisDataSource(byte offset, Class<? extends Message> msgClass, Register dataRegister) {
+                super((byte) 2, msgClass, new ResponseHeader(dataRegister));
+                dataOffset= offset;
+                this.dataRegister= dataRegister;
             }
 
-            throw new UnsupportedOperationException("Tap detection not yet implemented for R+Gyro");
-        }
-
-        @Override
-        public DataSignal fromMovement() {
-            if (modelNumber.equals(Constant.METAWEAR_R_MODULE)) {
-                return new DataSource((byte) 1, Mma8452qMovementMessage.class, new ResponseHeader(MwrAccelerometerRegister.MOVEMENT_VALUE)) {
-                    @Override
-                    public boolean isSigned() { return false; }
-
-                    @Override
-                    public void enableNotifications() {
-                        writeRegister(MwrAccelerometerRegister.MOVEMENT_VALUE, (byte) 1);
-                    }
-
-                    @Override
-                    public byte[] getEventConfig() {
-                        return new byte[] {MwrAccelerometerRegister.MOVEMENT_VALUE.moduleOpcode(), MwrAccelerometerRegister.MOVEMENT_VALUE.opcode(),
-                                (byte) 0xff};
-                    }
-
-                    @Override
-                    public void unsubscribe() {
-                        writeRegister(MwrAccelerometerRegister.MOVEMENT_VALUE, (byte) 0);
-                        super.unsubscribe();
-                    }
-                };
+            @Override
+            public boolean isSigned() {
+                return true;
             }
 
-            throw new UnsupportedOperationException("Tap detection not yet implemented for R+Gyro");
-        }
-
-        @Override
-        public DataSignal fromOrientation() {
-            if (modelNumber.equals(Constant.METAWEAR_R_MODULE)) {
-                return new DataSource((byte) 1, Mma8452qOrientationMessage.class, new ResponseHeader(MwrAccelerometerRegister.ORIENTATION_VALUE)) {
-                    @Override
-                    public boolean isSigned() { return false; }
-
-                    @Override
-                    public void enableNotifications() {
-                        writeRegister(MwrAccelerometerRegister.ORIENTATION_VALUE, (byte) 1);
-                    }
-
-                    @Override
-                    public byte[] getEventConfig() {
-                        return new byte[] {MwrAccelerometerRegister.ORIENTATION_VALUE.moduleOpcode(), MwrAccelerometerRegister.ORIENTATION_VALUE.opcode(),
-                                (byte) 0xff};
-                    }
-
-                    @Override
-                    public void unsubscribe() {
-                        writeRegister(MwrAccelerometerRegister.ORIENTATION_VALUE, (byte) 0);
-                        super.unsubscribe();
-                    }
-                };
+            @Override
+            public DataSignal stream(String key) {
+                return new InvalidDataSignal(new UnsupportedOperationException("Subscribing to single axis sources is not supported.  Subscribe to the full data source instead"));
             }
 
-            throw new UnsupportedOperationException("Tap detection not yet implemented for R+Gyro");
-        }
-
-        @Override
-        public DataSignal fromShake() {
-            if (modelNumber.equals(Constant.METAWEAR_R_MODULE)) {
-                return new DataSource((byte) 1, Mma8452qMovementMessage.class, new ResponseHeader(MwrAccelerometerRegister.SHAKE_STATUS)) {
-                    @Override
-                    public boolean isSigned() { return false; }
-
-                    @Override
-                    public void enableNotifications() {
-                        writeRegister(MwrAccelerometerRegister.SHAKE_STATUS, (byte) 1);
-                    }
-
-                    @Override
-                    public byte[] getEventConfig() {
-                        return new byte[] {MwrAccelerometerRegister.SHAKE_STATUS.moduleOpcode(), MwrAccelerometerRegister.SHAKE_STATUS.opcode(),
-                                (byte) 0xff};
-                    }
-
-                    @Override
-                    public void unsubscribe() {
-                        writeRegister(MwrAccelerometerRegister.SHAKE_STATUS, (byte) 0);
-                        super.unsubscribe();
-                    }
-                };
+            @Override
+            public byte offset() {
+                return dataOffset;
             }
 
-            throw new UnsupportedOperationException("Tap detection not yet implemented for R+Gyro");
-        }
-
-        @Override
-        public DataSignal fromGyro() {
-            if (modelNumber.equals(Constant.METAWEAR_RG_MODULE)) {
-                routeSource= new AccelerometerDataSource((byte) 6, Bmi160GyroMessage.class, new ResponseHeader(Bmi160GyroRegister.DATA)) {
-                    @Override
-                    public void enableNotifications() {
-                        writeRegister(Bmi160GyroRegister.DATA, (byte) 1);
-                    }
-
-                    @Override
-                    public void unsubscribe() {
-                        writeRegister(Bmi160GyroRegister.DATA, (byte) 0);
-                        super.unsubscribe();
-                    }
-
-                    @Override
-                    public byte[] getEventConfig() {
-                        return new byte[] {Bmi160GyroRegister.DATA.moduleOpcode(), Bmi160GyroRegister.DATA.opcode(), (byte) 0xff};
-                    }
-
-                    @Override
-                    public Number numberToFirmwareUnits(Number input) {
-                        return input.floatValue() * bmi160GyroRange.scale();
-                    }
-                };
-                return routeSource;
+            @Override
+            public void enableNotifications() {
+                writeRegister(dataRegister, (byte) 1);
             }
-            throw new UnsupportedOperationException("Gyro module available for this board");
+
+            @Override
+            public void unsubscribe() {
+                writeRegister(dataRegister, (byte) 0);
+                super.unsubscribe();
+            }
         }
 
-        @Override
+        public DataSignal fromMma8452qAxis() {
+            return new ThreeAxisDataSource(Mma8452qThreeAxisMessage.class, Mma8452qSingleAxisUnsignedMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.DATA_VALUE)) {
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Mma8452qAccelerometerRegister.DATA_VALUE, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Mma8452qAccelerometerRegister.DATA_VALUE, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+        public DataSignal fromMma8452qXAxis() {
+            return new SingleAxisDataSource(X_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE);
+        }
+        public DataSignal fromMma8452qYAxis() {
+            return new SingleAxisDataSource(Y_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE);
+        }
+        public DataSignal fromMma8452qZAxis() {
+            return new SingleAxisDataSource(Z_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE);
+        }
+        public DataSignal fromMma8452qTap() {
+            return new DataSource((byte) 1, Mma8452qTapMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.PULSE_STATUS)) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Mma8452qAccelerometerRegister.PULSE_STATUS, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Mma8452qAccelerometerRegister.PULSE_STATUS, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+        public DataSignal fromMma8452qMovement() {
+            return new DataSource((byte) 1, Mma8452qMovementMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.MOVEMENT_VALUE)) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Mma8452qAccelerometerRegister.MOVEMENT_VALUE, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Mma8452qAccelerometerRegister.MOVEMENT_VALUE, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+        public DataSignal fromMma8452qOrientation() {
+            return new DataSource((byte) 1, Mma8452qOrientationMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.ORIENTATION_VALUE)) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Mma8452qAccelerometerRegister.ORIENTATION_VALUE, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Mma8452qAccelerometerRegister.ORIENTATION_VALUE, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+        public DataSignal fromMma8452qShake() {
+            return new DataSource((byte) 1, Mma8452qMovementMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.SHAKE_STATUS)) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Mma8452qAccelerometerRegister.SHAKE_STATUS, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Mma8452qAccelerometerRegister.SHAKE_STATUS, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
+        public DataSignal fromBmi160Axis() {
+            return new ThreeAxisDataSource(Bmi160ThreeAxisMessage.class, Bmi160SingleAxisUnsignedMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.DATA_INTERRUPT)) {
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT, (byte) 0);
+                    super.unsubscribe();
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT, (byte) 0x1);
+                }
+
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * bmi160AccRange.scale();
+                }
+            };
+        }
+        public DataSignal fromBmi160XAxis() {
+            return new SingleAxisDataSource(X_OFFSET, Bmi160SingleAxisMessage.class, Bmi160AccelerometerRegister.DATA_INTERRUPT) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * bmi160AccRange.scale();
+                }
+            };
+        }
+        public DataSignal fromBmi160YAxis() {
+            return new SingleAxisDataSource(Y_OFFSET, Bmi160SingleAxisMessage.class, Bmi160AccelerometerRegister.DATA_INTERRUPT) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * bmi160AccRange.scale();
+                }
+            };
+        }
+        public DataSignal fromBmi160ZAxis() {
+            return new SingleAxisDataSource(Z_OFFSET, Bmi160SingleAxisMessage.class, Bmi160AccelerometerRegister.DATA_INTERRUPT) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * bmi160AccRange.scale();
+                }
+            };
+        }
+
+        public DataSignal fromBmi160Gyro() {
+            return new ThreeAxisDataSource(Bmi160ThreeAxisGyroMessage.class, Bmi160SingleAxisUnsignedGyroMessage.class, new ResponseHeader(Bmi160GyroRegister.DATA)) {
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmi160GyroRegister.DATA, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmi160GyroRegister.DATA, (byte) 0);
+                    super.unsubscribe();
+                }
+
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * bmi160GyroRange.scale();
+                }
+            };
+        }
+        public DataSignal fromBmi160GyroXAxis() {
+            return new SingleAxisDataSource(X_OFFSET, Bmi160SingleAxisGyroMessage.class, Bmi160GyroRegister.DATA) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * bmi160GyroRange.scale();
+                }
+            };
+        }
+        public DataSignal fromBmi160GyroYAxis() {
+            return new SingleAxisDataSource(Y_OFFSET, Bmi160SingleAxisGyroMessage.class, Bmi160GyroRegister.DATA) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * bmi160GyroRange.scale();
+                }
+            };
+        }
+        public DataSignal fromBmi160GyroZAxis() {
+            return new SingleAxisDataSource(Z_OFFSET, Bmi160SingleAxisGyroMessage.class, Bmi160GyroRegister.DATA) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * bmi160GyroRange.scale();
+                }
+            };
+        }
+
         public DataSignal fromAnalogGpio(final byte pin, final Gpio.AnalogReadMode mode) {
             final Register analogRegister;
-            Class<? extends Message> msgClass;
+            Class<? extends Message> msgClass= UnsignedMessage.class;
 
             switch(mode) {
                 case ABS_REFERENCE:
                     analogRegister= GpioRegister.READ_AI_ABS_REF;
-                    msgClass= GpioAbsRefMessage.class;
                     break;
                 case ADC:
                     analogRegister= GpioRegister.READ_AI_ADC;
-                    msgClass= GpioAdcMessage.class;
                     break;
                 default:
                     analogRegister= null;
                     msgClass= null;
             }
 
-            routeSource= new DataSource((byte) 2, msgClass, new ResponseHeader(analogRegister, pin)) {
+            return new DataSource((byte) 2, msgClass, new ResponseHeader(analogRegister, pin), true) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -1699,19 +2025,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                 @Override
                 public void enableNotifications() { }
-
-                @Override
-                public byte[] getEventConfig() {
-                    return new byte[] {analogRegister.moduleOpcode(), (byte) (0x80 | analogRegister.opcode()), pin};
-                }
             };
-            return routeSource;
         }
 
-        @Override
         public DataSignal fromDigitalIn(final byte pin) {
-            routeSource= new DataSource((byte) 1, GpioDigitalMessage.class, new ResponseHeader(GpioRegister.READ_DI, pin)) {
-
+            return new DataSource((byte) 1, UnsignedMessage.class, new ResponseHeader(GpioRegister.READ_DI, pin), true) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -1719,18 +2037,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                 @Override
                 public void enableNotifications() { }
-
-                @Override
-                public byte[] getEventConfig() {
-                    return new byte[] {GpioRegister.READ_DI.moduleOpcode(), (byte) (0x80 | GpioRegister.READ_DI.opcode()), pin};
-                }
             };
-            return routeSource;
         }
 
-        @Override
         public DataSignal fromGpioPinNotify(final byte pin) {
-            routeSource= new DataSource((byte) 1, GpioDigitalMessage.class, new ResponseHeader(GpioRegister.PIN_CHANGE_NOTIFY, pin)) {
+            return new DataSource((byte) 1, UnsignedMessage.class, new ResponseHeader(GpioRegister.PIN_CHANGE_NOTIFY, pin)) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -1746,18 +2057,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 public void enableNotifications() {
                     writeRegister(GpioRegister.PIN_CHANGE_NOTIFY, (byte) 1);
                 }
-
-                @Override
-                public byte[] getEventConfig() {
-                    return new byte[] {GpioRegister.PIN_CHANGE_NOTIFY.moduleOpcode(), (byte) (0x80 | GpioRegister.PIN_CHANGE_NOTIFY.opcode()), pin};
-                }
             };
-            return routeSource;
         }
 
-        @Override
         public DataSignal fromGsr(final byte channel) {
-            routeSource= new DataSource((byte) 4, GsrMessage.class, new ResponseHeader(GsrRegister.CONDUCTANCE, channel)) {
+            return new DataSource((byte) 4, UnsignedMessage.class, new ResponseHeader(GsrRegister.CONDUCTANCE, channel), true) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -1765,41 +2069,77 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                 @Override
                 public void enableNotifications() { }
-
-                @Override
-                public byte[] getEventConfig() {
-                    return new byte[] {GsrRegister.CONDUCTANCE.moduleOpcode(), (byte) (0x80 | GsrRegister.CONDUCTANCE.opcode()), channel};
-                }
             };
-            return routeSource;
         }
 
-        @Override
-        public DataSignal fromTemperature(final MultiChannelTemperature.Source src) {
-            if (modelNumber.equals(Constant.METAWEAR_RG_MODULE)) {
-                routeSource= new DataSource((byte) 2, TemperatureMessage.class, new ResponseHeader(MultiChannelTempRegister.TEMPERATURE, src.channel())) {
+        public DataSignal fromLtr329Output() {
+            return new DataSource((byte) 4, UnsignedMessage.class, new ResponseHeader(Ltr329AmbientLightRegister.OUTPUT), false) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
 
-                    @Override
-                    public Number numberToFirmwareUnits(Number input) {
-                        return input.floatValue() * 8.0f;
-                    }
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Ltr329AmbientLightRegister.OUTPUT, (byte) 1);
+                }
 
-                    @Override
-                    public boolean isSigned() {
-                        return false;
-                    }
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Ltr329AmbientLightRegister.OUTPUT, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
 
-                    @Override
-                    public void enableNotifications() { }
+        public DataSignal fromBmp280Pressure() {
+            return new DataSource((byte) 4, Bmp280PressureMessage.class, new ResponseHeader(Bmp280BarometerRegister.PRESSURE), false) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
 
-                    @Override
-                    public byte[] getEventConfig() {
-                        return new byte[] {MultiChannelTempRegister.TEMPERATURE.moduleOpcode(), MultiChannelTempRegister.TEMPERATURE.opcode(), src.channel()};
-                    }
-                };
-                return routeSource;
-            }
-            throw new UnsupportedOperationException("Multichannel temperature not supported on this board");
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmp280BarometerRegister.PRESSURE, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmp280BarometerRegister.PRESSURE, (byte) 0);
+                    super.unsubscribe();
+                }
+
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * 256.f;
+                }
+            };
+        }
+
+        public DataSignal fromBmp280Altitude() {
+            return new DataSource((byte) 4, Bmp280AltitudeMessage.class, new ResponseHeader(Bmp280BarometerRegister.ALTITUDE), false) {
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmp280BarometerRegister.ALTITUDE, (byte) 1);
+                }
+
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * 256.f;
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmp280BarometerRegister.ALTITUDE, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
         }
 
         @Override
@@ -1812,9 +2152,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             if (isConnected()) {
                 if (nExpectedCmds == 0) {
                     currEventListener = null;
-                    byte routeId= (byte) routeIdGenerator.getAndIncrement();
+                    int routeId= routeIdGenerator.getAndIncrement();
                     manager.setRouteId(routeId);
-                    commitResult.setResult(manager, null);
+                    conn.setResultReady(commitResult, manager, null);
 
                     pendingRoutes.poll();
                     if (!pendingRoutes.isEmpty()) {
@@ -1825,7 +2165,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     }
                 }
             } else {
-                commitResult.setResult(null, new RuntimeException("Connection to MetaWear board lost"));
+                conn.setResultReady(commitResult, null, new RuntimeException("Connection to MetaWear board lost"));
             }
         }
         public void receivedCommandId(byte id) {
@@ -1846,7 +2186,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         private void addTaps() {
             eventConfig= null;
             currEventListener = this;
-            for(Map.Entry<DataSignalImpl, DataSignal.ActivityMonitor> it: signalMonitors.entrySet()) {
+            for(Map.Entry<DataSignalImpl, DataSignal.ActivityHandler> it: signalMonitors.entrySet()) {
                 eventConfig= it.getKey().getEventConfig();
                 it.getValue().onSignalActive(dataProcessors, it.getKey());
             }
@@ -1862,22 +2202,24 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     }
 
     private interface ResponseProcessor {
-        public Response process(byte[] response);
+        Response process(byte[] response);
     }
     private final HashMap<ResponseHeader, ResponseProcessor> responses;
 
-    private String modelNumber = null;
+    ///< General class variables
+    private final Connection conn;
+    private final HashMap<Byte, ModuleInfo> moduleInfo= new HashMap<>();
     private Logging.DownloadHandler downloadHandler;
     private float notifyProgress= 1.0f;
     private int nLogEntries;
     private ReferenceTick logReferenceTick= null;
     private final AtomicBoolean commitRoutes= new AtomicBoolean(false);
     private final Queue<RouteHandler> pendingRoutes= new LinkedList<>();
-    private final HashMap<ResponseHeader, DataSignal.MessageProcessor> responseProcessors= new HashMap<>();
+    private final HashMap<ResponseHeader, RouteManager.MessageHandler> responseProcessors= new HashMap<>();
     private final HashMap<ResponseHeader, Loggable> dataLoggers= new HashMap<>();
 
     ///< Route variables
-    private final HashMap<Byte, RouteManagerImpl> dataRoutes= new HashMap<>();
+    private final HashMap<Integer, RouteManagerImpl> dataRoutes= new HashMap<>();
     private final AtomicInteger routeIdGenerator= new AtomicInteger(0);
     private byte nProcSubscribers= 0;
     private final HashMap<ResponseHeader, Class<? extends Message>> dataProcMsgClasses= new HashMap<>();
@@ -1888,7 +2230,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     ///< Timer variables
     private final HashMap<Byte, TimerControllerImpl> timerControllers= new HashMap<>();
 
-    protected DefaultMetaWearBoard(Connection conn) {
+    protected DefaultMetaWearBoard(final Connection conn) {
         this.conn= conn;
         final ResponseProcessor idProcessor= new ResponseProcessor() {
             @Override
@@ -1905,7 +2247,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 byte[] respBody= new byte[response.length - 2];
                 System.arraycopy(response, 2, respBody, 0, respBody.length);
 
-                return new Response(new SwitchMessage(respBody), new ResponseHeader(response[0], response[1]));
+                return new Response(new UnsignedMessage(respBody), new ResponseHeader(response[0], response[1]));
             }
         });
         responses.put(new ResponseHeader(EventRegister.ENTRY), new ResponseProcessor() {
@@ -1936,6 +2278,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 nLogEntries= ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xffff;
                 int nEntriesNotify= (int) (nLogEntries * notifyProgress);
 
+                conn.setResultReady(logEntryCountResults.poll(), nLogEntries, null);
                 writeRegister(LoggingRegister.READOUT, response[2], response[3], (byte) (nEntriesNotify & 0xff), (byte) ((nEntriesNotify >> 8) & 0xff));
                 return null;
             }
@@ -1955,7 +2298,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             @Override
             public Response process(byte[] response) {
                 int nEntriesLeft= ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xffff;
-                downloadHandler.onProgressUpdate(nEntriesLeft, nLogEntries);
+                if (downloadHandler != null) {
+                    downloadHandler.onProgressUpdate(nEntriesLeft, nLogEntries);
+                }
                 return null;
             }
         });
@@ -1969,18 +2314,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     System.arraycopy(response, 3, respBody, 0, respBody.length);
                     ResponseHeader header= new ResponseHeader(response[0], response[1], response[2]);
 
-                    if (dataProcMsgClasses.get(header).equals(Bmi160Accelerometer.class)) {
-                        return new Response(new Bmi160AccelAxisMessage(respBody, bmi160AccRange.scale()), header);
-                    } else if (dataProcMsgClasses.get(header).equals(Bmi160GyroMessage.class)) {
-                        return new Response(new Bmi160GyroMessage(respBody, bmi160GyroRange.scale()), header);
-                    } else {
-                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class);
-
-                        return new Response((Message) cTor.newInstance(respBody), header);
+                    if (bmi160AccMessageClasses.contains(dataProcMsgClasses.get(header))) {
+                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
+                        return new Response((Message) cTor.newInstance(respBody, bmi160AccRange.scale()), header);
                     }
-                } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException |
-                        InstantiationException ex) {
-                    throw new RuntimeException("Cannot create a message processor for filter output: " + Arrays.toString(response));
+
+                    if (bmi160GyroMessageClasses.contains(dataProcMsgClasses.get(header))) {
+                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
+                        return new Response((Message) cTor.newInstance(respBody, bmi160GyroRange.scale()), header);
+                    }
+
+                    Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class);
+                    return new Response((Message) cTor.newInstance(respBody), header);
+                } catch (Exception ex) {
+                    throw new RuntimeException("Cannot create a message processor for filter output: " + Arrays.toString(response), ex);
                 }
             }
         });
@@ -2006,7 +2353,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 System.arraycopy(response, 3, respBody, 0, respBody.length);
                 ResponseHeader header= new ResponseHeader(response[0], response[1], response[2]);
 
-                return new Response(new GpioAbsRefMessage(respBody), header);
+                return new Response(new UnsignedMessage(respBody), header);
             }
         });
         responses.put(new ResponseHeader(GpioRegister.READ_AI_ADC), new ResponseProcessor() {
@@ -2016,7 +2363,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 System.arraycopy(response, 3, respBody, 0, respBody.length);
                 ResponseHeader header= new ResponseHeader(response[0], response[1], response[2]);
 
-                return new Response(new GpioAdcMessage(respBody), header);
+                return new Response(new UnsignedMessage(respBody), header);
             }
         });
         responses.put(new ResponseHeader(GpioRegister.READ_DI), new ResponseProcessor() {
@@ -2026,7 +2373,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 System.arraycopy(response, 3, respBody, 0, respBody.length);
                 ResponseHeader header= new ResponseHeader(response[0], response[1], response[2]);
 
-                return new Response(new GpioDigitalMessage(respBody), header);
+                return new Response(new UnsignedMessage(respBody), header);
             }
         });
         responses.put(new ResponseHeader(GpioRegister.PIN_CHANGE_NOTIFY), new ResponseProcessor() {
@@ -2036,7 +2383,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 System.arraycopy(response, 3, respBody, 0, respBody.length);
                 ResponseHeader header= new ResponseHeader(response[0], response[1], response[2]);
 
-                return new Response(new GpioDigitalMessage(respBody), header);
+                return new Response(new UnsignedMessage(respBody), header);
             }
         });
         responses.put(new ResponseHeader(GsrRegister.CONDUCTANCE), new ResponseProcessor() {
@@ -2046,7 +2393,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 System.arraycopy(response, 3, respBody, 0, respBody.length);
                 ResponseHeader header= new ResponseHeader(response[0], response[1], response[2]);
 
-                return new Response(new GsrMessage(respBody), header);
+                return new Response(new UnsignedMessage(respBody), header);
             }
         });
         responses.put(new ResponseHeader(IBeaconRegister.UUID), new ResponseProcessor() {
@@ -2094,24 +2441,36 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             @Override
             public Response process(byte[] response) {
                 ibeaconPeriod = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                ibeaconConfigResults.poll().setResult(new IBeacon.Configuration() {
+                conn.setResultReady(ibeaconConfigResults.poll(), new IBeacon.Configuration() {
                     @Override
-                    public UUID adUuid() { return ibeaconUuid; }
+                    public UUID adUuid() {
+                        return ibeaconUuid;
+                    }
 
                     @Override
-                    public short major() { return ibeaconMajor; }
+                    public short major() {
+                        return ibeaconMajor;
+                    }
 
                     @Override
-                    public short minor() { return ibeaconMinor; }
+                    public short minor() {
+                        return ibeaconMinor;
+                    }
 
                     @Override
-                    public byte rxPower() { return ibeaconRxPower; }
+                    public byte rxPower() {
+                        return ibeaconRxPower;
+                    }
 
                     @Override
-                    public byte txPower() { return ibeaconTxPower; }
+                    public byte txPower() {
+                        return ibeaconTxPower;
+                    }
 
                     @Override
-                    public short adPeriod() { return ibeaconPeriod; }
+                    public short adPeriod() {
+                        return ibeaconPeriod;
+                    }
 
                     @Override
                     public String toString() {
@@ -2159,7 +2518,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             public Response process(byte[] response) {
                 advResponse= new byte[response.length - 2];
                 System.arraycopy(response, 2, advResponse, 0, advResponse.length);
-                advertisementConfigResults.poll().setResult(new Settings.AdvertisementConfig() {
+                conn.setResultReady(advertisementConfigResults.poll(), new Settings.AdvertisementConfig() {
                     @Override
                     public String deviceName() {
                         return advName;
@@ -2201,9 +2560,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     byte[] i2cData = new byte[response.length - 3];
                     System.arraycopy(response, 3, i2cData, 0, response.length - 3);
 
-                    i2cReadResults.poll().setResult(i2cData, null);
+                    conn.setResultReady(i2cReadResults.poll(), i2cData, null);
                 } else {
-                    i2cReadResults.poll().setResult(null, new RuntimeException("Received I2C data less than 4 bytes: " + arrayToHexString(response)));
+                    conn.setResultReady(i2cReadResults.poll(), null,
+                            new RuntimeException("Received I2C data less than 4 bytes: " + arrayToHexString(response)));
                 }
 
                 return null;
@@ -2219,7 +2579,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         responses.put(new ResponseHeader(MacroRegister.NOTIFY), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
-                macroExecResults.poll().setResult(null, null);
+                conn.setResultReady(macroExecResults.poll(), null, null);
                 return null;
             }
         });
@@ -2237,192 +2597,183 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         if (dataLoggers.containsKey(header)) {
             dataLoggers.get(header).processLogMessage(logId, timestamp, logEntryData);
         } else {
-            downloadHandler.receivedUnknownLogEntry(logId, timestamp, logEntryData);
+            if (downloadHandler != null) {
+                downloadHandler.receivedUnknownLogEntry(logId, timestamp, logEntryData);
+            }
         }
     }
 
-    public void setModelNumber(final String modelNumber) {
-        this.modelNumber = modelNumber;
+    public void receivedModuleInfo(ModuleInfo info) {
+        moduleInfo.put(info.id(), info);
 
-        if (modelNumber.equals(Constant.METAWEAR_R_MODULE)) {
-            final ResponseProcessor movementProcessor= new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    byte[] respBody= new byte[response.length - 2];
-                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+        if (info.id() == InfoRegister.TEMPERATURE.moduleOpcode()) {
+            switch(info.implementation()) {
+                case Constant.SINGLE_CHANNEL_TEMP_IMPLEMENTATION:
+                    responses.put(new ResponseHeader(TemperatureRegister.VALUE), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
 
-                    return new Response(new Mma8452qMovementMessage(respBody), new ResponseHeader(response[0], response[1]));
-                }
-            };
-
-            responses.put(new ResponseHeader(MwrAccelerometerRegister.DATA_VALUE), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    byte[] respBody= new byte[response.length - 2];
-                    System.arraycopy(response, 2, respBody, 0, respBody.length);
-
-                    return new Response(new Mma8452qAxisMessage(respBody), new ResponseHeader(response[0], response[1]));
-                }
-            });
-            responses.put(new ResponseHeader(TemperatureRegister.VALUE), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    byte[] respBody= new byte[response.length - 2];
-                    System.arraycopy(response, 2, respBody, 0, respBody.length);
-
-                    return new Response(new TemperatureMessage(respBody), new ResponseHeader(response[0], response[1]));
-                }
-            });
-            responses.put(new ResponseHeader(MwrAccelerometerRegister.PULSE_STATUS), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    byte[] respBody= new byte[response.length - 2];
-                    System.arraycopy(response, 2, respBody, 0, respBody.length);
-
-                    return new Response(new Mma8452qTapMessage(respBody), new ResponseHeader(response[0], response[1]));
-                }
-            });
-            responses.put(new ResponseHeader(MwrAccelerometerRegister.ORIENTATION_VALUE), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    byte[] respBody= new byte[response.length - 2];
-                    System.arraycopy(response, 2, respBody, 0, respBody.length);
-
-                    return new Response(new Mma8452qOrientationMessage(respBody), new ResponseHeader(response[0], response[1]));
-                }
-            });
-            responses.put(new ResponseHeader(MwrAccelerometerRegister.SHAKE_STATUS), movementProcessor);
-            responses.put(new ResponseHeader(MwrAccelerometerRegister.MOVEMENT_VALUE), movementProcessor);
-        } else if (modelNumber.equals(Constant.METAWEAR_RG_MODULE)) {
-            responses.put(new ResponseHeader(Bmi160AccelerometerRegister.DATA_INTERRUPT), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    byte[] respBody = new byte[response.length - 2];
-                    System.arraycopy(response, 2, respBody, 0, respBody.length);
-
-                    return new Response(new Bmi160AccelAxisMessage(respBody,
-                            bmi160AccRange.scale()),
-                            new ResponseHeader(response[0], response[1]));
-                }
-            });
-            responses.put(new ResponseHeader(Bmi160GyroRegister.DATA), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    byte[] respBody = new byte[response.length - 2];
-                    System.arraycopy(response, 2, respBody, 0, respBody.length);
-
-                    return new Response(new Bmi160GyroMessage(respBody,
-                            bmi160GyroRange.scale()),
-                            new ResponseHeader(response[0], response[1]));
-                }
-            });
-            responses.put(new ResponseHeader(Bmi160GyroRegister.CONFIG), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    bmi160DataSampling[0]= response[0];
-                    bmi160DataSampling[1]= response[1];
-                    bmi160GyroRange= Bmi160Gyro.FullScaleRange.bitMaskToRange((byte) (response[1] & 0x7));
-                    return null;
-                }
-            });
-            responses.put(new ResponseHeader(Bmi160AccelerometerRegister.DATA_CONFIG), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    bmi160DataSampling[0]= response[0];
-                    bmi160DataSampling[1]= response[1];
-                    bmi160AccRange= Bmi160Accelerometer.AccRange.bitMaskToRange((byte) (response[1] & 0xf));
-                    return null;
-                }
-            });
-            responses.put(new ResponseHeader(MultiChannelTempRegister.TEMPERATURE), new ResponseProcessor() {
-                @Override
-                public Response process(byte[] response) {
-                    byte[] respBody= new byte[response.length - 3];
-                    System.arraycopy(response, 3, respBody, 0, respBody.length);
-
-                    return new Response(new TemperatureMessage(respBody), new ResponseHeader(response[0], response[1], response[2]));
-                }
-            });
-            responses.put(new ResponseHeader(MultiChannelTempRegister.INFO), new ResponseProcessor() {
-                @Override
-                public Response process(final byte[] response) {
-                    final MultiChannelTemperature.Source[] sources= new MultiChannelTemperature.Source[response.length - 4];
-
-                    for(byte i= 4; i < response.length; i++) {
-                        final MultiChannelTemperature.SourceType type= MultiChannelTemperature.SourceType.values()[response[i]];
-                        final byte channel= (byte) (i - 4);
-                        MultiChannelTemperature.Source newSource= null;
-
-                        switch (type) {
-                            case ON_DIE:
-                                newSource= new MultiChannelTemperature.NrfDie() {
-                                    @Override
-                                    public byte driver() { return response[channel + 4]; }
-
-                                    @Override
-                                    public byte channel() { return channel; }
-
-                                    @Override
-                                    public MultiChannelTemperature.SourceType type() {
-                                        return type;
-                                    }
-                                };
-                                break;
-                            case EXT_THERMISTOR:
-                                newSource= new MultiChannelTemperature.ExtThermistor() {
-                                    @Override
-                                    public void configure(byte analogReadPin, byte pulldownPin, boolean activeHigh) {
-                                        writeRegister(MultiChannelTempRegister.MODE, channel(), analogReadPin, pulldownPin, (byte) (activeHigh ? 1 : 0));
-                                    }
-
-                                    @Override
-                                    public byte driver() { return response[channel + 4]; }
-
-                                    @Override
-                                    public byte channel() { return channel; }
-
-                                    @Override
-                                    public MultiChannelTemperature.SourceType type() {
-                                        return type;
-                                    }
-                                };
-                                break;
-                            case BMP280:
-                                newSource= new MultiChannelTemperature.BMP280() {
-                                    @Override
-                                    public byte driver() { return response[channel + 4]; }
-
-                                    @Override
-                                    public byte channel() { return channel; }
-
-                                    @Override
-                                    public MultiChannelTemperature.SourceType type() {
-                                        return type;
-                                    }
-                                };
-                                break;
-                            case PRESET_THERMISTOR:
-                                newSource= new MultiChannelTemperature.PresetThermistor() {
-                                    @Override
-                                    public byte driver() { return response[channel + 4]; }
-
-                                    @Override
-                                    public byte channel() { return channel; }
-
-                                    @Override
-                                    public MultiChannelTemperature.SourceType type() {
-                                        return type;
-                                    }
-                                };
-                                break;
+                            return new Response(new TemperatureMessage(respBody), new ResponseHeader(response[0], response[1]));
                         }
-                        sources[channel]= newSource;
-                    }
+                    });
+                    break;
+                case Constant.MULTI_CHANNEL_TEMP_IMPLEMENTATION:
+                    responses.put(new ResponseHeader(MultiChannelTempRegister.TEMPERATURE), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 3];
+                            System.arraycopy(response, 3, respBody, 0, respBody.length);
 
-                    tempSourcesResults.poll().setResult(sources, null);
-                    return null;
-                }
-            });
+                            return new Response(new TemperatureMessage(respBody), new ResponseHeader(response[0], response[1], response[2]));
+                        }
+                    });
+
+                    byte[] extra= info.extra();
+                    for(byte i= 0; i < extra.length; i++) {
+                        try {
+                            Constructor<?> cTor = tempDriverClasses[extra[i]].getConstructor(DefaultMetaWearBoard.class, byte.class, byte.class);
+                            tempSources.add((MultiChannelTemperature.Source) cTor.newInstance(this, extra[i], i));
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                    break;
+            }
+        } else if (info.id() == InfoRegister.ACCELEROMETER.moduleOpcode()) {
+            switch(info.implementation()) {
+                case Constant.MMA8452Q_IMPLEMENTATION:
+                    final ResponseProcessor movementProcessor= new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Mma8452qMovementMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    };
+
+                    responses.put(new ResponseHeader(Mma8452qAccelerometerRegister.DATA_VALUE), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Mma8452qThreeAxisMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Mma8452qAccelerometerRegister.PULSE_STATUS), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Mma8452qTapMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Mma8452qAccelerometerRegister.ORIENTATION_VALUE), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Mma8452qOrientationMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Mma8452qAccelerometerRegister.SHAKE_STATUS), movementProcessor);
+                    responses.put(new ResponseHeader(Mma8452qAccelerometerRegister.MOVEMENT_VALUE), movementProcessor);
+                    break;
+                case Constant.BMI160_IMPLEMENTATION:
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.DATA_INTERRUPT), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody = new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmi160ThreeAxisMessage(respBody,
+                                    bmi160AccRange.scale()),
+                                    new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmi160GyroRegister.DATA), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody = new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmi160ThreeAxisMessage(respBody,
+                                    bmi160GyroRange.scale()),
+                                    new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmi160GyroRegister.CONFIG), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            bmi160DataSampling[0]= response[0];
+                            bmi160DataSampling[1]= response[1];
+                            bmi160GyroRange= Bmi160Gyro.FullScaleRange.bitMaskToRange((byte) (response[1] & 0x7));
+                            return null;
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.DATA_CONFIG), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            bmi160DataSampling[0]= response[0];
+                            bmi160DataSampling[1]= response[1];
+                            bmi160AccRange= Bmi160Accelerometer.AccRange.bitMaskToRange((byte) (response[1] & 0xf));
+                            return null;
+                        }
+                    });
+                    break;
+            }
+        } else if (info.id() == InfoRegister.BAROMETER.moduleOpcode()) {
+            switch(info.implementation()) {
+                case Constant.BMP280_BAROMETER:
+                    responses.put(new ResponseHeader(Bmp280BarometerRegister.ALTITUDE), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody = new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmp280AltitudeMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmp280BarometerRegister.PRESSURE), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody = new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmp280PressureMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    break;
+            }
+        } else if (info.id() == InfoRegister.AMBIENT_LIGHT.moduleOpcode()) {
+            switch(info.implementation()) {
+                case Constant.LTR329_LIGHT_SENSOR:
+                    responses.put(new ResponseHeader(Ltr329AmbientLightRegister.OUTPUT), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody = new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new UnsignedMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    break;
+            }
+        }
+    }
+
+    public void wroteCommand(byte[] cmd) {
+        if (cmd[0] == InfoRegister.MACRO.moduleOpcode() &&
+                (cmd[1] == MacroRegister.BEGIN.opcode() || cmd[1] == MacroRegister.END.opcode() || cmd[1] == MacroRegister.ADD_COMMAND.opcode())) {
+            nExpectedMacroCmds--;
+            if (nExpectedMacroCmds == 0) {
+                conn.setResultReady(macroIdResults.poll(), macroIds.poll(), null);
+            }
         }
     }
 
@@ -2508,7 +2859,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             }
 
             {
-                byte highestId= -1;
+                int highestId= -1;
                 JSONArray routeManagerStates= jsonState.getJSONArray(JSON_FIELD_ROUTE_MANAGER);
 
                 for (byte j= 0; j < routeManagerStates.length(); j++) {
@@ -2541,7 +2892,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     timerControllers.put(currentTimer.id(), currentTimer);
                 }
             }
-        } catch (JSONException | ClassNotFoundException | NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
@@ -2566,19 +2917,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         dataSubscriptions.clear();
 
         writeRegister(DataProcessorRegister.REMOVE_ALL);
-
+        writeRegister(DataProcessorRegister.NOTIFY, (byte) 0x0);
         dataProcessors.clear();
         dataRoutes.clear();
+        nProcSubscribers= 0;
     }
 
     @Override
-    public RouteManager getRouteManager(byte id) {
+    public RouteManager getRouteManager(int id) {
         return dataRoutes.get(id);
-    }
-
-    @Override
-    public RouteBuilder routeData() {
-        return new RouteBuilderImpl();
     }
 
     @Override
@@ -2594,6 +2941,17 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
     }
 
+    private class SwitchImpl implements Switch {
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromSensor() {
+                    return new RouteBuilder().fromSwitch();
+                }
+            };
+        }
+    }
     private class GsrImpl implements Gsr {
         @Override
         public void readConductance(byte channel) {
@@ -2604,55 +2962,85 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         public void calibrate() {
             writeRegister(GsrRegister.CALIBRATE);
         }
+
+        @Override
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private ConstantVoltage newCv= ConstantVoltage.CV_500MV;
+                private Gain newGain= Gain.G_499K;
+
+                @Override
+                public ConfigEditor setConstantVoltage(ConstantVoltage cv) {
+                    newCv= cv;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setGain(Gain gain) {
+                    newGain= gain;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(GsrRegister.CONFIG, (byte) newCv.ordinal(), (byte) newGain.ordinal());
+                }
+            };
+        }
+
+        @Override
+        public DataSignal routeData(byte channel) {
+            return new RouteBuilder().fromGsr(channel);
+        }
     }
     private class LedImpl implements Led {
         @Override
-        public ColorChannelWriter writeChannelAttributes(final ColorChannel channel) {
-            return new ColorChannelWriter() {
+        public ColorChannelEditor configureColorChannel(final ColorChannel channel) {
+            return new ColorChannelEditor() {
                 private final byte[] channelData= new byte[15];
 
                 @Override
-                public ColorChannelWriter withHighIntensity(byte intensity) {
+                public ColorChannelEditor setHighIntensity(byte intensity) {
                     channelData[2]= intensity;
                     return this;
                 }
 
                 @Override
-                public ColorChannelWriter withLowIntensity(byte intensity) {
+                public ColorChannelEditor setLowIntensity(byte intensity) {
                     channelData[3]= intensity;
                     return this;
                 }
 
                 @Override
-                public ColorChannelWriter withRiseTime(short time) {
+                public ColorChannelEditor setRiseTime(short time) {
                     channelData[5]= (byte)((time >> 8) & 0xff);
                     channelData[4]= (byte)(time & 0xff);
                     return this;
                 }
 
                 @Override
-                public ColorChannelWriter withHighTime(short time) {
+                public ColorChannelEditor setHighTime(short time) {
                     channelData[7]= (byte)((time >> 8) & 0xff);
                     channelData[6]= (byte)(time & 0xff);
                     return this;
                 }
 
                 @Override
-                public ColorChannelWriter withFallTime(short time) {
+                public ColorChannelEditor setFallTime(short time) {
                     channelData[9]= (byte)((time >> 8) & 0xff);
                     channelData[8]= (byte)(time & 0xff);
                     return this;
                 }
 
                 @Override
-                public ColorChannelWriter withPulseDuration(short duration) {
+                public ColorChannelEditor setPulseDuration(short duration) {
                     channelData[11]= (byte)((duration >> 8) & 0xff);
                     channelData[10]= (byte)(duration & 0xff);
                     return this;
                 }
 
                 @Override
-                public ColorChannelWriter withRepeatCount(byte count) {
+                public ColorChannelEditor setRepeatCount(byte count) {
                     channelData[14]= count;
                     return this;
                 }
@@ -2681,22 +3069,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             writeRegister(LedRegister.STOP, (byte) (resetChannelAttrs ? 1 : 0));
         }
     }
-    private class TemperatureImpl implements Temperature {
-        @Override
-        public void readTemperarure() {
-            readRegister(TemperatureRegister.VALUE);
-        }
-
-        @Override
-        public void enableThermistorMode(byte analogReadPin, byte pulldownPin) {
-            writeRegister(TemperatureRegister.THERMISTOR_MODE, (byte) 1, analogReadPin, pulldownPin);
-        }
-
-        @Override
-        public void disableThermistorMode() {
-            writeRegister(TemperatureRegister.THERMISTOR_MODE, new byte[] {0, 0, 0});
-        }
-    }
     private class GpioImpl implements Gpio {
         @Override
         public void readAnalogIn(byte pin, AnalogReadMode mode) {
@@ -2716,7 +3088,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void setDigitalInPullMode(byte pin, PinConfig mode) {
+        public void setPinPullMode(byte pin, PullMode mode) {
             switch (mode) {
                 case PULL_UP:
                     writeRegister(GpioRegister.PULL_UP_DI, pin);
@@ -2754,20 +3126,39 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         public void stopPinChangeDetection(byte pin) {
             writeRegister(GpioRegister.PIN_CHANGE_NOTIFY_ENABLE, pin, (byte) 0);
         }
-    }
-
-    private final ConcurrentLinkedQueue<AsyncResultImpl<Timer.Controller>> timerControllerResults= new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<Timer.Task> timeTasks= new ConcurrentLinkedQueue<>();
-    private class TimerImpl implements Timer {
 
         @Override
-        public AsyncResult<Controller> scheduleTask(Task mwTask, int period, boolean delay) {
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromAnalogGpio(byte pin, AnalogReadMode mode) {
+                    return new RouteBuilder().fromAnalogGpio(pin, mode);
+                }
+
+                @Override
+                public DataSignal fromDigitalIn(byte pin) {
+                    return new RouteBuilder().fromDigitalIn(pin);
+                }
+
+                @Override
+                public DataSignal fromGpioPinNotify(byte pin) {
+                    return new RouteBuilder().fromGpioPinNotify(pin);
+                }
+            };
+        }
+    }
+
+    private final ConcurrentLinkedQueue<AsyncOperation<Timer.Controller>> timerControllerResults= new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Timer.Task> timeTasks= new ConcurrentLinkedQueue<>();
+    private class TimerImpl implements Timer {
+        @Override
+        public AsyncOperation<Controller> scheduleTask(Task mwTask, int period, boolean delay) {
             return scheduleTask(mwTask, period, delay, (short) -1);
         }
 
         @Override
-        public AsyncResult<Controller> scheduleTask(Task mwTask, int period, boolean delay, short repetitions) {
-            AsyncResultImpl<Controller> timerResult= new AsyncResultImpl<>();
+        public AsyncOperation<Controller> scheduleTask(Task mwTask, int period, boolean delay, short repetitions) {
+            AsyncOperation<Controller> timerResult= conn.createAsyncOperation();
             if (isConnected()) {
                 timeTasks.add(mwTask);
                 timerControllerResults.add(timerResult);
@@ -2776,7 +3167,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 buffer.putInt(period).putShort(repetitions).put((byte) (delay ? 0 : 1));
                 writeRegister(TimerRegister.TIMER_ENTRY, buffer.array());
             } else {
-                timerResult.setResult(null, new RuntimeException("Not connected to a MetaWear board"));
+                conn.setResultReady(timerResult, null, new RuntimeException("Not connected to a MetaWear board"));
             }
 
             return timerResult;
@@ -2886,7 +3277,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     writeMacroCommands();
                 }
 
-                timerControllerResults.poll().setResult(this, null);
+                conn.setResultReady(timerControllerResults.poll(), this, null);
             }
         }
 
@@ -2938,8 +3329,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             writeRegister(DebugRegister.GAP_DISCONNECT);
         }
     }
-    private class LoggingImpl implements Logging {
 
+    private final ConcurrentLinkedQueue<AsyncOperation<Integer>> logEntryCountResults= new ConcurrentLinkedQueue<>();
+    private class LoggingImpl implements Logging {
         @Override
         public void startLogging() {
             startLogging(false);
@@ -2957,7 +3349,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void downloadLog(float notifyProgress, DownloadHandler handler) {
+        public AsyncOperation<Integer> downloadLog(float notifyProgress, DownloadHandler handler) {
+            AsyncOperation result= conn.createAsyncOperation();
+            logEntryCountResults.add(result);
+
             DefaultMetaWearBoard.this.notifyProgress= notifyProgress;
             downloadHandler= handler;
 
@@ -2966,6 +3361,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 writeRegister(LoggingRegister.READOUT_PROGRESS, (byte) 1);
             }
             readRegister(LoggingRegister.TIME);
+
+            return result;
         }
 
         @Override
@@ -2977,60 +3374,80 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     private UUID ibeaconUuid;
     private short ibeaconMajor, ibeaconMinor, ibeaconPeriod;
     private byte ibeaconRxPower, ibeaconTxPower;
-    private final ConcurrentLinkedQueue<AsyncResultImpl<IBeacon.Configuration>> ibeaconConfigResults= new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<AsyncOperation<IBeacon.Configuration>> ibeaconConfigResults= new ConcurrentLinkedQueue<>();
     private class IBeaconImpl implements IBeacon {
-        public IBeaconConfigEditor edit() {
-            return new IBeaconConfigEditor() {
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private UUID newUuid= null;
+                private Short newMajor= null, newMinor= null, newPeriod = null;
+                private Byte newRxPower= null, newTxPower= null;
+
                 @Override
-                public IBeaconConfigEditor withUUID(UUID adUuid) {
-                    ibeaconUuid= adUuid;
+                public ConfigEditor setUUID(UUID adUuid) {
+                    newUuid = adUuid;
                     return this;
                 }
 
                 @Override
-                public IBeaconConfigEditor withMajor(short major) {
-                    DefaultMetaWearBoard.this.ibeaconMajor = major;
+                public ConfigEditor setMajor(short major) {
+                    newMajor = major;
                     return this;
                 }
 
                 @Override
-                public IBeaconConfigEditor withMinor(short minor) {
-                    DefaultMetaWearBoard.this.ibeaconMinor = minor;
+                public ConfigEditor setMinor(short minor) {
+                    newMinor = minor;
                     return this;
                 }
 
                 @Override
-                public IBeaconConfigEditor withRxPower(byte power) {
-                    ibeaconRxPower = power;
+                public ConfigEditor setRxPower(byte power) {
+                    newRxPower = power;
                     return this;
                 }
 
                 @Override
-                public IBeaconConfigEditor withTxPower(byte power) {
-                    ibeaconTxPower = power;
+                public ConfigEditor setTxPower(byte power) {
+                    newTxPower = power;
                     return this;
                 }
 
                 @Override
-                public IBeaconConfigEditor withAdPeriod(short period) {
-                    DefaultMetaWearBoard.this.ibeaconPeriod = period;
+                public ConfigEditor setAdPeriod(short period) {
+                    newPeriod = period;
                     return this;
                 }
 
                 @Override
                 public void commit() {
-                    byte[] uuidBytes= ByteBuffer.allocate(16)
-                            .order(ByteOrder.LITTLE_ENDIAN)
-                            .putLong(ibeaconUuid.getLeastSignificantBits())
-                            .putLong(ibeaconUuid.getMostSignificantBits())
-                            .array();
+                    if (newUuid != null) {
+                        byte[] uuidBytes = ByteBuffer.allocate(16)
+                                .order(ByteOrder.LITTLE_ENDIAN)
+                                .putLong(newUuid.getLeastSignificantBits())
+                                .putLong(newUuid.getMostSignificantBits())
+                                .array();
+                        writeRegister(IBeaconRegister.UUID, uuidBytes);
+                    }
 
-                    writeRegister(IBeaconRegister.UUID, uuidBytes);
-                    writeRegister(IBeaconRegister.MAJOR, (byte)(ibeaconMajor & 0xff), (byte)((ibeaconMajor >> 8) & 0xff));
-                    writeRegister(IBeaconRegister.MINOR, (byte)(ibeaconMinor & 0xff), (byte)((ibeaconMinor >> 8) & 0xff));
-                    writeRegister(IBeaconRegister.RX_POWER, ibeaconRxPower);
-                    writeRegister(IBeaconRegister.TX_POWER, ibeaconTxPower);
-                    writeRegister(IBeaconRegister.PERIOD, (byte)(ibeaconPeriod & 0xff), (byte)((ibeaconPeriod >> 8) & 0xff));
+                    if (newMajor != null) {
+                        writeRegister(IBeaconRegister.MAJOR, (byte) (newMajor & 0xff), (byte) ((newMajor >> 8) & 0xff));
+                    }
+
+                    if (newMinor != null) {
+                        writeRegister(IBeaconRegister.MINOR, (byte) (newMinor & 0xff), (byte) ((newMinor >> 8) & 0xff));
+                    }
+
+                    if (newRxPower != null) {
+                        writeRegister(IBeaconRegister.RX_POWER, newRxPower);
+                    }
+
+                    if (newTxPower != null) {
+                        writeRegister(IBeaconRegister.TX_POWER, newTxPower);
+                    }
+
+                    if (newPeriod != null) {
+                        writeRegister(IBeaconRegister.PERIOD, (byte) (newPeriod & 0xff), (byte) ((newPeriod >> 8) & 0xff));
+                    }
                 }
             };
         }
@@ -3042,8 +3459,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             writeRegister(IBeaconRegister.ENABLE, (byte) 0);
         }
 
-        public AsyncResult<Configuration> readConfiguration() {
-            AsyncResultImpl<Configuration> result= new AsyncResultImpl<>();
+        public AsyncOperation<Configuration> readConfiguration() {
+            AsyncOperation<Configuration> result= conn.createAsyncOperation();
             ibeaconConfigResults.add(result);
             readRegister(IBeaconRegister.UUID);
             return result;
@@ -3124,63 +3541,77 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     private short advInterval;
     private byte advTimeout, advTxPower;
     private byte[] advResponse;
-    private final ConcurrentLinkedQueue<AsyncResultImpl<Settings.AdvertisementConfig>> advertisementConfigResults= new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<AsyncOperation<Settings.AdvertisementConfig>> advertisementConfigResults= new ConcurrentLinkedQueue<>();
     private class SettingsImpl implements Settings {
         @Override
-        public AdvertisementConfigEditor edit() {
-            return new AdvertisementConfigEditor() {
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private String newAdvName= null;
+                private Short newAdvInterval= 417;
+                private Byte newAdvTimeout= 0, newAdvTxPower= null;
+                private byte[] newAdvResponse= null;
+
                 @Override
-                public AdvertisementConfigEditor withDeviceName(String name) {
-                    advName= name;
+                public ConfigEditor setDeviceName(String name) {
+                    newAdvName = name;
                     return this;
                 }
 
                 @Override
-                public AdvertisementConfigEditor withAdInterval(short interval, byte timeout) {
-                    advInterval= interval;
-                    advTimeout= timeout;
+                public ConfigEditor setAdInterval(short interval, byte timeout) {
+                    newAdvInterval = interval;
+                    newAdvTimeout = timeout;
                     return this;
                 }
 
                 @Override
-                public AdvertisementConfigEditor withTxPower(byte power) {
-                    advTxPower= power;
+                public ConfigEditor setTxPower(byte power) {
+                    newAdvTxPower = power;
                     return this;
                 }
 
                 @Override
-                public AdvertisementConfigEditor setScanResponse(byte[] response) {
-                    advResponse= response;
+                public ConfigEditor setScanResponse(byte[] response) {
+                    newAdvResponse = response;
                     return this;
                 }
 
                 @Override
                 public void commit() {
-                    try {
-                        writeRegister(SettingsRegister.DEVICE_NAME, advName.getBytes("US-ASCII"));
-                    } catch (UnsupportedEncodingException e) {
-                        writeRegister(SettingsRegister.DEVICE_NAME, advName.getBytes());
+                    if (newAdvName != null) {
+                        try {
+                            writeRegister(SettingsRegister.DEVICE_NAME, newAdvName.getBytes("US-ASCII"));
+                        } catch (UnsupportedEncodingException e) {
+                            writeRegister(SettingsRegister.DEVICE_NAME, newAdvName.getBytes());
+                        }
                     }
-                    writeRegister(SettingsRegister.ADVERTISING_INTERVAL, (byte) (advInterval & 0xff),
-                            (byte) ((advInterval >> 8) & 0xff), advTimeout);
-                    writeRegister(SettingsRegister.TX_POWER, advTxPower);
-                    if (advResponse.length >= MW_COMMAND_LENGTH) {
-                        byte[] first= new byte[13], second= new byte[advResponse.length - 13];
-                        System.arraycopy(advResponse, 0, first, 0, first.length);
-                        System.arraycopy(advResponse, first.length, second, 0, second.length);
 
-                        writeRegister(SettingsRegister.PARTIAL_SCAN_RESPONSE, first);
-                        writeRegister(SettingsRegister.SCAN_RESPONSE, second);
-                    } else {
-                        writeRegister(SettingsRegister.SCAN_RESPONSE, advResponse);
+                    writeRegister(SettingsRegister.ADVERTISING_INTERVAL, (byte) (newAdvInterval & 0xff),
+                            (byte) ((newAdvInterval >> 8) & 0xff), newAdvTimeout);
+
+                    if (newAdvTxPower != null) {
+                        writeRegister(SettingsRegister.TX_POWER, newAdvTxPower);
+                    }
+
+                    if (newAdvResponse != null) {
+                        if (newAdvResponse.length >= MW_COMMAND_LENGTH) {
+                            byte[] first = new byte[13], second = new byte[newAdvResponse.length - 13];
+                            System.arraycopy(newAdvResponse, 0, first, 0, first.length);
+                            System.arraycopy(newAdvResponse, first.length, second, 0, second.length);
+
+                            writeRegister(SettingsRegister.PARTIAL_SCAN_RESPONSE, first);
+                            writeRegister(SettingsRegister.SCAN_RESPONSE, second);
+                        } else {
+                            writeRegister(SettingsRegister.SCAN_RESPONSE, newAdvResponse);
+                        }
                     }
                 }
             };
         }
 
         @Override
-        public AsyncResult<AdvertisementConfig> readAdConfig() {
-            AsyncResultImpl<AdvertisementConfig> result= new AsyncResultImpl<>();
+        public AsyncOperation<AdvertisementConfig> readAdConfig() {
+            AsyncOperation<AdvertisementConfig> result= conn.createAsyncOperation();
             advertisementConfigResults.add(result);
             readRegister(SettingsRegister.DEVICE_NAME);
             return result;
@@ -3207,7 +3638,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
     }
 
-    private final ConcurrentLinkedQueue<AsyncResultImpl<byte[]>> i2cReadResults= new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<AsyncOperation<byte[]>> i2cReadResults= new ConcurrentLinkedQueue<>();
     private class I2CImpl implements I2C {
         @Override
         public void writeData(byte deviceAddr, byte registerAddr, byte[] data) {
@@ -3222,8 +3653,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public AsyncResult<byte[]> readData(byte deviceAddr, byte registerAddr, byte numBytes) {
-            AsyncResultImpl<byte[]> result= new AsyncResultImpl<>();
+        public AsyncOperation<byte[]> readData(byte deviceAddr, byte registerAddr, byte numBytes) {
+            AsyncOperation<byte[]> result= conn.createAsyncOperation();
 
             i2cReadResults.add(result);
             readRegister(I2CRegister.READ_WRITE, deviceAddr, registerAddr, (byte) 0xff, numBytes);
@@ -3232,14 +3663,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     }
 
     private final Queue<byte[]> commands= new LinkedList<>();
-    private final ConcurrentLinkedQueue<AsyncResultImpl<Byte>> macroIdResults = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<AsyncResultImpl<Void>> macroExecResults = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<AsyncOperation<Byte>> macroIdResults = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<AsyncOperation<Void>> macroExecResults = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<Byte> macroIds = new ConcurrentLinkedQueue<>();
+    private int nExpectedMacroCmds= 0;
     private Macro.CodeBlock currentBlock;
     private class MacroImpl implements Macro {
         @Override
-        public AsyncResult<Byte> record(CodeBlock block) {
-            AsyncResultImpl<Byte> idResult= new AsyncResultImpl<>();
+        public AsyncOperation<Byte> record(CodeBlock block) {
+            AsyncOperation<Byte> idResult= conn.createAsyncOperation();
 
             currentBlock= block;
             macroIdResults.add(idResult);
@@ -3255,8 +3687,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public AsyncResult<Void> execute(byte macroId) {
-            AsyncResultImpl<Void> result= new AsyncResultImpl<>();
+        public AsyncOperation<Void> execute(byte macroId) {
+            AsyncOperation<Void> result= conn.createAsyncOperation();
 
             macroExecResults.add(result);
             writeRegister(MacroRegister.NOTIFY, (byte) 1);
@@ -3275,72 +3707,14 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         if (currentBlock != null) {
             saveCommand = false;
 
+            nExpectedMacroCmds= commands.size() + 2;
             writeRegister(MacroRegister.BEGIN, (byte) (currentBlock.execOnBoot() ? 1 : 0));
             for (byte[] cmd : commands) {
                 conn.sendCommand(true, cmd);
             }
             writeRegister(MacroRegister.END);
-
-            macroIdResults.poll().setResult(macroIds.poll(), null);
+            currentBlock = null;
         }
-    }
-
-    @Override
-    public <T extends Module> T getModule(Class<T> moduleClass) {
-        if (moduleClass.equals(Led.class)) {
-            return moduleClass.cast(new LedImpl());
-        } else if (moduleClass.equals(Temperature.class)) {
-            return moduleClass.cast(new TemperatureImpl());
-        } else if (moduleClass.equals(Gpio.class)) {
-            return moduleClass.cast(new GpioImpl());
-        } else if (moduleClass.equals(Accelerometer.class)) {
-            if (modelNumber.equals(Constant.METAWEAR_R_MODULE)) {
-                if (mma8452qModule == null) {
-                    mma8452qModule = new Mma8452qAccelerometerImpl();
-                }
-                return moduleClass.cast(mma8452qModule);
-            } else if (modelNumber.equals(Constant.METAWEAR_RG_MODULE)) {
-                return moduleClass.cast(new Bmi160AccelerometerImpl());
-            }
-            return null;
-        } else if (moduleClass.equals(Mma8452qAccelerometer.class)) {
-            if (modelNumber.equals(Constant.METAWEAR_R_MODULE)) {
-                if (mma8452qModule == null) {
-                    mma8452qModule = new Mma8452qAccelerometerImpl();
-                }
-                return moduleClass.cast(mma8452qModule);
-            } else {
-                return null;
-            }
-        } else if (moduleClass.equals(Timer.class)) {
-            return moduleClass.cast(new TimerImpl());
-        } else if (moduleClass.equals(Debug.class)) {
-            return moduleClass.cast(new DebugImpl());
-        } else if (moduleClass.equals(Logging.class)) {
-            return moduleClass.cast(new LoggingImpl());
-        } else if (moduleClass.equals(Bmi160Gyro.class)) {
-            if (modelNumber.equals(Constant.METAWEAR_RG_MODULE)) {
-                return moduleClass.cast(new Bmi160GyroImpl());
-            }
-            return null;
-        } else if (moduleClass.equals(Gsr.class)) {
-            return moduleClass.cast(new GsrImpl());
-        } else if (moduleClass.equals(IBeacon.class)) {
-            return moduleClass.cast(new IBeaconImpl());
-        } else if (moduleClass.equals(Haptic.class)) {
-            return moduleClass.cast(new HapticImpl());
-        } else if (moduleClass.equals(NeoPixel.class)) {
-            return moduleClass.cast(new NeoPixelImpl());
-        } else if (moduleClass.equals(Settings.class)) {
-            return moduleClass.cast(new SettingsImpl());
-        } else if (moduleClass.equals(MultiChannelTemperature.class)) {
-            return moduleClass.cast(new MultiChannelTemperatureImpl());
-        } else if (moduleClass.equals(I2C.class)) {
-            return moduleClass.cast(new I2CImpl());
-        } else if (moduleClass.equals(Macro.class)) {
-            return moduleClass.cast(new MacroImpl());
-        }
-        throw new ClassCastException("Unrecognized module class: \'" + moduleClass.toString() + "\'");
     }
 
     private Mma8452qAccelerometerImpl mma8452qModule= null;
@@ -3407,20 +3781,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void setAxisSamplingRange(float range) {
-            final float[] values= new float[] { 2.f, 4.f, 8.f };
-            int closest= closestIndex(values, range);
-
-            selectedFsr= FullScaleRange.values()[closest];
-        }
-
-        @Override
         public void setOutputDataRate(float frequency) {
             final float[] values = new float[] {1.56f, 6.25f, 12.5f, 50.f, 100.f, 200.f, 400.f, 800.f};
             int selected = values.length - closestIndex(values, frequency) - 1;
 
             mma8452qDataSampling[2] &= 0xc7;
             mma8452qDataSampling[2] |= (selected) << 3;
+        }
+
+        @Override
+        public void setAxisSamplingRange(float range) {
+            final float[] ranges= new float[] {2.f, 4.f, 8.f};
+            int selected= closestIndex(ranges, range);
+
+            selectedFsr= FullScaleRange.values()[selected];
         }
 
         @Override
@@ -3481,17 +3855,17 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void startAxisSampling() {
-            writeRegister(MwrAccelerometerRegister.DATA_ENABLE, (byte) 1);
+        public void enableAxisSampling() {
+            writeRegister(Mma8452qAccelerometerRegister.DATA_ENABLE, (byte) 1);
         }
 
         @Override
-        public void stopAxisSampling() {
-            writeRegister(MwrAccelerometerRegister.DATA_ENABLE, (byte) 0);
+        public void disableAxisSampling() {
+            writeRegister(Mma8452qAccelerometerRegister.DATA_ENABLE, (byte) 0);
         }
 
         @Override
-        public void globalStart() {
+        public void start() {
             int accelOdr= (mma8452qDataSampling[2] >> 3) & 0x3;
             int pwMode= (mma8452qDataSampling[3] >> 3) & 0x3;
 
@@ -3503,7 +3877,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     mma8452qDataSampling[4]= (byte)(activeTimeout / sleepCountSteps[accelOdr]);
                 }
 
-                writeRegister(MwrAccelerometerRegister.DATA_CONFIG, mma8452qDataSampling);
+                writeRegister(Mma8452qAccelerometerRegister.DATA_CONFIG, mma8452qDataSampling);
             }
 
             {
@@ -3529,7 +3903,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 tapConfig[5]= (byte) (tapDuration / pulseTmltSteps[lpfEn][pwMode][accelOdr]);
                 tapConfig[6]= (byte) (tapLatency / pulseLtcySteps[lpfEn][pwMode][accelOdr]);
                 tapConfig[7]= (byte) (tapWindow / pulseWindSteps[lpfEn][pwMode][accelOdr]);
-                writeRegister(MwrAccelerometerRegister.PULSE_CONFIG, tapConfig);
+                writeRegister(Mma8452qAccelerometerRegister.PULSE_CONFIG, tapConfig);
             }
 
             {
@@ -3537,7 +3911,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 shakeConfig[0] = (byte) ((2 << shakeAxis.ordinal()) | 0x10);
                 shakeConfig[2] = (byte) (shakeThreshold / MMA8452Q_G_PER_STEP);
                 shakeConfig[3] = (byte)(shakeDuration / transientSteps[pwMode][accelOdr]);
-                writeRegister(MwrAccelerometerRegister.SHAKE_CONFIG, shakeConfig);
+                writeRegister(Mma8452qAccelerometerRegister.SHAKE_CONFIG, shakeConfig);
             }
 
             {
@@ -3555,20 +3929,65 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 movementConfig[0] |= mask;
                 movementConfig[2]= (byte) (movementThreshold / MMA8452Q_G_PER_STEP);
                 movementConfig[3]= (byte)(movementDuration / transientSteps[pwMode][accelOdr]);
-                writeRegister(MwrAccelerometerRegister.MOVEMENT_CONFIG, movementConfig);
+                writeRegister(Mma8452qAccelerometerRegister.MOVEMENT_CONFIG, movementConfig);
             }
 
             {
                 mma8452qOrientationCfg[2]= (byte) (orientationDelay / orientationSteps[pwMode][accelOdr]);
-                writeRegister(MwrAccelerometerRegister.ORIENTATION_CONFIG, mma8452qOrientationCfg);
+                writeRegister(Mma8452qAccelerometerRegister.ORIENTATION_CONFIG, mma8452qOrientationCfg);
             }
 
-            writeRegister(MwrAccelerometerRegister.GLOBAL_ENABLE, (byte) 1);
+            writeRegister(Mma8452qAccelerometerRegister.GLOBAL_ENABLE, (byte) 1);
         }
 
         @Override
-        public void globalStop() {
-            writeRegister(MwrAccelerometerRegister.GLOBAL_ENABLE, (byte) 0);
+        public void stop() {
+            writeRegister(Mma8452qAccelerometerRegister.GLOBAL_ENABLE, (byte) 0);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromAxes() {
+                    return new RouteBuilder().fromMma8452qAxis();
+                }
+
+                @Override
+                public DataSignal fromXAxis() {
+                    return new RouteBuilder().fromMma8452qXAxis();
+                }
+
+                @Override
+                public DataSignal fromYAxis() {
+                    return new RouteBuilder().fromMma8452qYAxis();
+                }
+
+                @Override
+                public DataSignal fromZAxis() {
+                    return new RouteBuilder().fromMma8452qZAxis();
+                }
+
+                @Override
+                public DataSignal fromTap() {
+                    return new RouteBuilder().fromMma8452qTap();
+                }
+
+                @Override
+                public DataSignal fromOrientation() {
+                    return new RouteBuilder().fromMma8452qOrientation();
+                }
+
+                @Override
+                public DataSignal fromShake() {
+                    return new RouteBuilder().fromMma8452qShake();
+                }
+
+                @Override
+                public DataSignal fromMovement() {
+                    return new RouteBuilder().fromMma8452qMovement();
+                }
+            };
         }
 
         @Override
@@ -3604,7 +4023,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public TapConfigEditor configureTapDetection(final TapType ... type) {
+        public TapConfigEditor configureTapDetection() {
             return new TapConfigEditor() {
                 private float tapThreshold= 2.f;
                 private int tapLatency= 200, tapWindow= 300, tapDuration= 60;
@@ -3649,9 +4068,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                 @Override
                 public void commit() {
-                    tapTypes= new TapType[type.length];
-                    System.arraycopy(type, 0, tapTypes, 0, type.length);
-
                     Mma8452qAccelerometerImpl.this.tapAxis= this.tapAxis;
                     Mma8452qAccelerometerImpl.this.tapThreshold= this.tapThreshold;
                     Mma8452qAccelerometerImpl.this.tapLatency= this.tapLatency;
@@ -3668,13 +4084,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void startTapDetection() {
-            writeRegister(MwrAccelerometerRegister.PULSE_ENABLE, (byte) 1);
+        public void enableTapDetection(TapType ... types) {
+            tapTypes= new TapType[types.length];
+            System.arraycopy(types, 0, tapTypes, 0, types.length);
+
+            writeRegister(Mma8452qAccelerometerRegister.PULSE_ENABLE, (byte) 1);
         }
 
         @Override
-        public void stopTapDetection() {
-            writeRegister(MwrAccelerometerRegister.PULSE_ENABLE, (byte) 0);
+        public void disableTapDetection() {
+            writeRegister(Mma8452qAccelerometerRegister.PULSE_ENABLE, (byte) 0);
         }
 
         @Override
@@ -3712,59 +4131,69 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void startShakeDetection() {
-            writeRegister(MwrAccelerometerRegister.SHAKE_ENABLE, (byte) 1);
+        public void enableShakeDetection() {
+            writeRegister(Mma8452qAccelerometerRegister.SHAKE_ENABLE, (byte) 1);
         }
 
         @Override
-        public void stopShakeDetection() {
-            writeRegister(MwrAccelerometerRegister.SHAKE_ENABLE, (byte) 0);
+        public void disableShakeDetection() {
+            writeRegister(Mma8452qAccelerometerRegister.SHAKE_ENABLE, (byte) 0);
+        }
+
+        private class MovementConfigEditorImpl implements MovementConfigEditor {
+            private float movementThreshold;
+            private int movementDuration= 100;
+            private Axis[] movementAxes= Axis.values();
+
+            public MovementConfigEditorImpl(MovementType type) {
+                movementThreshold= (type == MovementType.FREE_FALL ? 0.5f : 1.5f);
+            }
+            @Override
+            public MovementConfigEditor setThreshold(float threshold) {
+                movementThreshold= threshold;
+                return this;
+            }
+
+            @Override
+            public MovementConfigEditor setDuration(int duration) {
+                movementDuration= duration;
+                return this;
+            }
+
+            @Override
+            public void commit() {
+                Mma8452qAccelerometerImpl.this.movementAxes= movementAxes;
+                Mma8452qAccelerometerImpl.this.movementThreshold= this.movementThreshold;
+                Mma8452qAccelerometerImpl.this.movementDuration= this.movementDuration;
+            }
+
+            @Override
+            public MovementConfigEditor setAxes(Axis ... axes) {
+                movementAxes= new Axis[axes.length];
+                System.arraycopy(axes, 0, movementAxes, 0, axes.length);
+                return this;
+            }
         }
 
         @Override
-        public MovementConfigEditor configureMovementDetection(final MovementType type) {
-            return new MovementConfigEditor() {
-                private float movementThreshold= (type == MovementType.FREE_FALL ? 0.5f : 1.5f);
-                private int movementDuration= 100;
-                private Axis[] movementAxes= Axis.values();
-
-                @Override
-                public MovementConfigEditor setThreshold(float threshold) {
-                    movementThreshold= threshold;
-                    return this;
-                }
-
-                @Override
-                public MovementConfigEditor setDuration(int duration) {
-                    movementDuration= duration;
-                    return this;
-                }
-
-                @Override
-                public void commit() {
-                    Mma8452qAccelerometerImpl.this.movementType= type;
-                    Mma8452qAccelerometerImpl.this.movementAxes= movementAxes;
-                    Mma8452qAccelerometerImpl.this.movementThreshold= this.movementThreshold;
-                    Mma8452qAccelerometerImpl.this.movementDuration= this.movementDuration;
-                }
-
-                @Override
-                public MovementConfigEditor setAxes(Axis... axes) {
-                    movementAxes= new Axis[axes.length];
-                    System.arraycopy(axes, 0, movementAxes, 0, axes.length);
-                    return this;
-                }
-            };
+        public MovementConfigEditor configureMotionDetection() {
+            return new MovementConfigEditorImpl(MovementType.MOTION);
         }
 
         @Override
-        public void startMovementDetection() {
-            writeRegister(MwrAccelerometerRegister.MOVEMENT_ENABLE, (byte) 1);
+        public MovementConfigEditor configureFreeFallDetection() {
+            return new MovementConfigEditorImpl(MovementType.FREE_FALL);
         }
 
         @Override
-        public void stopMovementDetection() {
-            writeRegister(MwrAccelerometerRegister.MOVEMENT_ENABLE, (byte) 0);
+        public void enableMovementDetection(final MovementType type) {
+            this.movementType= type;
+            writeRegister(Mma8452qAccelerometerRegister.MOVEMENT_ENABLE, (byte) 1);
+        }
+
+        @Override
+        public void disableMovementDetection() {
+            writeRegister(Mma8452qAccelerometerRegister.MOVEMENT_ENABLE, (byte) 0);
         }
 
         @Override
@@ -3786,15 +4215,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void startOrientationDetection() {
+        public void enableOrientationDetection() {
             mma8452qOrientationCfg[1]= (byte) 0xc0;
-            writeRegister(MwrAccelerometerRegister.ORIENTATION_ENABLE, (byte) 1);
+            writeRegister(Mma8452qAccelerometerRegister.ORIENTATION_ENABLE, (byte) 1);
         }
         @Override
-        public void stopOrientationDetection() {
-            writeRegister(MwrAccelerometerRegister.ORIENTATION_ENABLE, (byte) 0);
+        public void disableOrientationDetection() {
+            writeRegister(Mma8452qAccelerometerRegister.ORIENTATION_ENABLE, (byte) 0);
             mma8452qOrientationCfg[1]= 0x0;
-            writeRegister(MwrAccelerometerRegister.ORIENTATION_CONFIG, mma8452qOrientationCfg);
+            writeRegister(Mma8452qAccelerometerRegister.ORIENTATION_CONFIG, mma8452qOrientationCfg);
         }
     }
 
@@ -3805,10 +4234,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     };
     private class Bmi160AccelerometerImpl implements Bmi160Accelerometer {
         @Override
-        public AxisSamplingConfigEditor configureAxisSampling() {
-            return new AxisSamplingConfigEditor() {
+        public SamplingConfigEditor configureAxisSampling() {
+            return new SamplingConfigEditor() {
                 @Override
-                public AxisSamplingConfigEditor withDataRange(AccRange range) {
+                public SamplingConfigEditor setFullScaleRange(AccRange range) {
                     bmi160AccRange= range;
                     bmi160DataSampling[1]&= 0xf0;
                     bmi160DataSampling[1]|= range.bitMask();
@@ -3816,7 +4245,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 }
 
                 @Override
-                public AxisSamplingConfigEditor withOutputDataRate(OutputDataRate odr) {
+                public SamplingConfigEditor setOutputDataRate(OutputDataRate odr) {
                     bmi160DataSampling[0]&= 0xf0;
                     bmi160DataSampling[0]|= odr.bitMask();
                     return this;
@@ -3841,8 +4270,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         @Override
         public void setOutputDataRate(float frequency) {
-            final float[] values= new float[] { 0.78125f, 1.5625f, 3.125f, 6.25f, 12.5f, 25.f, 50.f, 100.f, 200.f, 400.f, 800.f, 1600.f };
-            int closest= closestIndex(values, frequency);
+            int closest= closestIndex(OutputDataRate.frequencies(), frequency);
 
             bmi160DataSampling[0]&= 0xf0;
             bmi160DataSampling[0]|= Bmi160Accelerometer.OutputDataRate.values()[closest].bitMask();
@@ -3850,21 +4278,46 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void startAxisSampling() {
+        public void enableAxisSampling() {
             writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT_ENABLE, (byte) 0x1, (byte) 0x0);
         }
 
         @Override
-        public void stopAxisSampling() {
+        public void disableAxisSampling() {
             writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT_ENABLE, (byte) 0x0, (byte) 0x1);
         }
 
         @Override
-        public void globalStart() {
+        public void start() {
             writeRegister(Bmi160AccelerometerRegister.POWER_MODE, (byte) 0x1);
         }
-        public void globalStop() {
+        public void stop() {
             writeRegister(Bmi160AccelerometerRegister.POWER_MODE, (byte) 0x0);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromAxes() {
+                    return new RouteBuilder().fromBmi160Axis();
+                }
+
+                @Override
+                public DataSignal fromXAxis() {
+                    return new RouteBuilder().fromBmi160XAxis();
+                }
+
+                @Override
+                public DataSignal fromYAxis() {
+                    return new RouteBuilder().fromBmi160YAxis();
+                }
+
+                @Override
+                public DataSignal fromZAxis() {
+                    return new RouteBuilder().fromBmi160ZAxis();
+                }
+            };
         }
     }
 
@@ -3878,7 +4331,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         public ConfigEditor configure() {
             return new ConfigEditor() {
                 @Override
-                public ConfigEditor withFullScaleRange(FullScaleRange range) {
+                public ConfigEditor setFullScaleRange(FullScaleRange range) {
                     bmi160GyroRange = range;
                     bmi160GyroConfig[1] &= 0xf8;
                     bmi160GyroConfig[1] |= range.bitMask();
@@ -3886,10 +4339,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 }
 
                 @Override
-                public ConfigEditor withOutputDataRate(OutputDataRate odr) {
+                public ConfigEditor setOutputDataRate(OutputDataRate odr) {
                     bmi160GyroConfig[0] &= 0xf0;
                     bmi160GyroConfig[0] |= odr.bitMask();
-
                     return this;
                 }
 
@@ -3901,45 +4353,484 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void globalStart() {
+        public void setOutputDataRate(float frequency) {
+            final float[] values= new float[] { 25f, 50f, 100f, 200f, 400f, 800f, 1600f, 3200f };
+            int closest= closestIndex(values, frequency);
+
+            OutputDataRate bestOdr= OutputDataRate.values()[closest];
+            bmi160GyroConfig[0] &= 0xf0;
+            bmi160GyroConfig[0] |= bestOdr.bitMask();
+        }
+
+        @Override
+        public void setAngularRateRange(float range) {
+            final float[] values= new float[] { 125f, 250f, 500f, 1000f, 2000f };
+            int closest= values.length - closestIndex(values, range) - 1;
+
+            FullScaleRange bestFsr= FullScaleRange.values()[closest];
+            bmi160GyroRange = bestFsr;
+            bmi160GyroConfig[1] &= 0xf8;
+            bmi160GyroConfig[1] |= bestFsr.bitMask();
+        }
+
+        @Override
+        public void start() {
             writeRegister(Bmi160GyroRegister.DATA_INTERRUPT_ENABLE, (byte) 1, (byte) 0);
             writeRegister(Bmi160GyroRegister.POWER_MODE, (byte) 1);
         }
 
         @Override
-        public void globalStop() {
+        public void stop() {
             writeRegister(Bmi160GyroRegister.POWER_MODE, (byte) 0);
             writeRegister(Bmi160GyroRegister.DATA_INTERRUPT_ENABLE, (byte) 0, (byte) 1);
         }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromAxes() {
+                    return new RouteBuilder().fromBmi160Gyro();
+                }
+
+                @Override
+                public DataSignal fromXAxis() {
+                    return new RouteBuilder().fromBmi160GyroXAxis();
+                }
+
+                @Override
+                public DataSignal fromYAxis() {
+                    return new RouteBuilder().fromBmi160GyroYAxis();
+                }
+
+                @Override
+                public DataSignal fromZAxis() {
+                    return new RouteBuilder().fromBmi160GyroZAxis();
+                }
+            };
+        }
     }
 
-    private final ConcurrentLinkedQueue<AsyncResultImpl<MultiChannelTemperature.Source[]>> tempSourcesResults= new ConcurrentLinkedQueue<>();
+    private abstract class SourceImpl implements MultiChannelTemperature.Source {
+        private final byte channel;
+        private final byte driver;
+
+        public SourceImpl(byte driver, byte channel) {
+            this.driver= driver;
+            this.channel= channel;
+        }
+
+        @Override
+        public byte driver() { return driver; }
+
+        @Override
+        public byte channel() { return channel; }
+    }
+    private class NrfDieImpl extends SourceImpl implements MultiChannelTemperature.NrfDie {
+        public NrfDieImpl(byte driver, byte channel) {
+            super(driver, channel);
+        }
+    }
+    private class ExtThermistorImpl extends SourceImpl implements MultiChannelTemperature.ExtThermistor {
+        public ExtThermistorImpl(byte driver, byte channel) {
+            super(driver, channel);
+        }
+
+        @Override
+        public void configure(byte analogReadPin, byte pulldownPin, boolean activeHigh) {
+            writeRegister(MultiChannelTempRegister.MODE, channel(), analogReadPin, pulldownPin, (byte) (activeHigh ? 1 : 0));
+        }
+    }
+    private class BMP280Impl extends SourceImpl implements MultiChannelTemperature.BMP280 {
+        public BMP280Impl(byte driver, byte channel) {
+            super(driver, channel);
+        }
+    }
+    private class PresetThermistorImpl extends SourceImpl implements MultiChannelTemperature.PresetThermistor {
+        public PresetThermistorImpl(byte driver, byte channel) {
+            super(driver, channel);
+        }
+    }
+    private final Class[] tempDriverClasses = new Class[] { NrfDieImpl.class, ExtThermistorImpl.class, BMP280Impl.class, PresetThermistorImpl.class};
+
+    private class SingleChannelTemperatureImpl implements SingleChannelTemperature {
+        @Override
+        public void readTemperature() {
+            readRegister(TemperatureRegister.VALUE);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromSensor() {
+                    return new RouteBuilder().fromSingleChannelTemp();
+                }
+            };
+        }
+
+        @Override
+        public void enableThermistorMode(byte analogReadPin, byte pulldownPin) {
+            writeRegister(TemperatureRegister.THERMISTOR_MODE, (byte) 1, analogReadPin, pulldownPin);
+        }
+
+        @Override
+        public void disableThermistorMode() {
+            writeRegister(TemperatureRegister.THERMISTOR_MODE, new byte[] {0, 0, 0});
+        }
+    }
+
+    private final ArrayList<MultiChannelTemperature.Source> tempSources= new ArrayList<>();
     private class MultiChannelTemperatureImpl implements MultiChannelTemperature {
         @Override
-        public AsyncResult<Source[]> readSources() {
-            AsyncResultImpl<MultiChannelTemperature.Source[]> result= new AsyncResultImpl<>();
-            tempSourcesResults.add(result);
-            readRegister(MultiChannelTempRegister.INFO);
-            return result;
+        public List<Source> getSources() {
+            return Collections.unmodifiableList(tempSources);
         }
 
         @Override
         public void readTemperature(Source src) {
             readRegister(MultiChannelTempRegister.TEMPERATURE, src.channel());
         }
+
+        @Override
+        public void readTemperature() {
+            readTemperature(tempSources.get(0));
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromSource(Source src) {
+                    return new RouteBuilder().fromMultiChannelTemp(src);
+                }
+
+                @Override
+                public DataSignal fromSensor() {
+                    return new RouteBuilder().fromMultiChannelTemp(tempSources.get(0));
+                }
+            };
+        }
+    }
+
+    private class Ltr329AmbientLightImpl implements Ltr329AmbientLight {
+        @Override
+        public void start() {
+            writeRegister(Ltr329AmbientLightRegister.ENABLE, (byte) 1);
+        }
+
+        @Override
+        public void stop() {
+            writeRegister(Ltr329AmbientLightRegister.ENABLE, (byte) 0);
+        }
+
+        @Override
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private Gain ltr329Gain= Gain.LTR329_GAIN_1X;
+                private IntegrationTime ltr329Time= IntegrationTime.LTR329_TIME_100MS;
+                private MeasurementRate ltr329Rate= MeasurementRate.LTR329_RATE_500MS;
+
+                @Override
+                public ConfigEditor setGain(Gain sensorGain) {
+                    ltr329Gain= sensorGain;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setIntegrationTime(IntegrationTime time) {
+                    ltr329Time= time;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setMeasurementRate(MeasurementRate rate) {
+                    ltr329Rate= rate;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    byte alsContr= (byte) (ltr329Gain.mask << 2);
+                    byte alsMeasRate= (byte) ((ltr329Time.mask << 3) | ltr329Rate.ordinal());
+
+                    writeRegister(Ltr329AmbientLightRegister.CONFIG, alsContr, alsMeasRate);
+                }
+            };
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromSensor() {
+                    return new RouteBuilder().fromLtr329Output();
+                }
+            };
+        }
+    }
+
+    private class Bmp280BarometerImpl implements Bmp280Barometer {
+        @Override
+        public void enableAltitudeSampling() {
+
+        }
+
+        @Override
+        public void disableAltitudeSampling() {
+
+        }
+
+        @Override
+        public void start() {
+            writeRegister(Bmp280BarometerRegister.CYCLIC, (byte) 1, (byte) 1);
+        }
+
+        @Override
+        public void stop() {
+            writeRegister(Bmp280BarometerRegister.CYCLIC, (byte) 0, (byte) 0);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromPressure() {
+                    return new RouteBuilder().fromBmp280Pressure();
+                }
+
+                @Override
+                public DataSignal fromAltitude() {
+                    return new RouteBuilder().fromBmp280Altitude();
+                }
+            };
+        }
+
+        @Override
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private OversamplingMode samplingMode;
+                private FilterMode filterMode;
+                private StandbyTime time;
+
+                @Override
+                public ConfigEditor setPressureOversampling(OversamplingMode mode) {
+                    samplingMode= mode;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setFilterMode(FilterMode mode) {
+                    filterMode= mode;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setStandbyTime(StandbyTime time) {
+                    this.time= time;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    byte first= (byte) (samplingMode.ordinal() << 2);
+                    byte second= (byte) ((filterMode.ordinal() << 2) | (time.ordinal() << 5));
+                    writeRegister(Bmp280BarometerRegister.CONFIG, first, second);
+                }
+            };
+        }
+    }
+    @Override
+    public <T extends Module> T getModule(Class<T> moduleClass) throws UnsupportedModuleException {
+        if (!isConnected()) {
+            return null;
+        }
+
+        ModuleInfo accelModuleinfo= moduleInfo.get(InfoRegister.ACCELEROMETER.moduleOpcode());
+        if (moduleClass.equals(Accelerometer.class)) {
+            if (!accelModuleinfo.present()) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+
+            switch(accelModuleinfo.implementation()) {
+                case Constant.MMA8452Q_IMPLEMENTATION:
+                    if (mma8452qModule == null) {
+                        mma8452qModule = new Mma8452qAccelerometerImpl();
+                    }
+                    return moduleClass.cast(mma8452qModule);
+                case Constant.BMI160_IMPLEMENTATION:
+                    return moduleClass.cast(new Bmi160AccelerometerImpl());
+                default:
+                    throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+        }
+        if (moduleClass.equals(Mma8452qAccelerometer.class)) {
+            if (accelModuleinfo.present() && accelModuleinfo.implementation() == Constant.MMA8452Q_IMPLEMENTATION) {
+                if (mma8452qModule == null) {
+                    mma8452qModule = new Mma8452qAccelerometerImpl();
+                }
+                return moduleClass.cast(mma8452qModule);
+            } else {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+        }
+        if (moduleClass.equals(Bmi160Accelerometer.class)) {
+            if (accelModuleinfo.present() && accelModuleinfo.implementation() == Constant.BMI160_IMPLEMENTATION) {
+                return moduleClass.cast(new Bmi160AccelerometerImpl());
+            } else {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+        }
+
+        ModuleInfo gyroModuleinfo= moduleInfo.get(InfoRegister.GYRO.moduleOpcode());
+        if (moduleClass.equals(Gyro.class)) {
+            if (!gyroModuleinfo.present()) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            switch(gyroModuleinfo.implementation()) {
+                case Constant.BMI160_GYRO_IMPLEMENTATION:
+                    return moduleClass.cast(new Bmi160GyroImpl());
+                default:
+                    throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+        }
+        if (moduleClass.equals(Bmi160Gyro.class)) {
+            if (gyroModuleinfo.present() && gyroModuleinfo.implementation() == Constant.BMI160_GYRO_IMPLEMENTATION) {
+                return moduleClass.cast(new Bmi160GyroImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+        }
+
+        if (moduleClass.equals(Timer.class)) {
+            return moduleClass.cast(new TimerImpl());
+        }
+
+        if (moduleClass.equals(Logging.class)) {
+            return moduleClass.cast(new LoggingImpl());
+        }
+
+        if (moduleClass.equals(Gpio.class)) {
+            return moduleClass.cast(new GpioImpl());
+        }
+
+        ModuleInfo tempModuleinfo= moduleInfo.get(InfoRegister.TEMPERATURE.moduleOpcode());
+        if (moduleClass.equals(Temperature.class)) {
+            if (!tempModuleinfo.present()) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+
+            switch(tempModuleinfo.implementation()) {
+                case Constant.SINGLE_CHANNEL_TEMP_IMPLEMENTATION:
+                    return moduleClass.cast(new SingleChannelTemperatureImpl());
+                case Constant.MULTI_CHANNEL_TEMP_IMPLEMENTATION:
+                    return moduleClass.cast(new MultiChannelTemperatureImpl());
+                default:
+                    throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+        }
+        if (moduleClass.equals(MultiChannelTemperature.class)) {
+            if (!tempModuleinfo.present() || tempModuleinfo.implementation() != Constant.MULTI_CHANNEL_TEMP_IMPLEMENTATION) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            return moduleClass.cast(new MultiChannelTemperatureImpl());
+        }
+        if (moduleClass.equals(SingleChannelTemperature.class)) {
+            if (!tempModuleinfo.present() || tempModuleinfo.implementation() != Constant.SINGLE_CHANNEL_TEMP_IMPLEMENTATION) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            return moduleClass.cast(new SingleChannelTemperatureImpl());
+        }
+
+        ModuleInfo ambientModuleInfo= moduleInfo.get(InfoRegister.AMBIENT_LIGHT.moduleOpcode());
+        if (moduleClass.equals(AmbientLight.class)) {
+            if (!ambientModuleInfo.present()) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            switch(ambientModuleInfo.implementation()) {
+                case Constant.LTR329_LIGHT_SENSOR:
+                    return moduleClass.cast(new Ltr329AmbientLightImpl());
+                default:
+                    throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+        }
+        if (moduleClass.equals(Ltr329AmbientLight.class)) {
+            if (!ambientModuleInfo.present() || ambientModuleInfo.implementation() != Constant.LTR329_LIGHT_SENSOR) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            return moduleClass.cast(new Ltr329AmbientLightImpl());
+        }
+
+        ModuleInfo barometerModuleInfo= moduleInfo.get(InfoRegister.BAROMETER.moduleOpcode());
+        if (moduleClass.equals(Barometer.class)) {
+            if (!barometerModuleInfo.present()) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            switch(barometerModuleInfo.implementation()) {
+                case Constant.BMP280_BAROMETER:
+                    return moduleClass.cast(new Bmp280BarometerImpl());
+                default:
+                    throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+        }
+        if (moduleClass.equals(Bmp280Barometer.class)) {
+            if (!barometerModuleInfo.present() || barometerModuleInfo.implementation() != Constant.BMP280_BAROMETER) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            return moduleClass.cast(new Bmp280BarometerImpl());
+        }
+
+        if (moduleClass.equals(Led.class)) {
+            return moduleClass.cast(new LedImpl());
+        }
+
+        if (moduleClass.equals(Switch.class)) {
+            return moduleClass.cast(new SwitchImpl());
+        }
+
+        if (moduleClass.equals(Debug.class)) {
+            return moduleClass.cast(new DebugImpl());
+        }
+
+        if (moduleClass.equals(Gsr.class)) {
+            if (!ambientModuleInfo.present()) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            return moduleClass.cast(new GsrImpl());
+        }
+
+        if (moduleClass.equals(IBeacon.class)) {
+            return moduleClass.cast(new IBeaconImpl());
+        }
+
+        if (moduleClass.equals(Haptic.class)) {
+            return moduleClass.cast(new HapticImpl());
+        }
+
+        if (moduleClass.equals(NeoPixel.class)) {
+            return moduleClass.cast(new NeoPixelImpl());
+        }
+
+        if (moduleClass.equals(Settings.class)) {
+            return moduleClass.cast(new SettingsImpl());
+        }
+
+        if (moduleClass.equals(I2C.class)) {
+            return moduleClass.cast(new I2CImpl());
+        }
+
+        if (moduleClass.equals(Macro.class)) {
+            return moduleClass.cast(new MacroImpl());
+        }
+
+        throw new UnsupportedModuleException("Unrecognized module class: \'" + moduleClass.toString() + "\'");
     }
 
     private boolean saveCommand= false;
     private EventListener currEventListener;
     private byte[] eventConfig= null;
-    private MessageToken eventParams= null;
+    private DataSignal.DataToken eventParams= null;
     private byte eventDestOffset= 0;
-    private void buildBlePacket(byte module, byte register, byte ... parameters) {
-        byte[] cmd= new byte[parameters.length + 2];
-        cmd[0]= module;
-        cmd[1]= register;
-        System.arraycopy(parameters, 0, cmd, 2, parameters.length);
-
+    private void buildBlePacket(byte[] cmd) {
         if (eventConfig != null) {
             currEventListener.onCommandWrite();
             byte[] eventEntry= new byte[] {EventRegister.ENTRY.moduleOpcode(), EventRegister.ENTRY.opcode(),
@@ -3973,9 +4864,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     }
 
     private void writeRegister(Register register, byte ... parameters) {
-        buildBlePacket(register.moduleOpcode(), register.opcode(), parameters);
+        buildBlePacket(Registers.buildWriteCommand(register, parameters));
     }
     private void readRegister(Register register, byte ... parameters) {
-        buildBlePacket(register.moduleOpcode(), (byte) (0x80 | register.opcode()), parameters);
+        buildBlePacket(Registers.buildReadCommand(register, parameters));
     }
+
+
 }

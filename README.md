@@ -1,20 +1,13 @@
-# MetaWear API v2.0.0 Beta #
+# MetaWear Android API #
+This project provides an Android API for interacting with the MetaWear board.  A minimum of Android 4.3 (SDK 18) is required to use this library however some features will not properly function due to the underlying Blueooth LE implementation.  For the best resuilts, it is recommended that users be on **Android 4.4 (SDK 19) or higher**.
 
-The MetaWear Android API is undergoing a major overhaul to improve the ease of use of the API.  Since this library is currently in a beta state, there may be many breaking changes in between releases leading up to the official v2.0.0 release.
+More information on MetaWear platform in on the MbientLab product page ([https://mbientlab.com/product/](https://mbientlab.com/product/)).
 
-Major changes from API v1.x are:
-
-1. Background service no longer communicates to apps via a BroadcastReceiver.  All asynchronous responses are executed in the background.  
-   * UI tasks in callback functions need to be explicitly run on the UI thread  
-2. Callbacks for receiving asynchronous responses (i.e. reading RSSI values) are replaced with the AsyncResult class.  
-3. Created a Java DSL to express how sensor data should be manipulated and routed.  
-4. Package renamed to com.mbientlab.metawear  
-
-# Getting Started #
-Integrating the v2.0.0 beta library into your app is essentially the same as for the v1.x libraries.  First, add MbientLab's Ivy repository in the repositories closure.
+# Setup  #
+## Adding Compile Dependency ##
+To add the library to your project, first, update the repositories closure to include the MbientLab Ivy Repo in the project's *build.gradle* file.
 
 ```gradle
-///< in the project's build.gradle file
 repositories {
     ivy {
         url "http://ivyrep.mbientlab.com"
@@ -23,28 +16,30 @@ repositories {
 }
 ```
 
-Then, add the MetaWear v2.0.0 beta library as a compile dependency.  The 2.0.0 beta releases will be tagged with the pattern: 2.0.0-beta.[0-9][0-9].  
+Then, add the compile element to the dependencies closure in the module's *build.gradle* file.
 
 ```gradle
-///< in the module's build.gradle file
-compile 'com.mbientlab:metawear:2.0.0-beta.04'
+dependencies {
+    compile 'com.mbientlab:metawear:2.0.0'
+}
 ```
 
-Once your project has synced with the updated Gradle files, declare the MetaWear service in the AndroidManifest.xml file.
-
+## Declaring the Service ##
+Once your project has synced with the updated Gradle files, declare the MetaWear Bluetooth LE service in the module's *AndroidManifest.xml* file.
 ```xml
 <application
     android:allowBackup="true"
     android:icon="@drawable/ic_launcher"
     android:label="@string/app_name"
     android:theme="@style/AppTheme" >
-        
-    <service android:name="com.mbientlab.metawear.impl.MetaWearBleService" />
+
+    <service android:name="com.mbientlab.metawear.MetaWearBleService" />
     <!-- Other application info below i.e. activity definitions -->
 </application>
 ```
 
-Finally, bind the service in your application and retrain a reference to the service' LocaBinder class.  This can be done in any activity or fragment that needs access to a MetaWearBoard object.
+## Binding the Service ##
+Lastly, bind the service in your application and retrain a reference to the service's LocaBinder class.  This can be done in any activity or fragment that needs access to a MetaWearBoard object.
 
 ```java
 import android.app.Activity;
@@ -59,7 +54,7 @@ public class ExampleActivity extends Activity implements ServiceConnection {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        super.onCreate(savedIFinally,nstanceState);
         setContentView(R.layout.activity_main);
 
         ///< Bind the service when the activity is created
@@ -85,5 +80,4 @@ public class ExampleActivity extends Activity implements ServiceConnection {
     public void onServiceDisconnected(ComponentName componentName) { }
 }
 ```
-
-Once the service is bound, you can retrieve a MetaWearBoard object from the service's LocalBinder to start interacting with your board.  More information and tutorials are available on [project's wiki](https://github.com/mbientlab/Metawear-AndroidAPI/wiki/MetaWearBoard-Class).
+With that, you are ready to interact with your board.  Further documentation and guides are available on the MbientLab web page ([https://mbientlab.com/androiddocs/](https://mbientlab.com/androiddocs/)).  Sample code is available both in the [Example](https://github.com/mbientlab/Metawear-AndroidAPI/tree/master/example/src/main/java/com/mbientlab/metawear/example/MainActivity.java) module and the MetaWear [Android app](https://github.com/mbientlab/Metawear-SampleAndroidApp).
