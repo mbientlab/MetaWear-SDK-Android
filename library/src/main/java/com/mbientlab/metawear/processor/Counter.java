@@ -27,15 +27,23 @@ package com.mbientlab.metawear.processor;
 import com.mbientlab.metawear.DataSignal;
 import com.mbientlab.metawear.module.DataProcessor;
 
-import java.lang.Math;
 import java.util.Map;
 
 /**
- * Configuration for the counter data processor
+ * Configuration for the counter data processor.  This class was slightly modified after v2.0.0 to correctly
+ * represent the actions of the counter.  The constructor now takes in a byte corresponding to how many bytes
+ * are available to the counter, not an int the counter should count up to.
  * @author Eric Tsai
  */
 public class Counter implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "counter";
+    public static final String FIELD_SIZE = "size";
+
+    /**
+     * @deprecated This field incorrectly represented the underlying implementation i.e. users could not
+     * set a counter max value, only how many bytes the counter has to use.  Use {@link #FIELD_SIZE} instead.
+     */
+    @Deprecated
     public static final String FIELD_LIMIT = "limit";
 
     /**
@@ -54,37 +62,32 @@ public class Counter implements DataSignal.ProcessorConfig {
         }
     }
 
-    public final byte output;
-
-    private byte valueToByteCount(int value) {
-        ///< Meh, phones can handle some log math
-        return (byte) ((Math.log(value) / Math.log(2)) / 8 + 1);
-    }
+    public final byte size;
 
     /**
      * Constructs a counter config object from a URI string
      * @param query    String-String map containing the fields from the URI string
      */
     public Counter(Map<String, String> query) {
-        if (query.containsKey(FIELD_LIMIT)) {
-            output= valueToByteCount(Integer.valueOf(query.get(FIELD_LIMIT)));
+        if (query.containsKey(FIELD_SIZE)) {
+            size = Byte.valueOf(query.get(FIELD_SIZE));
         } else {
-            output= 1;
+            size = 1;
         }
     }
 
     /**
-     * Constructs a counter that can count up to 255
+     * Constructs a counter that counts up to 255
      */
     public Counter() {
-        output= 1;
+        size = 1;
     }
 
     /**
-     * Constructs a config object with user defined upper limit
-     * @param limit Max range the counter can count to
+     * Constructs a config object with user defined counter size
+     * @param size Number of bytes to allocate for the counter, between [1-4]
      */
-    public Counter(int limit) {
-        this.output= valueToByteCount(limit);
+    public Counter(byte size) {
+        this.size = size;
     }
 }

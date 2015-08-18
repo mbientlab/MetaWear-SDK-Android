@@ -36,6 +36,13 @@ import java.util.Calendar;
  * @author Eric Tsai
  */
 public class Bmp280AltitudeMessage extends Message {
+    private static final float SCALE = 256f;
+    /**
+     * Retrieves the LSB to meter ratio.
+     * @return Value corresponding to 1m
+     */
+    public static float getScale() { return SCALE; }
+
     private final float meters;
 
     public Bmp280AltitudeMessage(byte[] data) {
@@ -45,7 +52,7 @@ public class Bmp280AltitudeMessage extends Message {
     public Bmp280AltitudeMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        meters= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getInt() / 256.f;
+        meters= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getInt() / SCALE;
     }
 
     @Override

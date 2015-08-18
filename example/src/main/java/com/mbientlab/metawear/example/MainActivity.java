@@ -46,9 +46,10 @@ import com.mbientlab.metawear.AsyncOperation;
 import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.RouteManager;
 import com.mbientlab.metawear.UnsupportedModuleException;
-import com.mbientlab.metawear.data.Cartesian;
+import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.data.CartesianShort;
 import com.mbientlab.metawear.MetaWearBleService;
+import com.mbientlab.metawear.data.Units;
 import com.mbientlab.metawear.module.*;
 import com.mbientlab.metawear.processor.*;
 import com.mbientlab.metawear.processor.Maths;
@@ -248,11 +249,11 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                         @Override
                                         public void process(Message msg) {
                                             final CartesianShort axisData = msg.getData(CartesianShort.class);
-                                            Log.i("test", String.format("Stream: %d,%d,%d", axisData.x(), axisData.y(), axisData.z()));
+                                            Log.i("test", String.format("Stream: %s", axisData.toString()));
                                             MainActivity.this.runOnUiThread(new Runnable() {
                                                 @Override
                                                 public void run() {
-                                                    ((TextView) findViewById(R.id.textView3)).setText(String.format("%d,%d,%d", axisData.x(), axisData.y(), axisData.z()));
+                                                    ((TextView) findViewById(R.id.textView3)).setText(axisData.toString());
                                                 }
                                             });
                                         }
@@ -261,11 +262,14 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                         @Override
                                         public void process(Message msg) {
                                             final CartesianShort axisData = msg.getData(CartesianShort.class);
-                                            Log.i("test", String.format("Log: %d,%d,%d", axisData.x(), axisData.y(), axisData.z()));
+                                            Log.i("test", String.format("Log: %s", axisData.toString()));
                                         }
                                     });
 
                                     accelModule.setOutputDataRate(50.f);
+
+                                    accelSetup = true;
+                                    loggingModule.startLogging();
 
                                     accelModule.enableAxisSampling();
                                     accelModule.start();
@@ -277,10 +281,9 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                     accelSetup = false;
                                 }
                             });
-                    accelSetup = true;
-                    loggingModule.startLogging();
+
                 } else {
-                    loggingModule.stopLogging();
+                    loggingModule.startLogging();
 
                     accelModule.enableAxisSampling();
                     accelModule.start();
@@ -424,7 +427,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                 public void success(Byte result) {
                     final String state = new String(mwBoard.serializeState());
                     editor.putString(ROUTE_STATE, state);
-                    editor.commit();
+                    editor.apply();
                     Log.i("test", state);
                 }
             });
@@ -436,7 +439,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
 
     public void syncMe(View v) {
         String stateString= sharedPrefs.getString(ROUTE_STATE, "");
-        if (stateString != null && !stateString.isEmpty()) {
+        if (!stateString.isEmpty()) {
             mwBoard.deserializeState(stateString.getBytes());
             routeId= (byte) sharedPrefs.getInt(ROUTE_ID, -1);
 
@@ -458,7 +461,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                 manager.setLogMessageHandler("accelAxisLogger", new RouteManager.MessageHandler() {
                     @Override
                     public void process(Message msg) {
-                        Cartesian milliG = msg.getData(Cartesian.class);
+                        CartesianShort milliG = msg.getData(CartesianShort.class);
                         Log.i("test", String.format("XYZ Axis: (%d, %d, %d)", milliG.x(), milliG.y(), milliG.z()));
                     }
                 });
@@ -488,7 +491,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
             final com.mbientlab.metawear.module.Switch switchModule= mwBoard.getModule(com.mbientlab.metawear.module.Switch.class);
 
             if (mySwitch.isChecked()) {
-                analogRoute= gpioModule.routeData().fromAnalogGpio((byte) 0, Gpio.AnalogReadMode.ADC)
+                analogRoute= gpioModule.routeData().fromAnalogIn((byte) 0, Gpio.AnalogReadMode.ADC)
                         .process("mathprocesser", "math?operation=mult&rhs=1")
                         .stream("analog_gpio")
                         .commit();
@@ -626,13 +629,13 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                             result.subscribe("gyroAxisSub", new RouteManager.MessageHandler() {
                                 @Override
                                 public void process(Message msg) {
-                                    final Cartesian spinData = msg.getData(Cartesian.class);
+                                    final CartesianFloat spinData = msg.getData(CartesianFloat.class);
 
-                                    Log.i("test", String.format("Gyro: %.3f,%.3f,%.3f", spinData.x(), spinData.y(), spinData.z()));
+                                    Log.i("test", spinData.toString());
                                     MainActivity.this.runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            ((TextView) findViewById(R.id.textView7)).setText(String.format("%.3f,%.3f,%.3f", spinData.x(), spinData.y(), spinData.z()));
+                                            ((TextView) findViewById(R.id.textView7)).setText(spinData.toString() + Units.DEGS_PER_SEC);
                                         }
                                     });
                                 }

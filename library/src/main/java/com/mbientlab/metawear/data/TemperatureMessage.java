@@ -32,8 +32,16 @@ import java.util.Calendar;
 
 /**
  * Container class for temperature data.  Data is interpreted as a float in celsius.
+ * @author Eric Tsai
  */
 public class TemperatureMessage extends Message {
+    private static final float SCALE = 8f;
+    /**
+     * Retrieves the LSB to celsius ratio.
+     * @return Value corresponding to 1C
+     */
+    public static float getScale() { return SCALE; }
+
     private final float value;
 
     public TemperatureMessage(byte[] data) {
@@ -44,7 +52,7 @@ public class TemperatureMessage extends Message {
         super(timestamp, data);
 
         ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-        value= buffer.getShort() * 0.125f;
+        value= buffer.getShort() / SCALE;
     }
 
     @Override

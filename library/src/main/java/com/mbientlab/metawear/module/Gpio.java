@@ -114,13 +114,43 @@ public interface Gpio extends MetaWearBoard.Module {
     void stopPinChangeDetection(byte pin);
 
     /**
-     * Selector for available gpio data sources
+     * Selector for available Gpio data sources
      * @author Eric Tsai
      */
     interface SourceSelector {
+        /**
+         * @deprecated Method renamed to fit the naming scheme of the class, use {@link #fromAnalogIn(byte, AnalogReadMode)} instead
+         */
+        @Deprecated
         DataSignal fromAnalogGpio(byte pin, Gpio.AnalogReadMode mode);
-        DataSignal fromDigitalIn(byte pin);
+        /**
+         * @deprecated Method renamed to fit the naming scheme of the class, use {@link #fromDigitalInChange(byte)} instead
+         */
+        @Deprecated
         DataSignal fromGpioPinNotify(byte pin);
+
+        /**
+         * Handle analog input data
+         * @param pin    GPIO pin the analog data is coming from
+         * @param mode   Read mode used to retrieve the data
+         * @return Object representing the data from an analog input
+         * @see Gpio#readAnalogIn(byte, AnalogReadMode)
+         */
+        DataSignal fromAnalogIn(byte pin, Gpio.AnalogReadMode mode);
+        /**
+         * Handle digital input data
+         * @param pin    GPIO pin the digital data is coming from
+         * @return Object representing the data from a digital input
+         * @see Gpio#readDigitalIn(byte)
+         */
+        DataSignal fromDigitalIn(byte pin);
+        /**
+         * Handle digital state change notification
+         * @param pin    GPIO pin the notification is coming from
+         * @return Object representing the data from a state change notification
+         * @see Gpio#startPinChangeDetection(byte)
+         */
+        DataSignal fromDigitalInChange(byte pin);
     }
 
     /**

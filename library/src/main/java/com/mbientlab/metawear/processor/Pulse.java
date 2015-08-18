@@ -34,7 +34,13 @@ import java.util.Map;
  */
 public class Pulse implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "pulse";
-    public static final String FIELD_OUTPUT = "output", FIELD_THRESHOLD= "threshold", FIELD_WIDTH= "width";
+    public static final String FIELD_MODE = "mode", FIELD_THRESHOLD= "threshold", FIELD_WIDTH= "width";
+
+    /**
+     * @deprecated Uri field renamed to "mode", use {@link #FIELD_MODE} instead
+     */
+    @Deprecated
+    public static final String FIELD_OUTPUT = "output";
 
     /**
      * Output modes for the pulse processor
@@ -58,10 +64,13 @@ public class Pulse implements DataSignal.ProcessorConfig {
      * @param query    String-String map containing the fields from the URI string
      */
     public Pulse(Map<String, String> query) {
-        if (!query.containsKey(FIELD_OUTPUT)) {
-            throw new RuntimeException("Missing required field in URI: " + FIELD_OUTPUT);
+        if (!query.containsKey(FIELD_OUTPUT) && !query.containsKey(FIELD_MODE)) {
+            throw new RuntimeException("Missing required field in URI: " + FIELD_MODE);
         }
-        mode = Enum.valueOf(OutputMode.class, query.get(FIELD_OUTPUT).toUpperCase());
+        if (query.containsKey(FIELD_OUTPUT)) {
+            query.put(FIELD_MODE, query.get(FIELD_OUTPUT));
+        }
+        mode = Enum.valueOf(OutputMode.class, query.get(FIELD_MODE).toUpperCase());
 
         if (!query.containsKey(FIELD_WIDTH)) {
             throw new RuntimeException("Missing required field in URI: " + FIELD_WIDTH);

@@ -46,8 +46,8 @@ public class Bmi160SingleAxisMessage extends SignedMessage {
     }
 
     /**
-     * Retrieves the LSB per g ratio
-     * @return Bit value corresponding to 1 g
+     * Retrieves the LSB to g ratio
+     * @return Value corresponding to 1 g
      */
     public float getScale() {
         return scale;

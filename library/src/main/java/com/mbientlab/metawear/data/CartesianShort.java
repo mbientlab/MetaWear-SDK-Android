@@ -28,5 +28,9 @@ package com.mbientlab.metawear.data;
  * Subclass of the Cartesian interface that reports data as a Short
  * @author Eric Tsai
  */
-public interface CartesianShort extends Cartesian<Short> {
+public abstract class CartesianShort implements Cartesian<Short> {
+    @Override
+    public String toString() {
+        return String.format("(%d, %d, %d)", x(), y(), z());
+    }
 }

@@ -1,5 +1,5 @@
 # MetaWear Android API #
-This project provides an Android API for interacting with the MetaWear board.  A minimum of Android 4.3 (SDK 18) is required to use this library however some features will not properly function due to the underlying Blueooth LE implementation.  For the best resuilts, it is recommended that users be on **Android 4.4 (SDK 19) or higher**.
+The MetaWear Android API is a libray for interacting with the MetaWear board on an Android device.  A minimum of Android 4.3 (SDK 18) is required to use this library however some features will not properly function due to the underlying Blueooth LE implementation.  For the best resuilts, it is recommended that users be on **Android 4.4 (SDK 19) or higher**.
 
 More information on MetaWear platform in on the MbientLab product page ([https://mbientlab.com/product/](https://mbientlab.com/product/)).
 
@@ -20,7 +20,7 @@ Then, add the compile element to the dependencies closure in the module's *build
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:2.0.0'
+    compile 'com.mbientlab:metawear:2.0.7'
 }
 ```
 

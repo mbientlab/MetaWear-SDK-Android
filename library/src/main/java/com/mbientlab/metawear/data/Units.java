@@ -22,26 +22,26 @@
  * hello@mbientlab.com.
  */
 
-apply plugin: 'com.android.library'
+package com.mbientlab.metawear.data;
 
-android {
-    compileSdkVersion 22
-    buildToolsVersion "21.1.2"
+/**
+ * Units for sensor data
+ * @author Eric Tsai
+ */
+public class Units {
+    /** Degrees per second, for BMI160 gyro */
+    public static final String DEGS_PER_SEC= "\u00B0/s";
 
-    defaultConfig {
-        minSdkVersion 18
-        targetSdkVersion 22
-        versionCode 25
-        versionName "2.0.7"
-    }
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-}
+    /** Milli g, for accelerometer */
+    public static final String MILLI_G= "mg";
+    /** g, for accelerometer */
+    public static final String G= "g";
 
-dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
+    /** Pascals, for BMP280 barometer pressure values */
+    public static final String PASCALS= "Pa";
+    /** Meters, for BMP280 barometer altitude values */
+    public static final String METERS= "m";
+
+    /** Milli lux, for LTR329 light sensor data */
+    public static final String MILLI_LUX= "mlx";
 }

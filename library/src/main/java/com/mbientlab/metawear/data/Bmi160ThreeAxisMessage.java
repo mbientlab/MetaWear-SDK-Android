@@ -40,8 +40,8 @@ import java.util.Calendar;
  */
 public class Bmi160ThreeAxisMessage extends Message {
     private final float scale;
-    final float[] scaledValues;
-    final short[] scaledShortValues;
+    private final float[] scaledValues;
+    private final short[] scaledShortValues;
 
     public Bmi160ThreeAxisMessage(byte[] data, float scale) {
         this(null, data, scale);
@@ -67,47 +67,39 @@ public class Bmi160ThreeAxisMessage extends Message {
         };
     }
 
+    /**
+     * Retrieves the LSB to g ratio
+     * @return Value corresponding to 1 g
+     */
     public float getScale() {
         return scale;
     }
 
     @Override
     public <T> T getData(Class<T> type) {
-        if (type.equals(CartesianFloat.class) || type.equals(Cartesian.class)) {
+        if (type.equals(CartesianFloat.class)) {
             return type.cast(new CartesianFloat() {
                 @Override
-                public Float x() {
-                    return scaledValues[0];
-                }
+                public Float x() { return scaledValues[0]; }
 
                 @Override
-                public Float y() {
-                    return scaledValues[1];
-                }
+                public Float y() { return scaledValues[1]; }
 
                 @Override
-                public Float z() {
-                    return scaledValues[2];
-                }
+                public Float z() { return scaledValues[2]; }
             });
         }
 
         if (type.equals(CartesianShort.class)) {
             return type.cast(new CartesianShort() {
                 @Override
-                public Short x() {
-                    return scaledShortValues[0];
-                }
+                public Short x() { return scaledShortValues[0]; }
 
                 @Override
-                public Short y() {
-                    return scaledShortValues[1];
-                }
+                public Short y() { return scaledShortValues[1]; }
 
                 @Override
-                public Short z() {
-                    return scaledShortValues[2];
-                }
+                public Short z() { return scaledShortValues[2]; }
             });
         }
 

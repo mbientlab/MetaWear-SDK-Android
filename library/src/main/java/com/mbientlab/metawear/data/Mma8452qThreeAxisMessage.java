@@ -57,41 +57,29 @@ public class Mma8452qThreeAxisMessage extends Message {
 
     @Override
     public <T> T getData(Class<T> type) {
-        if (type.equals(CartesianShort.class) || type.equals(Cartesian.class)) {
+        if (type.equals(CartesianShort.class)) {
             return type.cast(new CartesianShort() {
                 @Override
-                public Short x() {
-                    return milliGs[0];
-                }
+                public Short x() { return milliGs[0]; }
 
                 @Override
-                public Short y() {
-                    return milliGs[1];
-                }
+                public Short y() { return milliGs[1]; }
 
                 @Override
-                public Short z() {
-                    return milliGs[2];
-                }
+                public Short z() { return milliGs[2]; }
             });
         }
 
         if (type.equals(CartesianFloat.class)) {
             return type.cast(new CartesianFloat() {
                 @Override
-                public Float x() {
-                    return accelGs[0];
-                }
+                public Float x() { return accelGs[0]; }
 
                 @Override
-                public Float y() {
-                    return accelGs[1];
-                }
+                public Float y() { return accelGs[1]; }
 
                 @Override
-                public Float z() {
-                    return accelGs[2];
-                }
+                public Float z() { return accelGs[2]; }
             });
         }
 

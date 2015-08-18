@@ -28,5 +28,9 @@ package com.mbientlab.metawear.data;
  * Subclass of the Cartesian interface that reports data as a Float
  * @author Eric Tsai
  */
-public interface CartesianFloat extends Cartesian<Float> {
+public abstract class CartesianFloat implements Cartesian<Float> {
+    @Override
+    public String toString() {
+        return String.format("(%.3f, %.3f, %.3f)", x(), y(), z());
+    }
 }

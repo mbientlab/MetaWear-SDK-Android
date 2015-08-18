@@ -133,7 +133,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     private final static double TICK_TIME_STEP= (48.0 / 32768.0) * 1000.0;
     private static final HashMap<String, Class<? extends DataSignal.ProcessorConfig>> processorSchemes;
     private static final HashMap<Class<? extends Message>, Class<? extends Message>> unsignedToSigned, signedToUnsigned;
-    private static final HashSet<Class<? extends Message>> bmi160GyroMessageClasses, bmi160AccMessageClasses;
+    private static final HashSet<Class<? extends Message>> bmi160GyroMessageClasses, bmi160AccMessageClasses, signedMsgClasses;
 
     static {
         processorSchemes= new HashMap<>();
@@ -154,11 +154,18 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         unsignedToSigned= new HashMap<>();
         unsignedToSigned.put(UnsignedMessage.class, SignedMessage.class);
         unsignedToSigned.put(Bmi160SingleAxisUnsignedMessage.class, Bmi160SingleAxisMessage.class);
+        unsignedToSigned.put(Bmi160SingleAxisUnsignedGyroMessage.class, Bmi160SingleAxisGyroMessage.class);
         unsignedToSigned.put(Mma8452qSingleAxisUnsignedMessage.class, Mma8452qSingleAxisMessage.class);
+
+        signedMsgClasses= new HashSet<>();
+        signedMsgClasses.add(TemperatureMessage.class);
+        signedMsgClasses.add(Bmp280PressureMessage.class);
+        signedMsgClasses.add(Bmp280AltitudeMessage.class);
 
         signedToUnsigned= new HashMap<>();
         signedToUnsigned.put(SignedMessage.class, UnsignedMessage.class);
         signedToUnsigned.put(Bmi160SingleAxisMessage.class, Bmi160SingleAxisUnsignedMessage.class);
+        signedToUnsigned.put(Bmi160SingleAxisGyroMessage.class, Bmi160SingleAxisUnsignedGyroMessage.class);
         signedToUnsigned.put(Mma8452qSingleAxisMessage.class, Mma8452qSingleAxisUnsignedMessage.class);
 
         bmi160AccMessageClasses= new HashSet<>();
@@ -1141,7 +1148,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     };
                 } else if (config instanceof Counter) {
                     final Counter params= (Counter) config;
-                    newProcessor= new ProcessedDataSignal(params.output, UnsignedMessage.class) {
+                    newProcessor= new ProcessedDataSignal(params.size, UnsignedMessage.class) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1214,27 +1221,59 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     };
                 } else if (config instanceof Maths) {
                     final Maths params = (Maths) config;
+                    final boolean signedOp= params.signed == null ? isSigned() : params.signed;
                     Class<? extends Message> nextMsgClass;
 
                     switch (params.mathOp) {
+                        case ADD:
+                        case MULTIPLY:
+                        case DIVIDE:
                         case SUBTRACT:
-                            if (unsignedToSigned.containsKey(msgClass)) {
-                                nextMsgClass = unsignedToSigned.get(msgClass);
+                        case MODULUS:
+                            if (signedOp) {
+                                if (unsignedToSigned.containsKey(msgClass)) {
+                                    nextMsgClass = unsignedToSigned.get(msgClass);
+                                } else {
+                                    nextMsgClass = msgClass;
+                                }
                             } else {
-                                nextMsgClass = msgClass;
+                                if (signedToUnsigned.containsKey(msgClass)) {
+                                    nextMsgClass= signedToUnsigned.get(msgClass);
+                                } else {
+                                    nextMsgClass = msgClass;
+                                }
                             }
                             break;
                         case ABS_VALUE:
-                        case SQRT:
                             if (signedToUnsigned.containsKey(msgClass)) {
                                 nextMsgClass = signedToUnsigned.get(msgClass);
                             } else {
                                 nextMsgClass = msgClass;
                             }
                             break;
+                        case SQRT:
+                            nextMsgClass= UnsignedMessage.class;
+                            break;
+                        case EXPONENT:
+                            if (signedToUnsigned.containsKey(msgClass) || signedMsgClasses.contains(msgClass)) {
+                                nextMsgClass= SignedMessage.class;
+                            } else if (unsignedToSigned.containsKey(msgClass)) {
+                                nextMsgClass= UnsignedMessage.class;
+                            } else {
+                                ///< Every class should be categorized as signed or unsigned except the three axis messages
+                                ///< Should we also extend barometer and temp to follow suit?
+                                nextMsgClass= msgClass;
+                            }
+
+                            if (signedOp && unsignedToSigned.containsKey(nextMsgClass)) {
+                                nextMsgClass = unsignedToSigned.get(nextMsgClass);
+                            }
+                            break;
                         default:
-                            nextMsgClass = msgClass;
+                            nextMsgClass= msgClass;
+                            break;
                     }
+
                     newProcessor = new ProcessedDataSignal((byte) 4, nextMsgClass) {
                         @Override
                         public byte[] getFilterConfig() {
@@ -1244,8 +1283,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
                             Maths mathsConfig = (Maths) newConfig;
-                            byte signedMask = (byte) (mathsConfig.signed == null ? (isSigned() ? 0x10 : 0x0) : (mathsConfig.signed ? 0x10 : 0x0));
                             Number firmwareRhs;
+                            byte signedMask = (byte) (signedOp ? 0x10 : 0x0);
 
                             switch (mathsConfig.mathOp) {
                                 case ADD:
@@ -1266,8 +1305,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                         @Override
                         public boolean isSigned() {
-                            return !(params.mathOp == Maths.Operation.ABS_VALUE ||
-                                    params.mathOp == Maths.Operation.SQRT);
+                            return params.mathOp == Maths.Operation.ABS_VALUE || params.mathOp == Maths.Operation.SQRT ||
+                                    parent.isSigned();
                         }
 
                         @Override
@@ -1832,6 +1871,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 public void unsubscribe() {
                     writeRegister(Mma8452qAccelerometerRegister.DATA_VALUE, (byte) 0);
                     super.unsubscribe();
+                }
+
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * 1000;
                 }
             };
         }
@@ -3132,7 +3176,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             return new SourceSelector() {
                 @Override
                 public DataSignal fromAnalogGpio(byte pin, AnalogReadMode mode) {
-                    return new RouteBuilder().fromAnalogGpio(pin, mode);
+                    return fromAnalogIn(pin, mode);
                 }
 
                 @Override
@@ -3141,8 +3185,18 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 }
 
                 @Override
-                public DataSignal fromGpioPinNotify(byte pin) {
+                public DataSignal fromDigitalInChange(byte pin) {
                     return new RouteBuilder().fromGpioPinNotify(pin);
+                }
+
+                @Override
+                public DataSignal fromGpioPinNotify(byte pin) {
+                    return fromDigitalInChange(pin);
+                }
+
+                @Override
+                public DataSignal fromAnalogIn(byte pin, AnalogReadMode mode) {
+                    return new RouteBuilder().fromAnalogGpio(pin, mode);
                 }
             };
         }

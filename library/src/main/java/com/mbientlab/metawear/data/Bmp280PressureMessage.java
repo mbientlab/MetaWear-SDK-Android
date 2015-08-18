@@ -36,6 +36,13 @@ import java.util.Calendar;
  * @author Eric Tsai
  */
 public class Bmp280PressureMessage extends Message {
+    private static final float SCALE = 256f;
+    /**
+     * Retrieves the LSB to pascal ratio.
+     * @return Value corresponding to 1pa
+     */
+    public static float getScale() { return SCALE;}
+
     private final float pascals;
 
     public Bmp280PressureMessage(byte[] data) {
@@ -45,7 +52,7 @@ public class Bmp280PressureMessage extends Message {
     public Bmp280PressureMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        pascals= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getInt() / 256.f;
+        pascals= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getInt() / SCALE;
     }
 
     @Override

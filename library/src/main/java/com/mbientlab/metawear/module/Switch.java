@@ -37,6 +37,10 @@ public interface Switch extends MetaWearBoard.Module {
      * @author Eric Tsai
      */
     interface SourceSelector {
+        /**
+         * Handle data from the switch
+         * @return Object representing switch state
+         */
         DataSignal fromSensor();
     }
     /**
