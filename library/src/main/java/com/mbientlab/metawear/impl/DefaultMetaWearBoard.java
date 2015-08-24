@@ -2675,6 +2675,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     });
 
                     byte[] extra= info.extra();
+                    tempSources.clear();
                     for(byte i= 0; i < extra.length; i++) {
                         try {
                             Constructor<?> cTor = tempDriverClasses[extra[i]].getConstructor(DefaultMetaWearBoard.class, byte.class, byte.class);
@@ -4317,8 +4318,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             final float[] values= new float[] { 2.f, 4.f, 8.f, 16.f };
             int closest= closestIndex(values, range);
 
+            bmi160AccRange= Bmi160Accelerometer.AccRange.values()[closest];
             bmi160DataSampling[1]&= 0xf0;
-            bmi160DataSampling[1]|= Bmi160Accelerometer.AccRange.values()[closest].bitMask();
+            bmi160DataSampling[1]|= bmi160AccRange.bitMask();
             writeRegister(Bmi160AccelerometerRegister.DATA_CONFIG, bmi160DataSampling);
         }
 
@@ -4484,6 +4486,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         public NrfDieImpl(byte driver, byte channel) {
             super(driver, channel);
         }
+
+        @Override
+        public String getName() {
+            return "NRF On-Die Sensor";
+        }
     }
     private class ExtThermistorImpl extends SourceImpl implements MultiChannelTemperature.ExtThermistor {
         public ExtThermistorImpl(byte driver, byte channel) {
@@ -4494,15 +4501,30 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         public void configure(byte analogReadPin, byte pulldownPin, boolean activeHigh) {
             writeRegister(MultiChannelTempRegister.MODE, channel(), analogReadPin, pulldownPin, (byte) (activeHigh ? 1 : 0));
         }
+
+        @Override
+        public String getName() {
+            return "External Thermistor";
+        }
     }
     private class BMP280Impl extends SourceImpl implements MultiChannelTemperature.BMP280 {
         public BMP280Impl(byte driver, byte channel) {
             super(driver, channel);
         }
+
+        @Override
+        public String getName() {
+            return "BMP280 Sensor";
+        }
     }
     private class PresetThermistorImpl extends SourceImpl implements MultiChannelTemperature.PresetThermistor {
         public PresetThermistorImpl(byte driver, byte channel) {
             super(driver, channel);
+        }
+
+        @Override
+        public String getName() {
+            return "On-board Thermistor";
         }
     }
     private final Class[] tempDriverClasses = new Class[] { NrfDieImpl.class, ExtThermistorImpl.class, BMP280Impl.class, PresetThermistorImpl.class};
@@ -4663,9 +4685,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         @Override
         public ConfigEditor configure() {
             return new ConfigEditor() {
-                private OversamplingMode samplingMode;
-                private FilterMode filterMode;
-                private StandbyTime time;
+                private OversamplingMode samplingMode= OversamplingMode.STANDARD;
+                private FilterMode filterMode= FilterMode.OFF;
+                private StandbyTime time= StandbyTime.TIME_0_5;
 
                 @Override
                 public ConfigEditor setPressureOversampling(OversamplingMode mode) {

@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import java.util.HashMap;
 import java.util.UUID;
 
 /**
@@ -37,15 +38,32 @@ public enum DevInfoCharacteristic {
     HARDWARE_VERSION("27");
 
     private final UUID uuid;
+    private final String key;
+
     DevInfoCharacteristic(String uuidPart) {
         uuid= UUID.fromString(String.format("00002a%s-0000-1000-8000-00805f9b34fb", uuidPart));
+        key= this.name().toLowerCase();
     }
 
     public UUID uuid() {
         return uuid;
     }
+    public String key() {
+        return key;
+    }
 
     public static UUID serviceUuid() {
         return UUID.fromString(String.format("0000%s-0000-1000-8000-00805f9b34fb", "180a"));
+    }
+
+    private static final HashMap<UUID, DevInfoCharacteristic> uuidLookupMap;
+    static {
+        uuidLookupMap= new HashMap<>();
+        for(DevInfoCharacteristic it: DevInfoCharacteristic.values()) {
+            uuidLookupMap.put(it.uuid(), it);
+        }
+    }
+    public static DevInfoCharacteristic uuidToDevInfoCharacteristic(UUID uuid) {
+        return uuidLookupMap.get(uuid);
     }
 }

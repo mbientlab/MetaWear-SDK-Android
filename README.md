@@ -20,7 +20,7 @@ Then, add the compile element to the dependencies closure in the module's *build
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:2.0.7'
+    compile 'com.mbientlab:metawear:2.0.12'
 }
 ```
 
@@ -47,7 +47,7 @@ import android.content.*;
 import android.os.Bundle;
 import android.os.IBinder;
 
-import com.mbientlab.metawear.impl.MetaWearBleService;
+import com.mbientlab.metawear.MetaWearBleService;
 
 public class ExampleActivity extends Activity implements ServiceConnection {
     private MetaWearBleService.LocalBinder serviceBinder;

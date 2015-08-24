@@ -35,6 +35,7 @@ public interface Bmp280Barometer extends Barometer {
      * @author Eric Tsai
      */
     enum OversamplingMode {
+        SKIP,
         ULTRA_LOW_POWER,
         LOW_POWER,
         STANDARD,

@@ -51,6 +51,7 @@ import com.mbientlab.metawear.data.CartesianShort;
 import com.mbientlab.metawear.MetaWearBleService;
 import com.mbientlab.metawear.data.Units;
 import com.mbientlab.metawear.module.*;
+import com.mbientlab.metawear.module.Bmp280Barometer.StandbyTime;
 import com.mbientlab.metawear.processor.*;
 import com.mbientlab.metawear.processor.Maths;
 import com.mbientlab.metawear.DataSignal;
@@ -1215,10 +1216,11 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         final Switch mySwitch= (Switch) v;
 
         try {
-            final Barometer barometerModule= mwBoard.getModule(Barometer.class);
+            final Bmp280Barometer barometerModule= mwBoard.getModule(Bmp280Barometer.class);
             if (mySwitch.isChecked()) {
                 if (!barometerSetup) {
-                    barometerModule.routeData().fromPressure().process(new Time(Time.OutputMode.ABSOLUTE, 1000)).stream("pressure_sub").commit()
+                    barometerModule.configure().setPressureOversampling(Bmp280Barometer.OversamplingMode.ULTRA_HIGH).commit();
+                    barometerModule.routeData().fromPressure().stream("pressure_sub").commit()
                             .onComplete(new CompletionHandler<RouteManager>() {
                                 @Override
                                 public void success(RouteManager result) {
@@ -1228,10 +1230,9 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                             Log.i("test", String.format("Pressure= %.3f", msg.getData(Float.class)));
                                         }
                                     });
-                                    barometerModule.start();
                                 }
                             });
-                    barometerModule.routeData().fromAltitude().process(new Time(Time.OutputMode.ABSOLUTE, 1000)).stream("altitude_sub").commit()
+                    barometerModule.routeData().fromAltitude().stream("altitude_sub").commit()
                             .onComplete(new CompletionHandler<RouteManager>() {
                                 @Override
                                 public void success(RouteManager result) {

@@ -69,6 +69,12 @@ public interface MultiChannelTemperature extends Temperature {
          * @return Channel position
          */
         byte channel();
+
+        /**
+         * Retrieves a readable name for the temperature source
+         * @return Name for the source
+         */
+        String getName();
     }
 
     /**

@@ -212,7 +212,7 @@ public class MetaWearBleService extends Service {
         }
     };
     private class GattConnectionState {
-        public final HashMap<UUID, String> devInfoValues= new HashMap<>();
+        public final HashMap<DevInfoCharacteristic, String> devInfoValues= new HashMap<>();
 
         public final HashMap<Byte, ModuleInfoImpl> moduleInfo= new HashMap<>();
         public final AndroidBleConnection androidConn;
@@ -243,7 +243,9 @@ public class MetaWearBleService extends Service {
                     try {
                         SharedPreferences.Editor editor = deviceStates.edit();
                         JSONObject newCachedState = new JSONObject();
-                        newCachedState.put("firmware", devInfoValues.get(DevInfoCharacteristic.FIRMWARE_VERSION.uuid()));
+                        for(DevInfoCharacteristic it: DevInfoCharacteristic.values()) {
+                            newCachedState.put(it.key(), devInfoValues.get(it));
+                        }
 
                         JSONObject newModuleState = new JSONObject();
                         for (ModuleInfoImpl it : moduleInfo.values()) {
@@ -274,11 +276,11 @@ public class MetaWearBleService extends Service {
 
         public MetaWearBoard.DeviceInformation buildDeviceInfo() {
             return new MetaWearBoard.DeviceInformation() {
-                @Override public String manufacturer() { return devInfoValues.get(DevInfoCharacteristic.MANUFACTURER_NAME.uuid()); }
-                @Override public String serialNumber() { return devInfoValues.get(DevInfoCharacteristic.SERIAL_NUMBER.uuid()); }
-                @Override public String firmwareRevision() { return devInfoValues.get(DevInfoCharacteristic.FIRMWARE_VERSION.uuid()); }
-                @Override public String hardwareRevision() { return devInfoValues.get(DevInfoCharacteristic.HARDWARE_VERSION.uuid()); }
-                @Override public String modelNumber() { return devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER.uuid()); }
+                @Override public String manufacturer() { return devInfoValues.get(DevInfoCharacteristic.MANUFACTURER_NAME); }
+                @Override public String serialNumber() { return devInfoValues.get(DevInfoCharacteristic.SERIAL_NUMBER); }
+                @Override public String firmwareRevision() { return devInfoValues.get(DevInfoCharacteristic.FIRMWARE_VERSION); }
+                @Override public String hardwareRevision() { return devInfoValues.get(DevInfoCharacteristic.HARDWARE_VERSION); }
+                @Override public String modelNumber() { return devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER); }
                 @Override public String toString() {
                     return String.format("{manufacturer: %s, serialNumber: %s, firmwareRevision: %s, hardwareRevision: %s, modelNumber: %s}",
                             manufacturer(), serialNumber(), firmwareRevision(), hardwareRevision(), modelNumber());
@@ -743,28 +745,61 @@ public class MetaWearBleService extends Service {
                 gattManager.executeNext(GattActionKey.DESCRIPTOR_WRITE);
                 int newCount= state.nDescriptors.decrementAndGet();
                 if (newCount == 0) {
-                    for(final DevInfoCharacteristic it: DevInfoCharacteristic.values()) {
-                        gattManager.queueAction(new Action() {
-                            @Override
-                            public boolean execute() {
-                                BluetoothGattService service= gatt.getService(DevInfoCharacteristic.serviceUuid());
-                                BluetoothGattCharacteristic devInfoChar= service.getCharacteristic(it.uuid());
+                    String cachedState= deviceStates.getString(gatt.getDevice().getAddress(), "");
 
-                                if (devInfoChar != null) {
-                                    gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
-                                    gatt.readCharacteristic(devInfoChar);
-                                    return true;
+                    if (cachedState.isEmpty()) {
+                        readDeviceInformation(gatt, state);
+                    } else {
+                        try {
+                            JSONObject jsonCachedState = new JSONObject(cachedState);
+                            state.devInfoValues.put(DevInfoCharacteristic.MODEL_NUMBER, jsonCachedState.getString(DevInfoCharacteristic.MODEL_NUMBER.key()));
+                            state.devInfoValues.put(DevInfoCharacteristic.HARDWARE_VERSION, jsonCachedState.getString(DevInfoCharacteristic.HARDWARE_VERSION.key()));
+                            state.devInfoValues.put(DevInfoCharacteristic.MANUFACTURER_NAME, jsonCachedState.getString(DevInfoCharacteristic.MANUFACTURER_NAME.key()));
+                            state.devInfoValues.put(DevInfoCharacteristic.SERIAL_NUMBER, jsonCachedState.getString(DevInfoCharacteristic.SERIAL_NUMBER.key()));
+
+                            gattManager.queueAction(new Action() {
+                                @Override
+                                public boolean execute() {
+                                    BluetoothGattService service = gatt.getService(DevInfoCharacteristic.serviceUuid());
+                                    BluetoothGattCharacteristic devInfoChar = service.getCharacteristic(DevInfoCharacteristic.FIRMWARE_VERSION.uuid());
+
+                                    if (devInfoChar != null) {
+                                        gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
+                                        gatt.readCharacteristic(devInfoChar);
+                                        return true;
+                                    }
+                                    return false;
                                 }
-
-                                state.devInfoValues.put(it.uuid(), Constant.METAWEAR_R_MODULE);
-                                state.checkConnectionReady();
-                                return false;
-                            }
-                        });
+                            });
+                        } catch (JSONException e) {
+                            readDeviceInformation(gatt, state);
+                        }
                     }
 
                     gattManager.executeNext(GattActionKey.NONE);
                 }
+            }
+        }
+
+        private void readDeviceInformation(final BluetoothGatt gatt, final GattConnectionState state) {
+            for (final DevInfoCharacteristic it : DevInfoCharacteristic.values()) {
+                gattManager.queueAction(new Action() {
+                    @Override
+                    public boolean execute() {
+                        BluetoothGattService service = gatt.getService(DevInfoCharacteristic.serviceUuid());
+                        BluetoothGattCharacteristic devInfoChar = service.getCharacteristic(it.uuid());
+
+                        if (devInfoChar != null) {
+                            gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
+                            gatt.readCharacteristic(devInfoChar);
+                            return true;
+                        }
+
+                        state.devInfoValues.put(it, Constant.METAWEAR_R_MODULE);
+                        state.checkConnectionReady();
+                        return false;
+                    }
+                });
             }
         }
 
@@ -803,13 +838,18 @@ public class MetaWearBleService extends Service {
                     }
                 } else {
                     String charStringValue= new String(characteristic.getValue());
-                    state.devInfoValues.put(characteristic.getUuid(), charStringValue);
+                    state.devInfoValues.put(DevInfoCharacteristic.uuidToDevInfoCharacteristic(characteristic.getUuid()),
+                            charStringValue);
+
                     if (characteristic.getUuid().equals(DevInfoCharacteristic.FIRMWARE_VERSION.uuid())) {
                         Version deviceFirmware= new Version(charStringValue);
 
                         if (deviceFirmware.compareTo(Constant.SERVICE_DISCOVERY_MIN_FIRMWARE) < 0) {
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.AMBIENT_LIGHT, (byte) -1, false));
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.BAROMETER, (byte) -1, false));
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.GSR, (byte) -1, false));
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.TEMPERATURE, Constant.SINGLE_CHANNEL_TEMP_IMPLEMENTATION, true));
-                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.ACCELEROMETER, Constant.SINGLE_CHANNEL_TEMP_IMPLEMENTATION, true));
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.ACCELEROMETER, Constant.MMA8452Q_IMPLEMENTATION, true));
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.GYRO, (byte) -1, false));
                         } else {
                             String cachedState= deviceStates.getString(gatt.getDevice().getAddress(), "");
@@ -818,7 +858,7 @@ public class MetaWearBleService extends Service {
                             } else {
                                 try {
                                     JSONObject jsonCachedState= new JSONObject(cachedState);
-                                    String cachedFirmware= jsonCachedState.getString("firmware");
+                                    String cachedFirmware= jsonCachedState.getString(DevInfoCharacteristic.FIRMWARE_VERSION.key());
 
                                     if (!cachedFirmware.equals(charStringValue)) {
                                         state.discoverModuleInfo();
@@ -913,7 +953,7 @@ public class MetaWearBleService extends Service {
         }
 
         /**
-         * Executes asynchronous tasks on a background thread.  This is the default behaviour, to keep minimize
+         * Executes asynchronous tasks on a background thread.  This is the default behaviour, to minimize
          * activity on the UI thread.
          */
         public void executeOnBackgroundThread() {
