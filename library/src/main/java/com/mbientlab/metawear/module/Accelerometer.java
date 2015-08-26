@@ -42,7 +42,7 @@ public interface Accelerometer extends MetaWearBoard.Module {
      */
     void setOutputDataRate(float frequency);
     /**
-     * Sets the sampling range for the accelerometer.  The closet, valid range will be chosen depending
+     * Sets the sampling range for the accelerometer.  The closest, valid range will be chosen depending
      * on the underlying sensor
      * @param range    Sampling range, in G's
      */

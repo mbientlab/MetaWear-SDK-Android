@@ -72,9 +72,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         StringBuilder builder= new StringBuilder();
-        builder.append(String.format("[%02x", value[0]));
+        builder.append(String.format("[0x%02x", value[0]));
         for(int i= 1; i < value.length; i++) {
-            builder.append(String.format(", %02x", value[i]));
+            builder.append(String.format(", 0x%02x", value[i]));
         }
         builder.append("]");
 
@@ -968,7 +968,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                             byte second = (byte) ((DataSignalImpl.this.outputSize - 1) & 0x3 | (isSigned() ? 0x4 : 0) |
                                     (params.mode.ordinal() << 3));
                             ByteBuffer buffer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
-                            Number firmwareValue = numberToFirmwareUnits(thsConfig.limit), firmwareHysteresis= numberToFirmwareUnits(thsConfig.hysteresis);
+                            Number firmwareValue = parent.numberToFirmwareUnits(thsConfig.limit), firmwareHysteresis= parent.numberToFirmwareUnits(thsConfig.hysteresis);
                             buffer.put((byte) 0xd).put(second).putInt(firmwareValue.intValue()).putShort(firmwareHysteresis.shortValue());
 
                             return buffer.array();
@@ -1054,7 +1054,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                             ///< Do not allow the delta mode to be changed
                             byte second = (byte) (((this.outputSize - 1) & 0x3) | (isSigned() ? 0x4 : 0) |
                                     (params.mode.ordinal() << 3));
-                            Number firmware = numberToFirmwareUnits(deltaConfig.threshold);
+                            Number firmware = parent.numberToFirmwareUnits(deltaConfig.threshold);
                             ByteBuffer config = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN).put((byte) 0xc).put(second).putInt(firmware.intValue());
                             return config.array();
 
@@ -1366,7 +1366,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
                             Pulse pulseConfig= (Pulse) newConfig;
-                            Number firmwareThs= numberToFirmwareUnits(pulseConfig.threshold);
+                            Number firmwareThs= parent.numberToFirmwareUnits(pulseConfig.threshold);
 
                             ///< Do not allow output type to switch
                             ByteBuffer buffer= ByteBuffer.allocate(10).put((byte) 0xb).put(parent.outputSize).put((byte) 0).put((byte) params.mode.ordinal())
@@ -1557,7 +1557,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 } else if (newState instanceof Average.State) {
                     stateBytes= new byte[0];
                 } else if (newState instanceof Delta.State) {
-                    Number firmware= numberToFirmwareUnits(((Delta.State) newState).newPreviousValue);
+                    Number firmware= parent.numberToFirmwareUnits(((Delta.State) newState).newPreviousValue);
 
                     stateBytes= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(firmware.intValue()).array();
                 } else if (newState instanceof Passthrough.State) {
@@ -1742,6 +1742,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                             return new byte[]{0x7,
                                     (byte) (((this.outputSize - 1) & 0x3) | (((this.outputSize - 1) & 0x3) << 2) | ((nInputs - 1) << 4) | 0x80),
                                     rmsMode};
+                        }
+
+                        @Override
+                        public Number numberToFirmwareUnits(Number input) {
+                            return parent.numberToFirmwareUnits(input);
                         }
 
                         @Override
@@ -2279,7 +2284,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         final ResponseProcessor idProcessor= new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
-                pendingRoutes.peek().receivedId(response[2]);
+                if (!pendingRoutes.isEmpty()) {
+                    pendingRoutes.peek().receivedId(response[2]);
+                }
                 return null;
             }
         };
@@ -2297,7 +2304,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         responses.put(new ResponseHeader(EventRegister.ENTRY), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
-                currEventListener.receivedCommandId(response[2]);
+                if (currEventListener != null) {
+                    currEventListener.receivedCommandId(response[2]);
+                }
                 return null;
             }
         });
@@ -2354,9 +2363,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             @Override
             public Response process(byte[] response) {
                 try {
-                    byte[] respBody= new byte[response.length - 3];
+                    byte[] respBody = new byte[response.length - 3];
                     System.arraycopy(response, 3, respBody, 0, respBody.length);
-                    ResponseHeader header= new ResponseHeader(response[0], response[1], response[2]);
+                    ResponseHeader header = new ResponseHeader(response[0], response[1], response[2]);
 
                     if (bmi160AccMessageClasses.contains(dataProcMsgClasses.get(header))) {
                         Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
@@ -2370,6 +2379,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                     Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class);
                     return new Response((Message) cTor.newInstance(respBody), header);
+                } catch (NullPointerException ex) {
+                    return null;
                 } catch (Exception ex) {
                     throw new RuntimeException("Cannot create a message processor for filter output: " + Arrays.toString(response), ex);
                 }

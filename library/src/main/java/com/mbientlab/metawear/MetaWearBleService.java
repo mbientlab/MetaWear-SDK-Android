@@ -74,6 +74,7 @@ public class MetaWearBleService extends Service {
             METAWEAR_SERVICE= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A"),
             METAWEAR_COMMAND= UUID.fromString("326A9001-85CB-9195-D9DD-464CFBBAE75A"),
             METAWEAR_NOTIFY= UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A");
+    private final static long FUTURE_CHECKER_PERIOD= 1000L;
 
     private enum GattActionKey {
         NONE,
@@ -421,6 +422,8 @@ public class MetaWearBleService extends Service {
                 public boolean execute() {
                     if (gatt != null && (override || gattConnectionStates.get(gatt.getDevice()).isReady.get())) {
                         gattManager.setExpectedGattKey(GattActionKey.CHAR_WRITE);
+                        mwBoards.get(gatt.getDevice()).wroteCommand(command);
+
                         BluetoothGattService service = gatt.getService(METAWEAR_SERVICE);
                         BluetoothGattCharacteristic mwCmdChar = service.getCharacteristic(METAWEAR_COMMAND);
                         mwCmdChar.setWriteType(writeType);
@@ -470,9 +473,9 @@ public class MetaWearBleService extends Service {
                     queueCommand(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, macroBytes);
                 }
             } else {
-                queueCommand(command[0] == MacroRegister.ENABLE.moduleOpcode() ?
-                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
-                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                queueCommand(command[0] == InfoRegister.MACRO.moduleOpcode() ?
+                                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT :
+                                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
                         command);
             }
         }
@@ -693,8 +696,6 @@ public class MetaWearBleService extends Service {
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             gattManager.updateExecActionsState(false);
             gattManager.executeNext(GattActionKey.CHAR_WRITE);
-
-            mwBoards.get(gatt.getDevice()).wroteCommand(characteristic.getValue());
         }
 
         @Override
@@ -959,7 +960,7 @@ public class MetaWearBleService extends Service {
         public void executeOnBackgroundThread() {
             useHandler= false;
             futureTimer = new Timer();
-            futureTimer.scheduleAtFixedRate(futureCheckerTask, 0, 1000);
+            futureTimer.scheduleAtFixedRate(futureCheckerTask, 0, FUTURE_CHECKER_PERIOD);
         }
     }
 
@@ -988,6 +989,7 @@ public class MetaWearBleService extends Service {
     public void onCreate () {
         super.onCreate();
 
+        futureTimer.scheduleAtFixedRate(futureCheckerTask, 0, FUTURE_CHECKER_PERIOD);
         deviceStates= getSharedPreferences(DEVICE_STATE_KEY, MODE_PRIVATE);
     }
 }
