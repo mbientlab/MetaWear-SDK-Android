@@ -53,12 +53,21 @@ public abstract class Message {
     }
 
     /**
-     * Retrieves the timestamp of when the data was created.  The timestamp will not be accurate for
-     * high frequency streams (i.e  data from the accelerometer).
+     * Retrieves the timestamp of when the data was either logged or received from a stream.  The
+     * timestamp will not be accurate for high frequency streams (i.e  data from the accelerometer).
      * @return Data creation date
      */
     public Calendar getTimestamp() {
         return timestamp;
+    }
+
+    /**
+     * Retrieves the data timestamp as a formatted string.
+     * @return Formatted string representation of the timestamp
+     * @see #getTimestamp()
+     */
+    public String getTimestampAsString() {
+        return String.format("%tY%<tm%<td-%<tH%<tM%<tS%<tL", timestamp);
     }
 
     /**
@@ -88,6 +97,6 @@ public abstract class Message {
             builder.append(String.format(", %02x", data[i]));
         }
 
-        return String.format("{timestamp: %tY%<tm%<td-%<tH%<tM%<tS%<tL, data: [%s]}", timestamp, builder.toString());
+        return String.format("{timestamp: %s, data: [%s]}", getTimestampAsString(), builder.toString());
     }
 }

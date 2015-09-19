@@ -20,7 +20,7 @@ Then, add the compile element to the dependencies closure in the module's *build
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:2.0.18'
+    compile 'com.mbientlab:metawear:2.1.0'
 }
 ```
 

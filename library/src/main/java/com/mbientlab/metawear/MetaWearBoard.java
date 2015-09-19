@@ -32,10 +32,20 @@ import java.util.UUID;
  */
 public interface MetaWearBoard {
     /**
-     * Service UUID identifying a MetaWear board.  This uuid can be used to filter non MetaWears from a
-     * Bluetooth LE scan.
+     * Service UUID identifying a MetaWear board.  This uuid can be used to filter non MetaWear devices
+     * from a Bluetooth LE scan.
      */
-    UUID META_WEAR_SERVICE_UUID= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
+    UUID METAWEAR_SERVICE_UUID= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
+    /**
+     * Old name for the MetaWear service UUID, replaced in v2.1.0
+     * #deprecated Used {@link #METAWEAR_SERVICE_UUID} instead
+     */
+    @Deprecated
+    UUID META_WEAR_SERVICE_UUID= METAWEAR_SERVICE_UUID;
+    /**
+     * Service UUID identifying a MetaWear board in MetaBoot mode
+     */
+    UUID METABOOT_SERVICE_UUID= new UUID(0x000015301212EFDEl, 0x1523785FEABCD123l);
 
     /**
      * Retrieves the MAC address of the board
@@ -44,15 +54,71 @@ public interface MetaWearBoard {
     String getMacAddress();
 
     /**
-     * Base class for on-board sensors, or features supported by the board's firmware
+     * Checks if the board is in MetaBoot mode
+     * @return True if it is in MetaBoot mode
+     */
+    boolean inMetaBootMode();
+
+    /**
+     * Class for handling notifications from the device firmware update operation
+     * @author Eric Tsai
+     */
+    interface DfuProgressHandler {
+        /**
+         * Enumeration of the DFU operation states
+         */
+        enum State {
+            /** Downloading the new firmware from the internet */
+            DOWNLOADING,
+            /** Preparing the board and library for the update */
+            INITIALIZING,
+            /** Starting the update */
+            STARTING,
+            /** Validating the firmware upload */
+            VALIDATING,
+            /** Disconnecting from the board */
+            DISCONNECTING
+        }
+
+        /**
+         * Called when the DFU has progressed to a new state
+         * @param dfuState    New state of the update operation
+         */
+        void reachedCheckpoint(State dfuState);
+
+        /**
+         * Called when upload completion progress has been received.  This method also functions as
+         * an implied "uploading" state.
+         * @param progress    Integer between [0, 100] representing completion percentage
+         */
+        void receivedUploadProgress(int progress);
+    }
+    /**
+     * Updates the firmware on the board to the latest available release.  The update requires an active internet
+     * connection on your Android device and will terminate the Bluetooth connection when completed without calling the
+     * {@link ConnectionStateHandler#disconnect() disconnected()} callback function.  You must be connected to the board
+     * before calling this function, otherwise, it will fail.
+     * @param handler    Handler for processing DFU progress notifications
+     * @return Result of the operation, that will be available when DFU is complete
+     */
+    AsyncOperation<Void> updateFirmware(DfuProgressHandler handler);
+    /**
+     * Terminates a DFU in progress, resulting in a failure.  Does nothing if no DFU is in progress
+     */
+    void abortFirmwareUpdate();
+
+    /**
+     * Base class for on-board sensors or features supported by the board's firmware
      * @author Eric Tsai
      */
     interface Module { }
     /**
-     * Retrieves a pointer to the requested module, if supported by the current board and firmware
+     * Retrieves a pointer to the requested module, if supported by the current board and firmware, and
+     * the board is not in MetaBoot mode
      * @param moduleClass    Module class to lookup
      * @return Reference to the requested module, null if the BLE connection is not active
-     * @throws UnsupportedModuleException If the module is not available on the board
+     * @throws UnsupportedModuleException If the module is not available on the board, or the board is in
+     * MetaBoot mode
      */
     <T extends Module> T getModule(Class<T> moduleClass) throws UnsupportedModuleException;
 
@@ -113,18 +179,19 @@ public interface MetaWearBoard {
      */
     abstract class ConnectionStateHandler {
         /**
-         * Called when a Bluetooth LE connection is successfully established
+         * Called when a connection to the MetaWear board is established and ready to be used
          */
         public void connected() { }
 
         /**
-         * Called when the Bluetooth LE connection is lost
+         * Called when the connection is lost
          */
         public void disconnected() { }
 
         /**
          * Called if a connection attempt failed
-         * @param status    Status code reported by one of the BluetoothGattCallback methods
+         * @param status    Status code reported by one of the BluetoothGattCallback methods, -1 if a
+         *                  a connection timeout occurred
          * @param error     Error thrown by one of the BluetoothGattCallback methods
          */
         public void failure(int status, Throwable error) { }
@@ -135,7 +202,10 @@ public interface MetaWearBoard {
      */
     void setConnectionStateHandler(ConnectionStateHandler handler);
     /**
-     * Establish a connection to the board
+     * Establish a connection to the board and prepare the API to communicate with the board.  If this
+     * is not completed within a timeout interval, the
+     * {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#failure(int, Throwable) failure} callback
+     * function will be called with a TimeoutException
      */
     void connect();
     /**

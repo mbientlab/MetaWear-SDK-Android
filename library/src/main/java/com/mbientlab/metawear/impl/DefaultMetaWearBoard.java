@@ -52,6 +52,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,7 @@ import java.util.Queue;
 import java.util.Stack;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -66,6 +68,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Created by etsai on 6/15/2015.
  */
 public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.ResponseListener {
+    private static Collection<Byte> JsonByteArrayToCollection(JSONArray jsonArray) throws JSONException {
+        Collection<Byte> elements= new ArrayList<>(jsonArray.length());
+        for(int i= 0; i < jsonArray.length(); i++) {
+            elements.add((byte) jsonArray.getInt(i));
+        }
+
+        return elements;
+    }
+
     private static String arrayToHexString(byte[] value) {
         if (value.length == 0) {
             return "[]";
@@ -125,6 +136,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
     public final static byte MW_COMMAND_LENGTH = 18;
 
+    private static final long CREATOR_RESPONSE_TIME= 1500L, EVENT_COMMAND_TIME= 5500L;
     private static final byte X_OFFSET= 0, Y_OFFSET= 2, Z_OFFSET= 4;
     private static final String JSON_FIELD_MSG_CLASS= "message_class", JSON_FIELD_LOG= "logs", JSON_FIELD_ROUTE= "route",
             JSON_FIELD_SUBSCRIBERS="subscribers", JSON_FIELD_NAME= "name", JSON_FIELD_TIMER= "timers", JSON_FIELD_CMD_IDS="cmd_ids",
@@ -195,7 +207,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     }
 
     private interface RouteHandler {
-        void addId();
+        void begin();
         void receivedId(byte id);
     }
 
@@ -363,9 +375,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         @Override
         public void resubscribe(RouteManager.MessageHandler processor) {
-            if (nProcSubscribers == 0) {
-                writeRegister(DataProcessorRegister.NOTIFY, (byte) 0x1);
-            }
+            writeRegister(DataProcessorRegister.NOTIFY, (byte) 0x1);
             nProcSubscribers++;
             super.resubscribe(processor);
         }
@@ -461,65 +471,85 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         public abstract void remove();
     }
-    private class StandardLoggable extends Loggable {
-        private final byte logId;
 
-        public StandardLoggable(String key, byte logId, Class<? extends Message> msgClass) {
-            super(key, msgClass);
-            this.logId= logId;
-
-            dataLoggers.put(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, logId), this);
+    /**
+     * Legacy class left over from 2.0.0 implementation.  All future loggers should use the VariableLogger class
+     */
+    private class StandardLoggable extends VariableLoggable {
+        public StandardLoggable(String key, Collection<Byte> logIds, Class<? extends Message> msgClass) {
+            super(key, logIds, msgClass, (byte) 1);
         }
 
         public StandardLoggable(JSONObject state) throws JSONException, ClassNotFoundException {
-            this(state.getString(JSON_FIELD_LOG_KEY), (byte) state.getJSONArray(JSON_FIELD_LOGGER_IDS).getInt(0),
+            this(state.getString(JSON_FIELD_LOG_KEY), JsonByteArrayToCollection(state.getJSONArray(JSON_FIELD_LOGGER_IDS)),
                     (Class<Message>) Class.forName(state.getString(JSON_FIELD_MSG_CLASS)));
         }
-
-        @Override
-        public JSONObject serializeState() throws JSONException {
-            return super.serializeState().put(JSON_FIELD_LOGGER_IDS, new JSONArray().put(logId));
-        }
-
-        @Override
-        public void remove() {
-            dataLoggers.remove(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, logId));
-        }
     }
-    private class ThreeAxisLoggable extends Loggable {
-        private final byte xyId, zId;
-        private Queue<byte[]> xyLogEntries = new LinkedList<>(), zLogEntries = new LinkedList<>();
 
-        public ThreeAxisLoggable(String key, byte xyId, byte zId, Class<? extends Message> msgClass) {
-            super(key, msgClass);
-            this.xyId= xyId;
-            this.zId= zId;
-
-            dataLoggers.put(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, xyId), this);
-            dataLoggers.put(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, zId), this);
+    /**
+     * Legacy class left over from 2.0.0 implementation.  All future loggers should use the VariableLogger class
+     */
+    private class ThreeAxisLoggable extends VariableLoggable {
+        public ThreeAxisLoggable(String key, Collection<Byte> logIds, Class<? extends Message> msgClass) {
+            super(key, logIds, msgClass, (byte) 6);
         }
 
         public ThreeAxisLoggable(JSONObject state) throws JSONException, ClassNotFoundException {
-            this(state.getString(JSON_FIELD_LOG_KEY), (byte) state.getJSONArray(JSON_FIELD_LOGGER_IDS).getInt(0),
-                    (byte) state.getJSONArray(JSON_FIELD_LOGGER_IDS).getInt(1),
+            this(state.getString(JSON_FIELD_LOG_KEY), JsonByteArrayToCollection(state.getJSONArray(JSON_FIELD_LOGGER_IDS)),
                     (Class<Message>) Class.forName(state.getString(JSON_FIELD_MSG_CLASS)));
+        }
+    }
+    private class VariableLoggable extends Loggable {
+        private static final String JSON_FIELD_EXPECTED_SIZE= "expected_size";
+
+        ///< Use linked hash map to preserve the order in which log IDs are received from the board
+        private final LinkedHashMap<Byte, Queue<byte[]>> logEntries;
+        private final int expectedSize;
+
+        public VariableLoggable(String key, Collection<Byte> logIds, Class<? extends Message> msgClass, int expectedSize) {
+            super(key, msgClass);
+
+            this.expectedSize= expectedSize;
+
+            logEntries= new LinkedHashMap<>();
+            for(Byte id: logIds) {
+                dataLoggers.put(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, id), this);
+                logEntries.put(id, new LinkedList<byte[]>());
+            }
+        }
+
+        public VariableLoggable(JSONObject state) throws JSONException, ClassNotFoundException {
+            this(state.getString(JSON_FIELD_LOG_KEY), JsonByteArrayToCollection(state.getJSONArray(JSON_FIELD_LOGGER_IDS)),
+                    (Class<Message>) Class.forName(state.getString(JSON_FIELD_MSG_CLASS)),
+                    state.getInt(JSON_FIELD_EXPECTED_SIZE));
         }
 
         @Override
         public void processLogMessage(byte logId, Calendar timestamp, byte[] data) {
-            if (logId == xyId) {
-                xyLogEntries.add(data);
-            } else if (logId == zId) {
-                zLogEntries.add(data);
+            if (logEntries.containsKey(logId)) {
+                logEntries.get(logId).add(data);
             } else {
                 throw new RuntimeException("Unknown log id in this fn: " + logId);
             }
 
-            if (!xyLogEntries.isEmpty() && !zLogEntries.isEmpty()) {
-                byte[] xyEntry = xyLogEntries.poll(), zEntry = zLogEntries.poll();
-                byte[] merged = new byte[xyEntry.length + zEntry.length - 2];
-                System.arraycopy(xyEntry, 0, merged, 0, xyEntry.length);
-                System.arraycopy(zEntry, 0, merged, xyEntry.length, 2);
+            boolean noneEmpty= true;
+            for(Queue<byte[]> cachedValues: logEntries.values()) {
+                noneEmpty&= !cachedValues.isEmpty();
+            }
+
+            if (noneEmpty) {
+                ArrayList<byte[]> entries= new ArrayList<>(logEntries.values().size());
+                for(Queue<byte[]> cachedValues: logEntries.values()) {
+                    entries.add(cachedValues.poll());
+                }
+
+                byte[] merged= new byte[expectedSize];
+                int offset= 0;
+                for(int i= 0; i < entries.size(); i++) {
+                    int copyLength= Math.min(entries.get(i).length, expectedSize - offset);
+                    System.arraycopy(entries.get(i), 0, merged, offset, copyLength);
+                    offset+= entries.get(i).length;
+                }
 
                 super.processLogMessage(logId, timestamp, merged);
             }
@@ -527,16 +557,21 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         @Override
         public JSONObject serializeState() throws JSONException {
-            return super.serializeState().put(JSON_FIELD_LOGGER_IDS, new JSONArray().put(xyId).put(zId));
+            JSONArray loggerIds= new JSONArray();
+            for(Byte id: logEntries.keySet()) {
+                loggerIds.put(id);
+            }
+
+            return super.serializeState().put(JSON_FIELD_LOGGER_IDS, loggerIds).put(JSON_FIELD_EXPECTED_SIZE, expectedSize);
         }
 
         @Override
         public void remove() {
-            dataLoggers.remove(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, xyId));
-            dataLoggers.remove(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, zId));
+            for(Byte id: logEntries.keySet()) {
+                dataLoggers.remove(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, id));
+            }
         }
     }
-
     private class RouteBuilder implements EventListener, RouteHandler {
         private AsyncOperation<RouteManager> commitResult;
         private byte nExpectedCmds= 0;
@@ -744,28 +779,45 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 return log(key, this);
             }
 
-            protected DataSignal log(final String key, final DataSignalImpl source) {
-                creators.add(new IdCreator() {
-                    @Override
-                    public void execute() {
-                        writeRegister(LoggingRegister.TRIGGER, source.getTriggerConfig());
-                    }
+            private final int LOG_ENTRY_SIZE= 4;
+            private final ArrayList<Byte> logIds= new ArrayList<>();
 
-                    @Override
-                    public void receivedId(byte id) {
-                        Loggable newLogger = new StandardLoggable(key, id, msgClass);
+            protected final DataSignal log(final String key, final DataSignalImpl source) {
+                if (dataLoggerKeys.containsKey(key)) {
+                    return new InvalidDataSignal(new RuntimeException("Duplicate logging keys found: " + key));
+                }
 
-                        if (dataLoggerKeys.containsKey(key)) {
-                            throw new RuntimeException("Duplicate logging keys found: " + key);
-                        } else {
-                            dataLoggerKeys.put(key, newLogger);
-                            manager.loggerKeys.add(key);
+                ///< outputSize must be a positive number
+                final int nReqLogIds= (outputSize - 1) / LOG_ENTRY_SIZE + 1;
+                int remainder= outputSize;
+
+                for(int i= 0; i < nReqLogIds; i++, remainder-= LOG_ENTRY_SIZE) {
+                    final int entrySize= Math.min(remainder, LOG_ENTRY_SIZE), offset= LOG_ENTRY_SIZE * i;
+                    creators.add(new IdCreator() {
+                        @Override
+                        public void execute() {
+                            final byte[] triggerConfig = source.getTriggerConfig();
+                            final byte[] xyLogCfg = new byte[triggerConfig.length];
+                            System.arraycopy(triggerConfig, 0, xyLogCfg, 0, triggerConfig.length - 1);
+                            xyLogCfg[triggerConfig.length - 1] = (byte) (((entrySize - 1) << 5) | offset);
+
+                            writeRegister(LoggingRegister.TRIGGER, xyLogCfg);
                         }
-                    }
-                });
+
+                        @Override
+                        public void receivedId(byte id) {
+                            logIds.add(id);
+
+                            if (logIds.size() >= nReqLogIds) {
+                                Loggable newLogger= new VariableLoggable(key, logIds, msgClass, outputSize);
+                                dataLoggerKeys.put(key, newLogger);
+                                manager.loggerKeys.add(key);
+                            }
+                        }
+                    });
+                }
                 return this;
             }
-
 
             @Override
             public DataSignal stream(String key) {
@@ -788,7 +840,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     pendingRoutes.add(RouteBuilder.this);
                     if (!commitRoutes.get()) {
                         commitRoutes.set(true);
-                        pendingRoutes.peek().addId();
+                        pendingRoutes.peek().begin();
                     }
                 } else {
                     conn.setResultReady(commitResult, null, new RuntimeException("Not connected to a MetaWear board"));
@@ -1156,7 +1208,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
-                            return new byte[]{0x2, (byte) (((this.outputSize - 1) & 0x3) | (((parent.outputSize - 1) & 0x3) << 2) | 0x40)};
+                            return new byte[]{0x2, (byte) (((this.outputSize - 1) & 0x3) | (((parent.outputSize - 1) & 0x3) << 2) | 0x10)};
                         }
 
                         @Override
@@ -1659,7 +1711,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 public void enableNotifications() { }
             };
         }
-
         public DataSignal fromMultiChannelTemp(final MultiChannelTemperature.Source src) {
             return new DataSource((byte) 2, TemperatureMessage.class, new ResponseHeader(MultiChannelTempRegister.TEMPERATURE, src.channel()), true) {
                 @Override
@@ -1699,8 +1750,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         private abstract class ThreeAxisDataSource extends DataSource {
-            private final byte XY_LENGTH = 4, Z_OFFSET = XY_LENGTH;
-            private byte xyId = -1, zId = -1;
             private final Class<? extends UnsignedMessage> singleAxisClass;
 
             private ThreeAxisDataSource(Class<? extends Message> msgClass, Class<? extends UnsignedMessage> singleAxisClass, ResponseHeader header) {
@@ -1769,63 +1818,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     return newProcessor;
                 }
                 return super.process(config, parent);
-            }
-
-            @Override
-            protected DataSignal log(final String key, final DataSignalImpl source) {
-                creators.add(new IdCreator() {
-                    @Override
-                    public void execute() {
-                        final byte[] triggerConfig = source.getTriggerConfig();
-                        final byte[] xyLogCfg = new byte[triggerConfig.length];
-                        System.arraycopy(triggerConfig, 0, xyLogCfg, 0, triggerConfig.length - 1);
-                        xyLogCfg[triggerConfig.length - 1] = (byte) ((XY_LENGTH - 1) << 5);
-
-                        writeRegister(LoggingRegister.TRIGGER, xyLogCfg);
-                    }
-
-                    @Override
-                    public void receivedId(byte id) {
-                        xyId = id;
-
-                        if (xyId != -1 && zId != -1) {
-                            Loggable newLogger= new ThreeAxisLoggable(key, xyId, zId, msgClass);
-                            if (dataLoggerKeys.containsKey(key)) {
-                                throw new RuntimeException("Duplicate logging keys found: " + key);
-                            } else {
-                                dataLoggerKeys.put(key, newLogger);
-                                manager.loggerKeys.add(key);
-                            }
-                        }
-                    }
-                });
-                creators.add(new IdCreator() {
-                    @Override
-                    public void execute() {
-                        final byte[] triggerConfig = source.getTriggerConfig();
-                        final byte[] zLogCfg = new byte[triggerConfig.length];
-                        System.arraycopy(triggerConfig, 0, zLogCfg, 0, triggerConfig.length - 1);
-                        zLogCfg[triggerConfig.length - 1] = (byte) ((((outputSize - XY_LENGTH) - 1) << 5) | Z_OFFSET);
-
-                        writeRegister(LoggingRegister.TRIGGER, zLogCfg);
-                    }
-
-                    @Override
-                    public void receivedId(byte id) {
-                        zId = id;
-
-                        if (xyId != -1 && zId != -1) {
-                            Loggable newLogger = new ThreeAxisLoggable(key, xyId, zId, msgClass);
-                            if (dataLoggerKeys.containsKey(key)) {
-                                throw new RuntimeException("Duplicate logging keys found: " + key);
-                            } else {
-                                dataLoggerKeys.put(key, newLogger);
-                                manager.loggerKeys.add(key);
-                            }
-                        }
-                    }
-                });
-                return this;
             }
         }
         private class SingleAxisDataSource extends DataSource {
@@ -2076,7 +2068,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 public void enableNotifications() { }
             };
         }
-
         public DataSignal fromDigitalIn(final byte pin) {
             return new DataSource((byte) 1, UnsignedMessage.class, new ResponseHeader(GpioRegister.READ_DI, pin), true) {
                 @Override
@@ -2088,7 +2079,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 public void enableNotifications() { }
             };
         }
-
         public DataSignal fromGpioPinNotify(final byte pin) {
             return new DataSource((byte) 1, UnsignedMessage.class, new ResponseHeader(GpioRegister.PIN_CHANGE_NOTIFY, pin)) {
                 @Override
@@ -2165,7 +2155,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 }
             };
         }
-
         public DataSignal fromBmp280Altitude() {
             return new DataSource((byte) 4, Bmp280AltitudeMessage.class, new ResponseHeader(Bmp280BarometerRegister.ALTITUDE), false) {
                 @Override
@@ -2191,6 +2180,26 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             };
         }
 
+        public DataSignal fromI2C(byte numBytes, byte id) {
+            return new DataSource(numBytes, I2CMessage.class, new ResponseHeader(I2CRegister.READ_WRITE, id), true) {
+                @Override
+                public void enableNotifications() { }
+
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                protected DataSignal process(ProcessorConfig config, final DataSignalImpl parent) {
+                    if (!(config instanceof Counter)) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Only processor supported for I2C data is the counter processor"));
+                    }
+                    return super.process(config, parent);
+                }
+            };
+        }
+
         @Override
         public void receivedId(byte id) {
             creators.poll().receivedId(id);
@@ -2205,18 +2214,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     manager.setRouteId(routeId);
                     conn.setResultReady(commitResult, manager, null);
 
-                    pendingRoutes.poll();
-                    if (!pendingRoutes.isEmpty()) {
-                        pendingRoutes.peek().addId();
-                    } else {
-                        commitRoutes.set(false);
-                        writeMacroCommands();
-                    }
+                    updatePendingRoutes();
                 }
             } else {
                 conn.setResultReady(commitResult, null, new RuntimeException("Connection to MetaWear board lost"));
             }
         }
+
         public void receivedCommandId(byte id) {
             manager.routeEventCmdIds.add(id);
             nExpectedCmds--;
@@ -2224,7 +2228,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void addId() {
+        public void begin() {
+            final long routeTimeout= CREATOR_RESPONSE_TIME * creators.size() + EVENT_COMMAND_TIME;
+            conn.setOpTimeout(commitResult, new Runnable() {
+                @Override
+                public void run() {
+                    manager.remove();
+                    conn.setResultReady(commitResult, null, new TimeoutException(String.format("Adding a data route timed out after %dms", routeTimeout)));
+                    updatePendingRoutes();
+                }
+            }, routeTimeout);
+            addId();
+        }
+
+        private void addId() {
             if (creators.isEmpty()) {
                 addTaps();
             } else {
@@ -2275,6 +2292,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     private final HashMap<String, DataProcessor> dataProcessors= new HashMap<>();
     private final HashMap<String, Subscription> dataSubscriptions= new HashMap<>();
     private final HashMap<String, Loggable> dataLoggerKeys= new HashMap<>();
+
+    private void updatePendingRoutes() {
+        pendingRoutes.poll();
+        if (!pendingRoutes.isEmpty()) {
+            pendingRoutes.peek().begin();
+        } else {
+            commitRoutes.set(false);
+
+            if (currentBlock != null) {
+                conn.executeTask(writeMacroCommands, WRITE_MACRO_DELAY);
+            }
+        }
+    }
 
     ///< Timer variables
     private final HashMap<Byte, TimerControllerImpl> timerControllers= new HashMap<>();
@@ -2395,7 +2425,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                 pendingRoutes.add(timeCtrllr);
                 if (!commitRoutes.get()) {
                     commitRoutes.set(true);
-                    pendingRoutes.peek().addId();
+                    pendingRoutes.peek().begin();
                 }
 
                 return null;
@@ -2615,6 +2645,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     byte[] i2cData = new byte[response.length - 3];
                     System.arraycopy(response, 3, i2cData, 0, response.length - 3);
 
+                    if (response[2] != (byte) 0xff) {
+                        return new Response(new I2CMessage(i2cData), new ResponseHeader(response[0], response[1], response[2]));
+                    }
                     conn.setResultReady(i2cReadResults.poll(), i2cData, null);
                 } else {
                     conn.setResultReady(i2cReadResults.poll(), null,
@@ -3223,11 +3256,21 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public AsyncOperation<Controller> scheduleTask(Task mwTask, int period, boolean delay, short repetitions) {
-            AsyncOperation<Controller> timerResult= conn.createAsyncOperation();
+        public AsyncOperation<Controller> scheduleTask(final Task mwTask, int period, boolean delay, short repetitions) {
+            final AsyncOperation<Controller> timerResult= conn.createAsyncOperation();
             if (isConnected()) {
                 timeTasks.add(mwTask);
                 timerControllerResults.add(timerResult);
+
+                final long timerResponseTime= CREATOR_RESPONSE_TIME * 2;
+                conn.setOpTimeout(timerResult, new Runnable() {
+                    @Override
+                    public void run() {
+                        timerControllerResults.remove(timerResult);
+                        timeTasks.remove(mwTask);
+                        conn.setResultReady(timerResult, null, new TimeoutException(String.format("Creating a MetaWear timer timed out after %dms", timerResponseTime)));
+                    }
+                }, timerResponseTime);
 
                 ByteBuffer buffer = ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN);
                 buffer.putInt(period).putShort(repetitions).put((byte) (delay ? 0 : 1));
@@ -3335,14 +3378,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             if (nExpectedCommands == 0) {
                 currEventListener = null;
 
-                pendingRoutes.poll();
-                if (!pendingRoutes.isEmpty()) {
-                    pendingRoutes.peek().addId();
-                } else {
-                    commitRoutes.set(false);
-                    writeMacroCommands();
-                }
-
+                updatePendingRoutes();
                 conn.setResultReady(timerControllerResults.poll(), this, null);
             }
         }
@@ -3353,7 +3389,18 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         @Override
-        public void addId() {
+        public void begin() {
+            final AsyncOperation<Timer.Controller> next= timerControllerResults.peek();
+
+            conn.setOpTimeout(next, new Runnable() {
+                @Override
+                public void run() {
+                    remove();
+                    timerControllerResults.remove(next);
+                    conn.setResultReady(next, null, new TimeoutException(String.format("Scheduling a MetaWear task timed out after %dms", EVENT_COMMAND_TIME)));
+                }
+            }, EVENT_COMMAND_TIME);
+
             currEventListener = this;
 
             eventConfig= timerEventConfig;
@@ -3392,6 +3439,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         @Override
         public void resetAfterGarbageCollect() {
             writeRegister(DebugRegister.DELAYED_RESET);
+            disconnect();
+        }
+
+        @Override
+        public void disconnect() {
             writeRegister(DebugRegister.GAP_DISCONNECT);
         }
     }
@@ -3416,7 +3468,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         @Override
         public AsyncOperation<Integer> downloadLog(float notifyProgress, DownloadHandler handler) {
-            AsyncOperation result= conn.createAsyncOperation();
+            AsyncOperation<Integer> result= conn.createAsyncOperation();
             logEntryCountResults.add(result);
 
             DefaultMetaWearBoard.this.notifyProgress= notifyProgress;
@@ -3442,6 +3494,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     private byte ibeaconRxPower, ibeaconTxPower;
     private final ConcurrentLinkedQueue<AsyncOperation<IBeacon.Configuration>> ibeaconConfigResults= new ConcurrentLinkedQueue<>();
     private class IBeaconImpl implements IBeacon {
+        private static final long READ_CONFIG_TIMEOUT= 5000L;
+
         public ConfigEditor configure() {
             return new ConfigEditor() {
                 private UUID newUuid= null;
@@ -3526,8 +3580,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         }
 
         public AsyncOperation<Configuration> readConfiguration() {
-            AsyncOperation<Configuration> result= conn.createAsyncOperation();
+            final AsyncOperation<Configuration> result= conn.createAsyncOperation();
+
             ibeaconConfigResults.add(result);
+            conn.setOpTimeout(result, new Runnable() {
+                @Override
+                public void run() {
+                    ibeaconConfigResults.remove(result);
+                    conn.setResultReady(result, null, new TimeoutException(String.format("IBeacon config read timed out after %dms", READ_CONFIG_TIMEOUT)));
+                }
+            }, READ_CONFIG_TIMEOUT);
             readRegister(IBeaconRegister.UUID);
             return result;
         }
@@ -3609,6 +3671,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     private byte[] advResponse;
     private final ConcurrentLinkedQueue<AsyncOperation<Settings.AdvertisementConfig>> advertisementConfigResults= new ConcurrentLinkedQueue<>();
     private class SettingsImpl implements Settings {
+        private static final long READ_CONFIG_TIMEOUT= 5000L;
         @Override
         public ConfigEditor configure() {
             return new ConfigEditor() {
@@ -3677,8 +3740,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         @Override
         public AsyncOperation<AdvertisementConfig> readAdConfig() {
-            AsyncOperation<AdvertisementConfig> result= conn.createAsyncOperation();
+            final AsyncOperation<AdvertisementConfig> result= conn.createAsyncOperation();
+
             advertisementConfigResults.add(result);
+            conn.setOpTimeout(result, new Runnable() {
+                @Override
+                public void run() {
+                    advertisementConfigResults.remove(result);
+                    conn.setResultReady(result, null, new TimeoutException(String.format("Advertisement config read timed out after %dms", READ_CONFIG_TIMEOUT)));
+                }
+            }, READ_CONFIG_TIMEOUT);
             readRegister(SettingsRegister.DEVICE_NAME);
             return result;
         }
@@ -3706,6 +3777,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
     private final ConcurrentLinkedQueue<AsyncOperation<byte[]>> i2cReadResults= new ConcurrentLinkedQueue<>();
     private class I2CImpl implements I2C {
+        private final static long READ_DATA_TIMEOUT= 5000;
+
         @Override
         public void writeData(byte deviceAddr, byte registerAddr, byte[] data) {
             byte[] params= new byte[data.length + 4];
@@ -3720,11 +3793,33 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         @Override
         public AsyncOperation<byte[]> readData(byte deviceAddr, byte registerAddr, byte numBytes) {
-            AsyncOperation<byte[]> result= conn.createAsyncOperation();
+            final AsyncOperation<byte[]> result= conn.createAsyncOperation();
 
             i2cReadResults.add(result);
+            conn.setOpTimeout(result, new Runnable() {
+                @Override
+                public void run() {
+                    i2cReadResults.remove(result);
+                    conn.setResultReady(result, null, new TimeoutException(String.format("I2C read timed out after %dms", READ_DATA_TIMEOUT)));
+                }
+            }, READ_DATA_TIMEOUT);
             readRegister(I2CRegister.READ_WRITE, deviceAddr, registerAddr, (byte) 0xff, numBytes);
             return result;
+        }
+
+        @Override
+        public void readData(byte deviceAddr, byte registerAddr, byte numBytes, byte id) {
+            readRegister(I2CRegister.READ_WRITE, deviceAddr, registerAddr, id, numBytes);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromId(byte numBytes, byte id) {
+                    return new RouteBuilder().fromI2C(numBytes, id);
+                }
+            };
         }
     }
 
@@ -3746,7 +3841,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             block.commands();
 
             if (!commitRoutes.get()) {
-                writeMacroCommands();
+                conn.executeTask(writeMacroCommands, WRITE_MACRO_DELAY);
             }
 
             return idResult;
@@ -3769,8 +3864,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             writeRegister(MacroRegister.ERASE_ALL);
         }
     }
-    private void writeMacroCommands() {
-        if (currentBlock != null) {
+    private final long WRITE_MACRO_DELAY = 2000L;
+    private final Runnable writeMacroCommands= new Runnable() {
+        @Override
+        public void run() {
             saveCommand = false;
 
             nExpectedMacroCmds= commands.size() + 2;
@@ -3781,7 +3878,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             writeRegister(MacroRegister.END);
             currentBlock = null;
         }
-    }
+    };
 
     private Mma8452qAccelerometerImpl mma8452qModule= null;
     private final byte[] mma8452qDataSampling= new byte[] {0, 0, 0x18, 0, 0}, mma8452qOrientationCfg= new byte[5];
@@ -4729,6 +4826,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     }
     @Override
     public <T extends Module> T getModule(Class<T> moduleClass) throws UnsupportedModuleException {
+        if (inMetaBootMode()) {
+            throw new UnsupportedModuleException("Cannot interact with modules when board is in MetaBoot mode");
+        }
+
         if (!isConnected()) {
             return null;
         }

@@ -33,7 +33,10 @@ public interface Connection {
     interface ResponseListener {
         void receivedResponse(byte[] response);
     }
+
     void sendCommand(boolean writeMacro, byte[] command);
     <T> AsyncOperation<T> createAsyncOperation();
     <T> void setResultReady(AsyncOperation<T> async, T result, Throwable error);
+    void setOpTimeout(AsyncOperation<?> async, Runnable r, long timeout);
+    void executeTask(Runnable r, long delay);
 }

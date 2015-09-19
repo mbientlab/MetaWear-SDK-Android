@@ -22,40 +22,26 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.module;
+package com.mbientlab.metawear.data;
 
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.Message;
+
+import java.util.Calendar;
 
 /**
- * Debug functions for advanced use
- * @author Eric Tsai
+ * Created by etsai on 8/30/2015.
  */
-public interface Debug extends MetaWearBoard.Module {
-    /**
-     * Restart the board
-     */
-    void resetDevice();
+public class I2CMessage extends Message {
+    public I2CMessage(byte[] data) {
+        super(data);
+    }
 
-    /**
-     * Restart the board in bootloader mode
-     */
-    void jumpToBootloader();
+    public I2CMessage(Calendar timestamp, byte[] data) {
+        super(timestamp, data);
+    }
 
-    /**
-     * Restart the board after performing garbage collection.  This method should be
-     * used in lieu of {@link #resetDevice()} if a user wishes to restart the board
-     * after erasing macros or log entries.
-     * @see Logging#clearEntries()
-     * @see Macro#eraseMacros()
-     */
-    void resetAfterGarbageCollect();
-
-    /**
-     * Have the board terminate the connection, as opposed to {@link MetaWearBoard#disconnect()} where
-     * the mobile device terminates the connection.  On devices running Lollipop or later, this will call
-     * the {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#failure(int, Throwable) ConnectionStateHandler.failure}
-     * function with a status of 19 rather than
-     * {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#disconnected() ConnectionStateHandler.disconnected}
-     */
-    void disconnect();
+    @Override
+    public <T> T getData(Class<T> type) {
+        throw new UnsupportedOperationException("I2C data can only be interpreted as a byte array, use the default getData() method instead");
+    }
 }

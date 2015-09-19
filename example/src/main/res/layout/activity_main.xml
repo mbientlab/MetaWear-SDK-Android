@@ -391,8 +391,7 @@
             android:textAppearance="?android:attr/textAppearanceLarge"
             android:id="@+id/textView11"
             android:layout_below="@+id/textView10"
-            android:layout_alignEnd="@+id/textView10"
-            android:text="Big Boo" />
+            android:layout_alignEnd="@+id/textView10" />
 
         <Switch
             android:layout_width="wrap_content"
@@ -417,7 +416,8 @@
             android:onClick="removeMe"
             android:id="@+id/button18"
             android:layout_above="@+id/button6"
-            android:layout_centerHorizontal="true" />
+            android:layout_centerHorizontal="true"
+            android:text="Clear" />
 
         <Switch
             android:layout_width="wrap_content"
@@ -434,7 +434,62 @@
             android:text="Light"
             android:onClick="lightMe"
             android:id="@+id/switch15"
-            android:layout_below="@+id/switch14" />
+            android:layout_below="@+id/switch14"
+            android:checked="false" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add Filters"
+            android:id="@+id/button19"
+            android:layout_below="@+id/switch15"
+            android:onClick="addMoreFilters"
+            android:layout_alignParentStart="true" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DFU"
+            android:id="@+id/button20"
+            android:onClick="dfuMe"
+            android:layout_alignBottom="@+id/button18"
+            android:layout_alignEnd="@+id/textView6" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DFU Abort"
+            android:id="@+id/button21"
+            android:onClick="aboutDfuMe"
+            android:layout_above="@+id/switch7"
+            android:layout_alignEnd="@+id/textView6" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Free Fall"
+            android:id="@+id/button22"
+            android:onClick="freefallMe"
+            android:layout_alignBottom="@+id/button5"
+            android:layout_alignParentEnd="true" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Led"
+            android:id="@+id/button23"
+            android:onClick="ledMe"
+            android:layout_alignBottom="@+id/button9"
+            android:layout_alignParentEnd="true" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="LED Off"
+            android:onClick="ledOffMe"
+            android:id="@+id/button24"
+            android:layout_below="@+id/button23"
+            android:layout_alignParentEnd="true" />
 
     </RelativeLayout>
 </ScrollView>

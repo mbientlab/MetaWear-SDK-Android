@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.example;
 
+import android.app.Notification;
+import android.app.NotificationManager;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.content.ComponentName;
@@ -43,6 +45,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.mbientlab.metawear.AsyncOperation;
+import com.mbientlab.metawear.DataSignal.ActivityHandler;
+import com.mbientlab.metawear.DataSignal.DataToken;
 import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.RouteManager;
 import com.mbientlab.metawear.UnsupportedModuleException;
@@ -51,13 +55,10 @@ import com.mbientlab.metawear.data.CartesianShort;
 import com.mbientlab.metawear.MetaWearBleService;
 import com.mbientlab.metawear.data.Units;
 import com.mbientlab.metawear.module.*;
-import com.mbientlab.metawear.module.Bmp280Barometer.StandbyTime;
 import com.mbientlab.metawear.processor.*;
 import com.mbientlab.metawear.processor.Maths;
-import com.mbientlab.metawear.DataSignal;
 import com.mbientlab.metawear.Message;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -121,6 +122,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
     //private final String MW_MAC_ADDRESS= "D6:0E:50:D0:AB:CE";
     //private final String MW_MAC_ADDRESS= "DD:F2:D5:07:B6:57";
     private final String MW_MAC_ADDRESS= "D5:7B:B9:7D:CE:0E";
+    //private final String MW_MAC_ADDRESS= "EB:4C:AF:68:8E:CB";
 
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
@@ -142,6 +144,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                 });
 
                 Log.i("test", "Connected");
+                Log.i("test", "MetaBoot? " + mwBoard.inMetaBootMode());
 
                 mwBoard.readDeviceInformation().onComplete(new CompletionHandler<MetaWearBoard.DeviceInformation>() {
                     @Override
@@ -154,6 +157,33 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                         Log.e("test", "Error reading device information", error);
                     }
                 });
+
+                try {
+                    mwBoard.getModule(IBeacon.class).readConfiguration().onComplete(new CompletionHandler<IBeacon.Configuration>() {
+                        @Override
+                        public void success(IBeacon.Configuration result) {
+                            Log.i("test", result.toString());
+                        }
+
+                        @Override
+                        public void failure(Throwable error) {
+                            Log.e("test", "Error reading ibeacon configuration", error);
+                        }
+                    });
+                    mwBoard.getModule(Settings.class).readAdConfig().onComplete(new CompletionHandler<Settings.AdvertisementConfig>() {
+                        @Override
+                        public void success(Settings.AdvertisementConfig result) {
+                            Log.i("test", result.toString());
+                        }
+
+                        @Override
+                        public void failure(Throwable error) {
+                            Log.e("test", "Error reading advertisement configuration", error);
+                        }
+                    });
+                } catch (UnsupportedModuleException e) {
+                    Log.e("test", "Cannot get module", e);
+                }
             }
 
             @Override
@@ -168,11 +198,11 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
             }
 
             @Override
-            public void failure(int status, Throwable error) {
+            public void failure(int status, final Throwable error) {
                 MainActivity.this.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        Toast.makeText(MainActivity.this, "Error connecting", Toast.LENGTH_LONG).show();
+                        Toast.makeText(MainActivity.this, error.getLocalizedMessage(), Toast.LENGTH_LONG).show();
                     }
                 });
 
@@ -511,9 +541,9 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                             }
                         });
                         gpioModule.clearDigitalOut((byte) 1);
-                        switchRoute = switchModule.routeData().fromSensor().monitor(new DataSignal.ActivityHandler() {
+                        switchRoute = switchModule.routeData().fromSensor().monitor(new ActivityHandler() {
                             @Override
-                            public void onSignalActive(Map<String, DataProcessor> processors, DataSignal.DataToken token) {
+                            public void onSignalActive(Map<String, DataProcessor> processors, DataToken token) {
                                 processors.get("mathprocesser").modifyConfiguration(new Maths(Maths.Operation.MULTIPLY, token));
                             }
                         }).commit();
@@ -569,9 +599,9 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                         .process("accumprocesser", "accumulator")
                         .process("math?operation=modulus&rhs=2")
                         .split()
-                            .branch().process("comparison?operation=eq&reference=1").monitor(new DataSignal.ActivityHandler() {
+                            .branch().process("comparison?operation=eq&reference=1").monitor(new ActivityHandler() {
                                 @Override
-                                public void onSignalActive(Map<String, DataProcessor> processors, DataSignal.DataToken token) {
+                                public void onSignalActive(Map<String, DataProcessor> processors, DataToken token) {
                                     ledCtrllr.configureColorChannel(Led.ColorChannel.BLUE)
                                             .setRiseTime((short) 0).setPulseDuration((short) 1000)
                                             .setRepeatCount((byte) -1).setHighTime((short) 500)
@@ -580,9 +610,9 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                     ledCtrllr.play(false);
                                 }
                             })
-                            .branch().process("comparison?operation=eq&reference=0").monitor(new DataSignal.ActivityHandler() {
+                            .branch().process("comparison?operation=eq&reference=0").monitor(new ActivityHandler() {
                                 @Override
-                                public void onSignalActive(Map<String, DataProcessor> processors, DataSignal.DataToken token) {
+                                public void onSignalActive(Map<String, DataProcessor> processors, DataToken token) {
                                     ledCtrllr.stop(true);
                                 }
                             })
@@ -762,9 +792,9 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                     Log.i("test", String.format("Lower threshold crossed: %.3f", msg.getData(Float.class)));
                                 }
                             });
-                            switchModule.routeData().fromSensor().monitor(new DataSignal.ActivityHandler() {
+                            switchModule.routeData().fromSensor().monitor(new ActivityHandler() {
                                 @Override
-                                public void onSignalActive(Map<String, DataProcessor> processors, DataSignal.DataToken token) {
+                                public void onSignalActive(Map<String, DataProcessor> processors, DataToken token) {
                                     processors.get("pt").setState(new Passthrough.State((short) 8));
                                 }
                             })
@@ -959,21 +989,41 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
 
     }
 
+    private boolean i2cSetup= false;
     public void i2cMe(View v) {
         try {
-            I2C i2cModule = mwBoard.getModule(I2C.class);
-            AsyncOperation<byte[]> result= i2cModule.readData((byte) 0x1c, (byte) 0xd, (byte) 1);
-            result.onComplete(new CompletionHandler<byte[]>() {
-                @Override
-                public void failure(Throwable error) {
-                    Log.e("test", "Error reading I2C data", error);
-                }
+            final I2C i2cModule = mwBoard.getModule(I2C.class);
+            final Logging loggingModule= mwBoard.getModule(Logging.class);
 
-                @Override
-                public void success(byte[] result) {
-                    Log.i("test", "result: " + Arrays.toString(result));
-                }
-            });
+            if (!i2cSetup) {
+                i2cModule.routeData().fromId((byte) 1, (byte) 0x0).log("i2c_key")
+                        .process(new Counter()).stream("counter_key").commit()
+                        .onComplete(new CompletionHandler<RouteManager>() {
+                            @Override
+                            public void success(RouteManager result) {
+                                result.subscribe("counter_key", new RouteManager.MessageHandler() {
+                                    @Override
+                                    public void process(Message msg) {
+                                        Log.i("test", String.format("Count= %d", msg.getData(Integer.class)));
+                                    }
+                                });
+                                result.setLogMessageHandler("i2c_key", new RouteManager.MessageHandler() {
+                                    @Override
+                                    public void process(Message msg) {
+                                        Log.i("test", "result: " + msg.toString());
+                                    }
+                                });
+                                loggingModule.startLogging();
+                                i2cModule.readData((byte) 0x1c, (byte) 0xd, (byte) 1, (byte) 0x0);
+                            }
+                        });
+
+                i2cSetup= true;
+            } else {
+                i2cModule.readData((byte) 0x1c, (byte) 0xd, (byte) 1, (byte) 0x0);
+            }
+
+
         } catch (UnsupportedModuleException e) {
             Toast.makeText(this, e.getLocalizedMessage(), Toast.LENGTH_LONG).show();
         }
@@ -983,16 +1033,34 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         try {
             final Macro macroModule = mwBoard.getModule(Macro.class);
             final Led ledModule= mwBoard.getModule(Led.class);
+            final Haptic hapticModule= mwBoard.getModule(Haptic.class);
+            final Accelerometer accelModule= mwBoard.getModule(Accelerometer.class);
 
             macroModule.record(new Macro.CodeBlock() {
                 @Override
                 public void commands() {
+
+                    accelModule.routeData().fromAxes()
+                            .process(new Rss())
+                            .process(new Average((byte) 4))
+                            .process(new Threshold(0.5f, Threshold.OutputMode.BINARY))
+                            .split()
+                            .branch().process(new Comparison(Comparison.Operation.EQ, -1)).log("free_fall")
+                            .branch().process(new Comparison(Comparison.Operation.EQ, 1)).log("no_free_fall")
+                            .end()
+                            .commit();
+
+/*
                     ledModule.configureColorChannel(Led.ColorChannel.BLUE)
                             .setRiseTime((short) 0).setPulseDuration((short) 1000)
                             .setRepeatCount((byte) 5).setHighTime((short) 500)
                             .setHighIntensity((byte) 16).setLowIntensity((byte) 16)
                             .commit();
                     ledModule.play(false);
+
+                    hapticModule.startMotor((short) 5000);
+*/
+
                 }
             }).onComplete(new CompletionHandler<Byte>() {
                 @Override
@@ -1290,5 +1358,194 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
             e.printStackTrace();
         }
 
+    }
+
+    public void addMoreFilters(View v) {
+        /*
+        final Timer timerModule = mwBoard.getModule(Timer.class);
+            final Haptic hapticModule = mwBoard.getModule(Haptic.class);
+            final Temperature tempModule = mwBoard.getModule(Temperature.class);
+            final Gpio gpioModule= mwBoard.getModule(Gpio.class);
+            final I2C i2cModule= mwBoard.getModule(I2C.class);
+
+            timerModule.scheduleTask(new Timer.Task() {
+                @Override
+                public void commands() {
+                    tempModule.readTemperature();
+                    hapticModule.startMotor((short) 5000);
+                    gpioModule.readAnalogIn((byte) 0, Gpio.AnalogReadMode.ABS_REFERENCE);
+                    i2cModule.readData((byte) 0x1c, (byte) 0xd, (byte) 1);
+                }
+            }, 1000, false).onComplete(new CompletionHandler<Timer.Controller>() {
+                @Override
+                public void success(Timer.Controller result) {
+                    Log.i("test", "Success schedule tasks");
+                }
+
+                @Override
+                public void failure(Throwable error) {
+                    Log.e("test", "Error scheduling tasks", error);
+                }
+            });
+         */
+        try {
+            final com.mbientlab.metawear.module.Switch switchModule= mwBoard.getModule(com.mbientlab.metawear.module.Switch.class);
+            final Led ledModule= mwBoard.getModule(Led.class);
+
+            switchModule.routeData().fromSensor()
+                    .process(new Accumulator())
+                    .process(new Maths(Maths.Operation.MODULUS, 2))
+                    .split()
+                    .branch().process(new Comparison(Comparison.Operation.EQ, 1))
+                    .monitor(new ActivityHandler() {
+                        @Override
+                        public void onSignalActive(Map<String, DataProcessor> processors,
+                                                   DataToken token) {
+                            ledModule.configureColorChannel(Led.ColorChannel.BLUE)
+                                    .setRiseTime((short) 0)
+                                    .setPulseDuration((short) 1000).setRepeatCount((byte) -1)
+                                    .setHighTime((short) 500).setHighIntensity((byte) 16)
+                                    .setLowIntensity((byte) 16).commit();
+                            ledModule.play(false);
+                        }
+                    })
+                    .branch().process(new Comparison(Comparison.Operation.EQ, 0))
+                    .monitor(new ActivityHandler() {
+                        @Override
+                        public void onSignalActive(Map<String, DataProcessor> processors,
+                                                   DataToken token) {
+                            ledModule.stop(true);
+                        }
+                    })
+                    .end()
+                    .commit().onComplete(new CompletionHandler<RouteManager>() {
+                @Override
+                public void success(RouteManager result) {
+                    Log.i("test", "Route commit a success!");
+                }
+
+                @Override
+                public void failure(Throwable error) {
+                    Log.e("test", "Error committing route", error);
+                }
+            });
+        } catch (UnsupportedModuleException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void dfuMe(View v) {
+        mwBoard.updateFirmware(new MetaWearBoard.DfuProgressHandler() {
+            @Override
+            public void reachedCheckpoint(State dfuState) {
+                final Notification.Builder builder = new Notification.Builder(MainActivity.this).setSmallIcon(android.R.drawable.stat_sys_upload)
+                        .setOnlyAlertOnce(true).setOngoing(true).setProgress(100, 0, true);
+                switch (dfuState) {
+                    case INITIALIZING:
+                        builder.setContentTitle("Entering Bootloader Mode");
+                        break;
+                    case STARTING:
+                        builder.setContentTitle("Starting DFU");
+                        break;
+                    case VALIDATING:
+                        builder.setContentTitle("Validating");
+                        break;
+                    case DISCONNECTING:
+                        builder.setContentTitle("Disconnecting");
+                        break;
+                }
+
+                final NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                manager.notify(1024, builder.build());
+            }
+
+            @Override
+            public void receivedUploadProgress(int progress) {
+                final Notification.Builder builder = new Notification.Builder(MainActivity.this).setSmallIcon(android.R.drawable.stat_sys_upload).setOnlyAlertOnce(true);
+                builder.setOngoing(true).setContentTitle("Uploading").setContentText(String.format("%d%%", progress)).setProgress(100, progress, false);
+
+                final NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                manager.notify(1024, builder.build());
+            }
+        }).onComplete(new CompletionHandler<Void>() {
+            final Notification.Builder builder = new Notification.Builder(MainActivity.this).setOnlyAlertOnce(true)
+                    .setOngoing(false).setAutoCancel(true)
+                    .setSmallIcon(android.R.drawable.stat_sys_upload_done);
+            final NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+
+            @Override
+            public void success(Void result) {
+                builder.setContentTitle("DFU Success");
+                manager.notify(1024, builder.build());
+
+                Log.i("test", "Success!  updated firmware");
+            }
+
+            @Override
+            public void failure(Throwable error) {
+                builder.setContentTitle("DFU Failed");
+                manager.notify(1024, builder.build());
+
+                Log.e("test", "Failed to DFU", error);
+            }
+        });
+    }
+
+    public void aboutDfuMe(View v) {
+        mwBoard.abortFirmwareUpdate();
+    }
+
+    public void freefallMe(View v) {
+        try {
+            Macro macroModule= mwBoard.getModule(Macro.class);
+            final Accelerometer accelModule= mwBoard.getModule(Accelerometer.class);
+
+            macroModule.record(new Macro.CodeBlock() {
+                @Override
+                public void commands() {
+                    accelModule.routeData().fromAxes()
+                            .process(new Rss())
+                            .process(new Average((byte) 16))
+                            .process(new Threshold(0.3f, Threshold.OutputMode.BINARY))
+                            .split()
+                                .branch().process(new Comparison(Comparison.Operation.EQ, -1)).stream("free_fall_key")
+                                .branch().process(new Comparison(Comparison.Operation.EQ, 1)).stream("no_free_fall")
+                            .end().commit();
+                    accelModule.setAxisSamplingRange(100.f);
+                }
+            }).onComplete(new CompletionHandler<Byte>() {
+                @Override
+                public void success(Byte result) {
+                    Log.i("test", "Macro ID: " + result);
+                }
+            });
+        } catch (UnsupportedModuleException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void ledMe(View v) {
+        try {
+            Led ledModule= mwBoard.getModule(Led.class);
+            ledModule.configureColorChannel(Led.ColorChannel.BLUE)
+                    .setHighIntensity((byte) 31)
+                    .setHighTime((short) 50).setPulseDuration((short) 500)
+                    .setRepeatCount((byte) -1).commit();
+            ledModule.play(false);
+        } catch (UnsupportedModuleException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void ledOffMe(View v) {
+        try {
+            Led ledModule= mwBoard.getModule(Led.class);
+            Debug debugModule= mwBoard.getModule(Debug.class);
+
+            ledModule.stop(true);
+            debugModule.disconnect();
+        } catch (UnsupportedModuleException e) {
+            e.printStackTrace();
+        }
     }
 }

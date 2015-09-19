@@ -44,11 +44,15 @@ import com.mbientlab.metawear.impl.characteristic.InfoRegister;
 import com.mbientlab.metawear.impl.characteristic.MacroRegister;
 import com.mbientlab.metawear.impl.characteristic.Register;
 import com.mbientlab.metawear.impl.characteristic.Registers;
+import com.mbientlab.metawear.impl.dfu.DfuService;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.lang.reflect.Method;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -62,6 +66,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -73,7 +78,8 @@ public class MetaWearBleService extends Service {
     private final static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"),
             METAWEAR_SERVICE= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A"),
             METAWEAR_COMMAND= UUID.fromString("326A9001-85CB-9195-D9DD-464CFBBAE75A"),
-            METAWEAR_NOTIFY= UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A");
+            METAWEAR_NOTIFY= UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A"),
+            DFU_SERVICE = UUID.fromString("00001530-1212-efde-1523-785feabcd123");
     private final static long FUTURE_CHECKER_PERIOD= 1000L;
 
     private enum GattActionKey {
@@ -214,14 +220,27 @@ public class MetaWearBleService extends Service {
     };
     private class GattConnectionState {
         public final HashMap<DevInfoCharacteristic, String> devInfoValues= new HashMap<>();
-
         public final HashMap<Byte, ModuleInfoImpl> moduleInfo= new HashMap<>();
         public final AndroidBleConnection androidConn;
         public final AtomicInteger nDescriptors= new AtomicInteger(0);
         public final AtomicBoolean isConnected= new AtomicBoolean(false), isReady= new AtomicBoolean(false);
-        public MetaWearBoard.ConnectionStateHandler connectionHandler;
         public final ConcurrentLinkedQueue<AsyncOperationAndroidImpl<Integer>> rssiResult= new ConcurrentLinkedQueue<>();
         public final ConcurrentLinkedQueue<Register> infoRegisters= new ConcurrentLinkedQueue<>();
+        private final Runnable connectionTimeoutHandler = new Runnable() {
+            @Override
+            public void run() {
+                isConnected.set(false);
+                isReady.set(false);
+                androidConn.gatt.close();
+
+                if (connectionHandler != null) {
+                    connectionHandler.failure(-1, new TimeoutException("Board connection timed out"));
+                }
+            }
+        };
+
+        public MetaWearBoard.ConnectionStateHandler connectionHandler;
+        public boolean isMetaBoot= false;
 
         private final BluetoothDevice device;
 
@@ -261,14 +280,16 @@ public class MetaWearBleService extends Service {
                     }
 
                     isReady.set(true);
-                    if (connectionHandler != null) {
-                        queueRunnable(new Runnable() {
-                            @Override
-                            public void run() {
+                    handlerThreadPool.removeCallbacks(connectionTimeoutHandler);
+
+                    queueRunnable(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (connectionHandler != null) {
                                 connectionHandler.connected();
                             }
-                        });
-                    }
+                        }
+                    });
                 } else {
                     androidConn.queueCommand(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, Registers.buildReadCommand(infoRegisters.poll()), true);
                 }
@@ -290,6 +311,7 @@ public class MetaWearBleService extends Service {
         }
 
         public void reset() {
+            isMetaBoot= false;
             nDescriptors.set(0);
             isReady.set(false);
             isConnected.set(false);
@@ -308,10 +330,8 @@ public class MetaWearBleService extends Service {
             gattKey= newKey;
         }
 
-        public void updateExecActionsState(boolean remove) {
-            if (remove) {
-                handlerThreadPool.removeCallbacks(gattForceExec);
-            }
+        public void updateExecActionsState() {
+            handlerThreadPool.removeCallbacks(gattForceExec);
             isExecActions.set(!actions.isEmpty());
         }
         public void queueAction(Action newAction) {
@@ -324,17 +344,22 @@ public class MetaWearBleService extends Service {
                     boolean lastResult= false;
                     try {
                         while(!actions.isEmpty() && !(lastResult = actions.poll().execute())) { }
-                        handlerThreadPool.postDelayed(gattForceExec, GATT_FORCE_EXEC_DELAY);
+
+                        if (lastResult) {
+                            handlerThreadPool.postDelayed(gattForceExec, GATT_FORCE_EXEC_DELAY);
+                        }
                     } catch (NullPointerException ex) {
                         lastResult= false;
                     }
 
                     if (!lastResult && actions.isEmpty()) {
                         isExecActions.set(false);
+                        gattKey= GattActionKey.NONE;
                     }
                 }
             } else {
                 isExecActions.set(false);
+                gattKey= GattActionKey.NONE;
             }
         }
     }
@@ -344,6 +369,8 @@ public class MetaWearBleService extends Service {
         private final AtomicBoolean completed= new AtomicBoolean(false);
         private T result;
         private Throwable exception;
+
+        private Runnable throwTimeoutException;
 
         @Override
         public void onComplete(CompletionHandler<T> handler) {
@@ -356,6 +383,7 @@ public class MetaWearBleService extends Service {
 
         public void setResult(T result, Throwable exception) {
             if (!completed.get()) {
+                handlerThreadPool.removeCallbacks(throwTimeoutException);
                 this.result= result;
                 this.exception= exception;
 
@@ -403,6 +431,20 @@ public class MetaWearBleService extends Service {
             }
             return result;
         }
+
+        public boolean setTimeout(Runnable r, long timeout) {
+            if (completed.get()) {
+                return false;
+            }
+
+            if (throwTimeoutException != null) {
+                handlerThreadPool.removeCallbacks(throwTimeoutException);
+            }
+
+            throwTimeoutException= r;
+            handlerThreadPool.postDelayed(throwTimeoutException, timeout);
+            return true;
+        }
     }
 
     private class AndroidBleConnection implements Connection {
@@ -443,8 +485,18 @@ public class MetaWearBleService extends Service {
         }
 
         @Override
+        public void setOpTimeout(AsyncOperation<?> async, Runnable r, long timeout) {
+            ((AsyncOperationAndroidImpl<?>) async).setTimeout(r, timeout);
+        }
+
+        @Override
         public <T> AsyncOperation<T> createAsyncOperation() {
             return new AsyncOperationAndroidImpl<>();
+        }
+
+        @Override
+        public void executeTask(Runnable r, long delay) {
+            handlerThreadPool.postDelayed(r, delay);
         }
 
         @Override
@@ -482,9 +534,15 @@ public class MetaWearBleService extends Service {
     }
 
     private class DefaultMetaWearBoardAndroidImpl extends DefaultMetaWearBoard {
+        private static final long READ_ATTR_TIMEOUT= 5000L, DEFAULT_CONNECTION_TIME= 15000L;
+
         private final ConcurrentLinkedQueue<AsyncOperationAndroidImpl<Byte>> batteryResult= new ConcurrentLinkedQueue<>();
         private final BluetoothDevice btDevice;
+
+        private final AtomicBoolean uploadingFirmware= new AtomicBoolean();
+        private AsyncOperationAndroidImpl<Void> dfuOperation= null;
         private BluetoothGatt gatt;
+        private DfuService dfuService;
 
         public DefaultMetaWearBoardAndroidImpl(BluetoothDevice btDevice, AndroidBleConnection androidConn) {
             super(androidConn);
@@ -509,7 +567,7 @@ public class MetaWearBleService extends Service {
 
         @Override
         public AsyncOperation<DeviceInformation> readDeviceInformation() {
-            AsyncOperationAndroidImpl<DeviceInformation> result= new AsyncOperationAndroidImpl<>();
+            final AsyncOperationAndroidImpl<DeviceInformation> result= new AsyncOperationAndroidImpl<>();
             final GattConnectionState state= gattConnectionStates.get(btDevice);
 
             if (!isConnected()) {
@@ -524,9 +582,16 @@ public class MetaWearBleService extends Service {
         @Override
         public AsyncOperation<Integer> readRssi() {
             final GattConnectionState state= gattConnectionStates.get(btDevice);
-            AsyncOperationAndroidImpl<Integer> result= new AsyncOperationAndroidImpl<>();
+            final AsyncOperationAndroidImpl<Integer> result= new AsyncOperationAndroidImpl<>();
 
             state.rssiResult.add(result);
+            result.setTimeout(new Runnable() {
+                @Override
+                public void run() {
+                    state.rssiResult.remove(result);
+                    result.setResult(null, new TimeoutException(String.format("RSSI read timed out after %dms", READ_ATTR_TIMEOUT)));
+                }
+            }, READ_ATTR_TIMEOUT);
             gattManager.queueAction(new Action() {
                 @Override
                 public boolean execute() {
@@ -545,17 +610,31 @@ public class MetaWearBleService extends Service {
 
         @Override
         public AsyncOperation<Byte> readBatteryLevel() {
-            AsyncOperationAndroidImpl<Byte> result= new AsyncOperationAndroidImpl<>();
+            final AsyncOperationAndroidImpl<Byte> result= new AsyncOperationAndroidImpl<>();
+
             batteryResult.add(result);
+            result.setTimeout(new Runnable() {
+                @Override
+                public void run() {
+                    batteryResult.remove(result);
+                    result.setResult(null, new TimeoutException(String.format("RSSI read timed out after %dms", READ_ATTR_TIMEOUT)));
+                }
+            }, READ_ATTR_TIMEOUT);
             gattManager.queueAction(new Action() {
                 @Override
                 public boolean execute() {
                     if (gatt != null && gattConnectionStates.get(gatt.getDevice()).isReady.get()) {
                         gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
                         BluetoothGattService service = gatt.getService(BattLevelCharacteristic.serviceUuid());
-                        BluetoothGattCharacteristic batLevelChar = service.getCharacteristic(BattLevelCharacteristic.LEVEL.uuid());
-                        gatt.readCharacteristic(batLevelChar);
-                        return true;
+
+                        if (service != null) {
+                            BluetoothGattCharacteristic batLevelChar = service.getCharacteristic(BattLevelCharacteristic.LEVEL.uuid());
+                            gatt.readCharacteristic(batLevelChar);
+                            return true;
+                        }
+
+                        batteryResult.poll().setResult(null, new RuntimeException("Battery service not found"));
+                        return false;
                     }
                     batteryResult.poll().setResult(null, new RuntimeException("Bluetooth LE connection not established"));
                     return false;
@@ -566,10 +645,21 @@ public class MetaWearBleService extends Service {
         }
 
         public void close() {
+            GattConnectionState state= gattConnectionStates.get(btDevice);
+            state.isConnected.set(false);
+            state.isReady.set(false);
+
             if (gatt != null) {
-                gatt.close();
+                try {
+                    final Method refresh = gatt.getClass().getMethod("refresh");
+                    refresh.invoke(gatt);
+                } catch (final Exception e) {
+                    Log.e("MetaWear", "Error refreshing gatt cache", e);
+                } finally {
+                    gatt.close();
+                    gatt= null;
+                }
             }
-            gatt= null;
         }
 
         @Override
@@ -581,8 +671,11 @@ public class MetaWearBleService extends Service {
         public void connect() {
             if (!isConnected()) {
                 close();
-                gattConnectionStates.get(btDevice).reset();
 
+                GattConnectionState state= gattConnectionStates.get(btDevice);
+                state.reset();
+
+                handlerThreadPool.postDelayed(state.connectionTimeoutHandler, DEFAULT_CONNECTION_TIME);
                 gatt= btDevice.connectGatt(MetaWearBleService.this, false, gattCallback);
                 gattConnectionStates.get(btDevice).androidConn.setBluetoothGatt(gatt);
             }
@@ -594,9 +687,87 @@ public class MetaWearBleService extends Service {
                 gatt.disconnect();
             }
         }
+
         @Override
         public boolean isConnected() {
             return gattConnectionStates.get(btDevice).isReady.get();
+        }
+
+        @Override
+        public boolean inMetaBootMode() {
+            return gattConnectionStates.get(btDevice).isMetaBoot;
+        }
+
+        @Override
+        public AsyncOperation<Void> updateFirmware(final DfuProgressHandler handler) {
+            if (uploadingFirmware.get()) {
+                AsyncOperationAndroidImpl<Void> result= new AsyncOperationAndroidImpl<>();
+                result.setResult(null, new RuntimeException("Firmware update already in progress"));
+                return result;
+            }
+
+            if (!isConnected()) {
+                AsyncOperationAndroidImpl<Void> result= new AsyncOperationAndroidImpl<>();
+                result.setResult(null, new RuntimeException("Connect to tbe board before updating the firmware"));
+                return result;
+            }
+
+            dfuOperation= new AsyncOperationAndroidImpl<>();
+
+            try {
+                final URL firmwareUrl = new URL(String.format("http://releases.mbientlab.com/metawear/%s/vanilla/latest/firmware.hex",
+                        gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER)));
+                close();
+
+                backgroundThreadPool.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        uploadingFirmware.set(true);
+                        dfuService = new DfuService(btDevice, firmwareUrl, MetaWearBleService.this, inMetaBootMode(), new DfuProgressHandler() {
+                            @Override
+                            public void reachedCheckpoint(final State dfuState) {
+                                queueRunnable(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        handler.reachedCheckpoint(dfuState);
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void receivedUploadProgress(final int progress) {
+                                queueRunnable(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        handler.receivedUploadProgress(progress);
+                                    }
+                                });
+                            }
+                        });
+                        Future<?> dfuFuture = backgroundThreadPool.submit(dfuService);
+
+                        try {
+                            dfuFuture.get();
+                            dfuOperation.setResult(null, null);
+                        } catch (Exception e) {
+                            dfuOperation.setResult(null, e.getCause());
+                        } finally {
+                            uploadingFirmware.set(false);
+                        }
+                    }
+                });
+            } catch (MalformedURLException e) {
+                dfuOperation.setResult(null, e);
+            }
+
+            return dfuOperation;
+        }
+
+        @Override
+        public void abortFirmwareUpdate() {
+            if (uploadingFirmware.get()) {
+                dfuService.abort();
+            }
         }
     }
 
@@ -613,34 +784,49 @@ public class MetaWearBleService extends Service {
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
                     gattConnectionStates.get(gatt.getDevice()).isConnected.set(status == 0);
+                    handlerThreadPool.removeCallbacks(state.connectionTimeoutHandler);
+
                     if (status != 0) {
                         mwBoards.get(gatt.getDevice()).close();
 
-                        if (state.connectionHandler != null) {
-                            final int paramStatus= status;
-                            queueRunnable(new Runnable() {
-                                @Override
-                                public void run() {
-                                    state.connectionHandler.failure(paramStatus, new RuntimeException("Error connecting to gatt server (%d)"));
+                        final int paramStatus= status;
+                        queueRunnable(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (state.connectionHandler != null) {
+                                    state.connectionHandler.failure(paramStatus, new RuntimeException("Error connecting to gatt server"));
                                 }
-                            });
-                        }
+                            }
+                        });
                     } else {
                         gatt.discoverServices();
                     }
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
-                    state.isConnected.set(false);
-                    state.isReady.set(false);
-                    if (state.connectionHandler != null) {
+                    mwBoards.get(gatt.getDevice()).close();
+                    handlerThreadPool.removeCallbacks(state.connectionTimeoutHandler);
+
+
+                    if (status != 0) {
+                        final int paramStatus= status;
                         queueRunnable(new Runnable() {
                             @Override
                             public void run() {
-                                state.connectionHandler.disconnected();
+                                if (state.connectionHandler != null) {
+                                    state.connectionHandler.failure(paramStatus, new RuntimeException("onConnectionStateChanged reported non-zero status: " + paramStatus));
+                                }
+                            }
+                        });
+                    } else {
+                        queueRunnable(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (state.connectionHandler != null) {
+                                    state.connectionHandler.disconnected();
+                                }
                             }
                         });
                     }
-                    mwBoards.get(gatt.getDevice()).close();
                     break;
             }
         }
@@ -652,17 +838,22 @@ public class MetaWearBleService extends Service {
                 mwBoards.get(gatt.getDevice()).close();
 
                 state.isConnected.set(false);
-                if (state.connectionHandler != null) {
-                    final int paramStatus= status;
-                    queueRunnable(new Runnable() {
-                        @Override
-                        public void run() {
-                            state.connectionHandler.failure(paramStatus, new RuntimeException("Error discovering Bluetooth services (%d)"));
+                handlerThreadPool.removeCallbacks(state.connectionTimeoutHandler);
+
+                final int paramStatus= status;
+                queueRunnable(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (state.connectionHandler != null) {
+                            state.connectionHandler.failure(paramStatus, new RuntimeException("Error discovering Bluetooth services"));
                         }
-                    });
-                }
+                    }
+                });
             } else {
                 for (BluetoothGattService service : gatt.getServices()) {
+                    if (service.getUuid().equals(DFU_SERVICE)) {
+                        gattConnectionStates.get(gatt.getDevice()).isMetaBoot= true;
+                    }
                     for (final BluetoothGattCharacteristic characteristic : service.getCharacteristics()) {
                         int charProps = characteristic.getProperties();
                         if ((charProps & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
@@ -694,7 +885,7 @@ public class MetaWearBleService extends Service {
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            gattManager.updateExecActionsState(false);
+            gattManager.updateExecActionsState();
             gattManager.executeNext(GattActionKey.CHAR_WRITE);
         }
 
@@ -724,7 +915,7 @@ public class MetaWearBleService extends Service {
 
         @Override
         public void onDescriptorWrite(final BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            gattManager.updateExecActionsState(true);
+            gattManager.updateExecActionsState();
 
             final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
             if (status != 0) {
@@ -732,16 +923,17 @@ public class MetaWearBleService extends Service {
 
                 state.isConnected.set(false);
                 gattManager.executeNext(GattActionKey.DESCRIPTOR_WRITE);
-                if (state.connectionHandler != null) {
-                    final int paramStatus= status;
-                    queueRunnable(new Runnable() {
-                        @Override
-                        public void run() {
-                            state.connectionHandler.failure(paramStatus, new RuntimeException("Error writing descriptors (%d)"));
-                        }
-                    });
+                handlerThreadPool.removeCallbacks(state.connectionTimeoutHandler);
 
-                }
+                final int paramStatus= status;
+                queueRunnable(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (state.connectionHandler != null) {
+                            state.connectionHandler.failure(paramStatus, new RuntimeException("Error writing descriptors"));
+                        }
+                    }
+                });
             } else {
                 gattManager.executeNext(GattActionKey.DESCRIPTOR_WRITE);
                 int newCount= state.nDescriptors.decrementAndGet();
@@ -762,13 +954,25 @@ public class MetaWearBleService extends Service {
                                 @Override
                                 public boolean execute() {
                                     BluetoothGattService service = gatt.getService(DevInfoCharacteristic.serviceUuid());
-                                    BluetoothGattCharacteristic devInfoChar = service.getCharacteristic(DevInfoCharacteristic.FIRMWARE_VERSION.uuid());
 
-                                    if (devInfoChar != null) {
-                                        gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
-                                        gatt.readCharacteristic(devInfoChar);
-                                        return true;
+                                    if (service != null) {
+                                        BluetoothGattCharacteristic devInfoChar = service.getCharacteristic(DevInfoCharacteristic.FIRMWARE_VERSION.uuid());
+
+                                        if (devInfoChar != null) {
+                                            gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
+                                            gatt.readCharacteristic(devInfoChar);
+                                            return true;
+                                        }
+                                    } else {
+                                        state.devInfoValues.put(DevInfoCharacteristic.FIRMWARE_VERSION, null);
                                     }
+
+                                    handlerThreadPool.post(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            state.checkConnectionReady();
+                                        }
+                                    });
                                     return false;
                                 }
                             });
@@ -788,15 +992,29 @@ public class MetaWearBleService extends Service {
                     @Override
                     public boolean execute() {
                         BluetoothGattService service = gatt.getService(DevInfoCharacteristic.serviceUuid());
-                        BluetoothGattCharacteristic devInfoChar = service.getCharacteristic(it.uuid());
 
-                        if (devInfoChar != null) {
-                            gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
-                            gatt.readCharacteristic(devInfoChar);
-                            return true;
+                        if (service != null) {
+                            BluetoothGattCharacteristic devInfoChar = service.getCharacteristic(it.uuid());
+
+                            if (devInfoChar != null) {
+                                gattManager.setExpectedGattKey(GattActionKey.CHAR_READ);
+                                gatt.readCharacteristic(devInfoChar);
+                                return true;
+                            }
+
+                            // Older firmware (< 1.0.4) did not have model number but those firmware
+                            // versions were only on MetaWear R boards
+                            state.devInfoValues.put(it, it == DevInfoCharacteristic.MODEL_NUMBER ?
+                                    Constant.METAWEAR_R_MODULE :
+                                    null);
+                        } else {
+                            // MetaWear R boards did not have the Device Information service in bootloader
+                            // mode.  If the service is not there, the board must be a MetaWear R.
+                            state.devInfoValues.put(it, it == DevInfoCharacteristic.MODEL_NUMBER ?
+                                    Constant.METAWEAR_R_MODULE :
+                                    null);
                         }
 
-                        state.devInfoValues.put(it, Constant.METAWEAR_R_MODULE);
                         state.checkConnectionReady();
                         return false;
                     }
@@ -806,7 +1024,7 @@ public class MetaWearBleService extends Service {
 
         @Override
         public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
-            gattManager.updateExecActionsState(true);
+            gattManager.updateExecActionsState();
             gattManager.executeNext(GattActionKey.RSSI_READ);
 
             if (status != 0) {
@@ -819,7 +1037,7 @@ public class MetaWearBleService extends Service {
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            gattManager.updateExecActionsState(true);
+            gattManager.updateExecActionsState();
             gattManager.executeNext(GattActionKey.CHAR_READ);
 
             final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
@@ -827,22 +1045,24 @@ public class MetaWearBleService extends Service {
 
             if (characteristic.getService().getUuid().equals(DevInfoCharacteristic.serviceUuid())) {
                 if (status != 0) {
-                    if (state.connectionHandler != null) {
-                        final int paramStatus= status;
-                        queueRunnable(new Runnable() {
-                            @Override
-                            public void run() {
+                    mwBoards.get(gatt.getDevice()).close();
+                    handlerThreadPool.removeCallbacks(state.connectionTimeoutHandler);
+
+                    final int paramStatus= status;
+                    queueRunnable(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (state.connectionHandler != null) {
                                 state.connectionHandler.failure(paramStatus, new RuntimeException("Error reading device information"));
                             }
-                        });
-
-                    }
+                        }
+                    });
                 } else {
                     String charStringValue= new String(characteristic.getValue());
                     state.devInfoValues.put(DevInfoCharacteristic.uuidToDevInfoCharacteristic(characteristic.getUuid()),
                             charStringValue);
 
-                    if (characteristic.getUuid().equals(DevInfoCharacteristic.FIRMWARE_VERSION.uuid())) {
+                    if (!state.isMetaBoot && characteristic.getUuid().equals(DevInfoCharacteristic.FIRMWARE_VERSION.uuid())) {
                         Version deviceFirmware= new Version(charStringValue);
 
                         if (deviceFirmware.compareTo(Constant.SERVICE_DISCOVERY_MIN_FIRMWARE) < 0) {
@@ -891,11 +1111,9 @@ public class MetaWearBleService extends Service {
         }
     };
 
-    private final IBinder mBinder= new LocalBinder();
-
     private boolean useHandler= false;
     private final Handler handlerThreadPool= new Handler();
-    private final ExecutorService backgroundThreadPool= Executors.newFixedThreadPool(1);
+    private final ExecutorService backgroundThreadPool= Executors.newCachedThreadPool();
     private final ConcurrentLinkedQueue<Future<?>> backgroundFutures= new ConcurrentLinkedQueue<>();
     private final TimerTask futureCheckerTask= new TimerTask() {
         @Override
@@ -979,6 +1197,8 @@ public class MetaWearBleService extends Service {
         }
         super.onDestroy();
     }
+
+    private final IBinder mBinder= new LocalBinder();
 
     @Override
     public IBinder onBind(Intent intent) {

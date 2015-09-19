@@ -119,7 +119,7 @@ public interface Gpio extends MetaWearBoard.Module {
      */
     interface SourceSelector {
         /**
-         * @deprecated Method renamed to fit the naming scheme of the class, use {@link #fromAnalogIn(byte, AnalogReadMode)} instead
+         * @deprecated Method renamed to fit the naming scheme of the class, use {@link #fromAnalogIn(byte, Gpio.AnalogReadMode)} instead
          */
         @Deprecated
         DataSignal fromAnalogGpio(byte pin, Gpio.AnalogReadMode mode);

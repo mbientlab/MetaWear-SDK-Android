@@ -25,6 +25,7 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncOperation;
+import com.mbientlab.metawear.DataSignal;
 import com.mbientlab.metawear.MetaWearBoard;
 
 /**
@@ -32,6 +33,21 @@ import com.mbientlab.metawear.MetaWearBoard;
  * @author Eric Tsai
  */
 public interface I2C extends MetaWearBoard.Module {
+    /**
+     * Selector for the I2C data sources
+     * @author Eric Tsai
+     */
+    interface SourceSelector {
+        /**
+         * Handle data from an I2C read.  The parameters for this function must match their respective
+         * parameters from the alternate {@link #readData(byte, byte, byte, byte)} function
+         * @param numBytes    Number of bytes to expect from the read
+         * @param id          User ID identifying the data
+         * @return Object representing I2C data
+         */
+        DataSignal fromId(byte numBytes, byte id);
+    }
+
     /**
      * Write data via the I2C bus without attaching a user id to the data.
      * @param deviceAddr Device to write to
@@ -41,10 +57,30 @@ public interface I2C extends MetaWearBoard.Module {
     void writeData(byte deviceAddr, byte registerAddr, byte[] data);
 
     /**
-     * Read data via the I2C bus without a user id identifying the read data.
+     * Read data via the I2C bus and stream result to user.  This version of the function does not use
+     * the data route system, it only streams data to the user.
      * @param deviceAddr Device to read from
      * @param registerAddr Device's register to read
      * @param numBytes Number of bytes to read
+     * @return Byte array containing the register data, available when read operation completes
      */
     AsyncOperation<byte[]> readData(byte deviceAddr, byte registerAddr, byte numBytes);
+
+    /**
+     * Read data via the I2C bus.  This version of the function uses the data route system.  The user ID
+     * and data length (numBytes parameters) must match their respective parameters in the SourceSelector.fromId
+     * function
+     * @param deviceAddr      Device to read from
+     * @param registerAddr    Device's register to read
+     * @param numBytes        User id identifying the data
+     * @param id              Number of bytes to read
+     * @see com.mbientlab.metawear.module.I2C.SourceSelector#fromId(byte, byte)
+     */
+    void readData(byte deviceAddr, byte registerAddr, byte numBytes, byte id);
+
+    /**
+     * Initiates the creation of a data route
+     * @return Selection of available data sources
+     */
+    SourceSelector routeData();
 }
