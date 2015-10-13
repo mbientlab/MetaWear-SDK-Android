@@ -503,7 +503,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         private static final String JSON_FIELD_EXPECTED_SIZE= "expected_size";
 
         ///< Use linked hash map to preserve the order in which log IDs are received from the board
-        private final LinkedHashMap<Byte, Queue<byte[]>> logEntries;
+        private final LinkedHashMap<Byte, ConcurrentLinkedQueue<byte[]>> logEntries;
         private final int expectedSize;
 
         public VariableLoggable(String key, Collection<Byte> logIds, Class<? extends Message> msgClass, int expectedSize) {
@@ -514,7 +514,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
             logEntries= new LinkedHashMap<>();
             for(Byte id: logIds) {
                 dataLoggers.put(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, id), this);
-                logEntries.put(id, new LinkedList<byte[]>());
+                logEntries.put(id, new ConcurrentLinkedQueue<byte[]>());
             }
         }
 
