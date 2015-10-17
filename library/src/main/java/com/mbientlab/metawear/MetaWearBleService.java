@@ -238,6 +238,7 @@ public class MetaWearBleService extends Service {
                 }
             }
         };
+        public final ExecutorService responseHandlerQueue= Executors.newSingleThreadExecutor(), taskExecutionQueue= Executors.newSingleThreadExecutor();
 
         public MetaWearBoard.ConnectionStateHandler connectionHandler;
         public boolean isMetaBoot= false;
@@ -497,6 +498,16 @@ public class MetaWearBleService extends Service {
         @Override
         public void executeTask(Runnable r, long delay) {
             handlerThreadPool.postDelayed(r, delay);
+        }
+
+        @Override
+        public void executeTask(Runnable r) {
+            if (useHandler) {
+                handlerThreadPool.post(r);
+            } else {
+                backgroundFutures.add(gattConnectionStates.get(gatt.getDevice()).taskExecutionQueue.submit(r));
+            }
+
         }
 
         @Override
@@ -892,23 +903,27 @@ public class MetaWearBleService extends Service {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             if (characteristic.getUuid().equals(METAWEAR_NOTIFY)) {
+                final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
                 final byte[] response= characteristic.getValue();
-                if ((byte) 0x00 == (byte) (response[1] & 0x7f)) {
+                byte registerId= (byte) (response[1] & 0x7f);
+
+                // All info registers are id = 0
+                if (InfoRegister.LOGGING.opcode() == registerId) {
                     ModuleInfoImpl info= new ModuleInfoImpl(response);
 
-                    GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
+
                     state.moduleInfo.put(info.id(), info);
                     mwBoards.get(gatt.getDevice()).receivedModuleInfo(info);
 
                     state.checkConnectionReady();
                 } else {
                     final BluetoothDevice paramDevice= gatt.getDevice();
-                    queueRunnable(new Runnable() {
+                    backgroundFutures.add(state.responseHandlerQueue.submit(new Runnable() {
                         @Override
                         public void run() {
                             mwBoards.get(paramDevice).receivedResponse(response);
                         }
-                    });
+                    }));
                 }
             }
         }

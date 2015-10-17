@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Created by etsai on 6/15/2015.
  */
-public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.ResponseListener {
+public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private static Collection<Byte> JsonByteArrayToCollection(JSONArray jsonArray) throws JSONException {
         Collection<Byte> elements= new ArrayList<>(jsonArray.length());
         for(int i= 0; i < jsonArray.length(); i++) {
@@ -435,7 +435,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
 
         public void processLogMessage(byte logId, Calendar timestamp, byte[] data) {
             try {
-                Message logMsg;
+                final Message logMsg;
 
                 if (bmi160AccMessageClasses.contains(msgClass)) {
                     Constructor<?> cTor = msgClass.getConstructor(Calendar.class, byte[].class, float.class);
@@ -448,7 +448,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
                     logMsg= (Message) cTor.newInstance(timestamp, data);
                 }
 
-                logProcessor.process(logMsg);
+                conn.executeTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        logProcessor.process(logMsg);
+                    }
+                });
             } catch (Exception ex) {
                 throw new RuntimeException("Cannot instantiate message class", ex);
             }
@@ -473,7 +478,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     }
 
     /**
-     * Legacy class left over from 2.0.0 implementation.  All future loggers should use the VariableLogger class
+     * Legacy class left over from 2.0.0 implementation.  All future loggers should use the VariableLoggable class
      */
     private class StandardLoggable extends VariableLoggable {
         public StandardLoggable(String key, Collection<Byte> logIds, Class<? extends Message> msgClass) {
@@ -503,7 +508,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         private static final String JSON_FIELD_EXPECTED_SIZE= "expected_size";
 
         ///< Use linked hash map to preserve the order in which log IDs are received from the board
-        private final LinkedHashMap<Byte, ConcurrentLinkedQueue<byte[]>> logEntries;
+        private final LinkedHashMap<Byte, Queue<byte[]>> logEntries;
         private final int expectedSize;
 
         public VariableLoggable(String key, Collection<Byte> logIds, Class<? extends Message> msgClass, int expectedSize) {
@@ -2380,9 +2385,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         responses.put(new ResponseHeader(LoggingRegister.READOUT_PROGRESS), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
-                int nEntriesLeft= ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xffff;
+                final int nEntriesLeft= ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xffff;
+
                 if (downloadHandler != null) {
-                    downloadHandler.onProgressUpdate(nEntriesLeft, nLogEntries);
+                    conn.executeTask(new Runnable() {
+                        @Override
+                        public void run() {
+                            downloadHandler.onProgressUpdate(nEntriesLeft, nLogEntries);
+                        }
+                    });
+
                 }
                 return null;
             }
@@ -2674,19 +2686,24 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     }
 
     private void processLogData(byte[] logData) {
-        byte logId= (byte) (logData[0] & 0xf);
+        final byte logId= (byte) (logData[0] & 0xf);
         ResponseHeader header= new ResponseHeader(LoggingRegister.READOUT_NOTIFY, logId);
 
         long tick= ByteBuffer.wrap(logData, 1, 4).order(ByteOrder.LITTLE_ENDIAN).getInt() & 0xffffffffL;
-        Calendar timestamp= (Calendar) logReferenceTick.timestamp().clone();
+        final Calendar timestamp= (Calendar) logReferenceTick.timestamp().clone();
         timestamp.add(Calendar.MILLISECOND, (int) ((tick - logReferenceTick.tickCount()) * TICK_TIME_STEP));
-        byte[] logEntryData= Arrays.copyOfRange(logData, 5, logData.length);
+        final byte[] logEntryData= Arrays.copyOfRange(logData, 5, logData.length);
 
         if (dataLoggers.containsKey(header)) {
             dataLoggers.get(header).processLogMessage(logId, timestamp, logEntryData);
         } else {
             if (downloadHandler != null) {
-                downloadHandler.receivedUnknownLogEntry(logId, timestamp, logEntryData);
+                conn.executeTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        downloadHandler.receivedUnknownLogEntry(logId, timestamp, logEntryData);
+                    }
+                });
             }
         }
     }
@@ -3017,15 +3034,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
         return dataRoutes.get(id);
     }
 
-    @Override
     public void receivedResponse(byte[] response) {
         response[1]&= 0x7f;
         ResponseHeader header= new ResponseHeader(response[0], response[1]);
 
         if (responses.containsKey(header)) {
-            Response resp= responses.get(header).process(response);
+            final Response resp= responses.get(header).process(response);
             if (resp != null && responseProcessors.containsKey(resp.header)) {
-                responseProcessors.get(resp.header).process(resp.body);
+                conn.executeTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        responseProcessors.get(resp.header).process(resp.body);
+                    }
+                });
             }
         }
     }
@@ -5057,6 +5078,4 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard, Connection.
     private void readRegister(Register register, byte ... parameters) {
         buildBlePacket(Registers.buildReadCommand(register, parameters));
     }
-
-
 }
