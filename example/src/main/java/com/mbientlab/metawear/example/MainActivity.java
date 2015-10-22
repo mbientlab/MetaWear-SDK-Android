@@ -82,6 +82,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         getApplicationContext().bindService(new Intent(this, MetaWearBleService.class),
                 this, Context.BIND_AUTO_CREATE);
         sharedPrefs= getSharedPreferences(SHARED_PREF_KEY, Context.MODE_PRIVATE);
+        manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
     }
 
     @Override
@@ -116,12 +117,12 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
     }
 
     //private final String MW_MAC_ADDRESS= "E9:64:E9:1A:BC:F0";
-    //private final String MW_MAC_ADDRESS= "C5:24:07:C3:20:9F";
+    private final String MW_MAC_ADDRESS= "C5:24:07:C3:20:9F";
     //private final String MW_MAC_ADDRESS= "C8:D2:BA:90:60:03";
     //private final String MW_MAC_ADDRESS= "E5:58:D9:C4:1C:AF";
     //private final String MW_MAC_ADDRESS= "D6:0E:50:D0:AB:CE";
     //private final String MW_MAC_ADDRESS= "DD:F2:D5:07:B6:57";
-    private final String MW_MAC_ADDRESS= "D5:7B:B9:7D:CE:0E";
+    //private final String MW_MAC_ADDRESS= "D5:7B:B9:7D:CE:0E";
     //private final String MW_MAC_ADDRESS= "EB:4C:AF:68:8E:CB";
 
     @Override
@@ -131,17 +132,13 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         final BluetoothManager btManager= (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         final BluetoothDevice remoteDevice= btManager.getAdapter().getRemoteDevice(MW_MAC_ADDRESS);
 
+        binder.executeOnUiThread();
         //binder.clearCachedState(remoteDevice);
         mwBoard= binder.getMetaWearBoard(remoteDevice);
         mwBoard.setConnectionStateHandler(new ConnectionStateHandler() {
             @Override
             public void connected() {
-                MainActivity.this.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Toast.makeText(MainActivity.this, "Connected", Toast.LENGTH_LONG).show();
-                    }
-                });
+                Toast.makeText(MainActivity.this, "Connected", Toast.LENGTH_LONG).show();
 
                 Log.i("test", "Connected");
                 Log.i("test", "MetaBoot? " + mwBoard.inMetaBootMode());
@@ -170,17 +167,6 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                             Log.e("test", "Error reading ibeacon configuration", error);
                         }
                     });
-                    mwBoard.getModule(Settings.class).readAdConfig().onComplete(new CompletionHandler<Settings.AdvertisementConfig>() {
-                        @Override
-                        public void success(Settings.AdvertisementConfig result) {
-                            Log.i("test", result.toString());
-                        }
-
-                        @Override
-                        public void failure(Throwable error) {
-                            Log.e("test", "Error reading advertisement configuration", error);
-                        }
-                    });
                 } catch (UnsupportedModuleException e) {
                     Log.e("test", "Cannot get module", e);
                 }
@@ -188,24 +174,13 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
 
             @Override
             public void disconnected() {
-                MainActivity.this.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Toast.makeText(MainActivity.this, "Disconnected", Toast.LENGTH_LONG).show();
-                    }
-                });
+                Toast.makeText(MainActivity.this, "Disconnected", Toast.LENGTH_LONG).show();
                 Log.i("test", "Disconnected");
             }
 
             @Override
             public void failure(int status, final Throwable error) {
-                MainActivity.this.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Toast.makeText(MainActivity.this, error.getLocalizedMessage(), Toast.LENGTH_LONG).show();
-                    }
-                });
-
+                Toast.makeText(MainActivity.this, error.getLocalizedMessage(), Toast.LENGTH_LONG).show();
                 Log.e("test", "Error connecting", error);
             }
         });
@@ -228,12 +203,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         mwBoard.readRssi().onComplete(new CompletionHandler<Integer>() {
             @Override
             public void success(final Integer result) {
-                MainActivity.this.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        ((TextView) findViewById(R.id.textView)).setText(String.format(Locale.US, "%d", result));
-                    }
-                });
+                ((TextView) findViewById(R.id.textView)).setText(String.format(Locale.US, "%d", result));
             }
 
             @Override
@@ -247,12 +217,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         mwBoard.readBatteryLevel().onComplete(new CompletionHandler<Byte>() {
             @Override
             public void success(final Byte result) {
-                MainActivity.this.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        ((TextView) findViewById(R.id.textView2)).setText(String.format(Locale.US, "%d", result));
-                    }
-                });
+                ((TextView) findViewById(R.id.textView2)).setText(String.format(Locale.US, "%d", result));
             }
 
             @Override
@@ -270,23 +235,20 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
             final Logging loggingModule = mwBoard.getModule(Logging.class);
             final Accelerometer accelModule = mwBoard.getModule(Accelerometer.class);
 
+            Log.i("test", "Log size: " + loggingModule.getLogCapacity());
             if (mySwitch.isChecked()) {
                 if (!accelSetup) {
-                    accelModule.routeData().fromAxes().stream("accelSub").log("accelLogger").commit()
+                    accelModule.routeData().fromAxes()/*.stream("accelSub")*/.log("accelLogger").commit()
                             .onComplete(new CompletionHandler<RouteManager>() {
                                 @Override
                                 public void success(RouteManager result) {
+                                    /*
                                     result.subscribe("accelSub", new RouteManager.MessageHandler() {
                                         @Override
                                         public void process(Message msg) {
                                             final CartesianShort axisData = msg.getData(CartesianShort.class);
                                             Log.i("test", String.format("Stream: %s", axisData.toString()));
-                                            MainActivity.this.runOnUiThread(new Runnable() {
-                                                @Override
-                                                public void run() {
-                                                    ((TextView) findViewById(R.id.textView3)).setText(axisData.toString());
-                                                }
-                                            });
+                                            ((TextView) findViewById(R.id.textView3)).setText(axisData.toString());
                                         }
                                     });
                                     result.setLogMessageHandler("accelLogger", new RouteManager.MessageHandler() {
@@ -296,6 +258,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                             Log.i("test", String.format("Log: %s", axisData.toString()));
                                         }
                                     });
+                                    */
 
                                     accelModule.setOutputDataRate(50.f);
 
@@ -330,12 +293,35 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         }
     }
 
+    final int NOTIFICATION_ID= 2048;
+    Notification.Builder logDownloadNotifyBuilder= null;
+    NotificationManager manager;
     public void downloadMe(View v) {
         try {
+            if (logDownloadNotifyBuilder == null) {
+                logDownloadNotifyBuilder= new Notification.Builder(this).setSmallIcon(android.R.drawable.stat_sys_download)
+                        .setOnlyAlertOnce(true).setOngoing(true).setContentTitle("Log Downloading");
+            }
             mwBoard.getModule(Logging.class).downloadLog(0.05f, new Logging.DownloadHandler() {
                 @Override
                 public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
+                    if (nEntriesLeft == 0) {
+                        final Notification.Builder builder = new Notification.Builder(MainActivity.this).setOnlyAlertOnce(true)
+                                .setOngoing(false).setAutoCancel(true);
+                        builder.setContentTitle("Log Download Complete").setSmallIcon(android.R.drawable.stat_sys_download_done);
+                        manager.notify(NOTIFICATION_ID, builder.build());
+                    } else {
+                        int progress = (int) (((totalEntries - nEntriesLeft) / ((float) totalEntries)) * 100);
+                        logDownloadNotifyBuilder.setContentText(String.format("%d%%", progress)).setProgress(100, progress, false);
+                        manager.notify(NOTIFICATION_ID, logDownloadNotifyBuilder.build());
+                    }
+
                     Log.i("test", String.format("Progress= %d / %d", nEntriesLeft, totalEntries));
+                }
+
+                @Override
+                public void receivedUnhandledLogEntry(Message logMessage) {
+                    Log.i("test", "Unhandled log entry: " + logMessage.toString());
                 }
             });
         } catch (UnsupportedModuleException e) {
@@ -383,12 +369,8 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                 @Override
                                 public void process(final Message msg) {
                                     Log.i("test", String.format("%.3f C", msg.getData(Float.class)));
-                                    MainActivity.this.runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            ((TextView) findViewById(R.id.textView4)).setText(String.format("%.3f C", msg.getData(Float.class)));
-                                        }
-                                    });
+
+                                    ((TextView) findViewById(R.id.textView4)).setText(String.format("%.3f C", msg.getData(Float.class)));
                                 }
                             });
                             result.subscribe("tempF", new RouteManager.MessageHandler() {
@@ -532,12 +514,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                         result.subscribe("analog_gpio", new RouteManager.MessageHandler() {
                             @Override
                             public void process(final Message msg) {
-                                MainActivity.this.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        ((TextView) findViewById(R.id.textView6)).setText(String.format("%d", msg.getData(Short.class)));
-                                    }
-                                });
+                                ((TextView) findViewById(R.id.textView6)).setText(String.format("%d", msg.getData(Short.class)));
                             }
                         });
                         gpioModule.clearDigitalOut((byte) 1);
@@ -661,14 +638,8 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                 @Override
                                 public void process(Message msg) {
                                     final CartesianFloat spinData = msg.getData(CartesianFloat.class);
-
                                     Log.i("test", spinData.toString());
-                                    MainActivity.this.runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            ((TextView) findViewById(R.id.textView7)).setText(spinData.toString() + Units.DEGS_PER_SEC);
-                                        }
-                                    });
+                                    ((TextView) findViewById(R.id.textView7)).setText(spinData.toString() + Units.DEGS_PER_SEC);
                                 }
                             });
                         }
@@ -724,12 +695,8 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                             public void process(Message msg) {
                                 final Long conductance = msg.getData(Long.class);
                                 Log.i("test", String.format("Conductance: %d", conductance));
-                                MainActivity.this.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        ((TextView) findViewById(R.id.textView8)).setText(String.format("%d", conductance));
-                                    }
-                                });
+
+                                ((TextView) findViewById(R.id.textView8)).setText(String.format("%d", conductance));
                             }
                         });
                     }
@@ -920,6 +887,17 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                     settingsModule.configure().setDeviceName("AntiWare").commit();
                 }
             });
+            settingsModule.readConnectionParameters().onComplete(new CompletionHandler<Settings.ConnectionParameters>() {
+                @Override
+                public void success(Settings.ConnectionParameters result) {
+                    Log.i("test", result.toString());
+                }
+
+                @Override
+                public void failure(Throwable error) {
+                    Log.e("test", "Error reading connection parameters", error);
+                }
+            });
         } catch (UnsupportedModuleException e) {
             Toast.makeText(this, e.getLocalizedMessage(), Toast.LENGTH_LONG).show();
         }
@@ -1092,34 +1070,31 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
         final Switch mySwitch= (Switch) v;
 
         try {
-            final Mma8452qAccelerometer accelModule = mwBoard.getModule(Mma8452qAccelerometer.class);
+            final Accelerometer accelModule = mwBoard.getModule(Accelerometer.class);
             final Logging loggingModule = mwBoard.getModule(Logging.class);
 
             if (mySwitch.isChecked()) {
                 if (!orientationSetup) {
-                    accelModule.routeData().fromOrientation().stream("orientation_sub").log("orientation_log")
+                    accelModule.routeData().fromOrientation().stream("orientation_sub")/*.log("orientation_log")*/
                             .commit().onComplete(new CompletionHandler<RouteManager>() {
                         @Override
                         public void success(RouteManager result) {
                             result.subscribe("orientation_sub", new RouteManager.MessageHandler() {
                                 @Override
                                 public void process(Message msg) {
-                                    final String orientation = msg.getData(Mma8452qAccelerometer.Orientation.class).toString();
+                                    final String orientation = msg.getData(Accelerometer.BoardOrientation.class).toString();
                                     Log.i("test", String.format(Locale.US, "Stream orientation: %s", orientation));
-                                    MainActivity.this.runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            ((TextView) findViewById(R.id.textView9)).setText(orientation);
-                                        }
-                                    });
+                                    ((TextView) findViewById(R.id.textView9)).setText(orientation);
                                 }
                             });
+                            /*
                             result.setLogMessageHandler("orientation_log", new RouteManager.MessageHandler() {
                                 @Override
                                 public void process(Message msg) {
-                                    Log.i("test", String.format(Locale.US, "Log orientation: %s", msg.getData(Mma8452qAccelerometer.Orientation.class).toString()));
+                                    Log.i("test", String.format(Locale.US, "Log orientation: %s", msg.getData(Accelerometer.BoardOrientation.class).toString()));
                                 }
                             });
+                            */
                         }
 
                         @Override
@@ -1160,20 +1135,16 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                 public void process(Message msg) {
                                     final Mma8452qAccelerometer.TapData tapData = msg.getData(Mma8452qAccelerometer.TapData.class);
 
-                                    MainActivity.this.runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            switch (tapData.type()) {
-                                                case SINGLE:
-                                                    ((TextView) findViewById(R.id.textView10)).setText("single tap");
-                                                    break;
-                                                case DOUBLE:
-                                                    ((TextView) findViewById(R.id.textView10)).setText("double tap");
-                                                    break;
-                                            }
 
-                                        }
-                                    });
+                                    switch (tapData.type()) {
+                                        case SINGLE:
+                                            ((TextView) findViewById(R.id.textView10)).setText("single tap");
+                                            break;
+                                        case DOUBLE:
+                                            ((TextView) findViewById(R.id.textView10)).setText("double tap");
+                                            break;
+                                    }
+
                                     Log.i("test", tapData.toString());
                                 }
                             });
@@ -1212,12 +1183,7 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                             shakeCount++;
                                             final Mma8452qAccelerometer.MovementData shakeData = msg.getData(Mma8452qAccelerometer.MovementData.class);
                                             Log.i("test", shakeData.toString());
-                                            MainActivity.this.runOnUiThread(new Runnable() {
-                                                @Override
-                                                public void run() {
-                                                    ((TextView) findViewById(R.id.textView11)).setText("shake " + shakeCount);
-                                                }
-                                            });
+                                            ((TextView) findViewById(R.id.textView11)).setText("shake " + shakeCount);
                                         }
                                     });
                                 }
@@ -1254,12 +1220,8 @@ public class MainActivity extends ActionBarActivity implements ServiceConnection
                                         public void process(Message msg) {
                                             final Mma8452qAccelerometer.MovementData shakeData = msg.getData(Mma8452qAccelerometer.MovementData.class);
                                             Log.i("test", shakeData.toString());
-                                            MainActivity.this.runOnUiThread(new Runnable() {
-                                                @Override
-                                                public void run() {
-                                                    ((TextView) findViewById(R.id.textView12)).setText("motion");
-                                                }
-                                            });
+
+                                            ((TextView) findViewById(R.id.textView12)).setText("motion");
                                         }
                                     });
                                 }

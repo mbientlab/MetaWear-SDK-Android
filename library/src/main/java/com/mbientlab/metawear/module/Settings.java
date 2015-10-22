@@ -33,11 +33,21 @@ import com.mbientlab.metawear.MetaWearBoard;
  */
 public interface Settings extends MetaWearBoard.Module {
     /**
+     * Configures the connection parameters
+     * @return Editor object to configure the connection parameters
+     */
+    ConnectionParameterEditor configureConnectionParameters();
+    /**
+     * Reads the current connection parameters
+     * @return ConnectionParameters object, available when the read is completed
+     */
+    AsyncOperation<ConnectionParameters> readConnectionParameters();
+
+    /**
      * Configures advertisement settings
      * @return Editor object to configure settings
      */
     ConfigEditor configure();
-
     /**
      * Reads the current advertisement settings
      * @return Advertisement configuration object, available when the read is completed
@@ -57,7 +67,7 @@ public interface Settings extends MetaWearBoard.Module {
      */
     void startAdvertisement();
     /**
-     * Triggers the board to initiate the Bluetooth bonding process with the connected Android device
+     * Trigger the board to initiate the Bluetooth bonding process with the connected Android device
      */
     void initiateBonding();
 
@@ -96,7 +106,6 @@ public interface Settings extends MetaWearBoard.Module {
          */
         byte[] scanResponse();
     }
-
     /**
      * Interface for configuring the advertisement settings
      * @author Eric Tsai
@@ -133,6 +142,74 @@ public interface Settings extends MetaWearBoard.Module {
 
         /**
          * Writes the new settings to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Wrapper class containing the connection parameters
+     * @author Eric Tsai
+     */
+    interface ConnectionParameters {
+        /**
+         * Retrieves the minimum connection interval
+         * @return Minimum connection interval
+         */
+        float minConnectionInterval();
+
+        /**
+         * Retrieves the maximum connection interval
+         * @return Maximum connection interval
+         */
+        float maxConnectionInterval();
+
+        /**
+         * Retrieves the slave latency value
+         * @return Slave latency value
+         */
+        short slaveLatency();
+
+        /**
+         * Retrieves the supervisor timeout value
+         * @return Supervisor timeout value
+         */
+        short supervisorTimeout();
+    }
+    /**
+     * Interface for configuring the Bluetooth LE connection parameters
+     * @author Eric Tsai
+     */
+    interface ConnectionParameterEditor {
+        /**
+         * Sets the lower bound of the connection interval
+         * @param interval    Lower bound, at least 7.5ms
+         * @return Calling object
+         */
+        ConnectionParameterEditor setMinConnectionInterval(float interval);
+
+        /**
+         * Sets the upper bound of the connection interval
+         * @param interval    Upper bound, at most 4000ms
+         * @return Calling object
+         */
+        ConnectionParameterEditor setMaxConnectionInterval(float interval);
+
+        /**
+         * Sets the number of connection intervals to skip
+         * @param latency    Number of connection intervals to skip, between [0, 1000]
+         * @return Calling object
+         */
+        ConnectionParameterEditor setSlaveLatency(short latency);
+
+        /**
+         * Sets the maximum amount of time between data exchanges until the connection is considered to be lost
+         * @param timeout    Timeout value between [10, 32000] ms
+         * @return Calling object
+         */
+        ConnectionParameterEditor setSupervisorTimeout(short timeout);
+
+        /**
+         * Writes the new connection parameters to the board
          */
         void commit();
     }

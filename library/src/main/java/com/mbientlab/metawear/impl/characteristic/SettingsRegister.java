@@ -65,6 +65,10 @@ public enum SettingsRegister implements Register {
     PARTIAL_SCAN_RESPONSE {
         @Override
         public byte opcode() { return 0x8; }
+    },
+    CONNECTION_PARAMETERS {
+        @Override
+        public byte opcode() { return 0x9; }
     };
 
     @Override

@@ -24,54 +24,29 @@
 
 package com.mbientlab.metawear.module;
 
+import com.mbientlab.metawear.DataSignal;
+import com.mbientlab.metawear.MetaWearBoard;
+
 /**
- * Interacts with a GSR (galvanic skin response) sensor
- * @author Eric Tsai
+ * Created by etsai on 10/21/2015.
  */
-public interface Gsr extends Conductance {
+public interface Conductance extends MetaWearBoard.Module {
     /**
-     * Voltages that can be applied to the GSR electrodes
+     * Read the conductance value from a GSR channel
+     * @param channel    Channel to read from
      */
-    enum ConstantVoltage {
-        CV_500MV,
-        CV_250MV
-    }
+    void readConductance(byte channel);
 
     /**
-     * Gains that can be applied to the GSR circuit
+     * Initiates automatic calibration.  This should be done before the first conductance read or
+     * if there are changes in temperature
      */
-    enum Gain {
-        G_499K,
-        G_1M
-    }
+    void calibrate();
 
     /**
-     * Interface for configuring GSR settings
+     * Initiates the creation of a route for GSR data
+     * @param channel    GSR channel to route data for
+     * @return Object representing the data from the specific channel
      */
-    interface ConfigEditor {
-        /**
-         * Sets the constant voltage applied to the electrodes
-         * @param cv    New constant voltage value
-         * @return Calling object
-         */
-        ConfigEditor setConstantVoltage(ConstantVoltage cv);
-
-        /**
-         * Sets the gain applied to the circuit
-         * @param gain    New gain value
-         * @return Calling object
-         */
-        ConfigEditor setGain(Gain gain);
-
-        /**
-         * Writes the new settings to the board
-         */
-        void commit();
-    }
-
-    /**
-     * Configures GSR settings
-     * @return Config object to edit the settings
-     */
-    ConfigEditor configure();
+    DataSignal routeData(byte channel);
 }

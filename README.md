@@ -1,5 +1,5 @@
 # MetaWear Android API #
-The MetaWear Android API is a libray for interacting with the MetaWear board on an Android device.  A minimum of Android 4.3 (SDK 18) is required to use this library however some features will not properly function due to the underlying Blueooth LE implementation.  For the best resuilts, it is recommended that users be on **Android 4.4 (SDK 19) or higher**.
+The MetaWear Android API is a library for interacting with the MetaWear board on an Android device.  A minimum of Android 4.3 (SDK 18) is required to use this library however some features will not properly function due to the underlying Bluetooth LE implementation.  For the best results, it is recommended that users be on **Android 4.4 (SDK 19) or higher**.
 
 More information on MetaWear platform in on the MbientLab product page ([https://mbientlab.com/product/](https://mbientlab.com/product/)).
 
@@ -20,7 +20,7 @@ Then, add the compile element to the dependencies closure in the module's *build
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:2.1.0'
+    compile 'com.mbientlab:metawear:2.2.0'
 }
 ```
 
@@ -47,7 +47,7 @@ Once your project has synced with the updated Gradle files, declare the MetaWear
 ```
 
 ## Binding the Service ##
-Lastly, bind the service in your application and retrain a reference to the service's LocaBinder class.  This can be done in any activity or fragment that needs access to a MetaWearBoard object.
+Lastly, bind the service in your application and retrain a reference to the service's LocalBinder class.  This can be done in any activity or fragment that needs access to a MetaWearBoard object.
 
 ```java
 import android.app.Activity;
@@ -62,7 +62,7 @@ public class ExampleActivity extends Activity implements ServiceConnection {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedIFinally,nstanceState);
+        super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         ///< Bind the service when the activity is created

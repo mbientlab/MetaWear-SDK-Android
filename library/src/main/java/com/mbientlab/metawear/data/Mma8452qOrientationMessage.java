@@ -25,18 +25,21 @@
 package com.mbientlab.metawear.data;
 
 import com.mbientlab.metawear.Message;
+import com.mbientlab.metawear.module.Accelerometer.BoardOrientation;
 import com.mbientlab.metawear.module.Mma8452qAccelerometer.Orientation;
 
 import java.util.Calendar;
 
 /**
  * Container class for orientation data from the MMA8452Q chip.  Data is interpreted as
- * an Orientation enum.
+ * an Orientation or BoardOrientation enum.
  * @author Eric Tsai
- * @see com.mbientlab.metawear.module.Mma8452qAccelerometer.Orientation
+ * @see BoardOrientation
+ * @see Orientation
  */
 public class Mma8452qOrientationMessage extends Message {
     private final Orientation orientation;
+    private final BoardOrientation boardOrientation;
 
     public Mma8452qOrientationMessage(byte[] data) {
         this(null, data);
@@ -45,12 +48,16 @@ public class Mma8452qOrientationMessage extends Message {
     public Mma8452qOrientationMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        orientation= Orientation.values()[(4 * (data[0] & 0x1) + ((data[0] >> 1) & 0x3))];
+        int index= 4 * (data[0] & 0x1) + ((data[0] >> 1) & 0x3);
+        orientation= Orientation.values()[index];
+        boardOrientation= BoardOrientation.values()[(index == 2 || index == 3) ? index: index ^ 0x1];
     }
 
     @Override
     public <T> T getData(Class<T> type) {
-        if (type.equals(Orientation.class)) {
+        if (type.equals(BoardOrientation.class)) {
+            return type.cast(boardOrientation);
+        } else if (type.equals(Orientation.class)) {
             return type.cast(orientation);
         }
 

@@ -42,6 +42,15 @@ public enum Bmi160AccelerometerRegister implements Register {
     },
     DATA_INTERRUPT_CONFIG {
         @Override public byte opcode() { return 0x5; }
+    },
+    ORIENT_INTERRUPT_ENABLE {
+        @Override public byte opcode() { return 0xf; }
+    },
+    ORIENT_CONFIG {
+        @Override public byte opcode() { return 0x10; }
+    },
+    ORIENT_INTERRUPT {
+        @Override public byte opcode() { return 0x11; }
     };
 
     @Override

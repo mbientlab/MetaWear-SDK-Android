@@ -36,6 +36,23 @@ import com.mbientlab.metawear.MetaWearBoard;
  */
 public interface Accelerometer extends MetaWearBoard.Module {
     /**
+     * Orientation definitions for the board, providing a unified definition of board orientation amongst
+     * the R, RG, and RPro boards.  The entries are defined from the board's perspective as pictured in the
+     * mechanical specification section of the MetaWear product spec sheets.
+     * @author Eric Tsai
+     */
+    enum BoardOrientation {
+        FACE_UP_PORTRAIT_UPRIGHT,
+        FACE_UP_PORTRAIT_UPSIDE_DOWN,
+        FACE_UP_LANDSCAPE_LEFT,
+        FACE_UP_LANDSCAPE_RIGHT,
+        FACE_DOWN_PORTRAIT_UPRIGHT,
+        FACE_DOWN_PORTRAIT_UPSIDE_DOWN,
+        FACE_DOWN_LANDSCAPE_LEFT,
+        FACE_DOWN_LANDSCAPE_RIGHT
+    }
+
+    /**
      * Sets the operating frequency of the accelerometer.  The closest, valid frequency will be chosen
      * depending on underlying sensor
      * @param frequency    Operating frequency, in Hz
@@ -58,6 +75,15 @@ public interface Accelerometer extends MetaWearBoard.Module {
     void disableAxisSampling();
 
     /**
+     * Enables orientation detection when the accelerometer is active
+     */
+    void enableOrientationDetection();
+    /**
+     * Disables orientation detection
+     */
+    void disableOrientationDetection();
+
+    /**
      * Global function that starts accelerometer activity.  The accelerometer cannot be configured until
      * the {@link #stop()} method is called
      */
@@ -77,24 +103,27 @@ public interface Accelerometer extends MetaWearBoard.Module {
          * @return Object representing the data from the accelerometer XYZ axis sampling
          */
         DataSignal fromAxes();
-
         /**
          * Handle data from the x-axis.  Streaming data from only the x-axis is not supported
          * @return Object representing the data from the accelerometer x-axis sampling
          */
         DataSignal fromXAxis();
-
         /**
          * Handle data from the y-axis.  Streaming data from only the y-axis is not supported
          * @return Object representing the data from the accelerometer y-axis sampling
          */
         DataSignal fromYAxis();
-
         /**
          * Handle data from the z-axis.  Streaming data from only the z-axis is not supported
          * @return Object representing the data from the accelerometer z-axis sampling
          */
         DataSignal fromZAxis();
+
+        /**
+         * Handle data from orientation changes
+         * @return Object representing the orientation data
+         */
+        DataSignal fromOrientation();
     }
 
     /**

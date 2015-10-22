@@ -59,6 +59,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Stack;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -451,7 +452,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 conn.executeTask(new Runnable() {
                     @Override
                     public void run() {
-                        logProcessor.process(logMsg);
+                        if (logProcessor != null) {
+                            logProcessor.process(logMsg);
+                        } else if (downloadHandler != null) {
+                            downloadHandler.receivedUnhandledLogEntry(logMsg);
+                        }
                     }
                 });
             } catch (Exception ex) {
@@ -994,7 +999,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
                             Sample sampleConfig = (Sample) newConfig;
-                            return new byte[]{0xa, (byte) (outputSize & 0x3), sampleConfig.binSize};
+                            return new byte[]{0xa, (byte) ((outputSize - 1) & 0x3), sampleConfig.binSize};
                         }
 
                         @Override
@@ -2003,6 +2008,24 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
 
+        public DataSignal fromBmi160Orientation() {
+            return new DataSource((byte) 1, Bmi160OrientationMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.ORIENT_INTERRUPT)) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmi160AccelerometerRegister.ORIENT_INTERRUPT, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmi160AccelerometerRegister.ORIENT_INTERRUPT, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
         public DataSignal fromBmi160Gyro() {
             return new ThreeAxisDataSource(Bmi160ThreeAxisGyroMessage.class, Bmi160SingleAxisUnsignedGyroMessage.class, new ResponseHeader(Bmi160GyroRegister.DATA)) {
                 @Override
@@ -2282,12 +2305,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private final HashMap<Byte, ModuleInfo> moduleInfo= new HashMap<>();
     private Logging.DownloadHandler downloadHandler;
     private float notifyProgress= 1.0f;
-    private int nLogEntries;
+    private long nLogEntries;
     private ReferenceTick logReferenceTick= null;
     private final AtomicBoolean commitRoutes= new AtomicBoolean(false);
     private final Queue<RouteHandler> pendingRoutes= new LinkedList<>();
-    private final HashMap<ResponseHeader, RouteManager.MessageHandler> responseProcessors= new HashMap<>();
-    private final HashMap<ResponseHeader, Loggable> dataLoggers= new HashMap<>();
+    private final Map<ResponseHeader, RouteManager.MessageHandler> responseProcessors= new ConcurrentHashMap<>();
+    private final Map<ResponseHeader, Loggable> dataLoggers= new HashMap<>();
 
     ///< Route variables
     private final HashMap<Integer, RouteManagerImpl> dataRoutes= new HashMap<>();
@@ -2363,11 +2386,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         responses.put(new ResponseHeader(LoggingRegister.LENGTH), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
-                nLogEntries= ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xffff;
-                int nEntriesNotify= (int) (nLogEntries * notifyProgress);
+                int payloadSize= response.length - 2;
 
-                conn.setResultReady(logEntryCountResults.poll(), nLogEntries, null);
-                writeRegister(LoggingRegister.READOUT, response[2], response[3], (byte) (nEntriesNotify & 0xff), (byte) ((nEntriesNotify >> 8) & 0xff));
+                ByteBuffer buffer= ByteBuffer.wrap(response, 2, payloadSize).order(ByteOrder.LITTLE_ENDIAN);
+                nLogEntries= (payloadSize > 2) ? buffer.getInt() & 0xffffffffL : buffer.getShort() & 0xffff;
+                long nEntriesNotify= (long) (nLogEntries * notifyProgress);
+
+                ///< TODO Have downloadLog return AsyncOperation<Long> to wrap uint32 size
+                conn.setResultReady(logEntryCountResults.poll(), (int) nLogEntries, null);
+
+                ByteBuffer readoutCommand= ByteBuffer.allocate(payloadSize + 4).order(ByteOrder.LITTLE_ENDIAN);
+                ///< In little endian, [A, B, 0, 0] is equal to [A, B]
+                readoutCommand.put(response, 2, payloadSize).putInt((int) nEntriesNotify);
+                writeRegister(LoggingRegister.READOUT, readoutCommand.array());
                 return null;
             }
         });
@@ -2385,16 +2416,23 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         responses.put(new ResponseHeader(LoggingRegister.READOUT_PROGRESS), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
-                final int nEntriesLeft= ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xffff;
+                ByteBuffer buffer= ByteBuffer.wrap(response, 2, response.length - 2).order(ByteOrder.LITTLE_ENDIAN);
+                final long nEntriesLeft;
+
+                if (response.length > 4) {
+                    nEntriesLeft= buffer.getInt() & 0xffffffffL;
+                } else {
+                    nEntriesLeft= buffer.getShort() & 0xffff;
+                }
 
                 if (downloadHandler != null) {
                     conn.executeTask(new Runnable() {
                         @Override
                         public void run() {
-                            downloadHandler.onProgressUpdate(nEntriesLeft, nLogEntries);
+                            ///< TODO Upcast onProgressUpdate to long
+                            downloadHandler.onProgressUpdate((int) nEntriesLeft, (int) nLogEntries);
                         }
                     });
-
                 }
                 return null;
             }
@@ -2593,15 +2631,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 return null;
             }
         });
-        responses.put(new ResponseHeader(SettingsRegister.ADVERTISING_INTERVAL), new ResponseProcessor() {
-            @Override
-            public Response process(byte[] response) {
-                advInterval= (short) ((response[2] & 0xff) | (response[3] << 8));
-                advTimeout= response[4];
-                readRegister(SettingsRegister.TX_POWER);
-                return null;
-            }
-        });
         responses.put(new ResponseHeader(SettingsRegister.TX_POWER), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
@@ -2613,7 +2642,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         responses.put(new ResponseHeader(SettingsRegister.SCAN_RESPONSE), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
-                advResponse= new byte[response.length - 2];
+                advResponse = new byte[response.length - 2];
                 System.arraycopy(response, 2, advResponse, 0, advResponse.length);
                 conn.setResultReady(advertisementConfigResults.poll(), new Settings.AdvertisementConfig() {
                     @Override
@@ -2623,7 +2652,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                     @Override
                     public int interval() {
-                        return advInterval & 0xffff;
+                        return advInterval;
                     }
 
                     @Override
@@ -2831,6 +2860,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             return null;
                         }
                     });
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.ORIENT_INTERRUPT), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmi160OrientationMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
                     break;
             }
         } else if (info.id() == InfoRegister.BAROMETER.moduleOpcode()) {
@@ -2866,6 +2904,68 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             System.arraycopy(response, 2, respBody, 0, respBody.length);
 
                             return new Response(new UnsignedMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    break;
+            }
+        } else if (info.id() == InfoRegister.SETTINGS.moduleOpcode()) {
+            switch(info.revision()) {
+                case 0:
+                    responses.put(new ResponseHeader(SettingsRegister.ADVERTISING_INTERVAL), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            advInterval= ((response[2] & 0xff) | (response[3] << 8)) & 0xffff;
+                            advTimeout= response[4];
+                            readRegister(SettingsRegister.TX_POWER);
+                            return null;
+                        }
+                    });
+                    break;
+                case 1:
+                    responses.put(new ResponseHeader(SettingsRegister.ADVERTISING_INTERVAL), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            int intervalBytes= ((response[2] & 0xff) | (response[3] << 8)) & 0xffff;
+
+                            advInterval= (int) (intervalBytes * SettingsImpl.AD_INTERVAL_STEP);
+                            advTimeout= response[4];
+                            readRegister(SettingsRegister.TX_POWER);
+                            return null;
+                        }
+                    });
+                    responses.put(new ResponseHeader(SettingsRegister.CONNECTION_PARAMETERS), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            final ByteBuffer buffer= ByteBuffer.wrap(response).order(ByteOrder.LITTLE_ENDIAN);
+
+                            conn.setResultReady(connectionParameterResults.poll(), new Settings.ConnectionParameters() {
+                                @Override
+                                public float minConnectionInterval() {
+                                    return buffer.getShort(2) * SettingsImpl.CONN_INTERVAL_STEP;
+                                }
+
+                                @Override
+                                public float maxConnectionInterval() {
+                                    return buffer.getShort(4) * SettingsImpl.CONN_INTERVAL_STEP;
+                                }
+
+                                @Override
+                                public short slaveLatency() {
+                                    return buffer.getShort(6);
+                                }
+
+                                @Override
+                                public short supervisorTimeout() {
+                                    return (short) (buffer.getShort(8) * SettingsImpl.SUPERVISOR_TIMEOUT_STEP);
+                                }
+
+                                @Override
+                                public String toString() {
+                                    return String.format("{min conn interval: %.2f, max conn interval: %.2f, slave latency: %d, supervisor timeout: %d}",
+                                            minConnectionInterval(), maxConnectionInterval(), slaveLatency(), supervisorTimeout());
+                                }
+                            }, null);
+                            return null;
                         }
                     });
                     break;
@@ -3041,10 +3141,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         if (responses.containsKey(header)) {
             final Response resp= responses.get(header).process(response);
             if (resp != null && responseProcessors.containsKey(resp.header)) {
+                final RouteManager.MessageHandler handler= responseProcessors.get(resp.header);
                 conn.executeTask(new Runnable() {
                     @Override
                     public void run() {
-                        responseProcessors.get(resp.header).process(resp.body);
+                        handler.process(resp.body);
                     }
                 });
             }
@@ -3506,7 +3607,26 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public void clearEntries() {
-            writeRegister(LoggingRegister.REMOVE_ENTRIES, (byte) 0xff, (byte) 0xff);
+            writeRegister(LoggingRegister.REMOVE_ENTRIES, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff);
+        }
+
+        @Override
+        public void clearEntries(long nEntries) {
+            ByteBuffer buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt((int) nEntries);
+            writeRegister(LoggingRegister.REMOVE_ENTRIES, buffer.array());
+        }
+
+        @Override
+        public long getLogCapacity() {
+            byte[] extra= moduleInfo.get(InfoRegister.LOGGING.moduleOpcode()).extra();
+            int payloadSize= extra.length - 1;
+
+            ByteBuffer buffer= ByteBuffer.wrap(extra, 1, payloadSize).order(ByteOrder.LITTLE_ENDIAN);
+
+            if (payloadSize > 2) {
+                return buffer.getInt() & 0xffffffffL;
+            }
+            return buffer.getShort() & 0xffff;
         }
     }
 
@@ -3687,12 +3807,74 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     }
 
     private String advName;
-    private short advInterval;
+    private int advInterval;
     private byte advTimeout, advTxPower;
     private byte[] advResponse;
     private final ConcurrentLinkedQueue<AsyncOperation<Settings.AdvertisementConfig>> advertisementConfigResults= new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<AsyncOperation<Settings.ConnectionParameters>> connectionParameterResults= new ConcurrentLinkedQueue<>();
     private class SettingsImpl implements Settings {
+        public static final float AD_INTERVAL_STEP= 0.625f, CONN_INTERVAL_STEP= 1.25f, SUPERVISOR_TIMEOUT_STEP= 10;
         private static final long READ_CONFIG_TIMEOUT= 5000L;
+
+        @Override
+        public ConnectionParameterEditor configureConnectionParameters() {
+            return new ConnectionParameterEditor() {
+                private Short minConnInterval= 6, maxConnInterval= 0x320, slaveLatency= 0, supervisorTimeout= 0x258;
+
+                @Override
+                public ConnectionParameterEditor setMinConnectionInterval(float interval) {
+                    minConnInterval= (short) (interval / CONN_INTERVAL_STEP);
+                    return this;
+                }
+
+                @Override
+                public ConnectionParameterEditor setMaxConnectionInterval(float interval) {
+                    maxConnInterval= (short) (interval / CONN_INTERVAL_STEP);
+                    return this;
+                }
+
+                @Override
+                public ConnectionParameterEditor setSlaveLatency(short latency) {
+                    slaveLatency= latency;
+                    return this;
+                }
+
+                @Override
+                public ConnectionParameterEditor setSupervisorTimeout(short timeout) {
+                    supervisorTimeout= (short) (timeout / SUPERVISOR_TIMEOUT_STEP);
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    ByteBuffer buffer= ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+
+                    buffer.putShort(minConnInterval).putShort(maxConnInterval).putShort(slaveLatency).putShort(supervisorTimeout);
+                    writeRegister(SettingsRegister.CONNECTION_PARAMETERS, buffer.array());
+                }
+            };
+        }
+
+        @Override
+        public AsyncOperation<ConnectionParameters> readConnectionParameters() {
+            final AsyncOperation<ConnectionParameters> result= conn.createAsyncOperation();
+
+            if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() == 0) {
+                conn.setResultReady(result, null, new UnsupportedOperationException("Connection parameters are not available for firmware v1.0.4 and earlier"));
+            } else {
+                connectionParameterResults.add(result);
+                conn.setOpTimeout(result, new Runnable() {
+                    @Override
+                    public void run() {
+                        connectionParameterResults.remove(result);
+                        conn.setResultReady(result, null, new TimeoutException(String.format("Reading connection parameters timed out after %dms", READ_CONFIG_TIMEOUT)));
+                    }
+                }, READ_CONFIG_TIMEOUT);
+                readRegister(SettingsRegister.CONNECTION_PARAMETERS);
+            }
+            return result;
+        }
+
         @Override
         public ConfigEditor configure() {
             return new ConfigEditor() {
@@ -3709,7 +3891,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public ConfigEditor setAdInterval(short interval, byte timeout) {
-                    newAdvInterval = interval;
+                    if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() == 1) {
+                        newAdvInterval= (short)((interval & 0xffff) / AD_INTERVAL_STEP);
+                    } else {
+                        newAdvInterval = interval;
+                    }
                     newAdvTimeout = timeout;
                     return this;
                 }
@@ -4417,6 +4603,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             Bmi160Accelerometer.AccRange.AR_2G.bitMask()
     };
     private class Bmi160AccelerometerImpl implements Bmi160Accelerometer {
+        private final float BMI160_ORIENT_HYS_G_PER_STEP= 0.0625f;
+
         @Override
         public SamplingConfigEditor configureAxisSampling() {
             return new SamplingConfigEditor() {
@@ -4501,6 +4689,44 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 @Override
                 public DataSignal fromZAxis() {
                     return new RouteBuilder().fromBmi160ZAxis();
+                }
+
+                @Override
+                public DataSignal fromOrientation() {
+                    return new RouteBuilder().fromBmi160Orientation();
+                }
+            };
+        }
+
+        public void enableOrientationDetection() {
+            writeRegister(Bmi160AccelerometerRegister.ORIENT_INTERRUPT_ENABLE, (byte) 0x1, (byte) 0x0);
+        }
+
+        public void disableOrientationDetection() {
+            writeRegister(Bmi160AccelerometerRegister.ORIENT_INTERRUPT_ENABLE, (byte) 0x0, (byte) 0x1);
+        }
+
+        public OrientationConfigEditor configureOrientationDetection() {
+            return new OrientationConfigEditor() {
+                private byte intOrient[]= new byte[] {0x18, 0x48};
+
+                @Override
+                public OrientationConfigEditor setHysteresis(float hysteresis) {
+                    intOrient[0]&= 0xf;
+                    intOrient[0]|= (byte) Math.min(0xf, (byte) hysteresis / BMI160_ORIENT_HYS_G_PER_STEP);
+                    return this;
+                }
+
+                @Override
+                public OrientationConfigEditor setMode(OrientationMode mode) {
+                    intOrient[0]&= 0xfc;
+                    intOrient[0]|= mode.ordinal();
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(Bmi160AccelerometerRegister.ORIENT_CONFIG, intOrient);
                 }
             };
         }
@@ -4919,7 +5145,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         if (moduleClass.equals(Gpio.class)) {
-            return moduleClass.cast(new GpioImpl());
+            if (moduleInfo.get(InfoRegister.GPIO.moduleOpcode()).present()) {
+                return moduleClass.cast(new GpioImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
         }
 
         ModuleInfo tempModuleinfo= moduleInfo.get(InfoRegister.TEMPERATURE.moduleOpcode());
@@ -4993,7 +5222,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         if (moduleClass.equals(Switch.class)) {
-            return moduleClass.cast(new SwitchImpl());
+            if (moduleInfo.get(InfoRegister.SWITCH.moduleOpcode()).present()) {
+                return moduleClass.cast(new SwitchImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
         }
 
         if (moduleClass.equals(Debug.class)) {
@@ -5008,15 +5240,24 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         if (moduleClass.equals(IBeacon.class)) {
-            return moduleClass.cast(new IBeaconImpl());
+            if (moduleInfo.get(InfoRegister.IBEACON.moduleOpcode()).present()) {
+                return moduleClass.cast(new IBeaconImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
         }
 
         if (moduleClass.equals(Haptic.class)) {
-            return moduleClass.cast(new HapticImpl());
+            if (moduleInfo.get(InfoRegister.HAPTIC.moduleOpcode()).present()) {
+                return moduleClass.cast(new HapticImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
         }
 
         if (moduleClass.equals(NeoPixel.class)) {
-            return moduleClass.cast(new NeoPixelImpl());
+            if (moduleInfo.get(InfoRegister.NEO_PIXEL.moduleOpcode()).present()) {
+                return moduleClass.cast(new NeoPixelImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
         }
 
         if (moduleClass.equals(Settings.class)) {

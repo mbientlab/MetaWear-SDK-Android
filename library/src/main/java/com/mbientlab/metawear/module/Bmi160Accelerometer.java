@@ -151,6 +151,63 @@ public interface Bmi160Accelerometer extends Accelerometer {
     }
 
     /**
+     * Orientation definitions for the BMI160 accelerometer as defined from the placement and orientation of
+     * the BMI160 sensor.  For board orientation, use the {@link Accelerometer.BoardOrientation} enum.
+     * @author Eric Tsai
+     */
+    enum SensorOrientation {
+        FACE_UP_PORTRAIT_UPRIGHT,
+        FACE_UP_PORTRAIT_UPSIDE_DOWN,
+        FACE_UP_LANDSCAPE_LEFT,
+        FACE_UP_LANDSCAPE_RIGHT,
+        FACE_DOWN_PORTRAIT_UPRIGHT,
+        FACE_DOWN_PORTRAIT_UPSIDE_DOWN,
+        FACE_DOWN_LANDSCAPE_LEFT,
+        FACE_DOWN_LANDSCAPE_RIGHT
+    }
+
+    /**
+     * Calculation modes that control the conditions that determine the board's orientation
+     */
+    enum OrientationMode {
+        /** Default mode */
+        SYMMETRICAL,
+        HIGH_ASYMMETRICAL,
+        LOW_ASYMMETRICAL
+    }
+
+    /**
+     * Configures the settings for orientation detection
+     * @return Editor object to configure various settings
+     */
+    OrientationConfigEditor configureOrientationDetection();
+
+    /**
+     * Interface for configuring orientation detection
+     * @author Eric Tsai
+     */
+    interface OrientationConfigEditor {
+        /**
+         * Sets the hysteresis offset for portrait/landscape detection
+         * @param hysteresis    New offset angle, in degrees
+         * @return Calling object
+         */
+        OrientationConfigEditor setHysteresis(float hysteresis);
+
+        /**
+         * Sets the orientation calculation mode
+         * @param mode    New calculation mode
+         * @return Calling object
+         */
+        OrientationConfigEditor setMode(OrientationMode mode);
+
+        /**
+         * writes the new settings to the board
+         */
+        void commit();
+    }
+
+    /**
      * Configures the settings for sampling axis data
      * @return Editor object to configure various settings
      */

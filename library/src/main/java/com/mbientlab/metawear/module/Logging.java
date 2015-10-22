@@ -25,6 +25,7 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncOperation;
+import com.mbientlab.metawear.Message;
 import com.mbientlab.metawear.MetaWearBoard;
 
 import java.util.Calendar;
@@ -53,6 +54,14 @@ public interface Logging extends MetaWearBoard.Module {
          * @param data         Byte array representation of the sensor data
          */
         public void receivedUnknownLogEntry(byte logId, Calendar timestamp, byte[] data) { }
+
+        /**
+         * Called when a log entry has been received but has no
+         * {@link com.mbientlab.metawear.RouteManager.MessageHandler MessageHandler} to process the
+         * received entry
+         * @param logMessage    Log message received from the board
+         */
+        public void receivedUnhandledLogEntry(Message logMessage) { }
     }
 
     /**
@@ -85,4 +94,17 @@ public interface Logging extends MetaWearBoard.Module {
      * use the {@link Debug#resetAfterGarbageCollect()} method.
      */
     void clearEntries();
+
+    /**
+     * Clear a set number of log entries stored on the board.  The erase operation will not be performed until
+     * you disconnect from the board.  If you wish to reset the board after the erase operation,
+     * use the {@link Debug#resetAfterGarbageCollect()} method.
+     */
+    void clearEntries(long nEntries);
+
+    /**
+     * Retrieves the number of log entries that can be written to the board.
+     * @return Number of log entries the board can store
+     */
+    long getLogCapacity();
 }

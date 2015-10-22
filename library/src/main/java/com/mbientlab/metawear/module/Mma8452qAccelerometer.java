@@ -380,12 +380,6 @@ public interface Mma8452qAccelerometer extends Accelerometer {
         DataSignal fromTap();
 
         /**
-         * Handle data from orientation changes
-         * @return Object representing the orientation data
-         */
-        DataSignal fromOrientation();
-
-        /**
          * Handle the data from shake detection
          * @return Object representing the shake data
          */
@@ -493,12 +487,4 @@ public interface Mma8452qAccelerometer extends Accelerometer {
      * @return Editor to configure orientation settings
      */
     OrientationConfigEditor configureOrientationDetection();
-    /**
-     * Enables orientation detection when the accelerometer is active
-     */
-    void enableOrientationDetection();
-    /**
-     * Disables orientation detection
-     */
-    void disableOrientationDetection();
 }

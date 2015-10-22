@@ -22,56 +22,45 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.module;
+package com.mbientlab.metawear.data;
+
+import com.mbientlab.metawear.Message;
+import com.mbientlab.metawear.module.Accelerometer.BoardOrientation;
+import com.mbientlab.metawear.module.Bmi160Accelerometer.SensorOrientation;
+
+import java.util.Calendar;
 
 /**
- * Interacts with a GSR (galvanic skin response) sensor
+ * Container class for orientation data from the BMI160 chip.  Data is interpreted as
+ * a SensorOrientation or BoardOrientation enum.
  * @author Eric Tsai
+ * @see BoardOrientation
+ * @see SensorOrientation
  */
-public interface Gsr extends Conductance {
-    /**
-     * Voltages that can be applied to the GSR electrodes
-     */
-    enum ConstantVoltage {
-        CV_500MV,
-        CV_250MV
+public class Bmi160OrientationMessage extends Message {
+    private final SensorOrientation orientation;
+    private final BoardOrientation boardOrientation;
+
+    public Bmi160OrientationMessage(byte[] data) {
+        this(null, data);
     }
 
-    /**
-     * Gains that can be applied to the GSR circuit
-     */
-    enum Gain {
-        G_499K,
-        G_1M
+    public Bmi160OrientationMessage(Calendar timestamp, byte[] data) {
+        super(timestamp, data);
+
+        int index= ((data[0] & 0x6) >> 1) + 4 * ((data[0] & 0x8) >> 3);
+        orientation= SensorOrientation.values()[index];
+        boardOrientation= BoardOrientation.values()[(index == 0 || index == 1) ? index ^ 0x2 : index ^ 0x3];
     }
 
-    /**
-     * Interface for configuring GSR settings
-     */
-    interface ConfigEditor {
-        /**
-         * Sets the constant voltage applied to the electrodes
-         * @param cv    New constant voltage value
-         * @return Calling object
-         */
-        ConfigEditor setConstantVoltage(ConstantVoltage cv);
-
-        /**
-         * Sets the gain applied to the circuit
-         * @param gain    New gain value
-         * @return Calling object
-         */
-        ConfigEditor setGain(Gain gain);
-
-        /**
-         * Writes the new settings to the board
-         */
-        void commit();
+    @Override
+    public <T> T getData(Class<T> type) {
+        if (type.equals(BoardOrientation.class)) {
+            return type.cast(boardOrientation);
+        } else if (type.equals(SensorOrientation.class)) {
+            return type.cast(orientation);
+        }
+        throw new UnsupportedOperationException(String.format("Type \'%s\' not supported for message class: %s",
+                type.toString(), getClass().toString()));
     }
-
-    /**
-     * Configures GSR settings
-     * @return Config object to edit the settings
-     */
-    ConfigEditor configure();
 }
