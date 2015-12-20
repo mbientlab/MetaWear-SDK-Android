@@ -69,6 +69,10 @@ public enum SettingsRegister implements Register {
     CONNECTION_PARAMETERS {
         @Override
         public byte opcode() { return 0x9; }
+    },
+    DISCONNECT_EVENT {
+        @Override
+        public byte opcode() { return 0xa; }
     };
 
     @Override

@@ -25,44 +25,71 @@
 package com.mbientlab.metawear.data;
 
 import com.mbientlab.metawear.Message;
-
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import com.mbientlab.metawear.module.Bmi160Accelerometer.Axis;
+import com.mbientlab.metawear.module.Bmi160Accelerometer.LowHighResponse;
+import com.mbientlab.metawear.module.Bmi160Accelerometer.Sign;
 import java.util.Calendar;
 
+
 /**
- * Container class for temperature data.  Data is interpreted as a float in celsius.
+ * Container class for low/high G detection data from the BMI160 sensor.  Data is interpreted as a LowHighResponse
+ * object
  * @author Eric Tsai
+ * @see LowHighResponse
  */
-public class TemperatureMessage extends Message {
-    private static final float SCALE = 8f;
-    /**
-     * Retrieves the LSB to celsius ratio.
-     * @return Value corresponding to 1C
-     */
-    public static float getScale() { return SCALE; }
+public class Bmi160LowHighMessage extends Message {
+    private final LowHighResponse response;
 
-    private final Float value;
-
-    public TemperatureMessage(byte[] data) {
+    public Bmi160LowHighMessage(byte[] data) {
         this(null, data);
     }
 
-    public TemperatureMessage(Calendar timestamp, byte[] data) {
+    public Bmi160LowHighMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        if (data.length >= 2) {
-            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-            value = buffer.getShort() / SCALE;
-        } else {
-            value= null;
-        }
+        final Sign sign;
+        final boolean highInt, lowInt;
+        final byte highFirst;
+
+        highInt= (data[0] & 0x1) == 0x1;
+        lowInt= (data[0] & 0x2) == 0x2;
+        highFirst= (byte) ((data[0] & 0x1c) >> 2);
+        sign= (data[0] & 0x20) == 0x20 ? Sign.NEGATIVE : Sign.POSITIVE;
+
+        response= new LowHighResponse() {
+            @Override
+            public boolean isHigh() {
+                return highInt;
+            }
+
+            @Override
+            public boolean isLow() {
+                return lowInt;
+            }
+
+            @Override
+            public boolean highG(Axis axis) {
+                byte mask= (byte) (0x1 << axis.ordinal());
+                return (highFirst & mask) == mask;
+            }
+
+            @Override
+            public Sign highSign() {
+                return sign;
+            }
+
+            @Override
+            public String toString() {
+                return String.format("{low: %s, high: %s, high_x: %s, high_y: %s, high_z: %s, high_direction: %s}",
+                        isLow(), isLow(), highG(Axis.X), highG(Axis.Y), highG(Axis.Z), highSign().toString());
+            }
+        };
     }
 
     @Override
     public <T> T getData(Class<T> type) {
-        if (type.equals(Float.class)) {
-            return type.cast(value);
+        if (type.equals(LowHighResponse.class)) {
+            return type.cast(response);
         }
 
         throw new UnsupportedOperationException(String.format("Type \'%s\' not supported for message class: %s",

@@ -46,12 +46,24 @@ public interface Temperature extends MetaWearBoard.Module {
          * @return Object representing temperature data
          */
         DataSignal fromSensor();
+        /**
+         * Handle data from the temperature sensor.  This version of the function pairs with the
+         * {@link #readTemperature(boolean)} variant
+         * @param silent    Same value as the silent parameter for calling {@link #readTemperature(boolean)}
+         * @return Object representing temperature data
+         */
+        DataSignal fromSensor(boolean silent);
     }
 
     /**
      * Reads value from a temperature sensor
      */
     void readTemperature();
+    /**
+     * Reads value from a temperature sensor
+     * @param silent    True if read should be silent
+     */
+    void readTemperature(boolean silent);
 
     /**
      * Initiates the creation of a route for temperature data

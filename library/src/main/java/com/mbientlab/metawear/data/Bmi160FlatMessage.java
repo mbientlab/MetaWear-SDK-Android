@@ -26,43 +26,30 @@ package com.mbientlab.metawear.data;
 
 import com.mbientlab.metawear.Message;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Calendar;
 
 /**
- * Container class for temperature data.  Data is interpreted as a float in celsius.
+ * Container class for flat detection data from the BMI160 sensor.  Data is interpreted as a Boolean where a
+ * true value means the sensor is laying flat.
  * @author Eric Tsai
  */
-public class TemperatureMessage extends Message {
-    private static final float SCALE = 8f;
-    /**
-     * Retrieves the LSB to celsius ratio.
-     * @return Value corresponding to 1C
-     */
-    public static float getScale() { return SCALE; }
+public class Bmi160FlatMessage extends Message {
+    private final boolean flat;
 
-    private final Float value;
-
-    public TemperatureMessage(byte[] data) {
+    public Bmi160FlatMessage(byte[] data) {
         this(null, data);
     }
 
-    public TemperatureMessage(Calendar timestamp, byte[] data) {
+    public Bmi160FlatMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        if (data.length >= 2) {
-            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-            value = buffer.getShort() / SCALE;
-        } else {
-            value= null;
-        }
+        flat= (data[0] & 0x2) == 0x2;
     }
 
     @Override
     public <T> T getData(Class<T> type) {
-        if (type.equals(Float.class)) {
-            return type.cast(value);
+        if (type.equals(Boolean.class)) {
+            return type.cast(flat);
         }
 
         throw new UnsupportedOperationException(String.format("Type \'%s\' not supported for message class: %s",

@@ -32,6 +32,10 @@ public class Registers {
         return buildCommand(register.moduleOpcode(), (byte)(0x80 | register.opcode()), parameters);
     }
 
+    public static byte[] buildSilentReadCommand(Register register, byte ... parameters) {
+        return buildCommand(register.moduleOpcode(), (byte)(0xc0 | register.opcode()), parameters);
+    }
+
     public static byte[] buildWriteCommand(Register register, byte ... parameters) {
         return buildCommand(register.moduleOpcode(), register.opcode(), parameters);
     }

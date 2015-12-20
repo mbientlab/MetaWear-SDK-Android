@@ -22,50 +22,34 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.data;
+package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.Message;
-
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.Calendar;
+import com.mbientlab.metawear.DataSignal;
+import com.mbientlab.metawear.MetaWearBoard;
 
 /**
- * Container class for temperature data.  Data is interpreted as a float in celsius.
+ * Interacts with data processors.  This class specifically is for retrieving information about a data processor
  * @author Eric Tsai
  */
-public class TemperatureMessage extends Message {
-    private static final float SCALE = 8f;
+public interface DataProcessorModule extends MetaWearBoard.Module {
     /**
-     * Retrieves the LSB to celsius ratio.
-     * @return Value corresponding to 1C
+     * Selector for data processing data
+     * @author Eric Tsai
      */
-    public static float getScale() { return SCALE; }
-
-    private final Float value;
-
-    public TemperatureMessage(byte[] data) {
-        this(null, data);
+    interface SourceSelector {
+        DataSignal fromState(String key, boolean silent);
     }
 
-    public TemperatureMessage(Calendar timestamp, byte[] data) {
-        super(timestamp, data);
+    /**
+     * Reads the current state of a data processor
+     * @param key       Unique key identifying the processor
+     * @param silent    True if read should be silent
+     */
+    void readState(String key, boolean silent);
 
-        if (data.length >= 2) {
-            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-            value = buffer.getShort() / SCALE;
-        } else {
-            value= null;
-        }
-    }
-
-    @Override
-    public <T> T getData(Class<T> type) {
-        if (type.equals(Float.class)) {
-            return type.cast(value);
-        }
-
-        throw new UnsupportedOperationException(String.format("Type \'%s\' not supported for message class: %s",
-                type.toString(), getClass().toString()));
-    }
+    /**
+     * Initiates the creation of a route for data processor data
+     * @return Selection of available data sources
+     */
+    SourceSelector routeData();
 }

@@ -49,10 +49,15 @@ public class Mma8452qThreeAxisMessage extends Message {
     public Mma8452qThreeAxisMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        if (data.length >= 6) {
+            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
 
-        milliGs= new short[] {buffer.getShort(), buffer.getShort(), buffer.getShort()};
-        accelGs= new float[] {milliGs[0] / 1000.f, milliGs[1] / 1000.f, milliGs[2] / 1000.f};
+            milliGs = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
+            accelGs = new float[]{milliGs[0] / 1000.f, milliGs[1] / 1000.f, milliGs[2] / 1000.f};
+        } else {
+            milliGs= null;
+            accelGs= null;
+        }
     }
 
     @Override

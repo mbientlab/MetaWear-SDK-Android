@@ -117,6 +117,12 @@ public interface MultiChannelTemperature extends Temperature {
      * @param src    Source to read from
      */
     void readTemperature(Source src);
+    /**
+     * Read the temperature from the specified source
+     * @param src    Source to read from
+     * @param silent True if read should be silent
+     */
+    void readTemperature(Source src, boolean silent);
 
     /**
      * Selector for available temperature sources
@@ -129,6 +135,14 @@ public interface MultiChannelTemperature extends Temperature {
          * @return Object representing temperature data
          */
         DataSignal fromSource(Source src);
+        /**
+         * Handle data from a specific temperature source.  This version of the function pairs with
+         * the {@link #readTemperature(Source, boolean)} variant
+         * @param src    Temperature source the route is for
+         * @param silent Same value as the silent parameter for calling {@link #readTemperature(Source, boolean)}
+         * @return Object representing temperature data
+         */
+        DataSignal fromSource(Source src, boolean silent);
     }
 
     /**

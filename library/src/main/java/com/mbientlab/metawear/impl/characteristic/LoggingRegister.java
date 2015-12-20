@@ -70,6 +70,14 @@ public enum LoggingRegister implements Register {
     CIRCULAR_BUFFER {
         @Override
         public byte opcode() { return 0xb; }
+    },
+    READOUT_PAGE_COMPLETED {
+        @Override
+        public byte opcode() { return 0xd; }
+    },
+    READOUT_PAGE_CONFIRM {
+        @Override
+        public byte opcode() { return 0xe; }
     };
 
     @Override

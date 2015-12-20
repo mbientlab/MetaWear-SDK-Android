@@ -48,10 +48,11 @@ public class Maths implements DataSignal.ProcessorConfig {
         opShortNames.put("rshift", Operation.RIGHT_SHIFT);
         opShortNames.put("sub", Operation.SUBTRACT);
         opShortNames.put("abs", Operation.ABS_VALUE);
+        opShortNames.put("const", Operation.CONSTANT);
     }
 
     public static final String SCHEME_NAME= "math";
-    public final static String FIELD_OP= "operation", FIELD_RHS= "rhs", FIELD_SIGNED= "signed";
+    public final static String FIELD_OP= "operation", FIELD_RHS= "rhs", FIELD_SIGNED= "signed", FIELD_SIZE="size";
 
     /**
      * Supported math operations for the transformer
@@ -87,7 +88,9 @@ public class Maths implements DataSignal.ProcessorConfig {
         ABS_VALUE {
             @Override
             public boolean requiresRhs() { return false; }
-        };
+        },
+        /** Transforms the input into a constant value */
+        CONSTANT;
 
         public boolean requiresRhs() { return true; }
     }
@@ -112,7 +115,6 @@ public class Maths implements DataSignal.ProcessorConfig {
         } else {
             mathOp = Enum.valueOf(Operation.class, query.get(FIELD_OP).toUpperCase());
         }
-
 
         if (query.containsKey(FIELD_SIGNED)) {
             signed = Boolean.valueOf(query.get(FIELD_SIGNED));

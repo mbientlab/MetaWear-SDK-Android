@@ -72,6 +72,12 @@ public interface Gpio extends MetaWearBoard.Module {
      * @param mode    Analog read mode
      */
     void readAnalogIn(byte pin, AnalogReadMode mode);
+    /**
+     * Read the analog input voltage
+     * @param pin     GPIO pin to read
+     * @param mode    Analog read mode
+     */
+    void readAnalogIn(byte pin, AnalogReadMode mode, boolean silent);
 
     /**
      * Sets pull mode on a pin
@@ -85,6 +91,12 @@ public interface Gpio extends MetaWearBoard.Module {
      * @param pin    GPIO pin to read
      */
     void readDigitalIn(byte pin);
+    /**
+     * Read the digital input state
+     * @param pin    GPIO pin to read
+     * @param silent True if read should be silent
+     */
+    void readDigitalIn(byte pin, boolean silent);
     /**
      * Sets the digital output state of a pin
      * @param pin    GPIO pin to set
@@ -151,6 +163,25 @@ public interface Gpio extends MetaWearBoard.Module {
          * @see Gpio#startPinChangeDetection(byte)
          */
         DataSignal fromDigitalInChange(byte pin);
+        /**
+         * Handle analog input data.  This version of the function pairs with the
+         * {@link #readAnalogIn(byte, AnalogReadMode, boolean)} variant.
+         * @param pin    GPIO pin the analog data is coming from
+         * @param mode   Read mode used to retrieve the data
+         * @param silent Same value as the silent parameter for calling {@link #readAnalogIn(byte, AnalogReadMode, boolean)}
+         * @return Object representing the data from an analog input
+         * @see Gpio#readAnalogIn(byte, AnalogReadMode)
+         */
+        DataSignal fromAnalogIn(byte pin, Gpio.AnalogReadMode mode, boolean silent);
+        /**
+         * Handle digital input data.  This version of the function pairs with the
+         * {@link #readDigitalIn(byte, boolean)} variant.
+         * @param pin    GPIO pin the digital data is coming from
+         * @param silent Same value as the silent parameter for calling {@link #readDigitalIn(byte, boolean)}
+         * @return Object representing the data from a digital input
+         * @see Gpio#readDigitalIn(byte)
+         */
+        DataSignal fromDigitalIn(byte pin, boolean silent);
     }
 
     /**

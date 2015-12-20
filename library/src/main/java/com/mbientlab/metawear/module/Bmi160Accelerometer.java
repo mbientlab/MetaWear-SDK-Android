@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.module;
 
+import com.mbientlab.metawear.DataSignal;
+
 import java.util.HashMap;
 
 /**
@@ -168,6 +170,7 @@ public interface Bmi160Accelerometer extends Accelerometer {
 
     /**
      * Calculation modes that control the conditions that determine the board's orientation
+     * @author Eric Tsai
      */
     enum OrientationMode {
         /** Default mode */
@@ -177,10 +180,63 @@ public interface Bmi160Accelerometer extends Accelerometer {
     }
 
     /**
-     * Configures the settings for orientation detection
-     * @return Editor object to configure various settings
+     * Direction of motion for high-g interrupts
+     * @author Eric Tsai
      */
-    OrientationConfigEditor configureOrientationDetection();
+    enum Sign {
+        POSITIVE,
+        NEGATIVE
+    }
+
+    /**
+     * Sensitivity setting for the step counter
+     * @author Eric Tsai
+     */
+    enum StepSensitivity {
+        /** Default mode with a balance between false positives and false negatives */
+        NORMAL,
+        /** Mode for light weighted persons that gives few false negatives but eventually more false positives */
+        SENSITIVE,
+        /** Gives few false positives but eventually more false negatives */
+        ROBUST
+    }
+
+    /**
+     * Enumeration of hold times for flat detection
+     * @author Eric Tsai
+     */
+    enum FlatHoldTime {
+        /** 0 milliseconds */
+        FHT_0_MS,
+        /** 640 milliseconds */
+        FHT_640_MS,
+        /** 1280 milliseconds */
+        FHT_1280_MS,
+        /** 2560 milliseconds */
+        FHT_2560_MS
+    }
+
+    /**
+     * Interrupt modes for low-g detection
+     * @author Eric Tsai
+     */
+    enum LowGMode {
+        /** Compare |acc_x|, |acc_y|, |acc_z| with the low threshold */
+        SINGLE,
+        /** Compare |acc_x| + |acc_y| + |acc_z| with the low threshold */
+        SUM
+    }
+
+    /**
+     * Axes available for motion detection on the BMI160 chip.  These axis entries are relative to the
+     * orientation of the accelerometer chip.
+     * @author Eric Tsai
+     */
+    enum Axis {
+        X,
+        Y,
+        Z
+    }
 
     /**
      * Interface for configuring orientation detection
@@ -193,7 +249,6 @@ public interface Bmi160Accelerometer extends Accelerometer {
          * @return Calling object
          */
         OrientationConfigEditor setHysteresis(float hysteresis);
-
         /**
          * Sets the orientation calculation mode
          * @param mode    New calculation mode
@@ -208,13 +263,7 @@ public interface Bmi160Accelerometer extends Accelerometer {
     }
 
     /**
-     * Configures the settings for sampling axis data
-     * @return Editor object to configure various settings
-     */
-    SamplingConfigEditor configureAxisSampling();
-
-    /**
-     * Interface for configuring axis sampling
+     * Interface for configuring acceleration sampling
      * @author Eric Tsai
      */
     interface SamplingConfigEditor {
@@ -224,17 +273,249 @@ public interface Bmi160Accelerometer extends Accelerometer {
          * @return Calling object
          */
         SamplingConfigEditor setFullScaleRange(AccRange range);
-
         /**
          * Sets the accelerometer output data rate
          * @param odr    New output data rate to use
          * @return Calling object
          */
         SamplingConfigEditor setOutputDataRate(OutputDataRate odr);
-
         /**
          * Writes the new settings to the board
          */
         void commit();
     }
+
+    /**
+     * Interface for configuring flat detection
+     * @author Eric Tsai
+     */
+    interface FlatDetectionConfigEditor {
+        /**
+         * Sets the delay for which the flat value must remain stable for a flat interrupt
+         * @param time    Delay time for a stable value
+         * @return Calling object
+         */
+        FlatDetectionConfigEditor setHoldTime(FlatHoldTime time);
+        /**
+         * Sets the threshold defining a flat position
+         * @param angle    Threshold angle, between [0, 44.8] degrees
+         * @return Calling object
+         */
+        FlatDetectionConfigEditor setFlatTheta(float angle);
+        /**
+         * Writes the new settings to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Interface for configuring the step detector
+     * @author Eric Tsai
+     */
+    interface StepDetectionConfigEditor {
+        /**
+         * Sets the sensitivity setting of the step detector.  The setting balances sensitivity and robustness.
+         * @param sensitivity    Detector sensitivity
+         * @return Calling object
+         */
+        StepDetectionConfigEditor setSensitivity(StepSensitivity sensitivity);
+        /**
+         * Enables the step counter.  Users must enable the step counter to use the readStepCounter function.
+         * @return Calling object
+         */
+        StepDetectionConfigEditor enableStepCounter();
+        /**
+         * Writes the new settings to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Interface for configuring low/high G detection
+     * @author Eric Tsai
+     */
+    interface LowHighDetectionConfigEditor {
+        /**
+         * Sets the minimum amount of time the acceleration must stay below (ths + hys) for an interrupt
+         * @param duration    Duration between [2.5, 640] milliseconds
+         * @return Calling object
+         */
+        LowHighDetectionConfigEditor setLowDuration(int duration);
+        /**
+         * Sets the threshold that triggers a low-g interrupt
+         * @param threshold    Low-g interrupt threshold, between [0.00391, 2.0] g
+         * @return Calling object
+         */
+        LowHighDetectionConfigEditor setLowThreshold(float threshold);
+        /**
+         * Sets the hysteresis level for low-g interrupt
+         * @param hysteresis    Low-g interrupt hysteresis, between [0, 0.375]g
+         * @return Calling object
+         */
+        LowHighDetectionConfigEditor setLowHysteresis(float hysteresis);
+        /**
+         * Sets mode for low-g detection
+         * @param mode    Low-g detection mode
+         * @return Calling object
+         */
+        LowHighDetectionConfigEditor setLowGMode(LowGMode mode);
+        /**
+         * Sets the minimum amount of time the acceleration sign does not change for an interrupt
+         * @param duration    Duration between [2.5, 640] milliseconds
+         * @return Calling object
+         */
+        LowHighDetectionConfigEditor setHighDuration(int duration);
+        /**
+         * Sets the threshold for clearing high-g interrupt
+         * @param threshold    High-g clear interrupt threshold
+         * @return Calling object
+         */
+        LowHighDetectionConfigEditor setHighThreshold(float threshold);
+        /**
+         * Sets the hysteresis level for clearing the high-g interrupt
+         * @param hysteresis    Hysteresis for clearing high-g interrupt
+         * @return Calling object
+         */
+        LowHighDetectionConfigEditor setHighHysteresis(float hysteresis);
+        /**
+         * Writes the new settings to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Wrapper class encapsulating the data from a low/high g intereupt
+     */
+    interface LowHighResponse {
+        /**
+         * Checks if the interrupt from from high-g motion.  If it is not high-g motion, there is no
+         * need to call {@link #highG(Bmi160Accelerometer.Axis)}.
+         * @return True if high-g motion
+         */
+        boolean isHigh();
+        /**
+         * Checks if the interrupt from from low-g motion
+         * @return True if low-g motion
+         */
+        boolean isLow();
+        /**
+         * Check if the specific axis triggered high-g interrupt
+         * @param axis    Axis to check
+         * @return True if axis triggered high-g interrupt
+         */
+        boolean highG(Axis axis);
+        /**
+         * Get the direction of the interrupt
+         * @return Direction of the high-g motion interrupt
+         */
+        Sign highSign();
+    }
+
+    /**
+     * Selector for available data sources on the BMI160 sensor
+     * @author Eric Tsai
+     */
+    interface SourceSelector extends Accelerometer.SourceSelector {
+        /**
+         * Handle data from flat detection
+         * @return Object representing flat data
+         */
+        DataSignal fromFlat();
+        /**
+         * Handle data from step detection
+         * @return Object representing step data
+         */
+        DataSignal fromStepDetection();
+        /**
+         * Handle data from step counter
+         * @param silent    Same value as the silent parameter used for calling {@link #readStepCounter(boolean)}
+         * @return Object representing step counts
+         */
+        DataSignal fromStepCounter(boolean silent);
+        /**
+         * Handle data from low/high detection
+         * @return Object representing low/high interrupt data
+         */
+        DataSignal fromLowHigh();
+    }
+
+    /**
+     * Configures the settings for acceleration sampling
+     * @return Editor object to configure the settings
+     */
+    SamplingConfigEditor configureAxisSampling();
+
+    /**
+     * Configures the settings for orientation detection
+     * @return Editor object to configure the settings
+     */
+    OrientationConfigEditor configureOrientationDetection();
+
+    /**
+     * Configures the settings for flat detection
+     * @return Editor object to configure the settings
+     */
+    FlatDetectionConfigEditor configureFlatDetection();
+    /**
+     * Enables flat detection
+     */
+    void enableFlatDetection();
+    /**
+     * Disables flat detection
+     */
+    void disableFlatDetection();
+
+    /**
+     * Configures the settings for step detection
+     * @return Editor object to configure the settings
+     */
+    StepDetectionConfigEditor configureStepDetection();
+    /**
+     * Reads the current value in the step counter.  The step counter must first be enabled with a {@link StepDetectionConfigEditor} object.
+     * @param silent True if the read should be silent
+     */
+    void readStepCounter(boolean silent);
+    /**
+     * Resets the step counter
+     */
+    void resetStepCounter();
+    /**
+     * Enable step detection
+     */
+    void enableStepDetection();
+    /**
+     * Disable step detection
+     */
+    void disableStepDetection();
+
+    /**
+     * Configures the settings for low/high G detection
+     * @return Editor object to configure the settings
+     */
+    LowHighDetectionConfigEditor configureLowHighDetection();
+    /**
+     * Enables low/high G detection
+     * @param lowG      True if low-g should be detected
+     * @param highGx    True if high-g on the x-axis should be detected
+     * @param highGy    True if high-g on the y-axis should be detected
+     * @param highGz    True if high-g on the z-axis should be detected
+     */
+    void enableLowHighDetection(boolean lowG, boolean highGx, boolean highGy, boolean highGz);
+    /**
+     * Disable low/high G detection
+     */
+    void disableLowHighDetection();
+
+    /**
+     * Starts the accelerometer in low power mode
+     * @param size      Number of samples to be averaged for undersampling
+     */
+    void startLowPower(byte size);
+
+    /**
+     * Initiates the creation of a route for BMI160 sensor data
+     * @return Selection of available data sources
+     */
+    @Override
+    SourceSelector routeData();
 }

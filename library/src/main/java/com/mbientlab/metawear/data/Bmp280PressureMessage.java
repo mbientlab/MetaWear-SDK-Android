@@ -43,7 +43,7 @@ public class Bmp280PressureMessage extends Message {
      */
     public static float getScale() { return SCALE;}
 
-    private final float pascals;
+    private final Float pascals;
 
     public Bmp280PressureMessage(byte[] data) {
         this(null, data);
@@ -52,7 +52,11 @@ public class Bmp280PressureMessage extends Message {
     public Bmp280PressureMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        pascals= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getInt() / SCALE;
+        if (data.length >= 4) {
+            pascals = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getInt() / SCALE;
+        } else {
+            pascals= null;
+        }
     }
 
     @Override

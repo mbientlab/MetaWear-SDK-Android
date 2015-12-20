@@ -43,6 +43,15 @@ public enum Bmi160AccelerometerRegister implements Register {
     DATA_INTERRUPT_CONFIG {
         @Override public byte opcode() { return 0x5; }
     },
+    LOW_HIGH_G_INTERRUPT_ENABLE {
+        @Override public byte opcode() { return 0x6; }
+    },
+    LOW_HIGH_G_CONFIG {
+        @Override public byte opcode() { return 0x7; }
+    },
+    LOW_HIGH_G_INTERRUPT {
+        @Override public byte opcode() { return 0x8; }
+    },
     ORIENT_INTERRUPT_ENABLE {
         @Override public byte opcode() { return 0xf; }
     },
@@ -51,6 +60,30 @@ public enum Bmi160AccelerometerRegister implements Register {
     },
     ORIENT_INTERRUPT {
         @Override public byte opcode() { return 0x11; }
+    },
+    FLAT_INTERRUPT_ENABLE {
+        @Override public byte opcode() { return 0x12; }
+    },
+    FLAT_CONFIG {
+        @Override public byte opcode() { return 0x13; }
+    },
+    FLAT_INTERRUPT {
+        @Override public byte opcode() { return 0x14; }
+    },
+    STEP_DETECTOR_INTERRUPT_ENABLE {
+        @Override public byte opcode() { return 0x17; }
+    },
+    STEP_DETECTOR_CONFIG {
+        @Override public byte opcode() { return 0x18; }
+    },
+    STEP_DETECTOR_INTERRUPT {
+        @Override public byte opcode() { return 0x19; }
+    },
+    STEP_COUNTER_DATA {
+        @Override public byte opcode() { return 0x1a; }
+    },
+    STEP_COUNTER_RESET {
+        @Override public byte opcode() { return 0x1b; }
     };
 
     @Override

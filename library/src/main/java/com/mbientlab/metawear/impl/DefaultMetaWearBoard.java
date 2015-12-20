@@ -142,10 +142,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private static final String JSON_FIELD_MSG_CLASS= "message_class", JSON_FIELD_LOG= "logs", JSON_FIELD_ROUTE= "route",
             JSON_FIELD_SUBSCRIBERS="subscribers", JSON_FIELD_NAME= "name", JSON_FIELD_TIMER= "timers", JSON_FIELD_CMD_IDS="cmd_ids",
             JSON_FIELD_MMA8452Q_ODR= "mma8452q_odr", JSON_FIELD_BMI160_ACC_RANGE= "bmi160_acc_range", JSON_FIELD_BMI160_GRYO_RANGE= "bmi160_gyro_range",
-            JSON_FIELD_ROUTE_MANAGER= "route_managers";
+            JSON_FIELD_ROUTE_MANAGER= "route_managers", JSON_FIELD_LOG_REFERENCE_TICKS= "log_reference_ticks";
     private final static double TICK_TIME_STEP= (48.0 / 32768.0) * 1000.0;
     private static final HashMap<String, Class<? extends DataSignal.ProcessorConfig>> processorSchemes;
-    private static final HashMap<Class<? extends Message>, Class<? extends Message>> unsignedToSigned, signedToUnsigned;
+    private static final HashMap<Class<? extends Message>, Class<? extends Message>> unsignedToSigned, signedToUnsigned, unpackedToRms;
     private static final HashSet<Class<? extends Message>> bmi160GyroMessageClasses, bmi160AccMessageClasses, signedMsgClasses;
 
     static {
@@ -163,6 +163,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         processorSchemes.put(Sample.SCHEME_NAME, Sample.class);
         processorSchemes.put(Counter.SCHEME_NAME, Counter.class);
         processorSchemes.put(Pulse.SCHEME_NAME, Pulse.class);
+        processorSchemes.put(Buffer.SCHEME_NAME, Buffer.class);
 
         unsignedToSigned= new HashMap<>();
         unsignedToSigned.put(UnsignedMessage.class, SignedMessage.class);
@@ -190,6 +191,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         bmi160GyroMessageClasses.add(Bmi160SingleAxisUnsignedGyroMessage.class);
         bmi160GyroMessageClasses.add(Bmi160SingleAxisGyroMessage.class);
         bmi160GyroMessageClasses.add(Bmi160ThreeAxisGyroMessage.class);
+
+        unpackedToRms = new HashMap<>();
+        unpackedToRms.put(Bmi160ThreeAxisMessage.class, Bmi160SingleAxisMessage.class);
+        unpackedToRms.put(Bmi160ThreeAxisGyroMessage.class, Bmi160SingleAxisUnsignedGyroMessage.class);
+        unpackedToRms.put(Mma8452qThreeAxisMessage.class, Mma8452qSingleAxisUnsignedMessage.class);
     }
 
     private interface IdCreator {
@@ -198,13 +204,56 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     }
 
     private interface EventListener {
+        void queueCommand(byte[] command);
         void receivedCommandId(byte id);
         void onCommandWrite();
     }
 
-    private interface ReferenceTick {
-        long tickCount();
-        Calendar timestamp();
+    private class ReferenceTick {
+        private final byte resetUid;
+        private final long tick;
+        private final Calendar timestamp;
+
+        public ReferenceTick(JSONObject state) throws JSONException {
+            resetUid= (byte) state.getInt("reset_uid");
+            tick= state.getInt("tick_count") & 0xffffffffL;
+
+            long high= state.getInt("timestamp_high") & 0xffffffffL, low= state.getInt("timestamp_low") & 0xffffffffL;
+            long epocOffset= (high << 32) | low;
+            timestamp= Calendar.getInstance();
+            timestamp.setTimeInMillis(epocOffset);
+        }
+
+        public ReferenceTick(byte resetUid, long tick, Calendar timestamp) {
+            this.timestamp= timestamp;
+            this.tick= tick;
+            this.resetUid= resetUid;
+        }
+
+        public byte resetUid() {
+            return resetUid;
+        }
+
+        public long tickCount() {
+            return tick;
+        }
+
+        public Calendar timestamp() {
+            return timestamp;
+        }
+
+        public JSONObject serialize() throws JSONException {
+            JSONObject state= new JSONObject();
+
+            state.put("reset_uid", resetUid);
+            state.put("tick_count", (int) tick);
+
+            long epocOffset= timestamp.getTimeInMillis();
+            state.put("timestamp_high", epocOffset >> 32);
+            state.put("timestamp_low", epocOffset);
+
+            return state;
+        }
     }
 
     private interface RouteHandler {
@@ -481,7 +530,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         public abstract void remove();
     }
-
     /**
      * Legacy class left over from 2.0.0 implementation.  All future loggers should use the VariableLoggable class
      */
@@ -495,7 +543,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     (Class<Message>) Class.forName(state.getString(JSON_FIELD_MSG_CLASS)));
         }
     }
-
     /**
      * Legacy class left over from 2.0.0 implementation.  All future loggers should use the VariableLogger class
      */
@@ -582,6 +629,40 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             }
         }
     }
+
+    private enum ProcessorType {
+        ACCUMULATOR,
+        AVERAGE,
+        BUFFER,
+        COMPARISON,
+        COUNTER,
+        DELTA,
+        MATHS,
+        PASSTHROUGH,
+        PULSE,
+        RMS,
+        RSS,
+        SAMPLE,
+        THRESHOLD,
+        TIME
+    }
+    private enum ReadType {
+        NONE,
+        NORMAL {
+            @Override public byte mask() {
+                return (byte) 0x80;
+            }
+        },
+        SILENT {
+            @Override public byte mask() {
+                return (byte) 0xc0;
+            }
+        };
+
+        public byte mask() {
+            return 0;
+        }
+    }
     private class RouteBuilder implements EventListener, RouteHandler {
         private AsyncOperation<RouteManager> commitResult;
         private byte nExpectedCmds= 0;
@@ -589,7 +670,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         private final RouteManagerImpl manager= new RouteManagerImpl();
         private final Stack<DataSignalImpl> branches= new Stack<>();
         private final Queue<IdCreator> creators= new LinkedList<>();
-        private final HashMap<DataSignalImpl, DataSignal.ActivityHandler> signalMonitors= new HashMap<>();
+        private final Map<DataSignalImpl, DataSignal.ActivityHandler> signalMonitors= new LinkedHashMap<>();
+        private final Queue<byte[]> tapCommands= new LinkedList<>();
 
         private class InvalidDataSignal implements DataSignal {
             private final Throwable error;
@@ -639,11 +721,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         private abstract class DataSignalImpl implements DataSignal, DataSignal.DataToken, Subscription {
             protected DataSignalImpl parent;
             protected Class<? extends Message> msgClass;
-            protected final byte outputSize;
+            protected final byte outputSize, channelSize, nChannels;
 
-            protected DataSignalImpl(byte outputSize, Class<? extends Message> msgClass) {
-                this.outputSize= outputSize;
+            protected DataSignalImpl(byte channelSize, byte nChannels, Class<? extends Message> msgClass) {
+                this.outputSize= (byte) (channelSize * nChannels);
                 this.msgClass= msgClass;
+                this.channelSize= channelSize;
+                this.nChannels= nChannels;
             }
 
             @Override
@@ -721,10 +805,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
             @Override
             public DataSignal process(String key, ProcessorConfig config) {
-                ProcessedDataSignal newDataSignal= (ProcessedDataSignal) process(config, this);
                 if (dataProcessors.containsKey(key)) {
                     return new InvalidDataSignal(new RuntimeException("Processor configuration key \'" + key + "\' already present"));
                 }
+
+                ProcessedDataSignal newDataSignal= (ProcessedDataSignal) process(config, this);
                 manager.routeDpKeys.add(key);
                 dataProcessors.put(key, newDataSignal);
                 return newDataSignal;
@@ -802,14 +887,14 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 int remainder= outputSize;
 
                 for(int i= 0; i < nReqLogIds; i++, remainder-= LOG_ENTRY_SIZE) {
-                    final int entrySize= Math.min(remainder, LOG_ENTRY_SIZE), offset= LOG_ENTRY_SIZE * i;
+                    final int entrySize= Math.min(remainder, LOG_ENTRY_SIZE), entryOffset= LOG_ENTRY_SIZE * i + offset();
                     creators.add(new IdCreator() {
                         @Override
                         public void execute() {
-                            final byte[] triggerConfig = source.getTriggerConfig();
-                            final byte[] xyLogCfg = new byte[triggerConfig.length];
-                            System.arraycopy(triggerConfig, 0, xyLogCfg, 0, triggerConfig.length - 1);
-                            xyLogCfg[triggerConfig.length - 1] = (byte) (((entrySize - 1) << 5) | offset);
+                            final byte[] eventConfig = source.getEventConfig();
+                            final byte[] xyLogCfg = new byte[eventConfig.length + 1];
+                            System.arraycopy(eventConfig, 0, xyLogCfg, 0, eventConfig.length);
+                            xyLogCfg[eventConfig.length] = (byte) (((entrySize - 1) << 5) | entryOffset);
 
                             writeRegister(LoggingRegister.TRIGGER, xyLogCfg);
                         }
@@ -870,11 +955,30 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             }
 
             protected DataSignal process(ProcessorConfig config, final DataSignalImpl parent) {
-                ProcessedDataSignal newProcessor;
+                if (outputSize > 4) {
+                    if (config instanceof Comparison) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Cannot compare data longer than 4 bytes"));
+                    } else if (config instanceof Sample) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach sample filter to data longer than 4 bytes"));
+                    } else if (config instanceof Accumulator) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Cannot accumulate data longer than 4 bytes"));
+                    } else if (config instanceof Average) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Cannot average data longer than 4 bytes"));
+                    } else if (config instanceof Maths && firmwareVersion.compareTo(Constant.MULTI_CHANNEL_MATH) < 0) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Cannot perform arithmetic operations on data longer than 4 bytes"));
+                    } else if (config instanceof Delta) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach delta transformer to data longer than 4 bytes"));
+                    } else if (config instanceof Pulse) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Cannot detect pulses on data longer than 4 bytes"));
+                    } else if (config instanceof Threshold) {
+                        return new InvalidDataSignal(new UnsupportedOperationException("Cannot detect thresholds on data longer than 4 bytes"));
+                    }
+                }
 
+                ProcessedDataSignal newProcessor;
                 if (config instanceof Passthrough) {
                     final Passthrough params= (Passthrough) config;
-                    newProcessor= new StaticProcessedDataSignal(outputSize, msgClass) {
+                    newProcessor= new StaticProcessedDataSignal(channelSize, nChannels, msgClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -898,6 +1002,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
 
                         @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.PASSTHROUGH;
+                        }
+
+                        @Override
                         public void modifyConfiguration(ProcessorConfig newConfig) {
                             if (!(newConfig instanceof Passthrough)) {
                                 throw new ClassCastException("Can only swap the current configuration with another passthrough configuration");
@@ -908,7 +1017,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     };
                 } else if (config instanceof Comparison) {
                     final Comparison params= (Comparison) config;
-                    newProcessor= new StaticProcessedDataSignal(outputSize, msgClass) {
+                    newProcessor= new StaticProcessedDataSignal(channelSize, nChannels, msgClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -945,6 +1054,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         public void setState(State newState) {
                             throw new UnsupportedOperationException("Cannot change comparison filter state");
                         }
+
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.COMPARISON;
+                        }
                     };
                 } else if (config instanceof Time) {
                     final Time params = (Time) config;
@@ -954,7 +1068,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         nextMsgClass= unsignedToSigned.get(msgClass);
                     }
 
-                    newProcessor = new StaticProcessedDataSignal(outputSize, nextMsgClass) {
+                    newProcessor = new StaticProcessedDataSignal(channelSize, nChannels, nextMsgClass) {
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.TIME;
+                        }
+
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -985,10 +1104,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     };
                 } else if (config instanceof Sample) {
                     final Sample params = (Sample) config;
-                    newProcessor = new StaticProcessedDataSignal(outputSize, msgClass) {
+                    newProcessor = new StaticProcessedDataSignal(channelSize, nChannels, msgClass) {
                         @Override
                         public void setState(State newState) {
                             throw new UnsupportedOperationException("Cannot change sample processor state");
+                        }
+
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.SAMPLE;
                         }
 
                         @Override
@@ -1016,7 +1140,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     final byte size= (params.mode == Threshold.OutputMode.BINARY) ? 1 : outputSize;
                     final Class<? extends Message> nextClass= (params.mode == Threshold.OutputMode.BINARY) ? SignedMessage.class : msgClass;
 
-                    newProcessor = new ProcessedDataSignal(size, nextClass) {
+                    newProcessor = new ProcessedDataSignal(size, nChannels, nextClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1039,6 +1163,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         @Override
                         public void setState(State newState) {
                             throw new UnsupportedOperationException("Cannot change threshold filter state");
+                        }
+
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.THRESHOLD;
                         }
 
                         @Override
@@ -1103,7 +1232,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             throw new RuntimeException("Only here to quiet compiler error");
                     }
 
-                    newProcessor = new ProcessedDataSignal(size, nextClass) {
+                    newProcessor = new ProcessedDataSignal(size, nChannels, nextClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1128,6 +1257,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                                 throw new ClassCastException("Delta processor state can only be modified with a Delta.State object");
                             }
                             super.setState(newState);
+                        }
+
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.DELTA;
                         }
 
                         @Override
@@ -1174,7 +1308,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     final Accumulator params = (Accumulator) config;
                     final byte filterOutputSize = params.output == null ? outputSize : params.output;
 
-                    newProcessor = new ProcessedDataSignal(filterOutputSize, msgClass) {
+                    newProcessor = new ProcessedDataSignal(filterOutputSize, nChannels, msgClass) {
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
                             return new byte[]{0x2, (byte) (((this.outputSize - 1) & 0x3) | (((parent.outputSize - 1) & 0x3) << 2))};
@@ -1199,6 +1333,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
 
                         @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.ACCUMULATOR;
+                        }
+
+                        @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
                         }
@@ -1210,7 +1349,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     };
                 } else if (config instanceof Counter) {
                     final Counter params= (Counter) config;
-                    newProcessor= new ProcessedDataSignal(params.size, UnsignedMessage.class) {
+                    newProcessor= new ProcessedDataSignal(params.size, nChannels, UnsignedMessage.class) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1229,9 +1368,14 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         @Override
                         public void setState(State newState) {
                             if (!(newState instanceof Counter.State)) {
-                                throw new RuntimeException("Counter state can only be configured with an Counter.State object");
+                                throw new RuntimeException("Counter state can only be modified with an Counter.State object");
                             }
                             super.setState(newState);
+                        }
+
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.COUNTER;
                         }
 
                         @Override
@@ -1241,7 +1385,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     };
                 } else if (config instanceof Average) {
                     final Average params = (Average) config;
-                    newProcessor = new ProcessedDataSignal(outputSize, msgClass) {
+                    newProcessor = new ProcessedDataSignal(channelSize, nChannels, msgClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1273,6 +1417,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
 
                         @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.AVERAGE;
+                        }
+
+                        @Override
                         public void modifyConfiguration(ProcessorConfig newConfig) {
                             if (!(newConfig instanceof Average)) {
                                 throw new ClassCastException("Can only swap the current configuration with another average configuration");
@@ -1284,6 +1433,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 } else if (config instanceof Maths) {
                     final Maths params = (Maths) config;
                     final boolean signedOp= params.signed == null ? isSigned() : params.signed;
+                    byte newChannelSize= channelSize;
                     Class<? extends Message> nextMsgClass;
 
                     switch (params.mathOp) {
@@ -1331,12 +1481,38 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                                 nextMsgClass = unsignedToSigned.get(nextMsgClass);
                             }
                             break;
+                        case CONSTANT:
+                            if (signedOp) {
+                                nextMsgClass= SignedMessage.class;
+                            } else {
+                                nextMsgClass= UnsignedMessage.class;
+                            }
+                            break;
                         default:
                             nextMsgClass= msgClass;
                             break;
                     }
+                    switch (params.mathOp) {
+                        case LEFT_SHIFT:
+                            newChannelSize+= (params.rhs.intValue() / 8);
+                            if (newChannelSize > 4) {
+                                newChannelSize= 4;
+                            }
+                            break;
+                        case RIGHT_SHIFT:
+                            newChannelSize-= (params.rhs.intValue() / 8);
+                            if (newChannelSize <= 0) {
+                                newChannelSize= 1;
+                            }
+                            break;
+                        default:
+                            if (nChannels == 1) {
+                                newChannelSize= 4;
+                            }
+                            break;
+                    }
 
-                    newProcessor = new ProcessedDataSignal((byte) 4, nextMsgClass) {
+                    newProcessor = new ProcessedDataSignal(newChannelSize, nChannels, nextMsgClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1359,7 +1535,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             }
 
                             ///< Do not allow the math operation to be changed
-                            ByteBuffer buffer = ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN).put((byte) 0x9)
+                            if (firmwareVersion != null && firmwareVersion.compareTo(Constant.MULTI_CHANNEL_MATH) >= 0) {
+                                ByteBuffer buffer = ByteBuffer.allocate(8);
+                                buffer.order(ByteOrder.LITTLE_ENDIAN).put((byte) 0x9)
+                                        .put((byte) ((this.channelSize - 1) & 0x3 | ((parent.channelSize - 1) << 2) | signedMask))
+                                        .put((byte) params.mathOp.ordinal()).putInt(firmwareRhs.intValue())
+                                        .put((byte) (this.nChannels - 1));
+                                return buffer.array();
+                            }
+                            ByteBuffer buffer = ByteBuffer.allocate(7);
+                            buffer.order(ByteOrder.LITTLE_ENDIAN).put((byte) 0x9)
                                     .put((byte) ((this.outputSize - 1) & 0x3 | ((parent.outputSize - 1) << 2) | signedMask))
                                     .put((byte) params.mathOp.ordinal()).putInt(firmwareRhs.intValue());
                             return buffer.array();
@@ -1382,6 +1567,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
 
                         @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.MATHS;
+                        }
+
+                        @Override
                         public void modifyConfiguration(ProcessorConfig newConfig) {
                             if (!(newConfig instanceof Maths)) {
                                 throw new ClassCastException("Can only swap the current configuration with another math configuration");
@@ -1398,28 +1588,33 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
                     };
                 } else if (config instanceof Pulse) {
-                    final Pulse params= (Pulse) config;
+                    final Pulse params = (Pulse) config;
                     final byte newOutputSize;
                     final Class<? extends Message> newMessageClass;
 
-                    switch(params.mode) {
+                    switch (params.mode) {
                         case WIDTH:
-                            newOutputSize= 2;
-                            newMessageClass= UnsignedMessage.class;
+                            newOutputSize = 2;
+                            newMessageClass = UnsignedMessage.class;
                             break;
                         case AREA:
-                            newOutputSize= 4;
-                            newMessageClass= msgClass;
+                            newOutputSize = 4;
+                            newMessageClass = msgClass;
                             break;
                         case PEAK:
-                            newOutputSize= outputSize;
-                            newMessageClass= msgClass;
+                            newOutputSize = outputSize;
+                            newMessageClass = msgClass;
                             break;
                         default:
                             throw new RuntimeException("Added to clear IDE error");
                     }
 
-                    newProcessor= new ProcessedDataSignal(newOutputSize, newMessageClass) {
+                    newProcessor = new ProcessedDataSignal(newOutputSize, nChannels, newMessageClass) {
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.PULSE;
+                        }
+
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1427,11 +1622,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
-                            Pulse pulseConfig= (Pulse) newConfig;
-                            Number firmwareThs= parent.numberToFirmwareUnits(pulseConfig.threshold);
+                            Pulse pulseConfig = (Pulse) newConfig;
+                            Number firmwareThs = parent.numberToFirmwareUnits(pulseConfig.threshold);
 
                             ///< Do not allow output type to switch
-                            ByteBuffer buffer= ByteBuffer.allocate(10).put((byte) 0xb).put(parent.outputSize).put((byte) 0).put((byte) params.mode.ordinal())
+                            ByteBuffer buffer = ByteBuffer.allocate(10).put((byte) 0xb).put(parent.outputSize).put((byte) 0).put((byte) params.mode.ordinal())
                                     .putInt(firmwareThs.intValue()).putShort(pulseConfig.width);
                             return buffer.array();
                         }
@@ -1476,11 +1671,82 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             super.modifyConfiguration(newConfig);
                         }
                     };
+                } else if (config instanceof Buffer) {
+                    newProcessor= new StaticProcessedDataSignal(channelSize, nChannels, msgClass) {
+                        @Override
+                        public byte[] getFilterConfig() {
+                            return processorConfigToBytes(null);
+                        }
 
-                } else if (config instanceof Rms) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach rms transformer to single component data"));
-                } else if (config instanceof Rss) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach rss transformer to single component data"));
+                        @Override
+                        protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
+                            return new byte[] {0xf, (byte) (this.outputSize - 1)};
+                        }
+
+                        @Override
+                        public void setState(State newState) {
+                            throw new UnsupportedOperationException("Cannot change buffer state");
+                        }
+
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.BUFFER;
+                        }
+
+                        @Override
+                        public void modifyConfiguration(ProcessorConfig newConfig) {
+                            throw new UnsupportedOperationException("Cannot change buffer configuration");
+                        }
+                    };
+                } else if (config instanceof Rms || config instanceof Rss) {
+                    final byte rmsMode, signedMask= (byte) (isSigned() ? 0x80 : 0x0);
+                    final ProcessorType type;
+
+                    if (config instanceof Rms) {
+                        rmsMode= 0;
+                        type= ProcessorType.RMS;
+                    } else {
+                        rmsMode= 1;
+                        type= ProcessorType.RSS;
+                    }
+                    newProcessor = new ProcessedDataSignal(channelSize, (byte) 1, unpackedToRms.get(msgClass)) {
+                        @Override
+                        public byte[] getFilterConfig() {
+                            return processorConfigToBytes(null);
+                        }
+
+                        @Override
+                        protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
+                            return new byte[]{0x7,
+                                    (byte) (((this.channelSize - 1) & 0x3) | (((parent.channelSize - 1) & 0x3) << 2) | (((parent.nChannels - 1) & 0x3) << 4) | signedMask),
+                                    rmsMode};
+                        }
+
+                        @Override
+                        public Number numberToFirmwareUnits(Number input) {
+                            return parent.numberToFirmwareUnits(input);
+                        }
+
+                        @Override
+                        public boolean isSigned() {
+                            return false;
+                        }
+
+                        @Override
+                        public void setState(State newState) {
+                            throw new UnsupportedOperationException("Cannot change rms/rss transformer state");
+                        }
+
+                        @Override
+                        public ProcessorType getType() {
+                            return type;
+                        }
+
+                        @Override
+                        public void modifyConfiguration(ProcessorConfig newConfig) {
+                            throw new UnsupportedOperationException("Cannot change rms/rss configuration");
+                        }
+                    };
                 } else {
                     return new InvalidDataSignal(new ClassCastException("Unrecognized ProcessorConfig subtype: \'" + config.getClass().toString() + "\'"));
                 }
@@ -1507,19 +1773,22 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             public abstract byte[] getEventConfig();
 
         }
+        private abstract class DataSource extends DataSignalImpl {
+            protected final ResponseHeader header;
+            protected final ReadType type;
 
-        public abstract class DataSource extends DataSignalImpl {
-            private final ResponseHeader header;
-            private final boolean readHeader;
-
-            protected DataSource(byte outputSize, Class<? extends Message> msgClass, ResponseHeader header, boolean readHeader) {
-                super(outputSize, msgClass);
+            protected DataSource(byte channelSize, byte nChannels, Class<? extends Message> msgClass, ResponseHeader header, ReadType type) {
+                super(channelSize, nChannels, msgClass);
                 this.header= header;
-                this.readHeader= readHeader;
+                this.type= type;
             }
 
-            protected DataSource(byte outputSize, Class<? extends Message> msgClass, ResponseHeader header) {
-                this(outputSize, msgClass, header, false);
+            @Override
+            public DataSignal stream(String key) {
+                if (type == ReadType.SILENT) {
+                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot stream data from a silent read"));
+                }
+                return super.stream(key);
             }
 
             @Override
@@ -1535,7 +1804,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
             @Override
             public byte[] getEventConfig() {
-                return new byte[] {header.module, (byte) ((readHeader ? 0x80 : 0x0) | header.register), header.id};
+                return new byte[] {header.module, (byte) (type.mask() | header.register), header.id};
             }
 
             @Override
@@ -1564,12 +1833,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 }
             }
         }
-
         private abstract class ProcessedDataSignal extends DataSignalImpl implements DataProcessor {
             private ResponseHeader header= null;
 
-            protected ProcessedDataSignal(byte outputSize, Class<? extends Message> msgClass) {
-                super(outputSize, msgClass);
+            protected ProcessedDataSignal(byte channelSize, byte nChannels, Class<? extends Message> msgClass) {
+                super(channelSize, nChannels, msgClass);
             }
 
             @Override
@@ -1625,7 +1893,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 } else if (newState instanceof Passthrough.State) {
                     stateBytes = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(((Passthrough.State) newState).newValue).array();
                 } else if (newState instanceof Counter.State) {
-                    stateBytes= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(((Counter.State) newState).newCount).array();
+                    stateBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(((Counter.State) newState).newCount).array();
                 } else {
                     throw new ClassCastException("Unrecognized state editor: \'" + newState.getClass() + "\'");
                 }
@@ -1640,6 +1908,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 header= new ResponseHeader(DataProcessorRegister.NOTIFY, newId);
             }
 
+            public abstract ProcessorType getType();
             public abstract byte[] getFilterConfig();
             protected abstract byte[] processorConfigToBytes(ProcessorConfig newConfig);
 
@@ -1679,8 +1948,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             }
         }
         private abstract class StaticProcessedDataSignal extends ProcessedDataSignal {
-            public StaticProcessedDataSignal(byte outputSize, Class<? extends Message> msgClass) {
-                super(outputSize, msgClass);
+            public StaticProcessedDataSignal(byte channelSize, byte nChannels, Class<? extends Message> msgClass) {
+                super(channelSize, nChannels, msgClass);
             }
 
             @Override
@@ -1704,9 +1973,114 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 return parent.isSigned();
             }
         }
+        private class EventSignal extends DataSource {
+            private final Register eventRegister;
 
-        public DataSignal fromSingleChannelTemp() {
-            return new DataSource((byte) 2, TemperatureMessage.class, new ResponseHeader(TemperatureRegister.VALUE), true) {
+            public EventSignal(Register eventRegister) {
+                super((byte) 0, (byte) 0, UnsignedMessage.class, new ResponseHeader(eventRegister), ReadType.NONE);
+                this.eventRegister= eventRegister;
+            }
+
+            @Override
+            public boolean isSigned() {
+                return true;
+            }
+
+            @Override
+            public DataSignal stream(String key) {
+                return new InvalidDataSignal(new UnsupportedOperationException("Events must be transformed with a counter processor to be able to use the full DataSignal class"));
+            }
+
+            @Override
+            public DataSignal log(String key) {
+                return new InvalidDataSignal(new UnsupportedOperationException("Events must be transformed with a counter processor to be able to use the full DataSignal class"));
+            }
+
+            @Override
+            protected DataSignal process(ProcessorConfig config, final DataSignalImpl parent) {
+                if (config instanceof Counter) {
+                    final Counter params= (Counter) config;
+                    ProcessedDataSignal newProcessor= new ProcessedDataSignal(params.size, (byte) 1, UnsignedMessage.class) {
+                        @Override
+                        public byte[] getFilterConfig() {
+                            return processorConfigToBytes(params);
+                        }
+
+                        @Override
+                        protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
+                            return new byte[]{0x2, (byte) (((this.outputSize - 1) & 0x3) | 0x10)};
+                        }
+
+                        @Override
+                        public boolean isSigned() {
+                            return false;
+                        }
+
+                        @Override
+                        public void setState(State newState) {
+                            if (!(newState instanceof Counter.State)) {
+                                throw new RuntimeException("Counter state can only be modified with an Counter.State object");
+                            }
+                            super.setState(newState);
+                        }
+
+                        @Override
+                        public ProcessorType getType() {
+                            return ProcessorType.COUNTER;
+                        }
+
+                        @Override
+                        public void modifyConfiguration(ProcessorConfig newConfig) {
+                            throw new UnsupportedOperationException("Cannot change counter configuration");
+                        }
+                    };
+
+                    postFilterCreate(newProcessor, parent);
+                    return newProcessor;
+                } else {
+                    return new InvalidDataSignal(new UnsupportedOperationException("Events can only have a counter processor attached"));
+                }
+            }
+
+            @Override
+            public byte offset() {
+                return 0;
+            }
+
+            @Override
+            public void enableNotifications() {
+                writeRegister(eventRegister, (byte) 1);
+            }
+
+            @Override
+            public void unsubscribe() {
+                writeRegister(eventRegister, (byte) 0);
+                super.unsubscribe();
+            }
+        }
+        private class DataProcessorStateSignal extends DataSource {
+            private final RouteBuilder.ProcessedDataSignal signal;
+
+            protected DataProcessorStateSignal(RouteBuilder.ProcessedDataSignal signal, Class<? extends Message> msgClass, boolean silent) {
+                super(signal.channelSize, signal.nChannels, msgClass,
+                        new ResponseHeader(InfoRegister.DATA_PROCESSOR.moduleOpcode(), DataProcessorRegister.STATE.opcode(), signal.header.id),
+                        silent ? ReadType.SILENT : ReadType.NORMAL);
+                this.signal= signal;
+            }
+
+            @Override
+            public boolean isSigned() {
+                return signal.isSigned();
+            }
+
+            @Override
+            public void enableNotifications() {
+                dataProcMsgClasses.put(header, msgClass);
+            }
+        }
+
+        public DataSignal fromSingleChannelTemp(ReadType type) {
+            return new DataSource((byte) 2, (byte) 1, TemperatureMessage.class, new ResponseHeader(TemperatureRegister.VALUE), type) {
                 @Override
                 public Number numberToFirmwareUnits(Number input) {
                     return input.floatValue() * 8.0f;
@@ -1721,8 +2095,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 public void enableNotifications() { }
             };
         }
-        public DataSignal fromMultiChannelTemp(final MultiChannelTemperature.Source src) {
-            return new DataSource((byte) 2, TemperatureMessage.class, new ResponseHeader(MultiChannelTempRegister.TEMPERATURE, src.channel()), true) {
+        public DataSignal fromMultiChannelTemp(final MultiChannelTemperature.Source src, ReadType type) {
+            return new DataSource((byte) 2, (byte) 1, TemperatureMessage.class, new ResponseHeader(MultiChannelTempRegister.TEMPERATURE, src.channel()), type) {
                 @Override
                 public Number numberToFirmwareUnits(Number input) {
                     return input.floatValue() * 8.0f;
@@ -1740,7 +2114,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         public DataSignal fromSwitch() {
-            return new DataSource((byte) 1, UnsignedMessage.class, new ResponseHeader(SwitchRegister.STATE)) {
+            return new DataSource((byte) 1, (byte) 1, UnsignedMessage.class, new ResponseHeader(SwitchRegister.STATE), ReadType.NONE) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -1760,74 +2134,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         private abstract class ThreeAxisDataSource extends DataSource {
-            private final Class<? extends UnsignedMessage> singleAxisClass;
-
-            private ThreeAxisDataSource(Class<? extends Message> msgClass, Class<? extends UnsignedMessage> singleAxisClass, ResponseHeader header) {
-                super((byte) 6, msgClass, header);
-                this.singleAxisClass= singleAxisClass;
+            private ThreeAxisDataSource(Class<? extends Message> msgClass, ResponseHeader header) {
+                super((byte) 2, (byte) 3, msgClass, header, ReadType.NONE);
             }
 
             @Override
             public boolean isSigned() {
-                throw new UnsupportedOperationException("isSigned method not supported for raw accelerometer axis data");
-            }
-
-            @Override
-            protected DataSignal process(ProcessorConfig config, final DataSignalImpl parent) {
-                if (config instanceof Comparison) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot compare three axis data"));
-                } else if (config instanceof Sample) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach sample filter to three axis data"));
-                } else if (config instanceof Accumulator) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot accumulate three axis data"));
-                } else if (config instanceof Average) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot average three axis data"));
-                } else if (config instanceof Maths) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot perform arithmetic operations on three axis data"));
-                } else if (config instanceof Delta) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot attach delta transformer to three axis data"));
-                } else if (config instanceof Pulse) {
-                    return new InvalidDataSignal(new UnsupportedOperationException("Cannot detect pulses on three axis data"));
-                } else if (config instanceof Rms || config instanceof Rss) {
-                    final byte nInputs = 3, rmsMode = (byte) (config instanceof Rms ? 0 : 1);
-                    ProcessedDataSignal newProcessor = new ProcessedDataSignal((byte) 2, singleAxisClass) {
-                        @Override
-                        public byte[] getFilterConfig() {
-                            return processorConfigToBytes(null);
-                        }
-
-                        @Override
-                        protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
-                            return new byte[]{0x7,
-                                    (byte) (((this.outputSize - 1) & 0x3) | (((this.outputSize - 1) & 0x3) << 2) | ((nInputs - 1) << 4) | 0x80),
-                                    rmsMode};
-                        }
-
-                        @Override
-                        public Number numberToFirmwareUnits(Number input) {
-                            return parent.numberToFirmwareUnits(input);
-                        }
-
-                        @Override
-                        public boolean isSigned() {
-                            return false;
-                        }
-
-                        @Override
-                        public void setState(State newState) {
-                            throw new UnsupportedOperationException("Cannot change rms/rss transformer state");
-                        }
-
-                        @Override
-                        public void modifyConfiguration(ProcessorConfig newConfig) {
-                            throw new UnsupportedOperationException("Cannot change rms/rss configuration");
-                        }
-                    };
-
-                    postFilterCreate(newProcessor, parent);
-                    return newProcessor;
-                }
-                return super.process(config, parent);
+                return true;
             }
         }
         private class SingleAxisDataSource extends DataSource {
@@ -1835,7 +2148,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             private final Register dataRegister;
 
             protected SingleAxisDataSource(byte offset, Class<? extends Message> msgClass, Register dataRegister) {
-                super((byte) 2, msgClass, new ResponseHeader(dataRegister));
+                super((byte) 2, (byte) 1, msgClass, new ResponseHeader(dataRegister), ReadType.NONE);
                 dataOffset= offset;
                 this.dataRegister= dataRegister;
             }
@@ -1868,7 +2181,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         public DataSignal fromMma8452qAxis() {
-            return new ThreeAxisDataSource(Mma8452qThreeAxisMessage.class, Mma8452qSingleAxisUnsignedMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.DATA_VALUE)) {
+            return new ThreeAxisDataSource(Mma8452qThreeAxisMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.DATA_VALUE)) {
                 @Override
                 public void enableNotifications() {
                     writeRegister(Mma8452qAccelerometerRegister.DATA_VALUE, (byte) 1);
@@ -1887,16 +2200,31 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
         public DataSignal fromMma8452qXAxis() {
-            return new SingleAxisDataSource(X_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE);
+            return new SingleAxisDataSource(X_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * 1000;
+                }
+            };
         }
         public DataSignal fromMma8452qYAxis() {
-            return new SingleAxisDataSource(Y_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE);
+            return new SingleAxisDataSource(Y_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * 1000;
+                }
+            };
         }
         public DataSignal fromMma8452qZAxis() {
-            return new SingleAxisDataSource(Z_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE);
+            return new SingleAxisDataSource(Z_OFFSET, Mma8452qSingleAxisMessage.class, Mma8452qAccelerometerRegister.DATA_VALUE) {
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * 1000;
+                }
+            };
         }
         public DataSignal fromMma8452qTap() {
-            return new DataSource((byte) 1, Mma8452qTapMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.PULSE_STATUS)) {
+            return new DataSource((byte) 1, (byte) 1, Mma8452qTapMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.PULSE_STATUS), ReadType.NONE) {
                 @Override
                 public boolean isSigned() { return false; }
 
@@ -1913,7 +2241,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
         public DataSignal fromMma8452qMovement() {
-            return new DataSource((byte) 1, Mma8452qMovementMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.MOVEMENT_VALUE)) {
+            return new DataSource((byte) 1, (byte) 1, Mma8452qMovementMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.MOVEMENT_VALUE), ReadType.NONE) {
                 @Override
                 public boolean isSigned() { return false; }
 
@@ -1930,7 +2258,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
         public DataSignal fromMma8452qOrientation() {
-            return new DataSource((byte) 1, Mma8452qOrientationMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.ORIENTATION_VALUE)) {
+            return new DataSource((byte) 1, (byte) 1, Mma8452qOrientationMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.ORIENTATION_VALUE), ReadType.NONE) {
                 @Override
                 public boolean isSigned() { return false; }
 
@@ -1947,7 +2275,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
         public DataSignal fromMma8452qShake() {
-            return new DataSource((byte) 1, Mma8452qMovementMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.SHAKE_STATUS)) {
+            return new DataSource((byte) 1, (byte) 1, Mma8452qMovementMessage.class, new ResponseHeader(Mma8452qAccelerometerRegister.SHAKE_STATUS), ReadType.NONE) {
                 @Override
                 public boolean isSigned() { return false; }
 
@@ -1965,7 +2293,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         public DataSignal fromBmi160Axis() {
-            return new ThreeAxisDataSource(Bmi160ThreeAxisMessage.class, Bmi160SingleAxisUnsignedMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.DATA_INTERRUPT)) {
+            return new ThreeAxisDataSource(Bmi160ThreeAxisMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.DATA_INTERRUPT)) {
                 @Override
                 public void unsubscribe() {
                     writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT, (byte) 0);
@@ -2007,9 +2335,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 }
             };
         }
-
         public DataSignal fromBmi160Orientation() {
-            return new DataSource((byte) 1, Bmi160OrientationMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.ORIENT_INTERRUPT)) {
+            return new DataSource((byte) 1, (byte) 1, Bmi160OrientationMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.ORIENT_INTERRUPT), ReadType.NONE) {
                 @Override
                 public boolean isSigned() { return false; }
 
@@ -2025,9 +2352,69 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 }
             };
         }
+        public DataSignal fromBmi160Flat() {
+            return new DataSource((byte) 1,(byte) 1,  Bmi160FlatMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.FLAT_INTERRUPT), ReadType.NONE) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmi160AccelerometerRegister.FLAT_INTERRUPT, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmi160AccelerometerRegister.FLAT_INTERRUPT, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+        public DataSignal fromBmi160StepDetection() {
+            return new DataSource((byte) 1, (byte) 1, UnsignedMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.STEP_DETECTOR_INTERRUPT), ReadType.NONE) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmi160AccelerometerRegister.STEP_DETECTOR_INTERRUPT, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmi160AccelerometerRegister.STEP_DETECTOR_INTERRUPT, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+        public DataSignal fromBmi160StepCounter(ReadType type) {
+            return new DataSource((byte) 2, (byte) 1, UnsignedMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.STEP_COUNTER_DATA), type) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() { }
+            };
+        }
+        public DataSignal fromBmi160LowHigh() {
+            return new DataSource((byte) 2, (byte) 1, Bmi160LowHighMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT), ReadType.NONE) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
 
         public DataSignal fromBmi160Gyro() {
-            return new ThreeAxisDataSource(Bmi160ThreeAxisGyroMessage.class, Bmi160SingleAxisUnsignedGyroMessage.class, new ResponseHeader(Bmi160GyroRegister.DATA)) {
+            return new ThreeAxisDataSource(Bmi160ThreeAxisGyroMessage.class, new ResponseHeader(Bmi160GyroRegister.DATA)) {
                 @Override
                 public void enableNotifications() {
                     writeRegister(Bmi160GyroRegister.DATA, (byte) 1);
@@ -2070,7 +2457,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
 
-        public DataSignal fromAnalogGpio(final byte pin, final Gpio.AnalogReadMode mode) {
+        public DataSignal fromAnalogGpio(final byte pin, final Gpio.AnalogReadMode mode, ReadType type) {
             final Register analogRegister;
             Class<? extends Message> msgClass= UnsignedMessage.class;
 
@@ -2086,7 +2473,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     msgClass= null;
             }
 
-            return new DataSource((byte) 2, msgClass, new ResponseHeader(analogRegister, pin), true) {
+            return new DataSource((byte) 2, (byte) 1, msgClass, new ResponseHeader(analogRegister, pin), type) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -2096,8 +2483,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 public void enableNotifications() { }
             };
         }
-        public DataSignal fromDigitalIn(final byte pin) {
-            return new DataSource((byte) 1, UnsignedMessage.class, new ResponseHeader(GpioRegister.READ_DI, pin), true) {
+        public DataSignal fromDigitalIn(final byte pin, ReadType type) {
+            return new DataSource((byte) 1, (byte) 1, UnsignedMessage.class, new ResponseHeader(GpioRegister.READ_DI, pin), type) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -2108,7 +2495,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
         public DataSignal fromGpioPinNotify(final byte pin) {
-            return new DataSource((byte) 1, UnsignedMessage.class, new ResponseHeader(GpioRegister.PIN_CHANGE_NOTIFY, pin)) {
+            return new DataSource((byte) 1, (byte) 1, UnsignedMessage.class, new ResponseHeader(GpioRegister.PIN_CHANGE_NOTIFY, pin), ReadType.NONE) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -2127,8 +2514,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
 
-        public DataSignal fromGsr(final byte channel) {
-            return new DataSource((byte) 4, UnsignedMessage.class, new ResponseHeader(GsrRegister.CONDUCTANCE, channel), true) {
+        public DataSignal fromGsr(final byte channel, ReadType type) {
+            return new DataSource((byte) 4, (byte) 1, UnsignedMessage.class, new ResponseHeader(GsrRegister.CONDUCTANCE, channel), type) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -2140,7 +2527,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         public DataSignal fromLtr329Output() {
-            return new DataSource((byte) 4, UnsignedMessage.class, new ResponseHeader(Ltr329AmbientLightRegister.OUTPUT), false) {
+            return new DataSource((byte) 4, (byte) 1, UnsignedMessage.class, new ResponseHeader(Ltr329AmbientLightRegister.OUTPUT), ReadType.NONE) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -2160,7 +2547,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         public DataSignal fromBmp280Pressure() {
-            return new DataSource((byte) 4, Bmp280PressureMessage.class, new ResponseHeader(Bmp280BarometerRegister.PRESSURE), false) {
+            return new DataSource((byte) 4, (byte) 1, Bmp280PressureMessage.class, new ResponseHeader(Bmp280BarometerRegister.PRESSURE), ReadType.NONE) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -2184,7 +2571,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
         public DataSignal fromBmp280Altitude() {
-            return new DataSource((byte) 4, Bmp280AltitudeMessage.class, new ResponseHeader(Bmp280BarometerRegister.ALTITUDE), false) {
+            return new DataSource((byte) 4, (byte) 1, Bmp280AltitudeMessage.class, new ResponseHeader(Bmp280BarometerRegister.ALTITUDE), ReadType.NONE) {
                 @Override
                 public boolean isSigned() {
                     return true;
@@ -2209,7 +2596,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         public DataSignal fromI2C(byte numBytes, byte id) {
-            return new DataSource(numBytes, I2CMessage.class, new ResponseHeader(I2CRegister.READ_WRITE, id), true) {
+            return new DataSource(numBytes, (byte) 1, I2CMessage.class, new ResponseHeader(I2CRegister.READ_WRITE, id), ReadType.NORMAL) {
                 @Override
                 public void enableNotifications() { }
 
@@ -2226,6 +2613,38 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     return super.process(config, parent);
                 }
             };
+        }
+
+        public DataSignal fromSettingsDisconnected() {
+            if (firmwareVersion.compareTo(Constant.DISCONNECTED_EVENT) < 0) {
+                return new InvalidDataSignal(new UnsupportedOperationException("Disconnected event only supported on firmware version 1.1.0 and later"));
+            }
+            return new EventSignal(SettingsRegister.DISCONNECT_EVENT);
+        }
+
+        public DataSignal fromDataProcessorState(String key, boolean silent) {
+            if (dataProcessors.containsKey(key) && dataProcessors.get(key) instanceof RouteBuilder.ProcessedDataSignal) {
+                final RouteBuilder.ProcessedDataSignal signal= (ProcessedDataSignal) dataProcessors.get(key);
+                Class<? extends Message> stateMsgClass;
+
+                switch (signal.getType()) {
+                    case ACCUMULATOR:
+                    case BUFFER:
+                    case DELTA:
+                        stateMsgClass= signal.msgClass;
+                        break;
+                    case AVERAGE:
+                    case COUNTER:
+                    case PASSTHROUGH:
+                        stateMsgClass= UnsignedMessage.class;
+                        break;
+                    default:
+                        return new InvalidDataSignal(new UnsupportedOperationException("No processor state available for type: " + signal.getType().toString()));
+                }
+                return new DataProcessorStateSignal(signal, stateMsgClass, silent);
+            } else {
+                return new InvalidDataSignal(new UnsupportedOperationException("No processor available with key: " + key));
+            }
         }
 
         @Override
@@ -2269,6 +2688,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             addId();
         }
 
+        @Override
+        public void queueCommand(byte[] command) {
+            tapCommands.add(command);
+        }
+
         private void addId() {
             if (creators.isEmpty()) {
                 addTaps();
@@ -2287,6 +2711,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             signalMonitors.clear();
             eventConfig= null;
 
+            for(byte[] it: tapCommands) {
+                conn.sendCommand(false, it);
+            }
+            tapCommands.clear();
             eventCommandsCheck();
         }
 
@@ -2301,12 +2729,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private final HashMap<ResponseHeader, ResponseProcessor> responses;
 
     ///< General class variables
+    private Version firmwareVersion;
     private final Connection conn;
     private final HashMap<Byte, ModuleInfo> moduleInfo= new HashMap<>();
     private Logging.DownloadHandler downloadHandler;
     private float notifyProgress= 1.0f;
     private long nLogEntries;
-    private ReferenceTick logReferenceTick= null;
+    private ReferenceTick latestTick;
+    private final Map<Byte, Long> lastTimestamp= new HashMap<>();
+    private final Map<Byte, ReferenceTick> logReferenceTicks= new HashMap<>();
     private final AtomicBoolean commitRoutes= new AtomicBoolean(false);
     private final Queue<RouteHandler> pendingRoutes= new LinkedList<>();
     private final Map<ResponseHeader, RouteManager.MessageHandler> responseProcessors= new ConcurrentHashMap<>();
@@ -2368,21 +2799,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 return null;
             }
         });
-        responses.put(new ResponseHeader(LoggingRegister.TIME), new ResponseProcessor() {
-            @Override
-            public Response process(byte[] response) {
-                final Calendar now= Calendar.getInstance();
-                final long tick= ByteBuffer.wrap(response, 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
-
-                logReferenceTick= new ReferenceTick() {
-                    @Override public long tickCount() { return tick; }
-                    @Override public Calendar timestamp() { return now; }
-                };
-
-                readRegister(LoggingRegister.LENGTH);
-                return null;
-            }
-        });
         responses.put(new ResponseHeader(LoggingRegister.LENGTH), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
@@ -2417,13 +2833,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             @Override
             public Response process(byte[] response) {
                 ByteBuffer buffer= ByteBuffer.wrap(response, 2, response.length - 2).order(ByteOrder.LITTLE_ENDIAN);
-                final long nEntriesLeft;
-
-                if (response.length > 4) {
-                    nEntriesLeft= buffer.getInt() & 0xffffffffL;
-                } else {
-                    nEntriesLeft= buffer.getShort() & 0xffff;
-                }
+                final long nEntriesLeft= (response.length > 4) ? buffer.getInt() & 0xffffffffL : buffer.getShort() & 0xffff;
 
                 if (downloadHandler != null) {
                     conn.executeTask(new Runnable() {
@@ -2462,7 +2872,34 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 } catch (NullPointerException ex) {
                     return null;
                 } catch (Exception ex) {
-                    throw new RuntimeException("Cannot create a message processor for filter output: " + Arrays.toString(response), ex);
+                    throw new RuntimeException("Cannot create a message processor for filter: " + Arrays.toString(response), ex);
+                }
+            }
+        });
+        responses.put(new ResponseHeader(DataProcessorRegister.STATE), new ResponseProcessor() {
+            @Override
+            public Response process(byte[] response) {
+                try {
+                    byte[] respBody = new byte[response.length - 3];
+                    System.arraycopy(response, 3, respBody, 0, respBody.length);
+                    ResponseHeader header = new ResponseHeader(response[0], response[1], response[2]);
+
+                    if (bmi160AccMessageClasses.contains(dataProcMsgClasses.get(header))) {
+                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
+                        return new Response((Message) cTor.newInstance(respBody, bmi160AccRange.scale()), header);
+                    }
+
+                    if (bmi160GyroMessageClasses.contains(dataProcMsgClasses.get(header))) {
+                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
+                        return new Response((Message) cTor.newInstance(respBody, bmi160GyroRange.scale()), header);
+                    }
+
+                    Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class);
+                    return new Response((Message) cTor.newInstance(respBody), header);
+                } catch (NullPointerException ex) {
+                    return null;
+                } catch (Exception ex) {
+                    throw new RuntimeException("Cannot create a message processor for filter state: " + Arrays.toString(response), ex);
                 }
             }
         });
@@ -2536,7 +2973,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             public Response process(byte[] response) {
                 ibeaconUuid= new UUID(ByteBuffer.wrap(response, 10, 8).order(ByteOrder.LITTLE_ENDIAN).getLong(),
                         ByteBuffer.wrap(response, 2, 8).order(ByteOrder.LITTLE_ENDIAN).getLong());
-                readRegister(IBeaconRegister.MAJOR);
+                readRegister(IBeaconRegister.MAJOR, false);
                 return null;
             }
         });
@@ -2544,7 +2981,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             @Override
             public Response process(byte[] response) {
                 ibeaconMajor = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                readRegister(IBeaconRegister.MINOR);
+                readRegister(IBeaconRegister.MINOR, false);
                 return null;
             }
         });
@@ -2552,7 +2989,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             @Override
             public Response process(byte[] response) {
                 ibeaconMinor = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                readRegister(IBeaconRegister.RX_POWER);
+                readRegister(IBeaconRegister.RX_POWER, false);
                 return null;
             }
         });
@@ -2560,7 +2997,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             @Override
             public Response process(byte[] response) {
                 ibeaconRxPower = response[2];
-                readRegister(IBeaconRegister.TX_POWER);
+                readRegister(IBeaconRegister.TX_POWER, false);
                 return null;
             }
         });
@@ -2568,7 +3005,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             @Override
             public Response process(byte[] response) {
                 ibeaconTxPower = response[2];
-                readRegister(IBeaconRegister.PERIOD);
+                readRegister(IBeaconRegister.PERIOD, false);
                 return null;
             }
         });
@@ -2627,7 +3064,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 } catch (UnsupportedEncodingException e) {
                     advName= new String(respBody);
                 }
-                readRegister(SettingsRegister.ADVERTISING_INTERVAL);
+                readRegister(SettingsRegister.ADVERTISING_INTERVAL, false);
                 return null;
             }
         });
@@ -2635,7 +3072,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             @Override
             public Response process(byte[] response) {
                 advTxPower= response[2];
-                readRegister(SettingsRegister.SCAN_RESPONSE);
+                readRegister(SettingsRegister.SCAN_RESPONSE, false);
                 return null;
             }
         });
@@ -2715,28 +3152,42 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     }
 
     private void processLogData(byte[] logData) {
-        final byte logId= (byte) (logData[0] & 0xf);
-        ResponseHeader header= new ResponseHeader(LoggingRegister.READOUT_NOTIFY, logId);
-
+        final byte logId= (byte) (logData[0] & 0x1f), resetUid= (byte) ((logData[0] & 0xe0) >> 5);
+        ReferenceTick reference= logReferenceTicks.containsKey(resetUid) ? logReferenceTicks.get(resetUid) : latestTick;
         long tick= ByteBuffer.wrap(logData, 1, 4).order(ByteOrder.LITTLE_ENDIAN).getInt() & 0xffffffffL;
-        final Calendar timestamp= (Calendar) logReferenceTick.timestamp().clone();
-        timestamp.add(Calendar.MILLISECOND, (int) ((tick - logReferenceTick.tickCount()) * TICK_TIME_STEP));
-        final byte[] logEntryData= Arrays.copyOfRange(logData, 5, logData.length);
+        final Calendar timestamp= (Calendar) reference.timestamp().clone();
+        timestamp.add(Calendar.MILLISECOND, (int) ((tick - reference.tickCount()) * TICK_TIME_STEP));
 
-        if (dataLoggers.containsKey(header)) {
-            dataLoggers.get(header).processLogMessage(logId, timestamp, logEntryData);
-        } else {
-            if (downloadHandler != null) {
-                conn.executeTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        downloadHandler.receivedUnknownLogEntry(logId, timestamp, logEntryData);
-                    }
-                });
+        if (!lastTimestamp.containsKey(logId) || lastTimestamp.get(logId) < tick) {
+            lastTimestamp.put(logId, tick);
+
+            ResponseHeader header= new ResponseHeader(LoggingRegister.READOUT_NOTIFY, logId);
+            final byte[] logEntryData= Arrays.copyOfRange(logData, 5, logData.length);
+
+            if (dataLoggers.containsKey(header)) {
+                dataLoggers.get(header).processLogMessage(logId, timestamp, logEntryData);
+            } else {
+                if (downloadHandler != null) {
+                    conn.executeTask(new Runnable() {
+                        @Override
+                        public void run() {
+                            downloadHandler.receivedUnknownLogEntry(logId, timestamp, logEntryData);
+                        }
+                    });
+                }
             }
         }
     }
 
+    public void receivedLoggingTick(byte[] response) {
+        final long tick= ByteBuffer.wrap(response, 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt() & 0xffffffffL;
+        byte resetUid= (response.length > 6) ? response[6] : -1;
+
+        latestTick= new ReferenceTick(resetUid, tick, Calendar.getInstance());
+        if (resetUid != -1) {
+            logReferenceTicks.put(latestTick.resetUid(), latestTick);
+        }
+    }
     public void receivedModuleInfo(ModuleInfo info) {
         moduleInfo.put(info.id(), info);
 
@@ -2826,8 +3277,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             byte[] respBody = new byte[response.length - 2];
                             System.arraycopy(response, 2, respBody, 0, respBody.length);
 
-                            return new Response(new Bmi160ThreeAxisMessage(respBody,
-                                    bmi160AccRange.scale()),
+                            return new Response(new Bmi160ThreeAxisMessage(respBody, bmi160AccRange.scale()),
                                     new ResponseHeader(response[0], response[1]));
                         }
                     });
@@ -2837,8 +3287,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             byte[] respBody = new byte[response.length - 2];
                             System.arraycopy(response, 2, respBody, 0, respBody.length);
 
-                            return new Response(new Bmi160ThreeAxisMessage(respBody,
-                                    bmi160GyroRange.scale()),
+                            return new Response(new Bmi160ThreeAxisMessage(respBody, bmi160GyroRange.scale()),
                                     new ResponseHeader(response[0], response[1]));
                         }
                     });
@@ -2867,6 +3316,42 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             System.arraycopy(response, 2, respBody, 0, respBody.length);
 
                             return new Response(new Bmi160OrientationMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.FLAT_INTERRUPT), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmi160FlatMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.STEP_DETECTOR_INTERRUPT), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new UnsignedMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.STEP_COUNTER_DATA), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new UnsignedMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmi160LowHighMessage(respBody), new ResponseHeader(response[0], response[1]));
                         }
                     });
                     break;
@@ -2916,12 +3401,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         public Response process(byte[] response) {
                             advInterval= ((response[2] & 0xff) | (response[3] << 8)) & 0xffff;
                             advTimeout= response[4];
-                            readRegister(SettingsRegister.TX_POWER);
+                            readRegister(SettingsRegister.TX_POWER, false);
                             return null;
                         }
                     });
                     break;
                 case 1:
+                case 2:
                     responses.put(new ResponseHeader(SettingsRegister.ADVERTISING_INTERVAL), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
@@ -2929,7 +3415,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                             advInterval= (int) (intervalBytes * SettingsImpl.AD_INTERVAL_STEP);
                             advTimeout= response[4];
-                            readRegister(SettingsRegister.TX_POWER);
+                            readRegister(SettingsRegister.TX_POWER, false);
                             return null;
                         }
                     });
@@ -2970,9 +3456,23 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     });
                     break;
             }
+        } else if (info.id() == InfoRegister.LOGGING.moduleOpcode()) {
+            switch(info.revision()) {
+                case Constant.EXTENDED_LOGGING_REVISION:
+                    responses.put(new ResponseHeader(LoggingRegister.READOUT_PAGE_COMPLETED), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            writeRegister(LoggingRegister.READOUT_PAGE_CONFIRM);
+                            return null;
+                        }
+                    });
+                    break;
+            }
         }
     }
-
+    public void setFirmwareVersion(Version firmwareVersion) {
+        this.firmwareVersion= firmwareVersion;
+    }
     public void wroteCommand(byte[] cmd) {
         if (cmd[0] == InfoRegister.MACRO.moduleOpcode() &&
                 (cmd[1] == MacroRegister.BEGIN.opcode() || cmd[1] == MacroRegister.END.opcode() || cmd[1] == MacroRegister.ADD_COMMAND.opcode())) {
@@ -2980,6 +3480,36 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             if (nExpectedMacroCmds == 0) {
                 conn.setResultReady(macroIdResults.poll(), macroIds.poll(), null);
             }
+        }
+    }
+
+    public JSONObject serializePersistentState() {
+        JSONObject persistentState= new JSONObject();
+
+        try {
+            JSONArray logTickStates= new JSONArray();
+            for(ReferenceTick it: logReferenceTicks.values()) {
+                logTickStates.put(it.serialize());
+            }
+            persistentState.put(JSON_FIELD_LOG_REFERENCE_TICKS, logTickStates);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return persistentState;
+    }
+
+    public void deserializePersistentState(JSONObject jsonState) {
+        try {
+            JSONArray logTickStates = jsonState.optJSONArray(JSON_FIELD_LOG_REFERENCE_TICKS);
+            if (logTickStates != null) {
+                for (int j = 0; j < logTickStates.length(); j++) {
+                    ReferenceTick tick = new ReferenceTick(logTickStates.getJSONObject(j));
+                    logReferenceTicks.put(tick.resetUid(), tick);
+                }
+            }
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -3166,7 +3696,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private class GsrImpl implements Gsr {
         @Override
         public void readConductance(byte channel) {
-            readRegister(GsrRegister.CONDUCTANCE, channel);
+            readConductance(channel, false);
+        }
+
+        @Override
+        public void readConductance(byte channel, boolean silent) {
+            readRegister(GsrRegister.CONDUCTANCE, silent, channel);
         }
 
         @Override
@@ -3201,7 +3736,17 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public DataSignal routeData(byte channel) {
-            return new RouteBuilder().fromGsr(channel);
+            return new RouteBuilder().fromGsr(channel, ReadType.NORMAL);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromChannel(byte channel, boolean silent) {
+                    return new RouteBuilder().fromGsr(channel, silent ? ReadType.SILENT : ReadType.NORMAL);
+                }
+            };
         }
     }
     private class LedImpl implements Led {
@@ -3283,19 +3828,29 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private class GpioImpl implements Gpio {
         @Override
         public void readAnalogIn(byte pin, AnalogReadMode mode) {
+            readAnalogIn(pin, mode, false);
+        }
+
+        @Override
+        public void readAnalogIn(byte pin, AnalogReadMode mode, boolean silent) {
             switch (mode) {
                 case ABS_REFERENCE:
-                    readRegister(GpioRegister.READ_AI_ABS_REF, pin);
+                    readRegister(GpioRegister.READ_AI_ABS_REF, silent, pin);
                     break;
                 case ADC:
-                    readRegister(GpioRegister.READ_AI_ADC, pin);
+                    readRegister(GpioRegister.READ_AI_ADC, silent, pin);
                     break;
             }
         }
 
         @Override
-        public void readDigitalIn(byte pin) {
-            readRegister(GpioRegister.READ_DI, pin);
+         public void readDigitalIn(byte pin) {
+            readDigitalIn(pin, false);
+        }
+
+        @Override
+        public void readDigitalIn(byte pin, boolean silent) {
+            readRegister(GpioRegister.READ_DI, silent, pin);
         }
 
         @Override
@@ -3348,12 +3903,22 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public DataSignal fromDigitalIn(byte pin) {
-                    return new RouteBuilder().fromDigitalIn(pin);
+                    return fromDigitalIn(pin, false);
                 }
 
                 @Override
                 public DataSignal fromDigitalInChange(byte pin) {
                     return new RouteBuilder().fromGpioPinNotify(pin);
+                }
+
+                @Override
+                public DataSignal fromAnalogIn(byte pin, AnalogReadMode mode, boolean silent) {
+                    return new RouteBuilder().fromAnalogGpio(pin, mode, silent ? ReadType.SILENT : ReadType.NORMAL);
+                }
+
+                @Override
+                public DataSignal fromDigitalIn(byte pin, boolean silent) {
+                    return new RouteBuilder().fromDigitalIn(pin, silent ? ReadType.SILENT : ReadType.NORMAL);
                 }
 
                 @Override
@@ -3363,7 +3928,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public DataSignal fromAnalogIn(byte pin, AnalogReadMode mode) {
-                    return new RouteBuilder().fromAnalogGpio(pin, mode);
+                    return fromAnalogIn(pin, mode, false);
                 }
             };
         }
@@ -3425,6 +3990,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         private byte nExpectedCommands= 0;
         private final HashSet<Byte> eventCmdIds;
         private boolean active= true;
+        private final Queue<byte[]> taskCommands= new LinkedList<>();
 
         private Timer.Task task;
 
@@ -3493,6 +4059,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
+        public void queueCommand(byte[] command) {
+            taskCommands.add(command);
+        }
+
+        @Override
         public void receivedCommandId(byte id) {
             eventCmdIds.add(id);
             nExpectedCommands--;
@@ -3500,8 +4071,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             if (nExpectedCommands == 0) {
                 currEventListener = null;
 
-                updatePendingRoutes();
                 conn.setResultReady(timerControllerResults.poll(), this, null);
+                updatePendingRoutes();
             }
         }
 
@@ -3524,10 +4095,14 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             }, EVENT_COMMAND_TIME);
 
             currEventListener = this;
-
             eventConfig= timerEventConfig;
             task.commands();
             eventConfig= null;
+
+            for(byte[] it: taskCommands) {
+                conn.sendCommand(false, it);
+            }
+            taskCommands.clear();
         }
 
         @Override
@@ -3596,22 +4171,29 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             DefaultMetaWearBoard.this.notifyProgress= notifyProgress;
             downloadHandler= handler;
 
+            if (moduleInfo.get(InfoRegister.LOGGING.moduleOpcode()).revision() == Constant.EXTENDED_LOGGING_REVISION) {
+                writeRegister(LoggingRegister.READOUT_PAGE_COMPLETED, (byte) 1);
+            }
             writeRegister(LoggingRegister.READOUT_NOTIFY, (byte) 1);
             if (handler != null) {
                 writeRegister(LoggingRegister.READOUT_PROGRESS, (byte) 1);
             }
-            readRegister(LoggingRegister.TIME);
+            readRegister(LoggingRegister.LENGTH, false);
 
             return result;
         }
 
         @Override
         public void clearEntries() {
-            writeRegister(LoggingRegister.REMOVE_ENTRIES, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff);
+            clearEntries(0xffffffff);
         }
 
         @Override
         public void clearEntries(long nEntries) {
+            if (moduleInfo.get(InfoRegister.LOGGING.moduleOpcode()).revision() == Constant.EXTENDED_LOGGING_REVISION) {
+                writeRegister(LoggingRegister.READOUT_PAGE_COMPLETED, (byte) 1);
+            }
+
             ByteBuffer buffer= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt((int) nEntries);
             writeRegister(LoggingRegister.REMOVE_ENTRIES, buffer.array());
         }
@@ -3731,7 +4313,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     conn.setResultReady(result, null, new TimeoutException(String.format("IBeacon config read timed out after %dms", READ_CONFIG_TIMEOUT)));
                 }
             }, READ_CONFIG_TIMEOUT);
-            readRegister(IBeaconRegister.UUID);
+            readRegister(IBeaconRegister.UUID, false);
             return result;
         }
     }
@@ -3870,7 +4452,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         conn.setResultReady(result, null, new TimeoutException(String.format("Reading connection parameters timed out after %dms", READ_CONFIG_TIMEOUT)));
                     }
                 }, READ_CONFIG_TIMEOUT);
-                readRegister(SettingsRegister.CONNECTION_PARAMETERS);
+                readRegister(SettingsRegister.CONNECTION_PARAMETERS, false);
             }
             return result;
         }
@@ -3879,8 +4461,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         public ConfigEditor configure() {
             return new ConfigEditor() {
                 private String newAdvName= null;
-                private Short newAdvInterval= 417;
-                private Byte newAdvTimeout= 0, newAdvTxPower= null;
+                private Short newAdvInterval= null;
+                private Byte newAdvTimeout= null, newAdvTxPower= null;
                 private byte[] newAdvResponse= null;
 
                 @Override
@@ -3891,11 +4473,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public ConfigEditor setAdInterval(short interval, byte timeout) {
-                    if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() == 1) {
-                        newAdvInterval= (short)((interval & 0xffff) / AD_INTERVAL_STEP);
-                    } else {
-                        newAdvInterval = interval;
-                    }
+                    newAdvInterval= interval;
                     newAdvTimeout = timeout;
                     return this;
                 }
@@ -3922,8 +4500,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
                     }
 
-                    writeRegister(SettingsRegister.ADVERTISING_INTERVAL, (byte) (newAdvInterval & 0xff),
-                            (byte) ((newAdvInterval >> 8) & 0xff), newAdvTimeout);
+                    if (newAdvInterval != null) {
+                        if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() == 1) {
+                            newAdvInterval = (short) ((newAdvInterval & 0xffff) / AD_INTERVAL_STEP);
+                        }
+                        writeRegister(SettingsRegister.ADVERTISING_INTERVAL, (byte) (newAdvInterval & 0xff),
+                                (byte) ((newAdvInterval >> 8) & 0xff), newAdvTimeout);
+                    }
 
                     if (newAdvTxPower != null) {
                         writeRegister(SettingsRegister.TX_POWER, newAdvTxPower);
@@ -3957,7 +4540,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     conn.setResultReady(result, null, new TimeoutException(String.format("Advertisement config read timed out after %dms", READ_CONFIG_TIMEOUT)));
                 }
             }, READ_CONFIG_TIMEOUT);
-            readRegister(SettingsRegister.DEVICE_NAME);
+            readRegister(SettingsRegister.DEVICE_NAME, false);
             return result;
         }
 
@@ -3979,6 +4562,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         @Override
         public void initiateBonding() {
             writeRegister(SettingsRegister.INIT_BOND);
+        }
+
+        @Override
+        public EventSelector handleEvent() {
+            return new EventSelector() {
+                @Override
+                public DataSignal fromDisconnect() {
+                    return new RouteBuilder().fromSettingsDisconnected();
+                }
+            };
         }
     }
 
@@ -4010,13 +4603,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     conn.setResultReady(result, null, new TimeoutException(String.format("I2C read timed out after %dms", READ_DATA_TIMEOUT)));
                 }
             }, READ_DATA_TIMEOUT);
-            readRegister(I2CRegister.READ_WRITE, deviceAddr, registerAddr, (byte) 0xff, numBytes);
+            readRegister(I2CRegister.READ_WRITE, false, deviceAddr, registerAddr, (byte) 0xff, numBytes);
             return result;
         }
 
         @Override
         public void readData(byte deviceAddr, byte registerAddr, byte numBytes, byte id) {
-            readRegister(I2CRegister.READ_WRITE, deviceAddr, registerAddr, id, numBytes);
+            readRegister(I2CRegister.READ_WRITE, false, deviceAddr, registerAddr, id, numBytes);
         }
 
         @Override
@@ -4597,35 +5190,53 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
     }
 
+    private Bmi160AccelerometerImpl bmi160AccModule= null;
+    private final byte[] bmi160LowHighConfig= new byte[] {0x7, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0};
     private Bmi160Accelerometer.AccRange bmi160AccRange= Bmi160Accelerometer.AccRange.AR_2G;
     private final byte[] bmi160DataSampling= new byte[] {
             (byte) (0x20 | Bmi160Accelerometer.OutputDataRate.ODR_100_HZ.bitMask()),
             Bmi160Accelerometer.AccRange.AR_2G.bitMask()
     };
     private class Bmi160AccelerometerImpl implements Bmi160Accelerometer {
-        private final float BMI160_ORIENT_HYS_G_PER_STEP= 0.0625f;
+        private static final float BMI160_ORIENT_HYS_G_PER_STEP= 0.0625f, THETA_STEP= (float) (44.8/63.f);
+        private final float[] HIGH_THRESHOLD_STEPS= {
+                0.00781f, 0.01563f, 0.03125f, 0.0625f
+        }, HIGH_HYSTERESIS_STEPS= {
+                0.125f, 0.250f, 0.5f, 1f
+        };
+
+        private Float highHysteresis= null, highThreshold= null;
 
         @Override
         public SamplingConfigEditor configureAxisSampling() {
             return new SamplingConfigEditor() {
+                private AccRange newAccRange= null;
+                private OutputDataRate newOdr= null;
+
                 @Override
                 public SamplingConfigEditor setFullScaleRange(AccRange range) {
-                    bmi160AccRange= range;
-                    bmi160DataSampling[1]&= 0xf0;
-                    bmi160DataSampling[1]|= range.bitMask();
+                    newAccRange= range;
                     return this;
                 }
 
                 @Override
                 public SamplingConfigEditor setOutputDataRate(OutputDataRate odr) {
-                    bmi160DataSampling[0]&= 0xf0;
-                    bmi160DataSampling[0]|= odr.bitMask();
+                    newOdr= odr;
                     return this;
                 }
 
                 @Override
                 public void commit() {
-                    writeRegister(Bmi160AccelerometerRegister.DATA_CONFIG, bmi160DataSampling);
+                    if (newAccRange != null) {
+                        bmi160AccRange= newAccRange;
+                        bmi160DataSampling[1]&= 0xf0;
+                        bmi160DataSampling[1]|= newAccRange.bitMask();
+                    }
+
+                    if (newOdr != null) {
+                        bmi160DataSampling[0]&= 0xf0;
+                        bmi160DataSampling[0]|= newOdr.bitMask();
+                    }
                 }
             };
         }
@@ -4638,7 +5249,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             bmi160AccRange= Bmi160Accelerometer.AccRange.values()[closest];
             bmi160DataSampling[1]&= 0xf0;
             bmi160DataSampling[1]|= bmi160AccRange.bitMask();
-            writeRegister(Bmi160AccelerometerRegister.DATA_CONFIG, bmi160DataSampling);
         }
 
         @Override
@@ -4647,7 +5257,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
             bmi160DataSampling[0]&= 0xf0;
             bmi160DataSampling[0]|= Bmi160Accelerometer.OutputDataRate.values()[closest].bitMask();
-            writeRegister(Bmi160AccelerometerRegister.DATA_CONFIG, bmi160DataSampling);
         }
 
         @Override
@@ -4661,9 +5270,50 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
-        public void start() {
-            writeRegister(Bmi160AccelerometerRegister.POWER_MODE, (byte) 0x1);
+        public void enableFlatDetection() {
+            writeRegister(Bmi160AccelerometerRegister.FLAT_INTERRUPT_ENABLE, (byte) 1, (byte) 0);
         }
+
+        @Override
+        public void disableFlatDetection() {
+            writeRegister(Bmi160AccelerometerRegister.FLAT_INTERRUPT_ENABLE, (byte) 0, (byte) 1);
+        }
+
+        @Override
+        public void start() {
+            bmi160DataSampling[0]&= 0xf;
+            bmi160DataSampling[0]|= 0x20;
+            start((byte) 1);
+        }
+
+        @Override
+        public void startLowPower(byte size) {
+            byte power= 0;
+            while(size != 0) {
+                size = (byte) (size >> 1);
+                power++;
+            }
+            bmi160DataSampling[0]&= 0xf;
+            bmi160DataSampling[0]|= (power << 4) | 0x80;
+
+            start((byte) 2);
+        }
+
+        private void start(byte powerMode) {
+            if (highHysteresis != null) {
+                bmi160LowHighConfig[2]|= ((int) (highHysteresis / HIGH_HYSTERESIS_STEPS[bmi160AccRange.ordinal()]) & 0x3) << 6;
+            }
+
+            if (highThreshold != null) {
+                bmi160LowHighConfig[4]= (byte) (highThreshold / HIGH_THRESHOLD_STEPS[bmi160AccRange.ordinal()]);
+            }
+
+            writeRegister(Bmi160AccelerometerRegister.DATA_CONFIG, bmi160DataSampling);
+            writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_CONFIG, bmi160LowHighConfig);
+            writeRegister(Bmi160AccelerometerRegister.POWER_MODE, powerMode);
+        }
+
+        @Override
         public void stop() {
             writeRegister(Bmi160AccelerometerRegister.POWER_MODE, (byte) 0x0);
         }
@@ -4694,6 +5344,26 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 @Override
                 public DataSignal fromOrientation() {
                     return new RouteBuilder().fromBmi160Orientation();
+                }
+
+                @Override
+                public DataSignal fromFlat() {
+                    return new RouteBuilder().fromBmi160Flat();
+                }
+
+                @Override
+                public DataSignal fromStepDetection() {
+                    return new RouteBuilder().fromBmi160StepDetection();
+                }
+
+                @Override
+                public DataSignal fromStepCounter(boolean silent) {
+                    return new RouteBuilder().fromBmi160StepCounter(silent ? ReadType.SILENT : ReadType.NORMAL);
+                }
+
+                @Override
+                public DataSignal fromLowHigh() {
+                    return new RouteBuilder().fromBmi160LowHigh();
                 }
             };
         }
@@ -4729,6 +5399,193 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     writeRegister(Bmi160AccelerometerRegister.ORIENT_CONFIG, intOrient);
                 }
             };
+        }
+
+        public FlatDetectionConfigEditor configureFlatDetection() {
+            return new FlatDetectionConfigEditor() {
+                private byte intFlat[]= new byte[] {0x08, 0x11};
+
+                @Override
+                public FlatDetectionConfigEditor setHoldTime(FlatHoldTime time) {
+                    intFlat[1]&= 0xcf;
+                    intFlat[1]|= (time.ordinal() << 4);
+                    return this;
+                }
+
+                @Override
+                public FlatDetectionConfigEditor setFlatTheta(float angle) {
+                    intFlat[0]&= 0xc0;
+                    intFlat[0]|= ((int) (angle / THETA_STEP) & 0x3f);
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(Bmi160AccelerometerRegister.FLAT_CONFIG, intFlat);
+                }
+            };
+        }
+
+        @Override
+        public StepDetectionConfigEditor configureStepDetection() {
+            return new StepDetectionConfigEditor() {
+                private byte[] stepCnt= new byte[] {0x15, 0x3};
+
+                @Override
+                public StepDetectionConfigEditor setSensitivity(StepSensitivity sensitivity) {
+                    stepCnt[1]&= 0xf8;
+                    switch (sensitivity) {
+                        case NORMAL:
+                            stepCnt[0]= 0x15;
+                            stepCnt[1]|= 0x3;
+                            break;
+                        case SENSITIVE:
+                            stepCnt[0]= 0x2d;
+                            break;
+                        case ROBUST:
+                            stepCnt[0]= 0x1d;
+                            stepCnt[1]|= 0x7;
+                            break;
+                    }
+                    return this;
+                }
+
+                @Override
+                public StepDetectionConfigEditor enableStepCounter() {
+                    stepCnt[1]|= 0x08;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(Bmi160AccelerometerRegister.STEP_DETECTOR_CONFIG, stepCnt);
+                }
+            };
+        }
+
+        @Override
+        public void resetStepCounter() {
+            writeRegister(Bmi160AccelerometerRegister.STEP_COUNTER_RESET);
+        }
+
+        @Override
+        public void readStepCounter(boolean silent) {
+            readRegister(Bmi160AccelerometerRegister.STEP_COUNTER_DATA, silent);
+        }
+
+        @Override
+        public void enableStepDetection() {
+            writeRegister(Bmi160AccelerometerRegister.STEP_DETECTOR_INTERRUPT_ENABLE, (byte) 1, (byte) 0);
+        }
+
+        @Override
+        public void disableStepDetection() {
+            writeRegister(Bmi160AccelerometerRegister.STEP_DETECTOR_INTERRUPT_ENABLE, (byte) 0, (byte) 1);
+        }
+
+        @Override
+        public LowHighDetectionConfigEditor configureLowHighDetection() {
+            return new LowHighDetectionConfigEditor() {
+                private final float DURATION_STEP = 2.5f, LOW_THRESHOLD_STEP= 0.00781f, LOW_HYSTERESIS_STEP= 0.125f;
+
+                private LowGMode lowGMode= null;
+                private Integer lowDuration= null, highDuration= null;
+                private Float lowThreshold= null, lowHysteresis= null, newHighThreshold= null, newHighHysteresis= null;
+
+                @Override
+                public LowHighDetectionConfigEditor setLowDuration(int duration) {
+                    lowDuration= duration;
+                    return this;
+                }
+
+                @Override
+                public LowHighDetectionConfigEditor setLowThreshold(float threshold) {
+                    lowThreshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public LowHighDetectionConfigEditor setLowHysteresis(float hysteresis) {
+                    lowHysteresis= hysteresis;
+                    return this;
+                }
+
+                @Override
+                public LowHighDetectionConfigEditor setLowGMode(LowGMode mode) {
+                    lowGMode= mode;
+                    return this;
+                }
+
+                @Override
+                public LowHighDetectionConfigEditor setHighDuration(int duration) {
+                    highDuration= duration;
+                    return this;
+                }
+
+                @Override
+                public LowHighDetectionConfigEditor setHighThreshold(float threshold) {
+                    newHighThreshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public LowHighDetectionConfigEditor setHighHysteresis(float hysteresis) {
+                    newHighHysteresis= hysteresis;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (lowDuration != null) {
+                        bmi160LowHighConfig[0]= (byte) ((lowDuration / DURATION_STEP) - 1);
+                    }
+                    if (lowThreshold != null) {
+                        bmi160LowHighConfig[1]= (byte) (lowThreshold / LOW_THRESHOLD_STEP);
+                    }
+                    if (newHighHysteresis != null) {
+                        highHysteresis= newHighHysteresis;
+                    }
+                    if (lowGMode != null) {
+                        bmi160LowHighConfig[2]&= 0xfb;
+                        bmi160LowHighConfig[2]|= (lowGMode.ordinal() << 2);
+                    }
+                    if (lowHysteresis != null) {
+                        bmi160LowHighConfig[2]&= 0xfc;
+                        bmi160LowHighConfig[2]|= ((byte) (lowHysteresis / LOW_HYSTERESIS_STEP) & 0x3);
+                    }
+                    if (highDuration != null) {
+                        bmi160LowHighConfig[3]= (byte) ((highDuration / DURATION_STEP) - 1);
+                    }
+                    if (newHighThreshold != null) {
+                        highThreshold= newHighThreshold;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public void enableLowHighDetection(boolean lowG, boolean highGx, boolean highGy, boolean highGz) {
+            byte enableMask= 0;
+
+            if (lowG) {
+                enableMask|= 0x8;
+            }
+            if (highGx) {
+                enableMask|= 0x1;
+            }
+            if (highGy) {
+                enableMask|= 0x2;
+            }
+            if (highGz) {
+                enableMask|= 0x4;
+            }
+
+            writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT_ENABLE, enableMask, (byte) 0);
+        }
+
+        @Override
+        public void disableLowHighDetection() {
+            writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT_ENABLE, (byte) 0, (byte) 0x1f);
         }
     }
 
@@ -4887,7 +5744,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private class SingleChannelTemperatureImpl implements SingleChannelTemperature {
         @Override
         public void readTemperature() {
-            readRegister(TemperatureRegister.VALUE);
+            readTemperature(false);
+        }
+
+        @Override
+        public void readTemperature(boolean silent) {
+            readRegister(TemperatureRegister.VALUE, silent);
         }
 
         @Override
@@ -4895,7 +5757,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             return new SourceSelector() {
                 @Override
                 public DataSignal fromSensor() {
-                    return new RouteBuilder().fromSingleChannelTemp();
+                    return fromSensor(false);
+                }
+
+                @Override
+                public DataSignal fromSensor(boolean silent) {
+                    return new RouteBuilder().fromSingleChannelTemp(silent ? ReadType.SILENT : ReadType.NORMAL);
                 }
             };
         }
@@ -4920,7 +5787,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public void readTemperature(Source src) {
-            readRegister(MultiChannelTempRegister.TEMPERATURE, src.channel());
+            readTemperature(src, false);
+        }
+
+        @Override
+        public void readTemperature(Source src, boolean silent) {
+            readRegister(MultiChannelTempRegister.TEMPERATURE, silent, src.channel());
         }
 
         @Override
@@ -4929,16 +5801,31 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
+        public void readTemperature(boolean silent) {
+            readTemperature(tempSources.get(0), silent);
+        }
+
+        @Override
         public SourceSelector routeData() {
             return new SourceSelector() {
                 @Override
                 public DataSignal fromSource(Source src) {
-                    return new RouteBuilder().fromMultiChannelTemp(src);
+                    return fromSource(src, false);
+                }
+
+                @Override
+                public DataSignal fromSource(Source src, boolean silent) {
+                    return new RouteBuilder().fromMultiChannelTemp(src, silent ? ReadType.SILENT : ReadType.NORMAL);
                 }
 
                 @Override
                 public DataSignal fromSensor() {
-                    return new RouteBuilder().fromMultiChannelTemp(tempSources.get(0));
+                    return fromSensor(false);
+                }
+
+                @Override
+                public DataSignal fromSensor(boolean silent) {
+                    return new RouteBuilder().fromMultiChannelTemp(tempSources.get(0), silent ? ReadType.SILENT : ReadType.NORMAL);
                 }
             };
         }
@@ -5071,6 +5958,26 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
     }
+
+    private class DataProcessorModuleImpl implements DataProcessorModule {
+        @Override
+        public void readState(String key, boolean silent) {
+            if (dataProcessors.containsKey(key) && dataProcessors.get(key) instanceof RouteBuilder.ProcessedDataSignal) {
+                readRegister(DataProcessorRegister.STATE, silent, ((RouteBuilder.ProcessedDataSignal) dataProcessors.get(key)).header.id);
+            }
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromState(String key, boolean silent) {
+                    return new RouteBuilder().fromDataProcessorState(key, silent);
+                }
+            };
+        }
+    }
+
     @Override
     public <T extends Module> T getModule(Class<T> moduleClass) throws UnsupportedModuleException {
         if (inMetaBootMode()) {
@@ -5094,7 +6001,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     }
                     return moduleClass.cast(mma8452qModule);
                 case Constant.BMI160_IMPLEMENTATION:
-                    return moduleClass.cast(new Bmi160AccelerometerImpl());
+                    if (bmi160AccModule == null) {
+                        bmi160AccModule= new Bmi160AccelerometerImpl();
+                    }
+                    return moduleClass.cast(bmi160AccModule);
                 default:
                     throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
             }
@@ -5111,7 +6021,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
         if (moduleClass.equals(Bmi160Accelerometer.class)) {
             if (accelModuleinfo.present() && accelModuleinfo.implementation() == Constant.BMI160_IMPLEMENTATION) {
-                return moduleClass.cast(new Bmi160AccelerometerImpl());
+                if (bmi160AccModule == null) {
+                    bmi160AccModule= new Bmi160AccelerometerImpl();
+                }
+                return moduleClass.cast(bmi160AccModule);
             } else {
                 throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
             }
@@ -5272,6 +6185,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             return moduleClass.cast(new MacroImpl());
         }
 
+        if (moduleClass.equals(DataProcessorModule.class)) {
+            return moduleClass.cast(new DataProcessorModuleImpl());
+        }
+
         throw new UnsupportedModuleException("Unrecognized module class: \'" + moduleClass.toString() + "\'");
     }
 
@@ -5293,18 +6210,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 tempEntry[eventEntry.length + 1]= eventDestOffset;
                 eventEntry= tempEntry;
             }
-            conn.sendCommand(false, eventEntry);
+            currEventListener.queueCommand(eventEntry);
+            //conn.sendCommand(false, eventEntry);
 
             byte[] eventParameters= new byte[cmd.length];
             System.arraycopy(cmd, 2, eventParameters, 2, cmd.length - 2);
             eventParameters[0]= EventRegister.CMD_PARAMETERS.moduleOpcode();
             eventParameters[1]= EventRegister.CMD_PARAMETERS.opcode();
-            conn.sendCommand(false, eventParameters);
-
-            if (saveCommand) {
-                commands.add(eventEntry);
-                commands.add(eventParameters);
-            }
+            currEventListener.queueCommand(eventParameters);
+            //conn.sendCommand(false, eventParameters);
         } else {
             conn.sendCommand(false, cmd);
             if (saveCommand) {
@@ -5316,7 +6230,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private void writeRegister(Register register, byte ... parameters) {
         buildBlePacket(Registers.buildWriteCommand(register, parameters));
     }
-    private void readRegister(Register register, byte ... parameters) {
-        buildBlePacket(Registers.buildReadCommand(register, parameters));
+    private void readRegister(Register register, boolean silent, byte ... parameters) {
+        if (silent) {
+            buildBlePacket(Registers.buildSilentReadCommand(register, parameters));
+        } else {
+            buildBlePacket(Registers.buildReadCommand(register, parameters));
+        }
     }
 }

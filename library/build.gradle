@@ -31,8 +31,8 @@ android {
     defaultConfig {
         minSdkVersion 18
         targetSdkVersion 23
-        versionCode 29
-        versionName "2.2.0"
+        versionCode 30
+        versionName "2.3.0"
     }
     buildTypes {
         release {
@@ -44,4 +44,5 @@ android {
 
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
+    testCompile 'junit:junit:4.12'
 }

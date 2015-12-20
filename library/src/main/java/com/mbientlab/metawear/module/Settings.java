@@ -25,7 +25,9 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncOperation;
+import com.mbientlab.metawear.DataSignal;
 import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.RouteManager;
 
 /**
  * Configures Bluetooth LE advertisement settings
@@ -213,4 +215,10 @@ public interface Settings extends MetaWearBoard.Module {
          */
         void commit();
     }
+
+    interface EventSelector {
+        DataSignal fromDisconnect();
+    }
+
+    EventSelector handleEvent();
 }

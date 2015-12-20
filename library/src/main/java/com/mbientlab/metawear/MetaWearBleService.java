@@ -41,6 +41,7 @@ import android.util.Log;
 
 import com.mbientlab.metawear.impl.*;
 import com.mbientlab.metawear.impl.characteristic.InfoRegister;
+import com.mbientlab.metawear.impl.characteristic.LoggingRegister;
 import com.mbientlab.metawear.impl.characteristic.MacroRegister;
 import com.mbientlab.metawear.impl.characteristic.Register;
 import com.mbientlab.metawear.impl.characteristic.Registers;
@@ -50,6 +51,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -255,34 +257,14 @@ public class MetaWearBleService extends Service {
         }
 
         public void discoverModuleInfo() {
+            infoRegisters.clear();
             infoRegisters.addAll(Arrays.asList(InfoRegister.values()));
         }
 
         public void checkConnectionReady() {
             if (deviceInfoReady()) {
-                if (infoRegisters.isEmpty()) {
-                    try {
-                        SharedPreferences.Editor editor = deviceStates.edit();
-                        JSONObject newCachedState = new JSONObject();
-                        for(DevInfoCharacteristic it: DevInfoCharacteristic.values()) {
-                            newCachedState.put(it.key(), devInfoValues.get(it));
-                        }
-
-                        JSONObject newModuleState = new JSONObject();
-                        for (ModuleInfoImpl it : moduleInfo.values()) {
-                            newModuleState.put(JSONObject.numberToString(it.id()), it.serialize());
-                        }
-                        newCachedState.put("module_info", newModuleState);
-
-                        editor.putString(device.getAddress(), newCachedState.toString());
-                        editor.apply();
-                    } catch (JSONException ignored) {
-
-                    }
-
+                if (isMetaBoot) {
                     isReady.set(true);
-                    handlerThreadPool.removeCallbacks(connectionTimeoutHandler);
-
                     queueRunnable(new Runnable() {
                         @Override
                         public void run() {
@@ -291,6 +273,24 @@ public class MetaWearBleService extends Service {
                             }
                         }
                     });
+                } else if (infoRegisters.isEmpty()) {
+                    try {
+                        String cachedState= deviceStates.getString(device.getAddress(), "");
+
+                        if (!cachedState.isEmpty()) {
+                            JSONObject jsonCachedState = new JSONObject(cachedState);
+                            JSONObject persistentState = jsonCachedState.optJSONObject("persistent_state");
+
+                            if (persistentState != null) {
+                                mwBoards.get(device).deserializePersistentState(persistentState);
+                            }
+                        }
+                    } catch (JSONException e) {
+                        Log.w("MetaWear", "Cannot deserialize persistent state", e);
+                    }
+
+                    isReady.set(true);
+                    androidConn.queueCommand(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, Registers.buildReadCommand(LoggingRegister.TIME), true);
                 } else {
                     androidConn.queueCommand(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, Registers.buildReadCommand(infoRegisters.poll()), true);
                 }
@@ -709,8 +709,7 @@ public class MetaWearBleService extends Service {
             return gattConnectionStates.get(btDevice).isMetaBoot;
         }
 
-        @Override
-        public AsyncOperation<Void> updateFirmware(final DfuProgressHandler handler) {
+        private AsyncOperation<Void> updateFirmwareInner(final File firmwareHexPath, final DfuProgressHandler handler) {
             if (uploadingFirmware.get()) {
                 AsyncOperationAndroidImpl<Void> result= new AsyncOperationAndroidImpl<>();
                 result.setResult(null, new RuntimeException("Firmware update already in progress"));
@@ -726,35 +725,44 @@ public class MetaWearBleService extends Service {
             dfuOperation= new AsyncOperationAndroidImpl<>();
 
             try {
-                final URL firmwareUrl = new URL(String.format("http://releases.mbientlab.com/metawear/%s/vanilla/latest/firmware.hex",
-                        gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER)));
+                final DfuProgressHandler handlerWrapper= new DfuProgressHandler() {
+                    @Override
+                    public void reachedCheckpoint(final State dfuState) {
+                        queueRunnable(new Runnable() {
+                            @Override
+                            public void run() {
+                                handler.reachedCheckpoint(dfuState);
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void receivedUploadProgress(final int progress) {
+                        queueRunnable(new Runnable() {
+                            @Override
+                            public void run() {
+                                handler.receivedUploadProgress(progress);
+                            }
+                        });
+                    }
+                };
+
+                final URL firmwareUrl;
+                if (firmwareHexPath == null) {
+                    firmwareUrl= new URL(String.format("http://releases.mbientlab.com/metawear/%s/vanilla/latest/firmware.hex",
+                            gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER)));
+                } else {
+                    firmwareUrl= null;
+                }
+
                 close();
 
                 backgroundThreadPool.submit(new Runnable() {
                     @Override
                     public void run() {
                         uploadingFirmware.set(true);
-                        dfuService = new DfuService(btDevice, firmwareUrl, MetaWearBleService.this, inMetaBootMode(), new DfuProgressHandler() {
-                            @Override
-                            public void reachedCheckpoint(final State dfuState) {
-                                queueRunnable(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        handler.reachedCheckpoint(dfuState);
-                                    }
-                                });
-                            }
-
-                            @Override
-                            public void receivedUploadProgress(final int progress) {
-                                queueRunnable(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        handler.receivedUploadProgress(progress);
-                                    }
-                                });
-                            }
-                        });
+                        dfuService = (firmwareUrl != null) ? new DfuService(btDevice, firmwareUrl, MetaWearBleService.this, inMetaBootMode(), handlerWrapper) :
+                                new DfuService(btDevice, firmwareHexPath, MetaWearBleService.this, inMetaBootMode(), handlerWrapper);
                         Future<?> dfuFuture = backgroundThreadPool.submit(dfuService);
 
                         try {
@@ -772,6 +780,16 @@ public class MetaWearBleService extends Service {
             }
 
             return dfuOperation;
+        }
+
+        @Override
+        public AsyncOperation<Void> updateFirmware(File firmwareHexPath, DfuProgressHandler handler) {
+            return updateFirmwareInner(firmwareHexPath, handler);
+        }
+
+        @Override
+        public AsyncOperation<Void> updateFirmware(final DfuProgressHandler handler) {
+            return updateFirmwareInner(null, handler);
         }
 
         @Override
@@ -795,9 +813,9 @@ public class MetaWearBleService extends Service {
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
                     gattConnectionStates.get(gatt.getDevice()).isConnected.set(status == 0);
-                    handlerThreadPool.removeCallbacks(state.connectionTimeoutHandler);
 
                     if (status != 0) {
+                        handlerThreadPool.removeCallbacks(state.connectionTimeoutHandler);
                         mwBoards.get(gatt.getDevice()).close();
 
                         final int paramStatus= status;
@@ -909,13 +927,47 @@ public class MetaWearBleService extends Service {
 
                 // All info registers are id = 0
                 if (InfoRegister.LOGGING.opcode() == registerId) {
-                    ModuleInfoImpl info= new ModuleInfoImpl(response);
+                    ModuleInfoImpl info = new ModuleInfoImpl(response);
 
 
                     state.moduleInfo.put(info.id(), info);
                     mwBoards.get(gatt.getDevice()).receivedModuleInfo(info);
 
                     state.checkConnectionReady();
+                } else if (response[0] == LoggingRegister.TIME.moduleOpcode() && registerId == LoggingRegister.TIME.opcode()) {
+                    handlerThreadPool.removeCallbacks(state.connectionTimeoutHandler);
+
+                    DefaultMetaWearBoardAndroidImpl board= mwBoards.get(gatt.getDevice());
+                    board.receivedLoggingTick(response);
+
+                    try {
+                        SharedPreferences.Editor editor = deviceStates.edit();
+                        JSONObject newCachedState = new JSONObject();
+                        for(DevInfoCharacteristic it: DevInfoCharacteristic.values()) {
+                            newCachedState.put(it.key(), state.devInfoValues.get(it));
+                        }
+
+                        JSONObject newModuleState = new JSONObject();
+                        for (ModuleInfoImpl it : state.moduleInfo.values()) {
+                            newModuleState.put(JSONObject.numberToString(it.id()), it.serialize());
+                        }
+                        newCachedState.put("module_info", newModuleState);
+                        newCachedState.put("persistent_state", board.serializePersistentState());
+
+                        editor.putString(state.device.getAddress(), newCachedState.toString());
+                        editor.apply();
+                    } catch (JSONException e) {
+                        Log.w("MetaWear", "Could not cache device information", e);
+                    }
+
+                    queueRunnable(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (state.connectionHandler != null) {
+                                state.connectionHandler.connected();
+                            }
+                        }
+                    });
                 } else {
                     final BluetoothDevice paramDevice= gatt.getDevice();
                     backgroundFutures.add(state.responseHandlerQueue.submit(new Runnable() {
@@ -1079,6 +1131,7 @@ public class MetaWearBleService extends Service {
 
                     if (!state.isMetaBoot && characteristic.getUuid().equals(DevInfoCharacteristic.FIRMWARE_VERSION.uuid())) {
                         Version deviceFirmware= new Version(charStringValue);
+                        board.setFirmwareVersion(deviceFirmware);
 
                         if (deviceFirmware.compareTo(Constant.SERVICE_DISCOVERY_MIN_FIRMWARE) < 0) {
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.AMBIENT_LIGHT, (byte) -1, false));
@@ -1087,6 +1140,11 @@ public class MetaWearBleService extends Service {
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.TEMPERATURE, Constant.SINGLE_CHANNEL_TEMP_IMPLEMENTATION, true));
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.ACCELEROMETER, Constant.MMA8452Q_IMPLEMENTATION, true));
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.GYRO, (byte) -1, false));
+
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.IBEACON, (byte) 0, true));
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.HAPTIC, (byte) 0, true));
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.NEO_PIXEL, (byte) 0, true));
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.SWITCH, (byte) 0, true));
                         } else {
                             String cachedState= deviceStates.getString(gatt.getDevice().getAddress(), "");
                             if (cachedState.isEmpty()) {

@@ -43,7 +43,7 @@ public class Bmp280AltitudeMessage extends Message {
      */
     public static float getScale() { return SCALE; }
 
-    private final float meters;
+    private final Float meters;
 
     public Bmp280AltitudeMessage(byte[] data) {
         this(null, data);
@@ -52,7 +52,11 @@ public class Bmp280AltitudeMessage extends Message {
     public Bmp280AltitudeMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
 
-        meters= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getInt() / SCALE;
+        if (data.length >= 4) {
+            meters = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getInt() / SCALE;
+        } else {
+            meters= null;
+        }
     }
 
     @Override

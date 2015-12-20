@@ -26,6 +26,7 @@ package com.mbientlab.metawear.processor;
 
 import com.mbientlab.metawear.DataSignal;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -33,8 +34,15 @@ import java.util.Map;
  * @author Eric Tsai
  */
 public class Time implements DataSignal.ProcessorConfig {
+    private static final HashMap<String, OutputMode> MODE_SHORT_NAMES;
     public static final String SCHEME_NAME= "time";
     public static final String FIELD_PERIOD= "period", FIELD_MODE= "mode";
+
+    static {
+        MODE_SHORT_NAMES = new HashMap<>();
+        MODE_SHORT_NAMES.put("abs", OutputMode.ABSOLUTE);
+        MODE_SHORT_NAMES.put("diff", OutputMode.DIFFERENTIAL);
+    }
 
     /**
      * Output modes for the time processor
@@ -63,7 +71,11 @@ public class Time implements DataSignal.ProcessorConfig {
         if (!query.containsKey(FIELD_MODE)) {
             throw new RuntimeException("Missing required field in URI: " + FIELD_MODE);
         } else {
-            mode= Enum.valueOf(OutputMode.class, query.get(FIELD_MODE).toUpperCase());
+            if (MODE_SHORT_NAMES.containsKey(query.get(FIELD_MODE).toLowerCase())) {
+                mode = MODE_SHORT_NAMES.get(query.get(FIELD_MODE).toLowerCase());
+            } else {
+                mode = Enum.valueOf(OutputMode.class, query.get(FIELD_MODE).toUpperCase());
+            }
         }
     }
 

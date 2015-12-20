@@ -403,15 +403,28 @@ public class DfuService implements Runnable {
         }
     };
 
+    private File firmwareHexPath;
+    private URL firmwareUrl;
+
     private final BluetoothDevice btDevice;
-    private final URL firmwareUrl;
     private final Context ctx;
     private final boolean inMetaBootMode;
     private final MetaWearBoard.DfuProgressHandler progressHandler;
 
+    public DfuService(BluetoothDevice btDevice, File firmwarePath, Context ctx, boolean inMetaBootMode, MetaWearBoard.DfuProgressHandler progressHandler) {
+        this(btDevice, ctx, inMetaBootMode, progressHandler);
+        this.firmwareUrl= null;
+        this.firmwareHexPath= firmwarePath;
+    }
+
     public DfuService(BluetoothDevice btDevice, URL firmwareUrl, Context ctx, boolean inMetaBootMode, MetaWearBoard.DfuProgressHandler progressHandler) {
-        this.btDevice= btDevice;
+        this(btDevice, ctx, inMetaBootMode, progressHandler);
         this.firmwareUrl= firmwareUrl;
+        this.firmwareHexPath= null;
+    }
+
+    private DfuService(BluetoothDevice btDevice, Context ctx, boolean inMetaBootMode, MetaWearBoard.DfuProgressHandler progressHandler) {
+        this.btDevice= btDevice;
         this.ctx= ctx;
         this.inMetaBootMode= inMetaBootMode;
 
@@ -452,7 +465,11 @@ public class DfuService implements Runnable {
             // Prepare data to send, calculate stream size
             try {
 
-                his = openInputStream(downloadFirmware());
+                if (firmwareUrl != null) {
+                    his = openInputStream(downloadFirmware());
+                } else {
+                    his= openInputStream(firmwareHexPath);
+                }
 
                 mImageSizeInBytes = his.sizeInBytes();
                 mHexInputStream = his;

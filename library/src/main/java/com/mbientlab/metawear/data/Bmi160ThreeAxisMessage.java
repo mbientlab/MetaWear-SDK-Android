@@ -52,19 +52,24 @@ public class Bmi160ThreeAxisMessage extends Message {
 
         this.scale= scale;
 
-        ByteBuffer buffer= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-        short x= buffer.getShort(), y= buffer.getShort(), z= buffer.getShort();
+        if (data.length >= 6) {
+            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+            short x = buffer.getShort(), y = buffer.getShort(), z = buffer.getShort();
 
-        scaledValues= new float[] {
-                x / scale,
-                y / scale,
-                z / scale,
-        };
-        scaledShortValues= new short[] {
-                (short) ((x * 1000) / scale),
-                (short) ((y * 1000) / scale),
-                (short) ((z * 1000) / scale)
-        };
+            scaledValues = new float[]{
+                    x / scale,
+                    y / scale,
+                    z / scale,
+            };
+            scaledShortValues = new short[]{
+                    (short) ((x * 1000) / scale),
+                    (short) ((y * 1000) / scale),
+                    (short) ((z * 1000) / scale)
+            };
+        } else {
+            scaledValues= null;
+            scaledShortValues= null;
+        }
     }
 
     /**

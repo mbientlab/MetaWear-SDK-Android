@@ -31,11 +31,26 @@ import com.mbientlab.metawear.MetaWearBoard;
  * Created by etsai on 10/21/2015.
  */
 public interface Conductance extends MetaWearBoard.Module {
+    interface SourceSelector {
+        /**
+         * Handles conductance data from calls to {@link #readConductance(byte, boolean)}
+         * @param silent    Same value as the silent parameter for calling {@link #readConductance(byte, boolean)}
+         * @return Object representing conductance data from the channel
+         */
+        DataSignal fromChannel(byte channel, boolean silent);
+    }
+
     /**
      * Read the conductance value from a GSR channel
      * @param channel    Channel to read from
      */
     void readConductance(byte channel);
+    /**
+     * Read the conductance value from a GSR channel
+     * @param channel    Channel to read from
+     * @param silent     True if the read should be silent
+     */
+    void readConductance(byte channel, boolean silent);
 
     /**
      * Initiates automatic calibration.  This should be done before the first conductance read or
@@ -44,9 +59,15 @@ public interface Conductance extends MetaWearBoard.Module {
     void calibrate();
 
     /**
-     * Initiates the creation of a route for GSR data
+     * Initiates the creation of a route for conductance data
      * @param channel    GSR channel to route data for
      * @return Object representing the data from the specific channel
      */
     DataSignal routeData(byte channel);
+
+    /**
+     * Initiates the creation of a route for conductance data
+     * @return Selection of available data sources
+     */
+    SourceSelector routeData();
 }
