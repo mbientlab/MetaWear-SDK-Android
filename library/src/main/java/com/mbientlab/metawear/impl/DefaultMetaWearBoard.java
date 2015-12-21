@@ -4501,7 +4501,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     }
 
                     if (newAdvInterval != null) {
-                        if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() == 1) {
+                        if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() >= 1) {
                             newAdvInterval = (short) ((newAdvInterval & 0xffff) / AD_INTERVAL_STEP);
                         }
                         writeRegister(SettingsRegister.ADVERTISING_INTERVAL, (byte) (newAdvInterval & 0xff),
