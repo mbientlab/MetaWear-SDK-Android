@@ -104,6 +104,10 @@ public enum InfoRegister implements Register {
         @Override
         public byte moduleOpcode() { return 0x14; }
     },
+    MAGNETOMETER {
+        @Override
+        public byte moduleOpcode() { return 0x15; }
+    },
     DEBUG {
         @Override
         public byte moduleOpcode() { return (byte) 0xfe; }

@@ -280,6 +280,12 @@ public interface Bmi160Accelerometer extends Accelerometer {
          */
         SamplingConfigEditor setOutputDataRate(OutputDataRate odr);
         /**
+         * Enables undersampling, which is required for ODR less than 12.5Hz
+         * @param size      Number of samples to be averaged for undersampling
+         * @return Calling object
+         */
+        SamplingConfigEditor enableUndersampling(byte size);
+        /**
          * Writes the new settings to the board
          */
         void commit();
@@ -508,9 +514,8 @@ public interface Bmi160Accelerometer extends Accelerometer {
 
     /**
      * Starts the accelerometer in low power mode
-     * @param size      Number of samples to be averaged for undersampling
      */
-    void startLowPower(byte size);
+    void startLowPower();
 
     /**
      * Initiates the creation of a route for BMI160 sensor data

@@ -170,6 +170,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         unsignedToSigned.put(Bmi160SingleAxisUnsignedMessage.class, Bmi160SingleAxisMessage.class);
         unsignedToSigned.put(Bmi160SingleAxisUnsignedGyroMessage.class, Bmi160SingleAxisGyroMessage.class);
         unsignedToSigned.put(Mma8452qSingleAxisUnsignedMessage.class, Mma8452qSingleAxisMessage.class);
+        unsignedToSigned.put(Bmm150SingleAxisUnsignedMessage.class, Bmm150SingleAxisMessage.class);
 
         signedMsgClasses= new HashSet<>();
         signedMsgClasses.add(TemperatureMessage.class);
@@ -181,6 +182,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         signedToUnsigned.put(Bmi160SingleAxisMessage.class, Bmi160SingleAxisUnsignedMessage.class);
         signedToUnsigned.put(Bmi160SingleAxisGyroMessage.class, Bmi160SingleAxisUnsignedGyroMessage.class);
         signedToUnsigned.put(Mma8452qSingleAxisMessage.class, Mma8452qSingleAxisUnsignedMessage.class);
+        signedToUnsigned.put(Bmm150SingleAxisMessage.class, Bmm150SingleAxisUnsignedMessage.class);
 
         bmi160AccMessageClasses= new HashSet<>();
         bmi160AccMessageClasses.add(Bmi160SingleAxisUnsignedMessage.class);
@@ -193,9 +195,10 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         bmi160GyroMessageClasses.add(Bmi160ThreeAxisGyroMessage.class);
 
         unpackedToRms = new HashMap<>();
-        unpackedToRms.put(Bmi160ThreeAxisMessage.class, Bmi160SingleAxisMessage.class);
+        unpackedToRms.put(Bmi160ThreeAxisMessage.class, Bmi160SingleAxisUnsignedMessage.class);
         unpackedToRms.put(Bmi160ThreeAxisGyroMessage.class, Bmi160SingleAxisUnsignedGyroMessage.class);
         unpackedToRms.put(Mma8452qThreeAxisMessage.class, Mma8452qSingleAxisUnsignedMessage.class);
+        unpackedToRms.put(Bmm150ThreeAxisMessage.class, Bmm150SingleAxisUnsignedMessage.class);
     }
 
     private interface IdCreator {
@@ -1099,7 +1102,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                         @Override
                         public boolean isSigned() {
-                            return params.mode == Time.OutputMode.ABSOLUTE && parent.isSigned();
+                            final boolean signed;
+                            switch (params.mode) {
+                                case ABSOLUTE:
+                                    signed= parent.isSigned();
+                                    break;
+                                case DIFFERENTIAL:
+                                    signed= true;
+                                    break;
+                                default:
+                                    throw new RuntimeException("Exception here to quiet compile errors");
+                            }
+
+                            return signed;
                         }
                     };
                 } else if (config instanceof Sample) {
@@ -1151,7 +1166,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             Threshold thsConfig = (Threshold) newConfig;
 
                             ///< Do not allow the threshold mode to be changed
-                            byte second = (byte) ((DataSignalImpl.this.outputSize - 1) & 0x3 | (isSigned() ? 0x4 : 0) |
+                            byte second = (byte) ((DataSignalImpl.this.outputSize - 1) & 0x3 | (parent.isSigned() ? 0x4 : 0) |
                                     (params.mode.ordinal() << 3));
                             ByteBuffer buffer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
                             Number firmwareValue = parent.numberToFirmwareUnits(thsConfig.limit), firmwareHysteresis= parent.numberToFirmwareUnits(thsConfig.hysteresis);
@@ -1214,19 +1229,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     final byte size = (params.mode == Delta.OutputMode.BINARY) ? 1 : outputSize;
                     final Class<? extends Message> nextClass;
 
-                    switch(params.mode) {
+                    switch (params.mode) {
                         case ABSOLUTE:
-                            nextClass= msgClass;
+                            nextClass = msgClass;
                             break;
                         case DIFFERENTIAL:
                             if (unsignedToSigned.containsKey(msgClass)) {
-                                nextClass= unsignedToSigned.get(msgClass);
+                                nextClass = unsignedToSigned.get(msgClass);
                             } else {
-                                nextClass= msgClass;
+                                nextClass = msgClass;
                             }
                             break;
                         case BINARY:
-                            nextClass= SignedMessage.class;
+                            nextClass = SignedMessage.class;
                             break;
                         default:
                             throw new RuntimeException("Only here to quiet compiler error");
@@ -1243,10 +1258,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             Delta deltaConfig = (Delta) newConfig;
 
                             ///< Do not allow the delta mode to be changed
-                            byte second = (byte) (((this.outputSize - 1) & 0x3) | (isSigned() ? 0x4 : 0) |
+                            byte second = (byte) (((this.outputSize - 1) & 0x3) | (parent.isSigned() ? 0x4 : 0) |
                                     (params.mode.ordinal() << 3));
                             Number firmware = parent.numberToFirmwareUnits(deltaConfig.threshold);
-                            ByteBuffer config = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN).put((byte) 0xc).put(second).putInt(firmware.intValue());
+                            ByteBuffer config = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN).put((byte) 0xc).put(second)
+                                    .putInt((int) firmware.longValue());
                             return config.array();
 
                         }
@@ -1275,7 +1291,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                         @Override
                         public boolean isSigned() {
-                            return params.mode == Delta.OutputMode.ABSOLUTE && parent.isSigned();
+                            final boolean signed;
+                            switch (params.mode) {
+                                case ABSOLUTE:
+                                    signed = parent.isSigned();
+                                    break;
+                                case DIFFERENTIAL:
+                                case BINARY:
+                                    signed = true;
+                                    break;
+                                default:
+                                    throw new RuntimeException("Exception here to quiet compile errors");
+                            }
+
+                            return signed;
                         }
 
                         @Override
@@ -1348,8 +1377,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
                     };
                 } else if (config instanceof Counter) {
-                    final Counter params= (Counter) config;
-                    newProcessor= new ProcessedDataSignal(params.size, nChannels, UnsignedMessage.class) {
+                    final Counter params = (Counter) config;
+                    newProcessor = new ProcessedDataSignal(params.size, nChannels, UnsignedMessage.class) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(params);
@@ -1432,8 +1461,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     };
                 } else if (config instanceof Maths) {
                     final Maths params = (Maths) config;
-                    final boolean signedOp= params.signed == null ? isSigned() : params.signed;
-                    byte newChannelSize= channelSize;
+                    final boolean signedOp = params.signed == null ? isSigned() : params.signed;
+                    byte newChannelSize = channelSize;
                     Class<? extends Message> nextMsgClass;
 
                     switch (params.mathOp) {
@@ -1450,7 +1479,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                                 }
                             } else {
                                 if (signedToUnsigned.containsKey(msgClass)) {
-                                    nextMsgClass= signedToUnsigned.get(msgClass);
+                                    nextMsgClass = signedToUnsigned.get(msgClass);
                                 } else {
                                     nextMsgClass = msgClass;
                                 }
@@ -1464,17 +1493,17 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             }
                             break;
                         case SQRT:
-                            nextMsgClass= UnsignedMessage.class;
+                            nextMsgClass = UnsignedMessage.class;
                             break;
                         case EXPONENT:
                             if (signedToUnsigned.containsKey(msgClass) || signedMsgClasses.contains(msgClass)) {
-                                nextMsgClass= SignedMessage.class;
+                                nextMsgClass = SignedMessage.class;
                             } else if (unsignedToSigned.containsKey(msgClass)) {
-                                nextMsgClass= UnsignedMessage.class;
+                                nextMsgClass = UnsignedMessage.class;
                             } else {
                                 ///< Every class should be categorized as signed or unsigned except the three axis messages
                                 ///< Should we also extend barometer and temp to follow suit?
-                                nextMsgClass= msgClass;
+                                nextMsgClass = msgClass;
                             }
 
                             if (signedOp && unsignedToSigned.containsKey(nextMsgClass)) {
@@ -1483,31 +1512,31 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             break;
                         case CONSTANT:
                             if (signedOp) {
-                                nextMsgClass= SignedMessage.class;
+                                nextMsgClass = SignedMessage.class;
                             } else {
-                                nextMsgClass= UnsignedMessage.class;
+                                nextMsgClass = UnsignedMessage.class;
                             }
                             break;
                         default:
-                            nextMsgClass= msgClass;
+                            nextMsgClass = msgClass;
                             break;
                     }
                     switch (params.mathOp) {
                         case LEFT_SHIFT:
-                            newChannelSize+= (params.rhs.intValue() / 8);
+                            newChannelSize += (params.rhs.intValue() / 8);
                             if (newChannelSize > 4) {
-                                newChannelSize= 4;
+                                newChannelSize = 4;
                             }
                             break;
                         case RIGHT_SHIFT:
-                            newChannelSize-= (params.rhs.intValue() / 8);
+                            newChannelSize -= (params.rhs.intValue() / 8);
                             if (newChannelSize <= 0) {
-                                newChannelSize= 1;
+                                newChannelSize = 1;
                             }
                             break;
                         default:
                             if (nChannels == 1) {
-                                newChannelSize= 4;
+                                newChannelSize = 4;
                             }
                             break;
                     }
@@ -1552,8 +1581,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                         @Override
                         public boolean isSigned() {
-                            return params.mathOp == Maths.Operation.ABS_VALUE || params.mathOp == Maths.Operation.SQRT ||
-                                    parent.isSigned();
+                            switch(params.mathOp) {
+                                case SQRT:
+                                case ABS_VALUE:
+                                    return false;
+                                case SUBTRACT:
+                                    return true;
+                                default:
+                                    return parent.isSigned();
+                            }
                         }
 
                         @Override
@@ -1626,7 +1662,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             Number firmwareThs = parent.numberToFirmwareUnits(pulseConfig.threshold);
 
                             ///< Do not allow output type to switch
-                            ByteBuffer buffer = ByteBuffer.allocate(10).put((byte) 0xb).put(parent.outputSize).put((byte) 0).put((byte) params.mode.ordinal())
+                            ByteBuffer buffer = ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN)
+                                    .put((byte) 0xb)
+                                    .put((byte) (parent.outputSize - 1))
+                                    .put((byte) 0)
+                                    .put((byte) params.mode.ordinal())
                                     .putInt(firmwareThs.intValue()).putShort(pulseConfig.width);
                             return buffer.array();
                         }
@@ -1672,7 +1712,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
                     };
                 } else if (config instanceof Buffer) {
-                    newProcessor= new StaticProcessedDataSignal(channelSize, nChannels, msgClass) {
+                    newProcessor = new StaticProcessedDataSignal(channelSize, nChannels, msgClass) {
                         @Override
                         public byte[] getFilterConfig() {
                             return processorConfigToBytes(null);
@@ -1680,7 +1720,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
-                            return new byte[] {0xf, (byte) (this.outputSize - 1)};
+                            return new byte[]{0xf, (byte) (this.outputSize - 1)};
                         }
 
                         @Override
@@ -1699,15 +1739,15 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
                     };
                 } else if (config instanceof Rms || config instanceof Rss) {
-                    final byte rmsMode, signedMask= (byte) (isSigned() ? 0x80 : 0x0);
+                    final byte rmsMode, signedMask = (byte) (isSigned() ? 0x80 : 0x0);
                     final ProcessorType type;
 
                     if (config instanceof Rms) {
-                        rmsMode= 0;
-                        type= ProcessorType.RMS;
+                        rmsMode = 0;
+                        type = ProcessorType.RMS;
                     } else {
-                        rmsMode= 1;
-                        type= ProcessorType.RSS;
+                        rmsMode = 1;
+                        type = ProcessorType.RSS;
                     }
                     newProcessor = new ProcessedDataSignal(channelSize, (byte) 1, unpackedToRms.get(msgClass)) {
                         @Override
@@ -2104,7 +2144,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public boolean isSigned() {
-                    return false;
+                    return true;
                 }
 
                 @Override
@@ -2645,6 +2685,26 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             } else {
                 return new InvalidDataSignal(new UnsupportedOperationException("No processor available with key: " + key));
             }
+        }
+
+        public DataSignal fromBmm150BField() {
+            return new ThreeAxisDataSource(Bmm150ThreeAxisMessage.class, new ResponseHeader(Bmm150MagnetometerRegister.MAG_DATA)) {
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmm150MagnetometerRegister.MAG_DATA, (byte) 0);
+                    super.unsubscribe();
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmm150MagnetometerRegister.MAG_DATA, (byte) 0x1);
+                }
+
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * 16.f;
+                }
+            };
         }
 
         @Override
@@ -5210,6 +5270,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         @Override
         public SamplingConfigEditor configureAxisSampling() {
             return new SamplingConfigEditor() {
+                private Byte undersampleSize= null;
                 private AccRange newAccRange= null;
                 private OutputDataRate newOdr= null;
 
@@ -5226,6 +5287,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 }
 
                 @Override
+                public SamplingConfigEditor enableUndersampling(byte size) {
+                    undersampleSize= (byte) (Math.log(size) / Math.log(2));
+                    return this;
+                }
+
+                @Override
                 public void commit() {
                     if (newAccRange != null) {
                         bmi160AccRange= newAccRange;
@@ -5236,6 +5303,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     if (newOdr != null) {
                         bmi160DataSampling[0]&= 0xf0;
                         bmi160DataSampling[0]|= newOdr.bitMask();
+                    }
+
+                    bmi160DataSampling[0]&= 0xf;
+                    if (undersampleSize != null) {
+                        bmi160DataSampling[0]|= (undersampleSize << 4) | 0x80;
+                    } else {
+                        bmi160DataSampling[0]|= 0x20;
                     }
                 }
             };
@@ -5281,21 +5355,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public void start() {
-            bmi160DataSampling[0]&= 0xf;
-            bmi160DataSampling[0]|= 0x20;
             start((byte) 1);
         }
 
         @Override
-        public void startLowPower(byte size) {
-            byte power= 0;
-            while(size != 0) {
-                size = (byte) (size >> 1);
-                power++;
-            }
-            bmi160DataSampling[0]&= 0xf;
-            bmi160DataSampling[0]|= (power << 4) | 0x80;
-
+        public void startLowPower() {
             start((byte) 2);
         }
 
@@ -5975,6 +6039,60 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     return new RouteBuilder().fromDataProcessorState(key, silent);
                 }
             };
+        }
+    }
+
+    private class Bmm150MagnetometerImpl implements Bmm150Magnetometer {
+        @Override
+        public void setPowerPrsest(PowerPreset preset) {
+            switch (preset) {
+                case LOW_POWER:
+                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) 1, (byte) 2);
+                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) 0);
+                    break;
+                case REGULAR:
+                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) 4, (byte) 14);
+                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) 0);
+                    break;
+                case ENHANCED_REGULAR:
+                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) 7, (byte) 26);
+                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) 0);
+                    break;
+                case HIGH_ACCURACY:
+                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) 23, (byte) 82);
+                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) 5);
+                    break;
+            }
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromBField() {
+                    return new RouteBuilder().fromBmm150BField();
+                }
+            };
+        }
+
+        @Override
+        public void disableBFieldSampling() {
+            writeRegister(Bmm150MagnetometerRegister.DATA_INTERRUPT_ENABLE, (byte) 1, (byte) 0);
+        }
+
+        @Override
+        public void enableBFieldSampling() {
+            writeRegister(Bmm150MagnetometerRegister.DATA_INTERRUPT_ENABLE, (byte) 0, (byte) 1);
+        }
+
+        @Override
+        public void start() {
+            writeRegister(Bmm150MagnetometerRegister.POWER_MODE, (byte) 1);
+        }
+
+        @Override
+        public void stop() {
+            writeRegister(Bmm150MagnetometerRegister.POWER_MODE, (byte) 0);
         }
     }
 

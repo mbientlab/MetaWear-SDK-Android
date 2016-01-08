@@ -233,7 +233,9 @@ public class MetaWearBleService extends Service {
             public void run() {
                 isConnected.set(false);
                 isReady.set(false);
-                androidConn.gatt.close();
+                if (androidConn.gatt != null) {
+                    androidConn.gatt.close();
+                }
 
                 if (connectionHandler != null) {
                     connectionHandler.failure(-1, new TimeoutException("Board connection timed out"));
