@@ -1,0 +1,16 @@
+<ivysettings>
+<!--
+    <property name="ivy.base.url" value="/srv/www/ivyrep" />
+    <property name="ivy.base.url" value="/home/etsai/public_html/ivyrep" />
+        <sftp name="default" host="127.0.0.1" port="22" keyFile="${user.home}/.ssh/id_rsa">
+        <sftp name="default" host="192.168.0.121" port="22" keyFile="${user.home}/.ssh/id_rsa">
+-->
+    <property name="ivy.base.url" value="/home2/mbient/public_html/releases/ivyrep" />
+    <settings defaultResolver="default"/>
+    <resolvers>
+        <sftp name="default" host="mbientlab.com" port="2222">
+            <artifact pattern="${ivy.base.url}/[organisation]/[module]/[revision]/[artifact]-[revision](-[classifier])(.[ext])"/>
+            <ivy pattern="${ivy.base.url}/[organisation]/[module]/[revision]/ivy-[revision].xml"/>
+        </sftp>
+    </resolvers>
+</ivysettings>

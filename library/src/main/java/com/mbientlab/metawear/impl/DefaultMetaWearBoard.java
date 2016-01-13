@@ -2452,6 +2452,40 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 }
             };
         }
+        public DataSignal fromBmi160Motion() {
+            return new DataSource((byte) 2, (byte) 1, Bmi160MotionMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.MOTION_INTERRUPT), ReadType.NONE) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
+        public DataSignal fromBmi160Tap() {
+            return new DataSource((byte) 2, (byte) 1, Bmi160TapMessage.class, new ResponseHeader(Bmi160AccelerometerRegister.TAP_INTERRUPT), ReadType.NONE) {
+                @Override
+                public boolean isSigned() { return false; }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(Bmi160AccelerometerRegister.TAP_INTERRUPT, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(Bmi160AccelerometerRegister.TAP_INTERRUPT, (byte) 0);
+                    super.unsubscribe();
+                }
+            };
+        }
 
         public DataSignal fromBmi160Gyro() {
             return new ThreeAxisDataSource(Bmi160ThreeAxisGyroMessage.class, new ResponseHeader(Bmi160GyroRegister.DATA)) {
@@ -2660,6 +2694,22 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 return new InvalidDataSignal(new UnsupportedOperationException("Disconnected event only supported on firmware version 1.1.0 and later"));
             }
             return new EventSignal(SettingsRegister.DISCONNECT_EVENT);
+        }
+
+        public DataSignal fromSettingsBatteryState(ReadType type) {
+            if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() < Constant.SETTINGS_BATTERY_REVISION) {
+                return new InvalidDataSignal(new UnsupportedOperationException("Battery state only supported on firmware version 1.1.1 and later"));
+            }
+            return new DataSource((byte) 3, (byte) 1, BatteryStateMessage.class, new ResponseHeader(SettingsRegister.BATTERY_STATE), type) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
+
+                @Override
+                public void enableNotifications() { }
+
+            };
         }
 
         public DataSignal fromDataProcessorState(String key, boolean silent) {
@@ -2895,6 +2945,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 ByteBuffer buffer= ByteBuffer.wrap(response, 2, response.length - 2).order(ByteOrder.LITTLE_ENDIAN);
                 final long nEntriesLeft= (response.length > 4) ? buffer.getInt() & 0xffffffffL : buffer.getShort() & 0xffff;
 
+                if (nEntriesLeft == 0) {
+                    lastTimestamp.clear();
+                }
                 if (downloadHandler != null) {
                     conn.executeTask(new Runnable() {
                         @Override
@@ -3414,6 +3467,24 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             return new Response(new Bmi160LowHighMessage(respBody), new ResponseHeader(response[0], response[1]));
                         }
                     });
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.MOTION_INTERRUPT), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmi160MotionMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
+                    responses.put(new ResponseHeader(Bmi160AccelerometerRegister.TAP_INTERRUPT), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody= new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmi160TapMessage(respBody), new ResponseHeader(response[0], response[1]));
+                        }
+                    });
                     break;
             }
         } else if (info.id() == InfoRegister.BAROMETER.moduleOpcode()) {
@@ -3466,8 +3537,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         }
                     });
                     break;
-                case 1:
-                case 2:
+                case Constant.SETTINGS_CONN_PARAMS_REVISION:
+                case Constant.SETTINGS_DISCONNECTED_EVENT_REVISION:
+                case Constant.SETTINGS_BATTERY_REVISION:
                     responses.put(new ResponseHeader(SettingsRegister.ADVERTISING_INTERVAL), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
@@ -3516,6 +3588,18 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     });
                     break;
             }
+
+            if (info.revision() == Constant.SETTINGS_BATTERY_REVISION) {
+                responses.put(new ResponseHeader(SettingsRegister.BATTERY_STATE), new ResponseProcessor() {
+                    @Override
+                    public Response process(byte[] response) {
+                        byte[] respBody = new byte[response.length - 2];
+                        System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                        return new Response(new BatteryStateMessage(respBody), new ResponseHeader(response[0], response[1]));
+                    }
+                });
+            }
         } else if (info.id() == InfoRegister.LOGGING.moduleOpcode()) {
             switch(info.revision()) {
                 case Constant.EXTENDED_LOGGING_REVISION:
@@ -3524,6 +3608,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         public Response process(byte[] response) {
                             writeRegister(LoggingRegister.READOUT_PAGE_CONFIRM);
                             return null;
+                        }
+                    });
+                    break;
+            }
+        } else if (info.id() == InfoRegister.MAGNETOMETER.moduleOpcode()) {
+            switch(info.implementation()) {
+                case Constant.BMM150_MAGNETOMETER:
+                    responses.put(new ResponseHeader(Bmm150MagnetometerRegister.MAG_DATA), new ResponseProcessor() {
+                        @Override
+                        public Response process(byte[] response) {
+                            byte[] respBody = new byte[response.length - 2];
+                            System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                            return new Response(new Bmm150ThreeAxisMessage(respBody), new ResponseHeader(response[0], response[1]));
                         }
                     });
                     break;
@@ -4561,7 +4659,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     }
 
                     if (newAdvInterval != null) {
-                        if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() >= 1) {
+                        if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() >= Constant.SETTINGS_CONN_PARAMS_REVISION) {
                             newAdvInterval = (short) ((newAdvInterval & 0xffff) / AD_INTERVAL_STEP);
                         }
                         writeRegister(SettingsRegister.ADVERTISING_INTERVAL, (byte) (newAdvInterval & 0xff),
@@ -4632,6 +4730,31 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     return new RouteBuilder().fromSettingsDisconnected();
                 }
             };
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromBattery() {
+                    return fromBattery(false);
+                }
+
+                @Override
+                public DataSignal fromBattery(boolean silent) {
+                    return new RouteBuilder().fromSettingsBatteryState(silent ? ReadType.SILENT : ReadType.NORMAL);
+                }
+            };
+        }
+
+        @Override
+        public void readBatteryState() {
+            readBatteryState(false);
+        }
+
+        @Override
+        public void readBatteryState(boolean silent) {
+            readRegister(SettingsRegister.BATTERY_STATE, silent);
         }
     }
 
@@ -5256,16 +5379,23 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private final byte[] bmi160DataSampling= new byte[] {
             (byte) (0x20 | Bmi160Accelerometer.OutputDataRate.ODR_100_HZ.bitMask()),
             Bmi160Accelerometer.AccRange.AR_2G.bitMask()
-    };
+    }, bmi160TapConfig= new byte[] { 0x4, 0xa };
     private class Bmi160AccelerometerImpl implements Bmi160Accelerometer {
         private static final float BMI160_ORIENT_HYS_G_PER_STEP= 0.0625f, THETA_STEP= (float) (44.8/63.f);
         private final float[] HIGH_THRESHOLD_STEPS= {
                 0.00781f, 0.01563f, 0.03125f, 0.0625f
         }, HIGH_HYSTERESIS_STEPS= {
                 0.125f, 0.250f, 0.5f, 1f
+        }, ANY_MOTION_THS_STEPS= {
+                3.91f, 7.81f, 15.63f, 31.25f
+        }, NO_MOTION_THS_STEPS= {
+                3.91f, 7.81f, 15.63f, 31.25f
+        }, TAP_THS_STEPS= {
+                0.0625f, 0.125f, 0.250f, 0.5f
         };
 
-        private Float highHysteresis= null, highThreshold= null;
+        private Float highHysteresis= null, highThreshold= null, noMotionThs= null, anyMotionThs= null, tapThs= 1.5f;
+        private byte[] motionConfig= new byte[] {0x0, 0x14, 0x14, 0x14};
 
         @Override
         public SamplingConfigEditor configureAxisSampling() {
@@ -5372,6 +5502,21 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 bmi160LowHighConfig[4]= (byte) (highThreshold / HIGH_THRESHOLD_STEPS[bmi160AccRange.ordinal()]);
             }
 
+            if (noMotionThs != null) {
+                motionConfig[2]= (byte) (noMotionThs / NO_MOTION_THS_STEPS[bmi160AccRange.ordinal()]);
+            }
+
+            if (anyMotionThs != null) {
+                motionConfig[1]= (byte) (anyMotionThs / ANY_MOTION_THS_STEPS[bmi160AccRange.ordinal()]);
+            }
+
+            if (tapThs != null) {
+                bmi160TapConfig[1]&= 0xe0;
+                bmi160TapConfig[1]|= (byte) Math.min(15, tapThs / TAP_THS_STEPS[bmi160AccRange.ordinal()]);
+            }
+
+            writeRegister(Bmi160AccelerometerRegister.TAP_CONFIG, bmi160TapConfig);
+            writeRegister(Bmi160AccelerometerRegister.MOTION_CONFIG, motionConfig);
             writeRegister(Bmi160AccelerometerRegister.DATA_CONFIG, bmi160DataSampling);
             writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_CONFIG, bmi160LowHighConfig);
             writeRegister(Bmi160AccelerometerRegister.POWER_MODE, powerMode);
@@ -5428,6 +5573,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 @Override
                 public DataSignal fromLowHigh() {
                     return new RouteBuilder().fromBmi160LowHigh();
+                }
+
+                @Override
+                public DataSignal fromMotion() {
+                    return new RouteBuilder().fromBmi160Motion();
+                }
+
+                @Override
+                public DataSignal fromTap() {
+                    return new RouteBuilder().fromBmi160Tap();
                 }
             };
         }
@@ -5650,6 +5805,250 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         @Override
         public void disableLowHighDetection() {
             writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT_ENABLE, (byte) 0, (byte) 0x1f);
+        }
+
+        @Override
+        public AnyMotionConfigEditor configureAnyMotionDetection() {
+            return new AnyMotionConfigEditor() {
+                private Integer duration= null;
+                private Float threshold= null;
+
+                @Override
+                public AnyMotionConfigEditor setDuration(int duration) {
+                    this.duration= duration;
+                    return this;
+                }
+
+                @Override
+                public AnyMotionConfigEditor setThreshold(float threshold) {
+                    this.threshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (duration != null) {
+                        motionConfig[0]&= 0xfc;
+                        motionConfig[0]|= duration - 1;
+                    }
+
+                    if (threshold != null) {
+                        anyMotionThs= threshold;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public void enableMotionDetection(MotionType type) {
+            motionConfig[3]&= 0xfc;
+
+            switch (type) {
+                case NO_MOTION:
+                    motionConfig[3]|= 0x1;
+                    break;
+                case SLOW_MOTION:
+                    motionConfig[3]&= (~0x1);
+                    break;
+                case SIGNIFICANT_MOTION:
+                    motionConfig[3]|= 0x2;
+                    break;
+                case ANY_MOTION:
+                    motionConfig[3]&= (~0x2);
+                    break;
+            }
+
+            switch (type) {
+                case NO_MOTION:
+                case SLOW_MOTION:
+                    writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT_ENABLE, (byte) 0x38, (byte) 0);
+                    break;
+                case ANY_MOTION:
+                case SIGNIFICANT_MOTION:
+                    writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT_ENABLE, (byte) 0x7, (byte) 0);
+                    break;
+            }
+        }
+
+        @Override
+        public void disableMotionDetection() {
+            writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT_ENABLE, (byte) 0, (byte) 0x3f);
+        }
+
+        @Override
+        public NoMotionConfigEditor configureNoMotionDetection() {
+            return new NoMotionConfigEditor() {
+                private Integer duration= null;
+                private Float threshold= null;
+
+                @Override
+                public NoMotionConfigEditor setDuration(int duration) {
+                    this.duration= duration;
+                    return this;
+                }
+
+                @Override
+                public NoMotionConfigEditor setThreshold(float threshold) {
+                    this.threshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (duration != null) {
+                        motionConfig[0]&= 0x3;
+
+                        if (duration >= 1280 && duration <= 20480) {
+                            motionConfig[0]|= ((byte) (duration / 1280.f - 1)) << 2;
+                        } else if (duration >= 25600 && duration <= 102400) {
+                            motionConfig[0]|= (((byte) (duration / 5120.f - 5)) << 2) | 0x40;
+                        } else if (duration >= 112640 && duration <= 430080) {
+                            motionConfig[0]|= (((byte) (duration / 10240.f - 11)) << 2) | 0x80;
+                        }
+                    }
+
+                    if (threshold != null) {
+                        noMotionThs= threshold;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public SignificantMotionConfigEditor configureSignificantMotionDetection() {
+            return new SignificantMotionConfigEditor() {
+                private SkipTime newSkipTime= null;
+                private ProofTime newProofTime= null;
+
+                @Override
+                public SignificantMotionConfigEditor setSkipTime(SkipTime time) {
+                    newSkipTime= time;
+                    return this;
+                }
+
+                @Override
+                public SignificantMotionConfigEditor setProofTime(ProofTime time) {
+                    newProofTime= time;
+                    return this;
+                }
+
+
+                @Override
+                public void commit() {
+                    if (newSkipTime != null) {
+                        motionConfig[3]|= (newSkipTime.ordinal() << 2);
+                    }
+
+                    if (newProofTime != null) {
+                        motionConfig[3]|= (newProofTime.ordinal() << 4);
+                    }
+                }
+            };
+        }
+
+        @Override
+        public SlowMotionConfigEditor configureSlowMotionDetection() {
+            return new SlowMotionConfigEditor() {
+                private Byte count= null;
+                private Float threshold= null;
+
+                @Override
+                public SlowMotionConfigEditor setCount(byte count) {
+                    this.count= count;
+                    return this;
+                }
+
+                @Override
+                public SlowMotionConfigEditor setThreshold(float threshold) {
+                    this.threshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (count != null) {
+                        motionConfig[0]&= 0x3;
+                        motionConfig[0]|= (count << 2);
+                    }
+                    if (threshold != null) {
+                        noMotionThs= threshold;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public TapConfigEditor configureTapDetection() {
+            return new TapConfigEditor() {
+                private TapQuietTime newTapTime= null;
+                private TapShockTime newShockTime= null;
+                private DoubleTapWindow newWindow= null;
+                private Float newThs= null;
+
+                @Override
+                public TapConfigEditor setQuietTime(TapQuietTime time) {
+                    newTapTime= time;
+                    return this;
+                }
+
+                @Override
+                public TapConfigEditor setShockTime(TapShockTime time) {
+                    newShockTime= time;
+                    return this;
+                }
+
+                @Override
+                public TapConfigEditor setDoubleTapWindow(DoubleTapWindow window) {
+                    newWindow= window;
+                    return this;
+                }
+
+                @Override
+                public TapConfigEditor setThreshold(float threshold) {
+                    newThs= threshold;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (newTapTime != null) {
+                        bmi160TapConfig[0]|= newTapTime.ordinal() << 7;
+                    }
+
+                    if (newShockTime != null) {
+                        bmi160TapConfig[0]|= newShockTime.ordinal() << 6;
+                    }
+
+                    if (newWindow != null) {
+                        bmi160TapConfig[0]|= newWindow.ordinal();
+                    }
+
+                    if (newThs != null) {
+                        tapThs= newThs;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public void enableTapDetection(TapType ... types) {
+            byte mask= 0;
+            for(TapType it: types) {
+                switch (it) {
+                    case SINGLE:
+                        mask|= 0x2;
+                        break;
+                    case DOUBLE:
+                        mask|= 0x1;
+                        break;
+                }
+            }
+
+            writeRegister(Bmi160AccelerometerRegister.TAP_INTERRUPT_ENABLE, mask, (byte) 0);
+        }
+        @Override
+        public void disableTapDetection() {
+            writeRegister(Bmi160AccelerometerRegister.TAP_INTERRUPT_ENABLE, (byte) 0, (byte) 0x3);
         }
     }
 
@@ -6077,12 +6476,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public void disableBFieldSampling() {
-            writeRegister(Bmm150MagnetometerRegister.DATA_INTERRUPT_ENABLE, (byte) 1, (byte) 0);
+            writeRegister(Bmm150MagnetometerRegister.DATA_INTERRUPT_ENABLE, (byte) 0, (byte) 1);
         }
 
         @Override
         public void enableBFieldSampling() {
-            writeRegister(Bmm150MagnetometerRegister.DATA_INTERRUPT_ENABLE, (byte) 0, (byte) 1);
+            writeRegister(Bmm150MagnetometerRegister.DATA_INTERRUPT_ENABLE, (byte) 1, (byte) 0);
         }
 
         @Override
@@ -6163,6 +6562,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         if (moduleClass.equals(Bmi160Gyro.class)) {
             if (gyroModuleinfo.present() && gyroModuleinfo.implementation() == Constant.BMI160_GYRO_IMPLEMENTATION) {
                 return moduleClass.cast(new Bmi160GyroImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+        }
+
+        if (moduleClass.equals(Bmm150Magnetometer.class)) {
+            if (moduleInfo.get(InfoRegister.MAGNETOMETER.moduleOpcode()).present()) {
+                return moduleClass.cast(new Bmm150MagnetometerImpl());
             }
             throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
         }

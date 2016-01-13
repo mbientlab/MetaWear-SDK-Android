@@ -3,7 +3,9 @@ package com.mbientlab.metawear.data;
 import java.util.Calendar;
 
 /**
- * Created by etsai on 1/8/2016.
+ * Container class for one axis of magnetometer data from the MMA8452Q chip.  The data can only be interpreted
+ * as a float and is returned in units of micro Teslas.
+ * @author Eric Tsai
  */
 public class Bmm150SingleAxisUnsignedMessage extends UnsignedMessage {
     public static float getScale() { return Bmm150ThreeAxisMessage.getScale(); }

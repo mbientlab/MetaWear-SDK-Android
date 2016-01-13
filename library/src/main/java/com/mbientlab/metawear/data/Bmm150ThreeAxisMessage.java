@@ -7,7 +7,10 @@ import java.nio.ByteOrder;
 import java.util.Calendar;
 
 /**
- * Created by etsai on 1/8/2016.
+ * Container class for magnetometer data from the BMM150 chip.  The data can only be interpreted as a
+ * CartesianFloat and returned in units of micro Teslas.
+ * @author Eric Tsai
+ * @see CartesianFloat
  */
 public class Bmm150ThreeAxisMessage extends Message {
     private static final float SCALE = 16f;

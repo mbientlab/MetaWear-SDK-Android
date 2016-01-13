@@ -239,6 +239,84 @@ public interface Bmi160Accelerometer extends Accelerometer {
     }
 
     /**
+     * Skip times available for significant motion detection
+     * @author Eric Tsai
+     */
+    enum SkipTime {
+        ST_1_5_S,
+        ST_3_S,
+        ST_6_S,
+        ST_12_S
+    }
+    /**
+     * Proof times available for significant motion detection
+     * @author Eric Tsai
+     */
+    enum ProofTime {
+        PT_0_25_S,
+        PT_0_5_S,
+        PT_1_S,
+        PT_2_S
+    }
+
+    /**
+     * Types of motion detection on the BMI160 chip
+     * @author Eric Tsai
+     */
+    enum MotionType {
+        /** Detects if there is no motion */
+        NO_MOTION,
+        /** Same as any motion exceed without information on which axis triggered the interrupt */
+        SLOW_MOTION,
+        /** Detects motion using the slope of successive acceleration signals */
+        ANY_MOTION,
+        /** Detects motion that resulted from a change in location, i.e. walking but not jostling while in a pocket */
+        SIGNIFICANT_MOTION
+    }
+
+    /**
+     * Available quiet times for double tap detection
+     * @author Eric Tsai
+     */
+    enum TapQuietTime {
+        TQT_30_MS,
+        TQT_20_MS
+    }
+
+    /**
+     * Available shock times for tap detection
+     * @author Eric Tsai
+     */
+    enum TapShockTime {
+        TST_50_MS,
+        TST_75_MS
+    }
+
+    /**
+     * Available windows for double tap detection
+     * @author Eric Tsai
+     */
+    enum DoubleTapWindow {
+        DTW_50_MS,
+        DTW_100_MS,
+        DTW_150_MS,
+        DTW_200_MS,
+        DTW_250_MW,
+        DTW_375_MS,
+        DTW_500_MS,
+        DTW_700_MS
+    }
+
+    /**
+     * Tap types to detect on the BMI160 chip
+     * @author Eric Tsai
+     */
+    enum TapType {
+        SINGLE,
+        DOUBLE
+    }
+
+    /**
      * Interface for configuring orientation detection
      * @author Eric Tsai
      */
@@ -418,6 +496,170 @@ public interface Bmi160Accelerometer extends Accelerometer {
     }
 
     /**
+     * Interface for configuring no motion detection
+     * @author Eric Tsai
+     */
+    interface NoMotionConfigEditor {
+        /**
+         * Sets the duration
+         * @param duration    Time, in milliseconds, for which no slope data points exceed the threshold
+         * @return Calling object
+         */
+        NoMotionConfigEditor setDuration(int duration);
+
+        /**
+         * Sets the tap threshold.  This value is shared with slow motion detection.
+         * @param threshold    Threshold, in Gs, for which no slope data points must exceed
+         * @return Calling object
+         */
+        NoMotionConfigEditor setThreshold(float threshold);
+        /**
+         * Writes the settings to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Interface for configuring slow motion detection
+     * @author Eric Tsai
+     */
+    interface SlowMotionConfigEditor {
+        /**
+         * Sets the count
+         * @param count    Number of consecutive slope data points that must be above the threshold
+         * @return Calling object
+         */
+        SlowMotionConfigEditor setCount(byte count);
+        /**
+         * Sets the tap threshold.  This value is shared with no motion detection
+         * @param threshold    Threshold, in Gs, for which no slope data points must exceed
+         * @return Calling object
+         */
+        SlowMotionConfigEditor setThreshold(float threshold);
+        /**
+         * Writes the settings to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Interface for configuring any motion detection
+     * @author Eric Tsai
+     */
+    interface AnyMotionConfigEditor {
+        /**
+         * Sets the duration
+         * @param duration    Number of consecutive slope data points that are above the threshold
+         * @return Calling object
+         */
+        AnyMotionConfigEditor setDuration(int duration);
+        /**
+         * Sets the threshold that the slope data points must be above
+         * @param threshold    Any motion threshold, in Gs
+         * @return Calling object
+         */
+        AnyMotionConfigEditor setThreshold(float threshold);
+        /**
+         * Writes the settings to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Interface for configuring significant motion detection
+     * @author Eric Tsai
+     */
+    interface SignificantMotionConfigEditor {
+        /**
+         * Sets the skip time
+         * @param time    Number of seconds to sleep after movement is detected
+         * @return Calling object
+         */
+        SignificantMotionConfigEditor setSkipTime(SkipTime time);
+        /**
+         * Sets the proof time
+         * @param time    Number of seconds that movement must still be detected after the skip time passed
+         * @return Calling object
+         */
+        SignificantMotionConfigEditor setProofTime(ProofTime time);
+        /**
+         * Writes the settings to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Wrapper class encapsulating responses from motion detection.  Only any motion detection has
+     * responses
+     * @author Eric Tsai
+     */
+    interface MotionResponse {
+        /**
+         * Slope sign of the triggering signal
+         * @return Positive or negative
+         */
+        Sign anyMotionSign();
+        /**
+         * Checks if any motion was detected on that axis
+         * @param axis    Axis to check
+         * @return True if the axis triggered the any motion interrupt
+         */
+        boolean anyMotionDetected(Axis axis);
+    }
+
+    /**
+     * Interface for configuring tap detection
+     * @author Eric Tsai
+     */
+    interface TapConfigEditor {
+        /**
+         * Sets the quiet time for double tap
+         * @param time    Time that must pass before a second tap can occur
+         * @return Calling object
+         */
+        TapConfigEditor setQuietTime(TapQuietTime time);
+        /**
+         * Sets the shock time
+         * @param time    Time to lock the data in the status register
+         * @return Calling object
+         */
+        TapConfigEditor setShockTime(TapShockTime time);
+        /**
+         * Sets the double tap window
+         * @param window    Length of time for a second shock to occur for a double tap
+         * @return Calling object
+         */
+        TapConfigEditor setDoubleTapWindow(DoubleTapWindow window);
+        /**
+         * Sets the tap threshold
+         * @param threshold    Threshold the acceleration difference must exceed for a tap, in Gs
+         * @return Calling object
+         */
+        TapConfigEditor setThreshold(float threshold);
+        /**
+         * Writes the changes to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Wrapper class encapsulating responses from tap detection
+     * @author Eric Tsai
+     */
+    interface TapResponse {
+        /**
+         * Get tap type of the response
+         * @return Single or double tap
+         */
+        TapType type();
+        /**
+         * Sign of the triggering signal
+         * @return Positive or negative
+         */
+        Sign sign();
+    }
+
+    /**
      * Selector for available data sources on the BMI160 sensor
      * @author Eric Tsai
      */
@@ -443,6 +685,16 @@ public interface Bmi160Accelerometer extends Accelerometer {
          * @return Object representing low/high interrupt data
          */
         DataSignal fromLowHigh();
+        /**
+         * Handle data from motion detection
+         * @return Object representing motion data
+         */
+        DataSignal fromMotion();
+        /**
+         * Handle data from tap detection
+         * @return Object representing tap data
+         */
+        DataSignal fromTap();
     }
 
     /**
@@ -511,6 +763,51 @@ public interface Bmi160Accelerometer extends Accelerometer {
      * Disable low/high G detection
      */
     void disableLowHighDetection();
+
+    /**
+     * Configures any motion detection
+     * @return Editor object to configure the settings
+     */
+    AnyMotionConfigEditor configureAnyMotionDetection();
+    /**
+     * Configures no motion detection
+     * @return Editor object to configure the detection settings
+     */
+    NoMotionConfigEditor configureNoMotionDetection();
+    /**
+     * Configures significant motion detection
+     * @return Editor object to configure the detection settings
+     */
+    SignificantMotionConfigEditor configureSignificantMotionDetection();
+    /**
+     * Configures slow motion detection
+     * @return Editor object to configure the detection settings
+     */
+    SlowMotionConfigEditor configureSlowMotionDetection();
+    /**
+     * Enables motion detection
+     * @param type    Type of motion to detect
+     */
+    void enableMotionDetection(MotionType type);
+    /**
+     * Disables motion detection
+     */
+    void disableMotionDetection();
+
+    /**
+     * Configures tap detection
+     * @return Editor object to configure the detection settings
+     */
+    TapConfigEditor configureTapDetection();
+    /**
+     * Enables tap detection
+     * @param types    Tap types to detect
+     */
+    void enableTapDetection(TapType ... types);
+    /**
+     * Disables tap detection
+     */
+    void disableTapDetection();
 
     /**
      * Starts the accelerometer in low power mode

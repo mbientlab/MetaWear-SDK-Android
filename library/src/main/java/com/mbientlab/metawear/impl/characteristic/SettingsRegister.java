@@ -73,6 +73,10 @@ public enum SettingsRegister implements Register {
     DISCONNECT_EVENT {
         @Override
         public byte opcode() { return 0xa; }
+    },
+    BATTERY_STATE {
+        @Override
+        public byte opcode() { return 0xc; }
     };
 
     @Override

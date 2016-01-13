@@ -116,6 +116,13 @@ public interface MetaWearBoard {
      * Terminates a DFU in progress, resulting in a failure.  Does nothing if no DFU is in progress
      */
     void abortFirmwareUpdate();
+    /**
+     * Checks if there is a newer version of the firmware available for your board.  If a newer firmware version
+     * exists, the operation will return true.  The firmware check requires an active internet connection on your
+     * Android device.
+     * @return Result of operation that will be available when the firmware check is completed
+     */
+    AsyncOperation<Boolean> checkForFirmwareUpdate();
 
     /**
      * Base class for on-board sensors or features supported by the board's firmware

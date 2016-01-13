@@ -41,4 +41,7 @@ public class Constant {
     public static final byte BMP280_BAROMETER= 0;
 
     public static final byte EXTENDED_LOGGING_REVISION= 2;
+
+    public static final byte BMM150_MAGNETOMETER= 0;
+    public static final byte SETTINGS_CONN_PARAMS_REVISION= 1, SETTINGS_DISCONNECTED_EVENT_REVISION= 2, SETTINGS_BATTERY_REVISION= 3;
 }

@@ -216,9 +216,72 @@ public interface Settings extends MetaWearBoard.Module {
         void commit();
     }
 
+    /**
+     * Wrapper class encapsulating battery state information
+     * @author Eric Tsai
+     */
+    interface BatteryState {
+        /**
+         * Percent charged
+         * @return Charge percentage between [0, 100]
+         */
+        byte charge();
+        /**
+         * Battery voltage
+         * @return Voltage level in mV
+         */
+        short voltage();
+    }
+
+    /**
+     * Selector for available events
+     * @author Eric Tsai
+     */
     interface EventSelector {
+        /**
+         * Handles disconnect events.  The disconnected event data signal cannot use the full data signal features
+         * until transformed by a counter processor
+         * @return Object representing the event
+         */
         DataSignal fromDisconnect();
     }
 
+    /**
+     * Selector for available data
+     * @author Eric Tsai
+     */
+    interface SourceSelector {
+        /**
+         * Handles battery state data.  This version defaults to handling data from a non-silent read
+         * @return Object representing the data
+         */
+        DataSignal fromBattery();
+        /**
+         * Handles battery state data
+         * @param silent    True if the data signal should handle data from silent reads, false if from non-silent reads
+         * @return Object representing the data
+         */
+        DataSignal fromBattery(boolean silent);
+    }
+
+    /**
+     * Initiates the creation of a route for handling settings events
+     * @return Selection of available events
+     */
     EventSelector handleEvent();
+    /**
+     *
+     * @return Selection of available data sources
+     */
+    SourceSelector routeData();
+
+    /**
+     * Reads the battery state, defaults to non-silent read
+     */
+    void readBatteryState();
+    /**
+     * Reads the battery state
+     * @param silent    True if it should be a silent read
+     */
+    void readBatteryState(boolean silent);
 }

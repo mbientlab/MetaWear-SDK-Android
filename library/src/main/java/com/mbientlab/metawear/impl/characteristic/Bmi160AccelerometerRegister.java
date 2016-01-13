@@ -52,6 +52,24 @@ public enum Bmi160AccelerometerRegister implements Register {
     LOW_HIGH_G_INTERRUPT {
         @Override public byte opcode() { return 0x8; }
     },
+    MOTION_INTERRUPT_ENABLE {
+        @Override public byte opcode() { return 0x9; }
+    },
+    MOTION_CONFIG {
+        @Override public byte opcode() { return 0xa; }
+    },
+    MOTION_INTERRUPT {
+        @Override public byte opcode() { return 0xb; }
+    },
+    TAP_INTERRUPT_ENABLE {
+        @Override public byte opcode() { return 0xc; }
+    },
+    TAP_CONFIG {
+        @Override public byte opcode() { return 0xd; }
+    },
+    TAP_INTERRUPT {
+        @Override public byte opcode() { return 0xe; }
+    },
     ORIENT_INTERRUPT_ENABLE {
         @Override public byte opcode() { return 0xf; }
     },

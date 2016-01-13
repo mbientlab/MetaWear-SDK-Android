@@ -52,7 +52,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
@@ -62,6 +64,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
@@ -76,7 +79,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Created by etsai on 6/15/2015.
  */
 public class MetaWearBleService extends Service {
-    private final static String DEVICE_STATE_KEY= "com.mbientlab.metawear.MetaWearBleService.DEVICE_STATE_KEY";
+    private final static String DEVICE_STATE_KEY= "com.mbientlab.metawear.MetaWearBleService.DEVICE_STATE_KEY", FIRMWARE_BUILD= "vanilla";
     private final static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"),
             METAWEAR_SERVICE= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A"),
             METAWEAR_COMMAND= UUID.fromString("326A9001-85CB-9195-D9DD-464CFBBAE75A"),
@@ -550,6 +553,7 @@ public class MetaWearBleService extends Service {
         private static final long READ_ATTR_TIMEOUT= 5000L, DEFAULT_CONNECTION_TIME= 15000L;
 
         private final ConcurrentLinkedQueue<AsyncOperationAndroidImpl<Byte>> batteryResult= new ConcurrentLinkedQueue<>();
+        private final ConcurrentLinkedQueue<AsyncOperationAndroidImpl<Boolean>> checkFirmwareResult= new ConcurrentLinkedQueue<>();
         private final BluetoothDevice btDevice;
 
         private final AtomicBoolean uploadingFirmware= new AtomicBoolean();
@@ -751,15 +755,16 @@ public class MetaWearBleService extends Service {
 
                 final URL firmwareUrl;
                 if (firmwareHexPath == null) {
-                    firmwareUrl= new URL(String.format("http://releases.mbientlab.com/metawear/%s/vanilla/latest/firmware.hex",
-                            gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER)));
+                    firmwareUrl= new URL(String.format("http://releases.mbientlab.com/metawear/%s/%s/latest/firmware.hex",
+                            gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER),
+                            FIRMWARE_BUILD));
                 } else {
                     firmwareUrl= null;
                 }
 
                 close();
 
-                backgroundThreadPool.submit(new Runnable() {
+                backgroundFutures.add(backgroundThreadPool.submit(new Runnable() {
                     @Override
                     public void run() {
                         uploadingFirmware.set(true);
@@ -776,7 +781,7 @@ public class MetaWearBleService extends Service {
                             uploadingFirmware.set(false);
                         }
                     }
-                });
+                }));
             } catch (MalformedURLException e) {
                 dfuOperation.setResult(null, e);
             }
@@ -792,6 +797,60 @@ public class MetaWearBleService extends Service {
         @Override
         public AsyncOperation<Void> updateFirmware(final DfuProgressHandler handler) {
             return updateFirmwareInner(null, handler);
+        }
+
+        @Override
+        public AsyncOperation<Boolean> checkForFirmwareUpdate() {
+            AsyncOperationAndroidImpl<Boolean> result= new AsyncOperationAndroidImpl<>();
+            if (!isConnected()) {
+                result.setResult(null, new RuntimeException("You must be connected to the board before checking for firmware updates"));
+            } else {
+                checkFirmwareResult.add(result);
+                backgroundFutures.add(backgroundThreadPool.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        HttpURLConnection urlConn = null;
+
+                        try {
+                            URL infoJson = new URL("http://releases.mbientlab.com/metawear/info.json");
+                            urlConn = (HttpURLConnection) infoJson.openConnection();
+                            InputStream ins = urlConn.getInputStream();
+
+                            StringBuilder response = new StringBuilder();
+                            byte data[] = new byte[1024];
+                            int count;
+                            while ((count = ins.read(data)) != -1) {
+                                response.append(new String(data, 0, count));
+                            }
+
+                            JSONObject releaseInfo = new JSONObject(response.toString());
+                            JSONObject builds = releaseInfo.getJSONObject(gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER));
+                            JSONObject availableVersions = builds.getJSONObject(FIRMWARE_BUILD);
+
+                            Iterator<String> versionKeys = availableVersions.keys();
+                            TreeSet<Version> versions = new TreeSet<>();
+                            while (versionKeys.hasNext()) {
+                                versions.add(new Version(versionKeys.next()));
+                            }
+
+                            Version currentVersion = new Version(gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.FIRMWARE_VERSION));
+                            Iterator<Version> it = versions.descendingIterator();
+                            if (it.hasNext()) {
+                                checkFirmwareResult.poll().setResult(it.next().compareTo(currentVersion) > 0, null);
+                            } else {
+                                checkFirmwareResult.poll().setResult(null, new RuntimeException("No information about released firmware versions available"));
+                            }
+                        } catch (Exception e) {
+                            checkFirmwareResult.poll().setResult(null, e);
+                        } finally {
+                            if (urlConn != null) {
+                                urlConn.disconnect();
+                            }
+                        }
+                    }
+                }));
+            }
+            return result;
         }
 
         @Override
@@ -926,7 +985,7 @@ public class MetaWearBleService extends Service {
                 final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
                 final byte[] response= characteristic.getValue();
                 byte registerId= (byte) (response[1] & 0x7f);
-
+                
                 // All info registers are id = 0
                 if (InfoRegister.LOGGING.opcode() == registerId) {
                     ModuleInfoImpl info = new ModuleInfoImpl(response);
