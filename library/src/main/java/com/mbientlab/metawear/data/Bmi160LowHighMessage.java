@@ -32,7 +32,7 @@ import java.util.Calendar;
 
 
 /**
- * Container class for low/high G detection data from the BMI160 sensor.  Data is interpreted as a LowHighResponse
+ * Container class for low/high G detection data from the BMI160 and BMA255 accelerometers.  Data is interpreted as a LowHighResponse
  * object
  * @author Eric Tsai
  * @see LowHighResponse

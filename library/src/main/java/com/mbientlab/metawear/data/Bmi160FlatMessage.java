@@ -29,7 +29,7 @@ import com.mbientlab.metawear.Message;
 import java.util.Calendar;
 
 /**
- * Container class for flat detection data from the BMI160 sensor.  Data is interpreted as a Boolean where a
+ * Container class for flat detection data from the BMI160 and BMA255 accelerometers.  Data is interpreted as a Boolean where a
  * true value means the sensor is laying flat.
  * @author Eric Tsai
  */

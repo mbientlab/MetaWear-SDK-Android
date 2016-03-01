@@ -6,7 +6,10 @@ import com.mbientlab.metawear.module.Bmi160Accelerometer.*;
 import java.util.Calendar;
 
 /**
- * Created by etsai on 1/9/2016.
+ * Container class for motion data from the BMI160 and BMA255 accelerometers.  The data can only be interpreted as a
+ * MotionResponse type.
+ * @author Eric Tsai
+ * @see MotionResponse
  */
 public class Bmi160MotionMessage extends Message {
     private final MotionResponse response;

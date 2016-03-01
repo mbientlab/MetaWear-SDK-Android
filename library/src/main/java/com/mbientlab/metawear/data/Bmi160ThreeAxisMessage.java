@@ -31,7 +31,7 @@ import java.nio.ByteOrder;
 import java.util.Calendar;
 
 /**
- * Container class for accelerometer data from the BMI160 chip.  By default, data is interpreted as
+ * Container class for acceleration data from the BMI160 and BMA255 accelerometers.  By default, data is interpreted as
  * a CartesianFloat type and reported in units of G's.  Interpreting the data as a CartesianShort converts
  * the data to milliG's
  * @author Eric Tsai

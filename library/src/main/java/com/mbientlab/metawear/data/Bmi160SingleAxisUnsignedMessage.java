@@ -27,7 +27,7 @@ package com.mbientlab.metawear.data;
 import java.util.Calendar;
 
 /**
- * Container class for one axis of accelerometer data from the BMI160 chip that will always be positive.
+ * Container class for one axis of acceleration data from the BMI160 and BMA255 accelerometers that will always be positive.
  * This can be done either combining the data of all three axes into 1 value via a RMS or RSS computation,
  * or feeding single axis data through an absolute value transformer.  Data by default is interpreted
  * as a float and given in G's.  Interpreting the data as a short, integer, or long will convert the

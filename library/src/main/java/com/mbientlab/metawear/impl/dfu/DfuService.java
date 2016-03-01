@@ -403,27 +403,16 @@ public class DfuService implements Runnable {
         }
     };
 
-    private File firmwareHexPath;
-    private URL firmwareUrl;
+
+    private final Object firmware;
 
     private final BluetoothDevice btDevice;
     private final Context ctx;
     private final boolean inMetaBootMode;
     private final MetaWearBoard.DfuProgressHandler progressHandler;
 
-    public DfuService(BluetoothDevice btDevice, File firmwarePath, Context ctx, boolean inMetaBootMode, MetaWearBoard.DfuProgressHandler progressHandler) {
-        this(btDevice, ctx, inMetaBootMode, progressHandler);
-        this.firmwareUrl= null;
-        this.firmwareHexPath= firmwarePath;
-    }
-
-    public DfuService(BluetoothDevice btDevice, URL firmwareUrl, Context ctx, boolean inMetaBootMode, MetaWearBoard.DfuProgressHandler progressHandler) {
-        this(btDevice, ctx, inMetaBootMode, progressHandler);
-        this.firmwareUrl= firmwareUrl;
-        this.firmwareHexPath= null;
-    }
-
-    private DfuService(BluetoothDevice btDevice, Context ctx, boolean inMetaBootMode, MetaWearBoard.DfuProgressHandler progressHandler) {
+    public DfuService(BluetoothDevice btDevice, Object firmware, Context ctx, boolean inMetaBootMode, MetaWearBoard.DfuProgressHandler progressHandler) {
+        this.firmware= firmware;
         this.btDevice= btDevice;
         this.ctx= ctx;
         this.inMetaBootMode= inMetaBootMode;
@@ -464,11 +453,10 @@ public class DfuService implements Runnable {
         try {
             // Prepare data to send, calculate stream size
             try {
-
-                if (firmwareUrl != null) {
+                if (firmware instanceof InputStream) {
+                    his= new HexInputStream((InputStream) firmware);
+                } else if (firmware instanceof URL) {
                     his = openInputStream(downloadFirmware());
-                } else {
-                    his= openInputStream(firmwareHexPath);
                 }
 
                 mImageSizeInBytes = his.sizeInBytes();
@@ -669,7 +657,7 @@ public class DfuService implements Runnable {
         progressHandler.reachedCheckpoint(MetaWearBoard.DfuProgressHandler.State.DOWNLOADING);
 
         try {
-            urlConn = (HttpURLConnection) firmwareUrl.openConnection();
+            urlConn = (HttpURLConnection) ((URL) firmware).openConnection();
 
             File fileDir = ctx.getFilesDir();
             File firmwareHex = new File(fileDir, "firmware.hex");

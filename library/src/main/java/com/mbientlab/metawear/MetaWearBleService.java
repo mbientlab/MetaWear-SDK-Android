@@ -715,7 +715,7 @@ public class MetaWearBleService extends Service {
             return gattConnectionStates.get(btDevice).isMetaBoot;
         }
 
-        private AsyncOperation<Void> updateFirmwareInner(final File firmwareHexPath, final DfuProgressHandler handler) {
+        private AsyncOperation<Void> updateFirmwareInner(Object firmwareHex, final DfuProgressHandler handler) {
             if (uploadingFirmware.get()) {
                 AsyncOperationAndroidImpl<Void> result= new AsyncOperationAndroidImpl<>();
                 result.setResult(null, new RuntimeException("Firmware update already in progress"));
@@ -753,13 +753,13 @@ public class MetaWearBleService extends Service {
                     }
                 };
 
-                final URL firmwareUrl;
-                if (firmwareHexPath == null) {
-                    firmwareUrl= new URL(String.format("http://releases.mbientlab.com/metawear/%s/%s/latest/firmware.hex",
+                final Object firmware;
+                if (firmwareHex == null) {
+                    firmware = new URL(String.format("http://releases.mbientlab.com/metawear/%s/%s/latest/firmware.hex",
                             gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER),
                             FIRMWARE_BUILD));
                 } else {
-                    firmwareUrl= null;
+                    firmware = firmwareHex;
                 }
 
                 close();
@@ -768,11 +768,9 @@ public class MetaWearBleService extends Service {
                     @Override
                     public void run() {
                         uploadingFirmware.set(true);
-                        dfuService = (firmwareUrl != null) ? new DfuService(btDevice, firmwareUrl, MetaWearBleService.this, inMetaBootMode(), handlerWrapper) :
-                                new DfuService(btDevice, firmwareHexPath, MetaWearBleService.this, inMetaBootMode(), handlerWrapper);
-                        Future<?> dfuFuture = backgroundThreadPool.submit(dfuService);
-
                         try {
+                            dfuService = new DfuService(btDevice, firmware, MetaWearBleService.this, inMetaBootMode(), handlerWrapper);
+                            Future<?> dfuFuture = backgroundThreadPool.submit(dfuService);
                             dfuFuture.get();
                             dfuOperation.setResult(null, null);
                         } catch (Exception e) {
@@ -797,6 +795,11 @@ public class MetaWearBleService extends Service {
         @Override
         public AsyncOperation<Void> updateFirmware(final DfuProgressHandler handler) {
             return updateFirmwareInner(null, handler);
+        }
+
+        @Override
+        public AsyncOperation<Void> updateFirmware(InputStream firmwareStream, DfuProgressHandler handler) {
+            return updateFirmwareInner(firmwareStream, handler);
         }
 
         @Override
@@ -985,7 +988,7 @@ public class MetaWearBleService extends Service {
                 final GattConnectionState state= gattConnectionStates.get(gatt.getDevice());
                 final byte[] response= characteristic.getValue();
                 byte registerId= (byte) (response[1] & 0x7f);
-                
+
                 // All info registers are id = 0
                 if (InfoRegister.LOGGING.opcode() == registerId) {
                     ModuleInfoImpl info = new ModuleInfoImpl(response);

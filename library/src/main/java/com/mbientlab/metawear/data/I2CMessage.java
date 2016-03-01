@@ -29,7 +29,9 @@ import com.mbientlab.metawear.Message;
 import java.util.Calendar;
 
 /**
- * Created by etsai on 8/30/2015.
+ * Container class for I2C data.  The data can only be interpreted as a byte array and the default
+ * {@link #getData()} function should be used.
+ * @author Eric Tsai
  */
 public class I2CMessage extends Message {
     public I2CMessage(byte[] data) {

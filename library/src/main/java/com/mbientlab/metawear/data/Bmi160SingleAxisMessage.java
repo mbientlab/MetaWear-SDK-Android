@@ -27,7 +27,7 @@ package com.mbientlab.metawear.data;
 import java.util.Calendar;
 
 /**
- * Container class for accelerometer data of one axis from the BMI160 chip.  The data, by default, is
+ * Container class for acceleration data of one axis from the BMI160 and BMA255 accelerometers.  The data, by default, is
  * interpreted as a float and corresponds to how much force the board is experiencing along the axis,
  * in G's.  If you interpret the data as a short or integer, the data will be converted to milliG's.
  * @author Eric Tsai

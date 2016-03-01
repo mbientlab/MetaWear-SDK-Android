@@ -38,14 +38,16 @@ public interface Gyro extends MetaWearBoard.Module {
     * Sets the operating frequency of the gyro.  The closest, valid frequency will be chosen
     * depending on underlying sensor
     * @param frequency    Operating frequency, in Hz
+    * @return Selected operating frequency
     */
-    void setOutputDataRate(float frequency);
+    float setOutputDataRate(float frequency);
     /**
      * Sets the max range for sampling the angular rate of the gyro.  The closest, valid range will be
      * chosen depending on the underlying sensor
      * @param range    Max sampling range, in degrees per second
+     * @return Selected angular rate range
      */
-    void setAngularRateRange(float range);
+    float setAngularRateRange(float range);
 
     /**
      * Switches the gyro into an active state

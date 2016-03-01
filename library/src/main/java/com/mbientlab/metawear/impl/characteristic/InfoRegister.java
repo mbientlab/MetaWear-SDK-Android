@@ -108,6 +108,18 @@ public enum InfoRegister implements Register {
         @Override
         public byte moduleOpcode() { return 0x15; }
     },
+    HUMIDITY {
+        @Override
+        public byte moduleOpcode() { return 0x16; }
+    },
+    COLOR_DETECTOR {
+        @Override
+        public byte moduleOpcode() { return 0x17; }
+    },
+    PROXIMITY {
+        @Override
+        public byte moduleOpcode() { return 0x18; }
+    },
     DEBUG {
         @Override
         public byte moduleOpcode() { return (byte) 0xfe; }

@@ -25,6 +25,7 @@
 package com.mbientlab.metawear;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.UUID;
 
 /**
@@ -112,6 +113,16 @@ public interface MetaWearBoard {
      * @return Result of the operation that will be available when the DFU is finished
      */
     AsyncOperation<Void> updateFirmware(File firmwareHexPath, DfuProgressHandler handler);
+    /**
+     * Updates the firmware on the board using data from the provided input stream.  Executing this function will terminate the Bluetooth
+     * connection without calling the {@link ConnectionStateHandler#disconnect() disconnected()} callback function.  You must be connected
+     * to the board before calling this feature, otherwise, it will fail.
+     * @param firmwareStream    Path to the firmware file
+     * @param handler            Handler for processing DFU progress notifications
+     * @return Result of the operation that will be available when the DFU is finished
+     */
+    AsyncOperation<Void> updateFirmware(InputStream firmwareStream, DfuProgressHandler handler);
+
     /**
      * Terminates a DFU in progress, resulting in a failure.  Does nothing if no DFU is in progress
      */

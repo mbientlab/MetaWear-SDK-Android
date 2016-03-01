@@ -28,17 +28,17 @@ package com.mbientlab.metawear.impl;
  * Created by etsai on 7/8/2015.
  */
 public class Constant {
-    public static final String METAWEAR_R_MODULE = "0", METAWEAR_RG_MODULE= "1";
+    public static final String METAWEAR_R_MODULE = "0", METAWEAR_RG_MODULE= "1", METAWEAR_C_MODULE= "2";
     public static final Version MULTI_CHANNEL_TEMP_MIN_FIRMWARE= new Version(1, 0, 4), SERVICE_DISCOVERY_MIN_FIRMWARE = MULTI_CHANNEL_TEMP_MIN_FIRMWARE,
             MULTI_CHANNEL_MATH= new Version(1, 1, 0), DISCONNECTED_EVENT= MULTI_CHANNEL_MATH;
 
     public static final byte SINGLE_CHANNEL_TEMP_IMPLEMENTATION= 0, MULTI_CHANNEL_TEMP_IMPLEMENTATION= 1;
 
-    public static final byte MMA8452Q_IMPLEMENTATION= 0, BMI160_IMPLEMENTATION= 1;
+    public static final byte MMA8452Q_IMPLEMENTATION= 0, BMI160_IMPLEMENTATION= 1, BMA255_IMPLEMENTATION= 3;
     public static final byte BMI160_GYRO_IMPLEMENTATION= 0;
 
     public static final byte LTR329_LIGHT_SENSOR= 0;
-    public static final byte BMP280_BAROMETER= 0;
+    public static final byte BMP280_BAROMETER= 0, BME280_BAROMETER= 1;
 
     public static final byte EXTENDED_LOGGING_REVISION= 2;
 

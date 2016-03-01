@@ -56,14 +56,16 @@ public interface Accelerometer extends MetaWearBoard.Module {
      * Sets the operating frequency of the accelerometer.  The closest, valid frequency will be chosen
      * depending on underlying sensor
      * @param frequency    Operating frequency, in Hz
+     * @return Selected operating frequency
      */
-    void setOutputDataRate(float frequency);
+    float setOutputDataRate(float frequency);
     /**
      * Sets the sampling range for the accelerometer.  The closest, valid range will be chosen depending
      * on the underlying sensor
      * @param range    Sampling range, in G's
+     * @return Selected acceleration range
      */
-    void setAxisSamplingRange(float range);
+    float setAxisSamplingRange(float range);
 
     /**
      * Enables sampling of the XYZ axes

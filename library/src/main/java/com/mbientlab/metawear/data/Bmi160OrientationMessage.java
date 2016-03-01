@@ -31,7 +31,7 @@ import com.mbientlab.metawear.module.Bmi160Accelerometer.SensorOrientation;
 import java.util.Calendar;
 
 /**
- * Container class for orientation data from the BMI160 chip.  Data is interpreted as
+ * Container class for orientation data from the BMI160 and BMA255 accelerometers.  Data is interpreted as
  * a SensorOrientation or BoardOrientation enum.
  * @author Eric Tsai
  * @see BoardOrientation

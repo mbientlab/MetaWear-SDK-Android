@@ -85,7 +85,7 @@ public interface Bmi160Accelerometer extends Accelerometer {
     }
 
     /**
-     * Operating frequency of the accelerometer
+     * Operating frequencies of the accelerometer
      * @author Eric Tsai
      */
     enum OutputDataRate {

@@ -1894,12 +1894,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             public void unsubscribe() {
                 if (header != null) {
                     writeRegister(DataProcessorRegister.NOTIFY_ENABLE, header.id, (byte) 0);
+                    responseProcessors.remove(header);
                 }
                 nProcSubscribers--;
                 if (nProcSubscribers == 0) {
                     writeRegister(DataProcessorRegister.NOTIFY, (byte) 0x0);
                 }
-                responseProcessors.remove(header);
             }
 
             @Override
@@ -2576,12 +2576,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 }
 
                 @Override
-                public void unsubscribe() {
-                    writeRegister(GpioRegister.PIN_CHANGE_NOTIFY, (byte) 0);
-                    super.unsubscribe();
-                }
-
-                @Override
                 public void enableNotifications() {
                     writeRegister(GpioRegister.PIN_CHANGE_NOTIFY, (byte) 1);
                 }
@@ -2757,6 +2751,42 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
 
+        public DataSignal fromTcs34725Color(ReadType type) {
+            return new DataSource((byte) 8, (byte) 1, Tcs34725ColorMessage.class, new ResponseHeader(Tcs34725ColorDetectorRegister.COLOR), type) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
+
+                @Override
+                public void enableNotifications() { }
+            };
+        }
+
+        public DataSignal fromBme280Humidity(ReadType type) {
+            return new DataSource((byte) 4, (byte) 1, Bme280HumidityMessage.class, new ResponseHeader(Bme280HumidityRegister.HUMIDITY), type) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
+
+                @Override
+                public void enableNotifications() { }
+            };
+        }
+
+        public DataSignal fromTsl2671Proximity(ReadType type) {
+            return new DataSource((byte) 2, (byte) 1, UnsignedMessage.class, new ResponseHeader(Tsl2671ProximityRegister.PROXIMITY), type) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
+
+                @Override
+                public void enableNotifications() { }
+            };
+        }
+
         @Override
         public void receivedId(byte id) {
             creators.poll().receivedId(id);
@@ -2869,7 +2899,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         } else {
             commitRoutes.set(false);
 
-            if (currentBlock != null) {
+            if (currentBlock != null && !writingMacro.get()) {
+                writingMacro.set(true);
                 conn.executeTask(writeMacroCommands, WRITE_MACRO_DELAY);
             }
         }
@@ -3232,19 +3263,28 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         responses.put(new ResponseHeader(I2CRegister.READ_WRITE), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
-                if (response.length > 3) {
-                    byte[] i2cData = new byte[response.length - 3];
-                    System.arraycopy(response, 3, i2cData, 0, response.length - 3);
+                if (response[2] != (byte) 0xff) {
+                    if (response.length > 3) {
+                        byte[] i2cData = new byte[response.length - 3];
+                        System.arraycopy(response, 3, i2cData, 0, response.length - 3);
 
-                    if (response[2] != (byte) 0xff) {
+                        conn.setResultReady(userI2cReads.get(response[2]).poll(), null, null);
                         return new Response(new I2CMessage(i2cData), new ResponseHeader(response[0], response[1], response[2]));
+                    } else {
+                        conn.setResultReady(userI2cReads.get(response[2]).poll(), null,
+                                new RuntimeException("Error reading I2C data from device or register address.  Response: " + arrayToHexString(response)));
                     }
-                    conn.setResultReady(i2cReadResults.poll(), i2cData, null);
                 } else {
-                    conn.setResultReady(i2cReadResults.poll(), null,
-                            new RuntimeException("Received I2C data less than 4 bytes: " + arrayToHexString(response)));
-                }
+                    if (response.length > 3) {
+                        byte[] i2cData = new byte[response.length - 3];
+                        System.arraycopy(response, 3, i2cData, 0, response.length - 3);
 
+                        conn.setResultReady(i2cReadResults.poll(), i2cData, null);
+                    } else {
+                        conn.setResultReady(i2cReadResults.poll(), null,
+                                new RuntimeException("Error reading I2C data from device or register address.  Response: " + arrayToHexString(response)));
+                    }
+                }
                 return null;
             }
         });
@@ -3384,6 +3424,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     responses.put(new ResponseHeader(Mma8452qAccelerometerRegister.MOVEMENT_VALUE), movementProcessor);
                     break;
                 case Constant.BMI160_IMPLEMENTATION:
+                case Constant.BMA255_IMPLEMENTATION:
                     responses.put(new ResponseHeader(Bmi160AccelerometerRegister.DATA_INTERRUPT), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
@@ -3418,6 +3459,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         public Response process(byte[] response) {
                             bmi160DataSampling[0]= response[0];
                             bmi160DataSampling[1]= response[1];
+                            bma255DataSampling[0]= response[0];
+                            bma255DataSampling[1]= response[1];
                             bmi160AccRange= Bmi160Accelerometer.AccRange.bitMaskToRange((byte) (response[1] & 0xf));
                             return null;
                         }
@@ -3490,6 +3533,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         } else if (info.id() == InfoRegister.BAROMETER.moduleOpcode()) {
             switch(info.implementation()) {
                 case Constant.BMP280_BAROMETER:
+                case Constant.BME280_BAROMETER:
                     responses.put(new ResponseHeader(Bmp280BarometerRegister.ALTITUDE), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
@@ -3626,6 +3670,36 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     });
                     break;
             }
+        } else if (info.id() == InfoRegister.HUMIDITY.moduleOpcode()) {
+            responses.put(new ResponseHeader(Bme280HumidityRegister.HUMIDITY), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new Bme280HumidityMessage(respBody), new ResponseHeader(response[0], response[1]));
+                }
+            });
+        } else if (info.id() == InfoRegister.COLOR_DETECTOR.moduleOpcode()) {
+            responses.put(new ResponseHeader(Tcs34725ColorDetectorRegister.COLOR), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new Tcs34725ColorMessage(respBody), new ResponseHeader(response[0], response[1]));
+                }
+            });
+        } else if (info.id() == InfoRegister.PROXIMITY.moduleOpcode()) {
+            responses.put(new ResponseHeader(Tsl2671ProximityRegister.PROXIMITY), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new UnsignedMessage(respBody), new ResponseHeader(response[0], response[1]));
+                }
+            });
         }
     }
     public void setFirmwareVersion(Version firmwareVersion) {
@@ -4758,6 +4832,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
     }
 
+    private final Map<Byte, ConcurrentLinkedQueue<AsyncOperation<Void>>> userI2cReads= new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<AsyncOperation<byte[]>> i2cReadResults= new ConcurrentLinkedQueue<>();
     private class I2CImpl implements I2C {
         private final static long READ_DATA_TIMEOUT= 5000;
@@ -4791,8 +4866,22 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
-        public void readData(byte deviceAddr, byte registerAddr, byte numBytes, byte id) {
+        public AsyncOperation<Void> readData(byte deviceAddr, byte registerAddr, byte numBytes, final byte id) {
+            final AsyncOperation<Void> result= conn.createAsyncOperation();
+            if (!userI2cReads.containsKey(id)) {
+                userI2cReads.put(id, new ConcurrentLinkedQueue<AsyncOperation<Void>>());
+            }
+            userI2cReads.get(id).add(result);
+            conn.setOpTimeout(result, new Runnable() {
+                @Override
+                public void run() {
+                    userI2cReads.get(id).remove(result);
+                    conn.setResultReady(result, null, new TimeoutException(String.format("I2C read timed out after %dms", READ_DATA_TIMEOUT)));
+                }
+            }, READ_DATA_TIMEOUT);
+
             readRegister(I2CRegister.READ_WRITE, false, deviceAddr, registerAddr, id, numBytes);
+            return result;
         }
 
         @Override
@@ -4806,6 +4895,23 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
     }
 
+    private final long WRITE_MACRO_DELAY = 2000L;
+    private final Runnable writeMacroCommands= new Runnable() {
+        @Override
+        public void run() {
+            saveCommand = false;
+
+            nExpectedMacroCmds= commands.size() + 2;
+            writeRegister(MacroRegister.BEGIN, (byte) (currentBlock.execOnBoot() ? 1 : 0));
+            for (byte[] cmd : commands) {
+                conn.sendCommand(true, cmd);
+            }
+            writeRegister(MacroRegister.END);
+            currentBlock = null;
+            writingMacro.set(false);
+        }
+    };
+    private final AtomicBoolean writingMacro= new AtomicBoolean();
     private final Queue<byte[]> commands= new LinkedList<>();
     private final ConcurrentLinkedQueue<AsyncOperation<Byte>> macroIdResults = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<AsyncOperation<Void>> macroExecResults = new ConcurrentLinkedQueue<>();
@@ -4823,7 +4929,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             saveCommand= true;
             block.commands();
 
-            if (!commitRoutes.get()) {
+            if (!commitRoutes.get() && !writingMacro.get()) {
+                writingMacro.set(true);
                 conn.executeTask(writeMacroCommands, WRITE_MACRO_DELAY);
             }
 
@@ -4847,21 +4954,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             writeRegister(MacroRegister.ERASE_ALL);
         }
     }
-    private final long WRITE_MACRO_DELAY = 2000L;
-    private final Runnable writeMacroCommands= new Runnable() {
-        @Override
-        public void run() {
-            saveCommand = false;
-
-            nExpectedMacroCmds= commands.size() + 2;
-            writeRegister(MacroRegister.BEGIN, (byte) (currentBlock.execOnBoot() ? 1 : 0));
-            for (byte[] cmd : commands) {
-                conn.sendCommand(true, cmd);
-            }
-            writeRegister(MacroRegister.END);
-            currentBlock = null;
-        }
-    };
 
     private Mma8452qAccelerometerImpl mma8452qModule= null;
     private final byte[] mma8452qDataSampling= new byte[] {0, 0, 0x18, 0, 0}, mma8452qOrientationCfg= new byte[5];
@@ -4927,20 +5019,22 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
-        public void setOutputDataRate(float frequency) {
+        public float setOutputDataRate(float frequency) {
             final float[] values = new float[] {1.56f, 6.25f, 12.5f, 50.f, 100.f, 200.f, 400.f, 800.f};
             int selected = values.length - closestIndex(values, frequency) - 1;
 
             mma8452qDataSampling[2] &= 0xc7;
             mma8452qDataSampling[2] |= (selected) << 3;
+            return values[selected];
         }
 
         @Override
-        public void setAxisSamplingRange(float range) {
+        public float setAxisSamplingRange(float range) {
             final float[] ranges= new float[] {2.f, 4.f, 8.f};
             int selected= closestIndex(ranges, range);
 
             selectedFsr= FullScaleRange.values()[selected];
+            return ranges[selected];
         }
 
         @Override
@@ -5373,6 +5467,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
     }
 
+    private static final float[] BOSCH_HIGH_THRESHOLD_STEPS= {0.00781f, 0.01563f, 0.03125f, 0.0625f},
+            BOSCH_HIGH_HYSTERESIS_STEPS= {0.125f, 0.250f, 0.5f, 1f},
+            BOSCH_ANY_MOTION_THS_STEPS= {0.00391f, 0.00781f, 0.01563f, 0.03125f},
+            BOSCH_NO_MOTION_THS_STEPS= BOSCH_ANY_MOTION_THS_STEPS,
+            BOSCH_TAP_THS_STEPS= {0.0625f, 0.125f, 0.250f, 0.5f};
+
     private Bmi160AccelerometerImpl bmi160AccModule= null;
     private final byte[] bmi160LowHighConfig= new byte[] {0x7, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0};
     private Bmi160Accelerometer.AccRange bmi160AccRange= Bmi160Accelerometer.AccRange.AR_2G;
@@ -5382,17 +5482,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     }, bmi160TapConfig= new byte[] { 0x4, 0xa };
     private class Bmi160AccelerometerImpl implements Bmi160Accelerometer {
         private static final float BMI160_ORIENT_HYS_G_PER_STEP= 0.0625f, THETA_STEP= (float) (44.8/63.f);
-        private final float[] HIGH_THRESHOLD_STEPS= {
-                0.00781f, 0.01563f, 0.03125f, 0.0625f
-        }, HIGH_HYSTERESIS_STEPS= {
-                0.125f, 0.250f, 0.5f, 1f
-        }, ANY_MOTION_THS_STEPS= {
-                3.91f, 7.81f, 15.63f, 31.25f
-        }, NO_MOTION_THS_STEPS= {
-                3.91f, 7.81f, 15.63f, 31.25f
-        }, TAP_THS_STEPS= {
-                0.0625f, 0.125f, 0.250f, 0.5f
-        };
 
         private Float highHysteresis= null, highThreshold= null, noMotionThs= null, anyMotionThs= null, tapThs= 1.5f;
         private byte[] motionConfig= new byte[] {0x0, 0x14, 0x14, 0x14};
@@ -5446,21 +5535,30 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
-        public void setAxisSamplingRange(float range) {
+        public float setAxisSamplingRange(float range) {
             final float[] values= new float[] { 2.f, 4.f, 8.f, 16.f };
             int closest= closestIndex(values, range);
 
             bmi160AccRange= Bmi160Accelerometer.AccRange.values()[closest];
             bmi160DataSampling[1]&= 0xf0;
             bmi160DataSampling[1]|= bmi160AccRange.bitMask();
+            return values[closest];
         }
 
         @Override
-        public void setOutputDataRate(float frequency) {
-            int closest= closestIndex(OutputDataRate.frequencies(), frequency);
+        public float setOutputDataRate(float frequency) {
+            OutputDataRate closestOdr=  Bmi160Accelerometer.OutputDataRate.values()[closestIndex(OutputDataRate.frequencies(), frequency)];
 
             bmi160DataSampling[0]&= 0xf0;
-            bmi160DataSampling[0]|= Bmi160Accelerometer.OutputDataRate.values()[closest].bitMask();
+            bmi160DataSampling[0]|= closestOdr.bitMask();
+
+            bmi160DataSampling[0]&= 0xf;
+            if (closestOdr.frequency() < 12.5f) {
+                bmi160DataSampling[0]|= 0x90;
+            } else {
+                bmi160DataSampling[0]|= 0x20;
+            }
+            return closestOdr.frequency();
         }
 
         @Override
@@ -5495,24 +5593,24 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         private void start(byte powerMode) {
             if (highHysteresis != null) {
-                bmi160LowHighConfig[2]|= ((int) (highHysteresis / HIGH_HYSTERESIS_STEPS[bmi160AccRange.ordinal()]) & 0x3) << 6;
+                bmi160LowHighConfig[2]|= ((int) (highHysteresis / BOSCH_HIGH_HYSTERESIS_STEPS[bmi160AccRange.ordinal()]) & 0x3) << 6;
             }
 
             if (highThreshold != null) {
-                bmi160LowHighConfig[4]= (byte) (highThreshold / HIGH_THRESHOLD_STEPS[bmi160AccRange.ordinal()]);
+                bmi160LowHighConfig[4]= (byte) (highThreshold / BOSCH_HIGH_THRESHOLD_STEPS[bmi160AccRange.ordinal()]);
             }
 
             if (noMotionThs != null) {
-                motionConfig[2]= (byte) (noMotionThs / NO_MOTION_THS_STEPS[bmi160AccRange.ordinal()]);
+                motionConfig[2]= (byte) (noMotionThs / BOSCH_NO_MOTION_THS_STEPS[bmi160AccRange.ordinal()]);
             }
 
             if (anyMotionThs != null) {
-                motionConfig[1]= (byte) (anyMotionThs / ANY_MOTION_THS_STEPS[bmi160AccRange.ordinal()]);
+                motionConfig[1]= (byte) (anyMotionThs / BOSCH_ANY_MOTION_THS_STEPS[bmi160AccRange.ordinal()]);
             }
 
             if (tapThs != null) {
                 bmi160TapConfig[1]&= 0xe0;
-                bmi160TapConfig[1]|= (byte) Math.min(15, tapThs / TAP_THS_STEPS[bmi160AccRange.ordinal()]);
+                bmi160TapConfig[1]|= (byte) Math.min(15, tapThs / BOSCH_TAP_THS_STEPS[bmi160AccRange.ordinal()]);
             }
 
             writeRegister(Bmi160AccelerometerRegister.TAP_CONFIG, bmi160TapConfig);
@@ -5602,7 +5700,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 @Override
                 public OrientationConfigEditor setHysteresis(float hysteresis) {
                     intOrient[0]&= 0xf;
-                    intOrient[0]|= (byte) Math.min(0xf, (byte) hysteresis / BMI160_ORIENT_HYS_G_PER_STEP);
+                    intOrient[0]|= (byte) Math.min(0xf, (byte) (hysteresis / BMI160_ORIENT_HYS_G_PER_STEP));
                     return this;
                 }
 
@@ -6084,17 +6182,19 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
-        public void setOutputDataRate(float frequency) {
+        public float setOutputDataRate(float frequency) {
             final float[] values= new float[] { 25f, 50f, 100f, 200f, 400f, 800f, 1600f, 3200f };
             int closest= closestIndex(values, frequency);
 
-            OutputDataRate bestOdr= OutputDataRate.values()[closest];
             bmi160GyroConfig[0] &= 0xf0;
-            bmi160GyroConfig[0] |= bestOdr.bitMask();
+            bmi160GyroConfig[0] |= OutputDataRate.values()[closest].bitMask();
+            writeRegister(Bmi160GyroRegister.CONFIG, bmi160GyroConfig);
+
+            return values[closest];
         }
 
         @Override
-        public void setAngularRateRange(float range) {
+        public float setAngularRateRange(float range) {
             final float[] values= new float[] { 125f, 250f, 500f, 1000f, 2000f };
             int closest= values.length - closestIndex(values, range) - 1;
 
@@ -6102,6 +6202,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             bmi160GyroRange = bestFsr;
             bmi160GyroConfig[1] &= 0xf8;
             bmi160GyroConfig[1] |= bestFsr.bitMask();
+            writeRegister(Bmi160GyroRegister.CONFIG, bmi160GyroConfig);
+
+            return values[closest];
         }
 
         @Override
@@ -6393,10 +6496,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 private OversamplingMode samplingMode= OversamplingMode.STANDARD;
                 private FilterMode filterMode= FilterMode.OFF;
                 private StandbyTime time= StandbyTime.TIME_0_5;
+                private byte tempOversampling= 1;
 
                 @Override
                 public ConfigEditor setPressureOversampling(OversamplingMode mode) {
                     samplingMode= mode;
+                    tempOversampling= (byte) ((mode == OversamplingMode.ULTRA_HIGH) ? 2 : 1);
                     return this;
                 }
 
@@ -6414,7 +6519,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public void commit() {
-                    byte first= (byte) (samplingMode.ordinal() << 2);
+                    byte first= (byte) ((byte) (samplingMode.ordinal() << 2) | (tempOversampling << 5));
                     byte second= (byte) ((filterMode.ordinal() << 2) | (time.ordinal() << 5));
                     writeRegister(Bmp280BarometerRegister.CONFIG, first, second);
                 }
@@ -6495,6 +6600,712 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
     }
 
+    private class Tcs34725ColorDetectorImpl implements Tcs34725ColorDetector {
+        @Override
+        public void readColorAdc(boolean silent) {
+            readRegister(Tcs34725ColorDetectorRegister.COLOR, silent);
+        }
+
+        @Override
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private byte aTime= (byte) 0xff;
+                private Gain gain= Gain.GAIN_1X;
+
+                @Override
+                public ConfigEditor setIntegrationTime(float time) {
+                    aTime= (byte) (256.f - time / 2.4f);
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setGain(Gain gain) {
+                    this.gain= gain;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(Tcs34725ColorDetectorRegister.MODE, aTime, (byte) gain.ordinal(), (byte) 0);
+                }
+            };
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromSensor(boolean silent) {
+                    return new RouteBuilder().fromTcs34725Color(silent ? ReadType.SILENT : ReadType.NORMAL);
+                }
+            };
+        }
+    }
+
+    private class Bme280HumidityImpl implements Bme280Humidity {
+        @Override
+        public void setOversampling(OversamplingMode mode) {
+            writeRegister(Bme280HumidityRegister.MODE, (byte) mode.ordinal());
+        }
+
+        @Override
+        public void readHumidity(boolean silent) {
+            readRegister(Bme280HumidityRegister.HUMIDITY, silent);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromSensor(boolean silent) {
+                    return new RouteBuilder().fromBme280Humidity(silent ? ReadType.SILENT : ReadType.NORMAL);
+                }
+            };
+        }
+    }
+
+    private class Tsl2671ProximityImpl implements Tsl2671Proximity {
+        @Override
+        public void readProximity(boolean silent) {
+            readRegister(Tsl2671ProximityRegister.PROXIMITY, silent);
+        }
+
+        @Override
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private ReceiverDiode diode= ReceiverDiode.CHANNEL_1;
+                private TransmitterDrive driveCurrent= TransmitterDrive.CURRENT_25MA;
+                private byte nPulses= 1;
+                private byte pTime= (byte) 0xff;
+
+                @Override
+                public ConfigEditor setIntegrationTime(float time) {
+                    pTime= (byte) (256.f - time / 2.72f);
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setPulseCount(byte nPulses) {
+                    this.nPulses= nPulses;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setReceiverDiode(ReceiverDiode diode) {
+                    this.diode= diode;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setTransmitterDriver(TransmitterDrive driveCurrent) {
+                    this.driveCurrent= driveCurrent;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    byte[] config= new byte[] {pTime, nPulses, (byte) ((diode.ordinal() << 4) | (driveCurrent.ordinal() << 6))};
+                    writeRegister(Tsl2671ProximityRegister.MODE, config);
+                }
+            };
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromSensor(boolean silent) {
+                    return new RouteBuilder().fromTsl2671Proximity(silent ? ReadType.SILENT : ReadType.NORMAL);
+                }
+            };
+        }
+    }
+
+    private Bma255AccelerometerImpl bma255Module= null;
+    private final byte[] bma255DataSampling= new byte[] {
+            Bma255Accelerometer.OutputDataRate.ODR_62_5HZ.bitMask(),
+            bmi160AccRange.bitMask()
+    };
+    private class Bma255AccelerometerImpl implements Bma255Accelerometer {
+        private static final float BMA255_ORIENT_HYS_G_PER_STEP= 0.0625f, THETA_STEP= (float) (44.8/63.f);
+        private final byte[] motionConfig= {0x0, 0x14, 0x14}, tapConfig= {0x04, 0x0f}, lowHighConfig= {0x09, 0x30, (byte) 0x81, 0x0f, (byte) 0xc0};
+
+        private Float anyMotionThs = null, noMotionThs= null, tapThs= null, highHysteresis= null, highThreshold= null;
+
+        @Override
+        public SamplingConfigEditor configureAxisSampling() {
+            return null;
+        }
+
+        @Override
+        public Bmi160Accelerometer.AnyMotionConfigEditor configureAnyMotionDetection() {
+            return new Bmi160Accelerometer.AnyMotionConfigEditor() {
+                private Integer duration= null;
+                private Float threshold= null;
+
+                @Override
+                public Bmi160Accelerometer.AnyMotionConfigEditor setDuration(int duration) {
+                    this.duration= duration;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.AnyMotionConfigEditor setThreshold(float threshold) {
+                    this.threshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (duration != null) {
+                        motionConfig[0]&= 0xfc;
+                        motionConfig[0]|= duration - 1;
+                    }
+
+                    if (threshold != null) {
+                        anyMotionThs = threshold;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public Bmi160Accelerometer.NoMotionConfigEditor configureNoMotionDetection() {
+            return new Bmi160Accelerometer.NoMotionConfigEditor() {
+                private Integer duration= null;
+                private Float threshold= null;
+
+                @Override
+                public Bmi160Accelerometer.NoMotionConfigEditor setDuration(int duration) {
+                    this.duration= duration;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.NoMotionConfigEditor setThreshold(float threshold) {
+                    this.threshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (duration != null) {
+                        motionConfig[0]&= 0x3;
+
+                        if (duration >= 1000 && duration <= 16000) {
+                            motionConfig[0]|= ((byte) (duration / 1000 - 1000)) << 2;
+                        } else if (duration >= 20000 && duration <= 80000) {
+                            motionConfig[0]|= (((byte) (duration - 20000) / 4000) << 2) | 0x40;
+                        } else if (duration >= 88000 && duration <= 336000) {
+                            motionConfig[0]|= (((byte) (duration - 88000) / 8000) << 2) | 0x80;
+                        }
+                    }
+
+                    if (threshold != null) {
+                        noMotionThs= threshold;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public Bmi160Accelerometer.SlowMotionConfigEditor configureSlowMotionDetection() {
+            return new Bmi160Accelerometer.SlowMotionConfigEditor() {
+                private Byte count= null;
+                private Float threshold= null;
+
+                @Override
+                public Bmi160Accelerometer.SlowMotionConfigEditor setCount(byte count) {
+                    this.count= count;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.SlowMotionConfigEditor setThreshold(float threshold) {
+                    this.threshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (count != null) {
+                        motionConfig[0]&= 0x3;
+                        motionConfig[0]|= (count - 1) << 2;
+                    }
+                    if (threshold != null) {
+                        noMotionThs= threshold;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public void enableMotionDetection(MotionType type) {
+            switch (type) {
+                case NO_MOTION:
+                    writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT_ENABLE, (byte) 0x78, (byte) 0);
+                    break;
+                case SLOW_MOTION:
+                    writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT_ENABLE, (byte) 0x38, (byte) 0);
+                    break;
+                case ANY_MOTION:
+                    writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT_ENABLE, (byte) 0x7, (byte) 0);
+                    break;
+            }
+        }
+
+        @Override
+        public void disableMotionDetection() {
+            writeRegister(Bmi160AccelerometerRegister.MOTION_INTERRUPT_ENABLE, (byte) 0, (byte) 0x7f);
+        }
+
+        @Override
+        public Bmi160Accelerometer.TapConfigEditor configureTapDetection() {
+            return new Bmi160Accelerometer.TapConfigEditor() {
+                private Bmi160Accelerometer.TapQuietTime newTapTime= null;
+                private Bmi160Accelerometer.TapShockTime newShockTime= null;
+                private Bmi160Accelerometer.DoubleTapWindow newWindow= null;
+                private Float newThs= null;
+
+                @Override
+                public Bmi160Accelerometer.TapConfigEditor setQuietTime(Bmi160Accelerometer.TapQuietTime time) {
+                    newTapTime= time;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.TapConfigEditor setShockTime(Bmi160Accelerometer.TapShockTime time) {
+                    newShockTime= time;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.TapConfigEditor setDoubleTapWindow(Bmi160Accelerometer.DoubleTapWindow window) {
+                    newWindow= window;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.TapConfigEditor setThreshold(float threshold) {
+                    newThs= threshold;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (newTapTime != null) {
+                        tapConfig[0]|= newTapTime.ordinal() << 7;
+                    }
+
+                    if (newShockTime != null) {
+                        tapConfig[0]|= newShockTime.ordinal() << 6;
+                    }
+
+                    if (newWindow != null) {
+                        tapConfig[0]|= newWindow.ordinal();
+                    }
+
+                    if (newThs != null) {
+                        tapThs= newThs;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public void enableTapDetection(Bmi160Accelerometer.TapType... types) {
+            byte mask= 0;
+            for(Bmi160Accelerometer.TapType it: types) {
+                switch (it) {
+                    case SINGLE:
+                        mask|= 0x2;
+                        break;
+                    case DOUBLE:
+                        mask|= 0x1;
+                        break;
+                }
+            }
+
+            writeRegister(Bmi160AccelerometerRegister.TAP_INTERRUPT_ENABLE, mask, (byte) 0);
+        }
+
+        @Override
+        public void disableTapDetection() {
+            writeRegister(Bmi160AccelerometerRegister.TAP_INTERRUPT_ENABLE, (byte) 0, (byte) 0x3);
+        }
+
+        @Override
+        public FlatDetectionConfigEditor configureFlatDetection() {
+            return new FlatDetectionConfigEditor() {
+                private byte intFlat[]= new byte[] {0x08, 0x11};
+
+                @Override
+                public FlatDetectionConfigEditor setHoldTime(FlatHoldTime time) {
+                    intFlat[1]&= 0xcf;
+                    intFlat[1]|= (time.ordinal() << 4);
+                    return this;
+                }
+
+                @Override
+                public FlatDetectionConfigEditor setFlatTheta(float angle) {
+                    intFlat[0]&= 0xc0;
+                    intFlat[0]|= ((int) (angle / THETA_STEP) & 0x3f);
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(Bmi160AccelerometerRegister.FLAT_CONFIG, intFlat);
+                }
+            };
+        }
+
+        @Override
+        public void enableFlatDetection() {
+            writeRegister(Bmi160AccelerometerRegister.FLAT_INTERRUPT_ENABLE, (byte) 1, (byte) 0);
+        }
+
+        @Override
+        public void disableFlatDetection() {
+            writeRegister(Bmi160AccelerometerRegister.FLAT_INTERRUPT_ENABLE, (byte) 0, (byte) 1);
+        }
+
+        @Override
+        public Bmi160Accelerometer.LowHighDetectionConfigEditor configureLowHighDetection() {
+            return new Bmi160Accelerometer.LowHighDetectionConfigEditor() {
+                private final float DURATION_STEP = 2.f, LOW_THRESHOLD_STEP= 0.00781f, LOW_HYSTERESIS_STEP= 0.125f;
+
+                private Bmi160Accelerometer.LowGMode lowGMode= null;
+                private Integer lowDuration= null, highDuration= null;
+                private Float lowThreshold= null, lowHysteresis= null, newHighThreshold= null, newHighHysteresis= null;
+
+                @Override
+                public Bmi160Accelerometer.LowHighDetectionConfigEditor setLowDuration(int duration) {
+                    lowDuration= duration;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.LowHighDetectionConfigEditor setLowThreshold(float threshold) {
+                    lowThreshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.LowHighDetectionConfigEditor setLowHysteresis(float hysteresis) {
+                    lowHysteresis= hysteresis;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.LowHighDetectionConfigEditor setLowGMode(Bmi160Accelerometer.LowGMode mode) {
+                    lowGMode= mode;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.LowHighDetectionConfigEditor setHighDuration(int duration) {
+                    highDuration= duration;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.LowHighDetectionConfigEditor setHighThreshold(float threshold) {
+                    newHighThreshold= threshold;
+                    return this;
+                }
+
+                @Override
+                public Bmi160Accelerometer.LowHighDetectionConfigEditor setHighHysteresis(float hysteresis) {
+                    newHighHysteresis= hysteresis;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    if (lowDuration != null) {
+                        lowHighConfig[0]= (byte) ((lowDuration / DURATION_STEP) - 1);
+                    }
+                    if (lowThreshold != null) {
+                        lowHighConfig[1]= (byte) (lowThreshold / LOW_THRESHOLD_STEP);
+                    }
+                    if (newHighHysteresis != null) {
+                        highHysteresis= newHighHysteresis;
+                    }
+                    if (lowGMode != null) {
+                        lowHighConfig[2]&= 0xfb;
+                        lowHighConfig[2]|= (lowGMode.ordinal() << 2);
+                    }
+                    if (lowHysteresis != null) {
+                        bmi160LowHighConfig[2]&= 0xfc;
+                        bmi160LowHighConfig[2]|= ((byte) (lowHysteresis / LOW_HYSTERESIS_STEP) & 0x3);
+                    }
+                    if (highDuration != null) {
+                        bmi160LowHighConfig[3]= (byte) ((highDuration / DURATION_STEP) - 1);
+                    }
+                    if (newHighThreshold != null) {
+                        highThreshold= newHighThreshold;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public void enableLowHighDetection(boolean lowG, boolean highGx, boolean highGy, boolean highGz) {
+            byte enableMask= 0;
+
+            if (lowG) {
+                enableMask|= 0x8;
+            }
+            if (highGx) {
+                enableMask|= 0x1;
+            }
+            if (highGy) {
+                enableMask|= 0x2;
+            }
+            if (highGz) {
+                enableMask|= 0x4;
+            }
+
+            writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT_ENABLE, enableMask, (byte) 0);
+        }
+
+        @Override
+        public void disableLowHighDetection() {
+            writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_INTERRUPT_ENABLE, (byte) 0, (byte) 0x1f);
+        }
+
+        @Override
+        public float setOutputDataRate(float frequency) {
+            OutputDataRate closestOdr= OutputDataRate.values()[closestIndex(OutputDataRate.frequencies(), frequency)];
+
+            bma255DataSampling[0]&= 0xe0;
+            bma255DataSampling[0]|= closestOdr.bitMask();
+            return closestOdr.frequency();
+        }
+
+
+        @Override
+        public float setAxisSamplingRange(float range) {
+            final float[] values= new float[] { 2.f, 4.f, 8.f, 16.f };
+            int closest= closestIndex(values, range);
+
+            bmi160AccRange= Bmi160Accelerometer.AccRange.values()[closest];
+            bma255DataSampling[1]&= 0xf0;
+            bma255DataSampling[1]|= bmi160AccRange.bitMask();
+            return values[closest];
+        }
+
+        @Override
+        public void enableAxisSampling() {
+            writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT_ENABLE, (byte) 0x1, (byte) 0x0);
+        }
+
+        @Override
+        public void disableAxisSampling() {
+            writeRegister(Bmi160AccelerometerRegister.DATA_INTERRUPT_ENABLE, (byte) 0x0, (byte) 0x1);
+        }
+
+        @Override
+        public void enableOrientationDetection() {
+            writeRegister(Bmi160AccelerometerRegister.ORIENT_INTERRUPT_ENABLE, (byte) 0x1, (byte) 0x0);
+        }
+
+        @Override
+        public void disableOrientationDetection() {
+            writeRegister(Bmi160AccelerometerRegister.ORIENT_INTERRUPT_ENABLE, (byte) 0x0, (byte) 0x1);
+        }
+
+        @Override
+        public OrientationConfigEditor configureOrientationDetection() {
+            return new OrientationConfigEditor() {
+                private byte intOrient[]= new byte[] {0x18, 0x48};
+
+                @Override
+                public OrientationConfigEditor setHysteresis(float hysteresis) {
+                    intOrient[0]&= 0xf;
+                    intOrient[0]|= (byte) Math.min(0xf, (byte) (hysteresis / BMA255_ORIENT_HYS_G_PER_STEP));
+                    return this;
+                }
+
+                @Override
+                public OrientationConfigEditor setMode(Bmi160Accelerometer.OrientationMode mode) {
+                    intOrient[0]&= 0xfc;
+                    intOrient[0]|= mode.ordinal();
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(Bmi160AccelerometerRegister.ORIENT_CONFIG, intOrient);
+                }
+            };
+        }
+
+
+        @Override
+        public void start() {
+            //private Float anyMotionThs = null, noMotionThs= null, tapThs= null, highHysteresis= null, highThreshold= null;
+
+            if (highHysteresis != null) {
+                lowHighConfig[2]|= ((int) (highHysteresis / BOSCH_HIGH_HYSTERESIS_STEPS[bmi160AccRange.ordinal()]) & 0x3) << 6;
+            }
+
+            if (highThreshold != null) {
+                lowHighConfig[4]= (byte) (highThreshold / BOSCH_HIGH_THRESHOLD_STEPS[bmi160AccRange.ordinal()]);
+            }
+
+            if (noMotionThs != null) {
+                motionConfig[2]= (byte) (noMotionThs / BOSCH_NO_MOTION_THS_STEPS[bmi160AccRange.ordinal()]);
+            }
+
+            if (anyMotionThs != null) {
+                motionConfig[1]= (byte) (anyMotionThs / BOSCH_ANY_MOTION_THS_STEPS[bmi160AccRange.ordinal()]);
+            }
+
+            if (tapThs != null) {
+                tapConfig[1]&= 0xe0;
+                tapConfig[1]|= (byte) Math.min(15, tapThs / BOSCH_TAP_THS_STEPS[bmi160AccRange.ordinal()]);
+            }
+
+            writeRegister(Bmi160AccelerometerRegister.TAP_CONFIG, tapConfig);
+            writeRegister(Bmi160AccelerometerRegister.MOTION_CONFIG, motionConfig);
+            writeRegister(Bmi160AccelerometerRegister.LOW_HIGH_G_CONFIG, lowHighConfig);
+            writeRegister(Bmi160AccelerometerRegister.DATA_CONFIG, bma255DataSampling);
+            writeRegister(Bmi160AccelerometerRegister.POWER_MODE, (byte) 1);
+        }
+
+        @Override
+        public void stop() {
+            writeRegister(Bmi160AccelerometerRegister.POWER_MODE, (byte) 0x0);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromFlat() {
+                    return new RouteBuilder().fromBmi160Flat();
+                }
+
+                @Override
+                public DataSignal fromLowHigh() {
+                    return new RouteBuilder().fromBmi160LowHigh();
+                }
+
+                @Override
+                public DataSignal fromMotion() {
+                    return new RouteBuilder().fromBmi160Motion();
+                }
+
+                @Override
+                public DataSignal fromTap() {
+                    return new RouteBuilder().fromBmi160Tap();
+                }
+
+                @Override
+                public DataSignal fromAxes() {
+                    return new RouteBuilder().fromBmi160Axis();
+                }
+
+                @Override
+                public DataSignal fromXAxis() {
+                    return new RouteBuilder().fromBmi160XAxis();
+                }
+
+                @Override
+                public DataSignal fromYAxis() {
+                    return new RouteBuilder().fromBmi160YAxis();
+                }
+
+                @Override
+                public DataSignal fromZAxis() {
+                    return new RouteBuilder().fromBmi160ZAxis();
+                }
+
+                @Override
+                public DataSignal fromOrientation() {
+                    return new RouteBuilder().fromBmi160Orientation();
+                }
+            };
+        }
+    }
+
+    private class Bme280BarometerImpl implements Bme280Barometer {
+        private byte altitude= 0;
+
+        @Override
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private Bmp280Barometer.OversamplingMode samplingMode= Bmp280Barometer.OversamplingMode.STANDARD;
+                private Bmp280Barometer.FilterMode filterMode= Bmp280Barometer.FilterMode.OFF;
+                private StandbyTime time= StandbyTime.TIME_0_5;
+                private byte tempOversampling= 1;
+
+                @Override
+                public ConfigEditor setPressureOversampling(Bmp280Barometer.OversamplingMode mode) {
+                    samplingMode= mode;
+                    tempOversampling= (byte) ((mode == Bmp280Barometer.OversamplingMode.ULTRA_HIGH) ? 2 : 1);
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setFilterMode(Bmp280Barometer.FilterMode mode) {
+                    filterMode= mode;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setStandbyTime(StandbyTime time) {
+                    this.time= time;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    byte first= (byte) ((samplingMode.ordinal() << 2) | (tempOversampling << 5));
+                    byte second= (byte) ((filterMode.ordinal() << 2) | (time.ordinal() << 5));
+                    writeRegister(Bmp280BarometerRegister.CONFIG, first, second);
+                }
+            };
+        }
+
+        @Override
+        public void enableAltitudeSampling() {
+            altitude= 1;
+        }
+
+        @Override
+        public void disableAltitudeSampling() {
+            altitude= 0;
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromPressure() {
+                    return new RouteBuilder().fromBmp280Pressure();
+                }
+
+                @Override
+                public DataSignal fromAltitude() {
+                    return new RouteBuilder().fromBmp280Altitude();
+                }
+            };
+        }
+
+        @Override
+        public void start() {
+            writeRegister(Bmp280BarometerRegister.CYCLIC, (byte) 1, altitude);
+        }
+
+        @Override
+        public void stop() {
+            writeRegister(Bmp280BarometerRegister.CYCLIC, (byte) 0, altitude);
+        }
+    }
+
     @Override
     public <T extends Module> T getModule(Class<T> moduleClass) throws UnsupportedModuleException {
         if (inMetaBootMode()) {
@@ -6522,6 +7333,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         bmi160AccModule= new Bmi160AccelerometerImpl();
                     }
                     return moduleClass.cast(bmi160AccModule);
+                case Constant.BMA255_IMPLEMENTATION:
+                    if (bma255Module == null) {
+                        bma255Module= new Bma255AccelerometerImpl();
+                    }
+                    return moduleClass.cast(bma255Module);
                 default:
                     throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
             }
@@ -6542,6 +7358,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     bmi160AccModule= new Bmi160AccelerometerImpl();
                 }
                 return moduleClass.cast(bmi160AccModule);
+            } else {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+        }
+        if (moduleClass.equals(Bma255Accelerometer.class)) {
+            if (accelModuleinfo.present() && accelModuleinfo.implementation() == Constant.BMA255_IMPLEMENTATION) {
+                if (bma255Module == null) {
+                    bma255Module= new Bma255AccelerometerImpl();
+                }
+                return moduleClass.cast(bma255Module);
             } else {
                 throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
             }
@@ -6567,7 +7393,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         }
 
         if (moduleClass.equals(Bmm150Magnetometer.class)) {
-            if (moduleInfo.get(InfoRegister.MAGNETOMETER.moduleOpcode()).present()) {
+            if (moduleInfo.containsKey(InfoRegister.MAGNETOMETER.moduleOpcode()) && moduleInfo.get(InfoRegister.MAGNETOMETER.moduleOpcode()).present()) {
                 return moduleClass.cast(new Bmm150MagnetometerImpl());
             }
             throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
@@ -6643,6 +7469,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             switch(barometerModuleInfo.implementation()) {
                 case Constant.BMP280_BAROMETER:
                     return moduleClass.cast(new Bmp280BarometerImpl());
+                case Constant.BME280_BAROMETER:
+                    return moduleClass.cast(new Bme280BarometerImpl());
                 default:
                     throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
             }
@@ -6652,6 +7480,12 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
             }
             return moduleClass.cast(new Bmp280BarometerImpl());
+        }
+        if (moduleClass.equals(Bme280Barometer.class)) {
+            if (!barometerModuleInfo.present() || barometerModuleInfo.implementation() != Constant.BME280_BAROMETER) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+            return moduleClass.cast(new Bme280BarometerImpl());
         }
 
         if (moduleClass.equals(Led.class)) {
@@ -6711,6 +7545,27 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         if (moduleClass.equals(DataProcessorModule.class)) {
             return moduleClass.cast(new DataProcessorModuleImpl());
+        }
+
+        if (moduleClass.equals(Tcs34725ColorDetector.class)) {
+            if (moduleInfo.containsKey(InfoRegister.COLOR_DETECTOR.moduleOpcode()) && moduleInfo.get(InfoRegister.COLOR_DETECTOR.moduleOpcode()).present()) {
+                return moduleClass.cast(new Tcs34725ColorDetectorImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+        }
+
+        if (moduleClass.equals(Bme280Humidity.class)) {
+            if (moduleInfo.containsKey(InfoRegister.HUMIDITY.moduleOpcode()) && moduleInfo.get(InfoRegister.HUMIDITY.moduleOpcode()).present()) {
+                return moduleClass.cast(new Bme280HumidityImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+        }
+
+        if (moduleClass.equals(Tsl2671Proximity.class)) {
+            if (moduleInfo.containsKey(InfoRegister.PROXIMITY.moduleOpcode()) && moduleInfo.get(InfoRegister.PROXIMITY.moduleOpcode()).present()) {
+                return moduleClass.cast(new Tsl2671ProximityImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
         }
 
         throw new UnsupportedModuleException("Unrecognized module class: \'" + moduleClass.toString() + "\'");

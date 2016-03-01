@@ -6,7 +6,10 @@ import com.mbientlab.metawear.module.Bmi160Accelerometer.*;
 import java.util.Calendar;
 
 /**
- * Created by etsai on 1/10/2016.
+ * Container class for tap data from the BMI160 and BMA255 accelerometers.  The data can only be interpreted as a
+ * TapResponse type.
+ * @author Eric Tsai
+ * @see TapResponse
  */
 public class Bmi160TapMessage extends Message {
     private final TapResponse response;

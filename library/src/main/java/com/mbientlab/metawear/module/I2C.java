@@ -76,7 +76,7 @@ public interface I2C extends MetaWearBoard.Module {
      * @param id              Number of bytes to read
      * @see com.mbientlab.metawear.module.I2C.SourceSelector#fromId(byte, byte)
      */
-    void readData(byte deviceAddr, byte registerAddr, byte numBytes, byte id);
+    AsyncOperation<Void> readData(byte deviceAddr, byte registerAddr, byte numBytes, byte id);
 
     /**
      * Initiates the creation of a data route
