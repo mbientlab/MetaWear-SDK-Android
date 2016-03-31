@@ -2582,8 +2582,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
 
-        public DataSignal fromGsr(final byte channel, ReadType type) {
-            return new DataSource((byte) 4, (byte) 1, UnsignedMessage.class, new ResponseHeader(GsrRegister.CONDUCTANCE, channel), type) {
+        public DataSignal fromConductance(final byte channel, ReadType type) {
+            return new DataSource((byte) 4, (byte) 1, UnsignedMessage.class, new ResponseHeader(ConductanceRegister.CONDUCTANCE, channel), type) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -2772,6 +2772,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public void enableNotifications() { }
+
+                @Override
+                public Number numberToFirmwareUnits(Number input) {
+                    return input.floatValue() * Bme280HumidityMessage.getScale();
+                }
             };
         }
 
@@ -2852,7 +2857,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             eventConfig= null;
 
             for(byte[] it: tapCommands) {
-                conn.sendCommand(false, it);
+                buildBlePacket(it);
             }
             tapCommands.clear();
             eventCommandsCheck();
@@ -3102,7 +3107,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 return new Response(new UnsignedMessage(respBody), header);
             }
         });
-        responses.put(new ResponseHeader(GsrRegister.CONDUCTANCE), new ResponseProcessor() {
+        responses.put(new ResponseHeader(ConductanceRegister.CONDUCTANCE), new ResponseProcessor() {
             @Override
             public Response process(byte[] response) {
                 byte[] respBody= new byte[response.length - 3];
@@ -3925,7 +3930,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
     }
-    private class GsrImpl implements Gsr {
+
+    private class ConductanceImpl implements Conductance {
         @Override
         public void readConductance(byte channel) {
             readConductance(channel, false);
@@ -3933,14 +3939,30 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public void readConductance(byte channel, boolean silent) {
-            readRegister(GsrRegister.CONDUCTANCE, silent, channel);
+            readRegister(ConductanceRegister.CONDUCTANCE, silent, channel);
         }
 
         @Override
         public void calibrate() {
-            writeRegister(GsrRegister.CALIBRATE);
+            writeRegister(ConductanceRegister.CALIBRATE);
         }
 
+        @Override
+        public DataSignal routeData(byte channel) {
+            return new RouteBuilder().fromConductance(channel, ReadType.NORMAL);
+        }
+
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromChannel(byte channel, boolean silent) {
+                    return new RouteBuilder().fromConductance(channel, silent ? ReadType.SILENT : ReadType.NORMAL);
+                }
+            };
+        }
+    }
+    private class GsrImpl extends ConductanceImpl implements Gsr {
         @Override
         public ConfigEditor configure() {
             return new ConfigEditor() {
@@ -3961,25 +3983,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public void commit() {
-                    writeRegister(GsrRegister.CONFIG, (byte) newCv.ordinal(), (byte) newGain.ordinal());
+                    writeRegister(ConductanceRegister.CONFIG, (byte) newCv.ordinal(), (byte) newGain.ordinal());
                 }
             };
         }
 
-        @Override
-        public DataSignal routeData(byte channel) {
-            return new RouteBuilder().fromGsr(channel, ReadType.NORMAL);
-        }
-
-        @Override
-        public SourceSelector routeData() {
-            return new SourceSelector() {
-                @Override
-                public DataSignal fromChannel(byte channel, boolean silent) {
-                    return new RouteBuilder().fromGsr(channel, silent ? ReadType.SILENT : ReadType.NORMAL);
-                }
-            };
-        }
     }
     private class LedImpl implements Led {
         @Override
@@ -5554,7 +5562,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
             bmi160DataSampling[0]&= 0xf;
             if (closestOdr.frequency() < 12.5f) {
-                bmi160DataSampling[0]|= 0x90;
+                bmi160DataSampling[0]|= 0x80;
             } else {
                 bmi160DataSampling[0]|= 0x20;
             }
@@ -6645,7 +6653,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private class Bme280HumidityImpl implements Bme280Humidity {
         @Override
         public void setOversampling(OversamplingMode mode) {
-            writeRegister(Bme280HumidityRegister.MODE, (byte) mode.ordinal());
+            writeRegister(Bme280HumidityRegister.MODE, (byte) (mode.ordinal() + 1));
         }
 
         @Override
@@ -6704,7 +6712,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public void commit() {
-                    byte[] config= new byte[] {pTime, nPulses, (byte) ((diode.ordinal() << 4) | (driveCurrent.ordinal() << 6))};
+                    byte[] config= new byte[] {pTime, nPulses, (byte) (((diode.ordinal() + 1) << 4) | (driveCurrent.ordinal() << 6))};
                     writeRegister(Tsl2671ProximityRegister.MODE, config);
                 }
             };
@@ -6734,7 +6742,28 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public SamplingConfigEditor configureAxisSampling() {
-            return null;
+            return new SamplingConfigEditor() {
+                @Override
+                public SamplingConfigEditor setFullScaleRange(Bmi160Accelerometer.AccRange range) {
+                    bmi160AccRange= range;
+
+                    bma255DataSampling[1]&= 0xf0;
+                    bma255DataSampling[1]|= range.bitMask();
+                    return this;
+                }
+
+                @Override
+                public SamplingConfigEditor setOutputDataRate(OutputDataRate odr) {
+                    bma255DataSampling[0]&= 0xe0;
+                    bma255DataSampling[0]|= odr.bitMask();
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(Bmi160AccelerometerRegister.DATA_CONFIG, bma255DataSampling);
+                }
+            };
         }
 
         @Override
@@ -7503,10 +7532,25 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             return moduleClass.cast(new DebugImpl());
         }
 
-        if (moduleClass.equals(Gsr.class)) {
-            if (!ambientModuleInfo.present()) {
+        ModuleInfo conductanceInfo= moduleInfo.get(InfoRegister.CONDUCTANCE.moduleOpcode());
+        if (moduleClass.equals(Conductance.class)) {
+            if (!conductanceInfo.present()) {
                 throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
             }
+
+            switch(conductanceInfo.implementation()) {
+                case Constant.GSR_IMPLEMENTATION:
+                    return moduleClass.cast(new GsrImpl());
+                default:
+                    return moduleClass.cast(new ConductanceImpl());
+            }
+        }
+
+        if (moduleClass.equals(Gsr.class)) {
+            if (!conductanceInfo.present() || conductanceInfo.implementation() != Constant.GSR_IMPLEMENTATION) {
+                throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+            }
+
             return moduleClass.cast(new GsrImpl());
         }
 

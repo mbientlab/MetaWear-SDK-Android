@@ -59,7 +59,7 @@ public interface Conductance extends MetaWearBoard.Module {
     void calibrate();
 
     /**
-     * Initiates the creation of a route for conductance data
+     * Initiates the creation of a route for conductance data.  This version defaults to non-silent reads.
      * @param channel    GSR channel to route data for
      * @return Object representing the data from the specific channel
      */

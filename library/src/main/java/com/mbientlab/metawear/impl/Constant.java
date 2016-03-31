@@ -44,4 +44,6 @@ public class Constant {
 
     public static final byte BMM150_MAGNETOMETER= 0;
     public static final byte SETTINGS_CONN_PARAMS_REVISION= 1, SETTINGS_DISCONNECTED_EVENT_REVISION= 2, SETTINGS_BATTERY_REVISION= 3;
+
+    public static final byte GSR_IMPLEMENTATION= 1;
 }

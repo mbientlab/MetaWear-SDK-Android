@@ -84,7 +84,7 @@ public enum InfoRegister implements Register {
         @Override
         public byte moduleOpcode() { return 0xf; }
     },
-    GSR {
+    CONDUCTANCE {
         @Override
         public byte moduleOpcode() { return 0x10; }
     },

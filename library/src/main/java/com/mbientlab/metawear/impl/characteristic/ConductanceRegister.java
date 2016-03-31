@@ -27,7 +27,7 @@ package com.mbientlab.metawear.impl.characteristic;
 /**
  * Created by etsai on 7/9/2015.
  */
-public enum GsrRegister implements Register {
+public enum ConductanceRegister implements Register {
     CONDUCTANCE {
         @Override
         public byte opcode() { return 0x1; }
@@ -42,5 +42,5 @@ public enum GsrRegister implements Register {
     };
 
     @Override
-    public byte moduleOpcode() { return InfoRegister.GSR.moduleOpcode(); }
+    public byte moduleOpcode() { return InfoRegister.CONDUCTANCE.moduleOpcode(); }
 }

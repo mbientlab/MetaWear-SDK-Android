@@ -1200,7 +1200,7 @@ public class MetaWearBleService extends Service {
                         if (deviceFirmware.compareTo(Constant.SERVICE_DISCOVERY_MIN_FIRMWARE) < 0) {
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.AMBIENT_LIGHT, (byte) -1, false));
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.BAROMETER, (byte) -1, false));
-                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.GSR, (byte) -1, false));
+                            board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.CONDUCTANCE, (byte) -1, false));
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.TEMPERATURE, Constant.SINGLE_CHANNEL_TEMP_IMPLEMENTATION, true));
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.ACCELEROMETER, Constant.MMA8452Q_IMPLEMENTATION, true));
                             board.receivedModuleInfo(new DummyModuleInfo(InfoRegister.GYRO, (byte) -1, false));
