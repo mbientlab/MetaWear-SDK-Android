@@ -4341,6 +4341,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
             for(byte[] it: taskCommands) {
                 conn.sendCommand(false, it);
+                if (saveCommand) {
+                    commands.add(it);
+                }
             }
             taskCommands.clear();
         }
