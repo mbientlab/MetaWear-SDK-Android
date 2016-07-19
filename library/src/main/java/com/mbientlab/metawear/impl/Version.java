@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -75,6 +76,6 @@ public class Version implements Comparable<Version> {
 
     @Override
     public String toString() {
-        return String.format("%d.%d.%d", major, minor, step);
+        return String.format(Locale.US, "%d.%d.%d", major, minor, step);
     }
 }

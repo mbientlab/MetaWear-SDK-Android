@@ -32,58 +32,62 @@
 package com.mbientlab.metawear.data;
 
 import com.mbientlab.metawear.Message;
-import com.mbientlab.metawear.module.Settings.BatteryState;
+import static com.mbientlab.metawear.module.Bmm150Magnetometer.ThresholdDetectionType.*;
+import com.mbientlab.metawear.module.Bmm150Magnetometer.ThresholdDetectionType;
+import com.mbientlab.metawear.module.Bmm150Magnetometer.ThresholdInterrupt;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Locale;
 
 /**
- * Container class for data from the battery state.  The data can only be interpreted as a BatteryState class
+ * Container class for threshold detection data from the BMM150 magnetometer.  The data can be interpreted as a
+ * ThresholdInterrupt type or a boolean array.  The boolean array is indexed by the ThresholdDetectionType
+ * enum values.
  * @author Eric Tsai
- * @see BatteryState
+ * @see ThresholdInterrupt
+ * @see ThresholdDetectionType
  */
-public class BatteryStateMessage extends Message {
-    private final BatteryState state;
+public class Bmm150ThresholdMessage extends Message {
+    private final boolean[] interrupts;
+    private final ThresholdInterrupt interruptObj;
 
-    public BatteryStateMessage(byte[] data) {
+    public Bmm150ThresholdMessage(byte[] data) {
         this(null, data);
     }
 
-    public BatteryStateMessage(Calendar timestamp, final byte[] data) {
+    public Bmm150ThresholdMessage(Calendar timestamp, final byte[] data) {
         super(timestamp, data);
 
-        if (data.length < 3) {
-            state= null;
-        } else {
-            final short voltage= ByteBuffer.wrap(data, 1, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+        ThresholdDetectionType[] types= ThresholdDetectionType.values();
+        interrupts= new boolean[types.length];
 
-            state= new BatteryState() {
-                @Override
-                public byte charge() {
-                    return data[0];
-                }
-
-                @Override
-                public short voltage() {
-                    return voltage;
-                }
-
-                @Override
-                public String toString() {
-                    return String.format(Locale.US, "{charge: %d%%, voltage: %dmV}", charge(), voltage());
-                }
-            };
+        byte mask= 0x1;
+        for(ThresholdDetectionType type: types) {
+            interrupts[type.ordinal()]= (data[0] & mask) == mask;
+            mask <<= 1;
         }
+
+        interruptObj = new ThresholdInterrupt() {
+            @Override
+            public boolean crossed(ThresholdDetectionType type) {
+                return interrupts[type.ordinal()];
+            }
+
+            @Override
+            public String toString() {
+                return String.format("{low x: %s, low y: %s, low z: %s, high x: %s, high y: %s, high z: %s}",
+                        crossed(LOW_X), crossed(LOW_Y), crossed(LOW_Z), crossed(HIGH_X), crossed(HIGH_Y), crossed(HIGH_Z));
+            }
+        };
     }
 
     @Override
     public <T> T getData(Class<T> type) {
-        if (type.equals(BatteryState.class)) {
-            return type.cast(state);
+        if (type.equals(ThresholdInterrupt.class)) {
+            return type.cast(interruptObj);
+        } else if (type.equals(boolean[].class)){
+            return type.cast(Arrays.copyOf(interrupts, interrupts.length));
         }
-
         throw new UnsupportedOperationException(String.format("Type \'%s\' not supported for message class: %s",
                 type.toString(), getClass().toString()));
     }

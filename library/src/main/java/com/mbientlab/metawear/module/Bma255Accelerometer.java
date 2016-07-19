@@ -40,8 +40,6 @@ import com.mbientlab.metawear.module.Bmi160Accelerometer.SlowMotionConfigEditor;
 import com.mbientlab.metawear.module.Bmi160Accelerometer.TapConfigEditor;
 import com.mbientlab.metawear.module.Bmi160Accelerometer.TapType;
 
-import java.util.HashMap;
-
 //TODO Keep code DRY, have Bma255 and Bmi160 extend from common interface
 /**
  * Controls the BMA255 accelerometer.  This sensor is only an accelerometer and is available on

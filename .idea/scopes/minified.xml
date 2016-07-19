@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="minified" pattern="(!test:*..*&amp;&amp;!src:*..*&amp;&amp;!src[example]:build&amp;&amp;!src[example]:BuildConfig&amp;&amp;!src[example]:R||src[library]:com.mbientlab.metawear.data..*||src[library]:com.mbientlab.metawear.module..*||src[library]:com.mbientlab.metawear.processor..*||src[library]:com.mbientlab.metawear..*)&amp;&amp;!src[library]:com.mbientlab.metawear.impl.dfu..*&amp;&amp;!src[library]:com.mbientlab.metawear.impl.characteristic..*&amp;&amp;!src[library]:com.mbientlab.metawear.impl..*&amp;&amp;!src[library]:R&amp;&amp;!src[library]:BuildConfig&amp;&amp;!src[library]:build" />
+</component>

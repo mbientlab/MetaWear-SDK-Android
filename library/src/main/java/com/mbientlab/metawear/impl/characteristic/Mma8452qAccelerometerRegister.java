@@ -91,6 +91,10 @@ public enum Mma8452qAccelerometerRegister implements Register {
     SHAKE_STATUS {
         @Override
         public byte opcode() { return 0x10; }
+    },
+    PACKED_ACC_DATA {
+        @Override
+        public byte opcode() { return 0x12; }
     };
 
     @Override

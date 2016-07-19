@@ -56,6 +56,61 @@ public interface Bmm150Magnetometer extends MetaWearBoard.Module {
     }
 
     /**
+     * Threshold detection types supported on the BMM150 magnetometer
+     * @author Eric Tsai
+     */
+    enum ThresholdDetectionType {
+        /** Detect when the x-axis B field drops below the threshold */
+        LOW_X,
+        /** Detect when the y-axis B field drops below the threshold */
+        LOW_Y,
+        /** Detect when the z-axis B field drops below the threshold */
+        LOW_Z,
+        /** Detect when the x-axis B field exceeds the threshold */
+        HIGH_X,
+        /** Detect when the y-axis B field exceeds the threshold */
+        HIGH_Y,
+        /** Detect when the z-axis B field exceeds the threshold */
+        HIGH_Z
+    }
+
+    /**
+     * Interface for configuring threshold detection
+     * @author Eric Tsai
+     */
+    interface ThresholdDetectionConfigEditor {
+        /**
+         * Sets the level for low threshold detection
+         * @param threshold    Low threshold level, between [0, 1530&#956;T]
+         * @return Calling object
+         */
+        ThresholdDetectionConfigEditor setLowThreshold(float threshold);
+        /**
+         * Sets the level for high threshold detection
+         * @param threshold    High threshold level, between [0, 1530&#956;T]
+         * @return Calling object
+         */
+        ThresholdDetectionConfigEditor setHighThreshold(float threshold);
+        /**
+         * Write the changes to the board
+         */
+        void commit();
+    }
+
+    /**
+     * Wrapper class encapsulating data from a threshold interrupt
+     * @author Eric Tsai
+     */
+    interface ThresholdInterrupt {
+        /**
+         * Checks if the specific threshold detection type triggered the interrupt
+         * @param type    Detection type to lookup
+         * @return True if the type triggered the interrupt
+         */
+        boolean crossed(ThresholdDetectionType type);
+    }
+
+    /**
      * Selector for available data sources on the BMM150 chip
      * @author Eric Tsai
      */
@@ -65,6 +120,17 @@ public interface Bmm150Magnetometer extends MetaWearBoard.Module {
          * @return Object representing B field data
          */
         DataSignal fromBField();
+        /**
+         * Special signal for high frequency (>100Hz) magnetic field stream.  This signal is only for streaming,
+         * it does not support logging or data processing.
+         * @return Object representing a high frequency acceleration stream
+         */
+        DataSignal fromHighFreqBField();
+        /**
+         * Handles data from the threshold detection interrupt
+         * @return Object representing threshold detection data
+         */
+        DataSignal fromThreshold();
     }
 
     /**
@@ -76,8 +142,15 @@ public interface Bmm150Magnetometer extends MetaWearBoard.Module {
     /**
      * Sets the power mode to one of the preset configurations
      * @param preset    Power preset to use
+     * @deprecated As of v2.6.0, replaced with the correctly spelled {@link #setPowerPreset(PowerPreset)} function
      */
+    @Deprecated
     void setPowerPrsest(PowerPreset preset);
+    /**
+     * Sets the power mode to one of the preset configurations
+     * @param preset    Power preset to use
+     */
+    void setPowerPreset(PowerPreset preset);
     /**
      * Enables magnetic field sampling
      */
@@ -86,6 +159,21 @@ public interface Bmm150Magnetometer extends MetaWearBoard.Module {
      * Disables magnetic field sampling
      */
     void enableBFieldSampling();
+
+    /**
+     * Configure the threshold detection
+     * @return Editor object to configure the settings
+     */
+    ThresholdDetectionConfigEditor configureThresholdDetection();
+    /**
+     * Enables threshold detection
+     * @param types    Threshold detection types to enable
+     */
+    void enableThresholdDetection(ThresholdDetectionType ... types);
+    /**
+     * Disables threshold detection
+     */
+    void disableThresholdDetection();
 
     /**
      * Switch the magnetometer into normal mode

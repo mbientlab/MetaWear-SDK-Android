@@ -57,6 +57,13 @@ public interface Macro extends MetaWearBoard.Module {
     AsyncOperation<Void> execute(byte macroId);
 
     /**
+     * Executes the commands corresponding to the macro ID.  This variant will not alert the caller of
+     * when the macro has finished executing
+     * @param macroId    Numerical ID of the macro to execute
+     */
+    void silentExecute(byte macroId);
+
+    /**
      * Program a code block to the flash memory
      * @param block    MetaWear commands
      * @return Numerical ID representing the code block, available when the macro is done writing

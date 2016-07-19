@@ -20,17 +20,9 @@ Then, add the compile element to the dependencies closure in the module's *build
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:2.5.9'
+    compile 'com.mbientlab:metawear:2.6.0'
 }
 ```
-
-## Attaching Source Code ##
-The MetaWear API aar comes packaged with the library's source code.  To associate the source code with the AAR package:  
-
-1. Switch the project view to display the project structure  
-2. Expand the "External Libraries" tab  
-3. Right click "metawear-${version}" and select "Library Properties"  
-4. Press the add button (green plus icon) and select "sources.jar" under the "jar" tab  
 
 ## Declaring the Service ##
 Once your project has synced with the updated Gradle files, declare the MetaWear Bluetooth LE service in the module's *AndroidManifest.xml* file.

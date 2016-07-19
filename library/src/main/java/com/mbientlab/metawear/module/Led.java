@@ -83,6 +83,13 @@ public interface Led extends MetaWearBoard.Module {
          */
         ColorChannelEditor setPulseDuration(short duration);
         /**
+         * How long to wait before starting the pattern.  This function is ignored on boards running firmware
+         * older than v1.2.3
+         * @param delay    Length of the delay (ms)
+         * @return Calling object
+         */
+        ColorChannelEditor setDelay(short delay);
+        /**
          * How many times to repeat a pulse pattern
          * @param count Number of repetitions, set to 255 to repeat indefinitely
          * @return Calling object
@@ -117,5 +124,9 @@ public interface Led extends MetaWearBoard.Module {
      */
     void stop(boolean resetChannelAttrs);
 
-
+    /**
+     * Configure advanced LED features
+     * @param config    Byte representation of the configuration
+     */
+    void configureSecondaryMode(byte[] config);
 }

@@ -39,6 +39,10 @@ public enum LedRegister implements Register {
     MODE {
         @Override
         public byte opcode() { return 0x3; }
+    },
+    SECONDARY_MODE {
+        @Override
+        public byte opcode() { return 0x4; }
     };
 
     @Override

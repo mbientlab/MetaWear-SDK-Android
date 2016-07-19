@@ -47,7 +47,7 @@ public interface MetaWearBoard {
     /**
      * Service UUID identifying a MetaWear board in MetaBoot mode
      */
-    UUID METABOOT_SERVICE_UUID= new UUID(0x000015301212EFDEl, 0x1523785FEABCD123l);
+    UUID METABOOT_SERVICE_UUID= new UUID(0x000015301212EFDEL, 0x1523785FEABCD123L);
 
     /**
      * Retrieves the MAC address of the board
@@ -64,7 +64,10 @@ public interface MetaWearBoard {
     /**
      * Class for handling notifications from the device firmware update operation
      * @author Eric Tsai
+     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
+     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
      */
+    @Deprecated
     interface DfuProgressHandler {
         /**
          * Enumeration of the DFU operation states
@@ -102,7 +105,11 @@ public interface MetaWearBoard {
      * before calling this function, otherwise, it will fail.
      * @param handler    Handler for processing DFU progress notifications
      * @return Result of the operation that will be available when the DFU is finished
+     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
+     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
+     * @see #downloadLatestFirmware()
      */
+    @Deprecated
     AsyncOperation<Void> updateFirmware(DfuProgressHandler handler);
     /**
      * Updates the firmware on the board with a user specified firmware file.  Executing this function will terminate the Bluetooth
@@ -111,7 +118,11 @@ public interface MetaWearBoard {
      * @param firmwareHexPath    Path to the firmware file
      * @param handler            Handler for processing DFU progress notifications
      * @return Result of the operation that will be available when the DFU is finished
+     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
+     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
+     * @see #downloadLatestFirmware()
      */
+    @Deprecated
     AsyncOperation<Void> updateFirmware(File firmwareHexPath, DfuProgressHandler handler);
     /**
      * Updates the firmware on the board using data from the provided input stream.  Executing this function will terminate the Bluetooth
@@ -120,13 +131,27 @@ public interface MetaWearBoard {
      * @param firmwareStream    Path to the firmware file
      * @param handler            Handler for processing DFU progress notifications
      * @return Result of the operation that will be available when the DFU is finished
+     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
+     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
+     * @see #downloadLatestFirmware()
      */
+    @Deprecated
     AsyncOperation<Void> updateFirmware(InputStream firmwareStream, DfuProgressHandler handler);
-
     /**
      * Terminates a DFU in progress, resulting in a failure.  Does nothing if no DFU is in progress
+     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
+     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
+     * @see #downloadLatestFirmware()
      */
+    @Deprecated
     void abortFirmwareUpdate();
+
+    /**
+     * Downloads the latest firmware release for the board to your Android device.  You must be connected to the
+     * board before calling this function.
+     * @return Path to where the firmware resides on the Android device, available when the download is completed
+     */
+    AsyncOperation<File> downloadLatestFirmware();
     /**
      * Checks if there is a newer version of the firmware available for your board.  If a newer firmware version
      * exists, the operation will return true.  The firmware check requires an active internet connection on your
@@ -142,13 +167,22 @@ public interface MetaWearBoard {
     interface Module { }
     /**
      * Retrieves a pointer to the requested module, if supported by the current board and firmware, and
-     * the board is not in MetaBoot mode
+     * the board is not in MetaBoot mode.  The API must be connected to the board to use this function.
      * @param moduleClass    Module class to lookup
      * @return Reference to the requested module, null if the BLE connection is not active
-     * @throws UnsupportedModuleException If the module is not available on the board, or the board is in
+     * @throws UnsupportedModuleException if the module is not available on the board, or the board is in
      * MetaBoot mode
      */
     <T extends Module> T getModule(Class<T> moduleClass) throws UnsupportedModuleException;
+
+    /**
+     * Variant of #{@link #getModule(Class)} that does not throw a checked exception.  The API must be
+     * connected to the board to use this function.
+     * @param moduleClass    Module class to lookup
+     * @return Reference to the module class, null if not supported, board is in MetaBoot mode, or
+     * the API is not connected to the board
+     */
+    <T extends Module> T lookupModule(Class<T> moduleClass);
 
     /**
      * Wrapper class around the data from the device information service
@@ -256,6 +290,12 @@ public interface MetaWearBoard {
      * Remove all data routes
      */
     void removeRoutes();
+
+    /**
+     * Removes all routes and timers from the board.  It does not reset the board so any configuration
+     * changes are preserved
+     */
+    void tearDown();
 
     /**
      * Serializes the internal state of the class

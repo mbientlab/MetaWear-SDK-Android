@@ -34,7 +34,7 @@ import java.util.Map;
  */
 public class Comparison implements DataSignal.ProcessorConfig {
     public static final String SCHEME_NAME= "comparison";
-    public final static String FIELD_OP= "operation", FIELD_SIGNED= "signed", FIELD_REFERENCE="reference";
+    public final static String FIELD_OP= "operation", FIELD_SIGNED= "signed", FIELD_REFERENCE="reference", FIELD_MODE="mode";
 
     /**
      * Supported comparison operations for the processor
@@ -55,10 +55,26 @@ public class Comparison implements DataSignal.ProcessorConfig {
         GTE,
     }
 
+    /**
+     * Operation modes for multi-valued comparison, only used on firmware v1.2.3 or later
+     * @author Eric Tsai
+     */
+    public enum Mode {
+        /** Input value is returned when the comparison is satisfied */
+        ABSOLUTE,
+        /** The reference value that satisfies the comparison is returned, no output if none match */
+        REFERENCE,
+        /** The index (0 based) of the value that satisfies the comparison is returned, n if none match */
+        ZONE,
+        /** 0 if comparison failed, 1 if it passed */
+        PASS_FAIL
+    }
+
     public final DataSignal.DataToken referenceToken;
     public final Boolean signed;
     public final Operation compareOp;
-    public final Number reference;
+    public final Number[] reference;
+    public final Mode mode;
 
     /**
      * Constructs a comparison config object from a URI string
@@ -79,14 +95,25 @@ public class Comparison implements DataSignal.ProcessorConfig {
             signed= null;
         }
 
+        if (query.containsKey(FIELD_MODE)) {
+            mode= Enum.valueOf(Mode.class, query.get(FIELD_MODE).toUpperCase());
+        } else {
+            mode= Mode.ABSOLUTE;
+        }
+
         if (!query.containsKey(FIELD_REFERENCE)) {
             throw new RuntimeException("Missing required field in URI: " + FIELD_REFERENCE);
         } else {
-            if (query.get(FIELD_REFERENCE).contains(".")) {
-                reference= Float.valueOf(query.get(FIELD_REFERENCE));
-            } else {
-                reference= Integer.valueOf(query.get(FIELD_REFERENCE));
+            String[] values= query.get(FIELD_REFERENCE).split(",");
+            reference= new Number[values.length];
+            for(int i= 0; i < values.length; i++) {
+                if (values[i].contains(".")) {
+                    reference[i]= Float.valueOf(query.get(FIELD_REFERENCE));
+                } else {
+                    reference[i]= Integer.valueOf(query.get(FIELD_REFERENCE));
+                }
             }
+
         }
     }
 
@@ -95,8 +122,8 @@ public class Comparison implements DataSignal.ProcessorConfig {
      * @param op Comparison operation to filter on
      * @param reference Value to compare against
      */
-    public Comparison(Operation op, Number reference) {
-        this(op, reference, null);
+    public Comparison(Operation op, Number ... reference) {
+        this(op, Mode.ABSOLUTE, null, reference);
     }
 
     /**
@@ -116,8 +143,30 @@ public class Comparison implements DataSignal.ProcessorConfig {
      * @param signed True if a signed comparison should be used, false for unsigned
      */
     public Comparison(Operation op, Number reference, Boolean signed) {
+        this(op, Mode.ABSOLUTE, signed, reference);
+    }
+
+    /**
+     * Constructs a config object for multi-valued comparisons with inferred signed/unsigned comparison,
+     * only supported for firmware v1.2.3 or later
+     * @param op            Comparison operation
+     * @param mode          Operation mode
+     * @param references    Values to compare against
+     */
+    public Comparison(Operation op, Mode mode, Number ... references) {
+        this(op, mode, null, references);
+    }
+    /**
+     * Constructs a config object for multi-valued comparisons with user explicitly requesting signed/unsigned comparison,
+     * only supported for firmware v1.2.3 or later
+     * @param op            Comparison operation
+     * @param mode          Operation mode
+     * @param references    Values to compare against
+     */
+    public Comparison(Operation op, Mode mode, Boolean signed, Number ... references) {
         this.compareOp= op;
-        this.reference= reference;
+        this.mode= mode;
+        this.reference= references;
         this.referenceToken= null;
         this.signed= signed;
     }
@@ -131,8 +180,9 @@ public class Comparison implements DataSignal.ProcessorConfig {
      */
     public Comparison(Operation op, DataSignal.DataToken reference, Boolean signed) {
         this.compareOp= op;
-        this.reference= 0;
+        this.reference= new Number[] {0};
         this.referenceToken= reference;
         this.signed= signed;
+        this.mode= Mode.ABSOLUTE;
     }
 }

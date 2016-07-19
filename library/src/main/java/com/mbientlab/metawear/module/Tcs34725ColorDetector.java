@@ -96,6 +96,11 @@ public interface Tcs34725ColorDetector extends MetaWearBoard.Module {
          */
         ConfigEditor setGain(Gain gain);
         /**
+         * Enable the illuminating LED, by default is disabled
+         * @return Calling object
+         */
+        ConfigEditor enableIlluminatorLed();
+        /**
          * Write the changes to the board
          */
         void commit();

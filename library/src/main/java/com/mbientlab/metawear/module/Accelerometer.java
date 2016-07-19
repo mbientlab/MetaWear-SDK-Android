@@ -106,6 +106,12 @@ public interface Accelerometer extends MetaWearBoard.Module {
          */
         DataSignal fromAxes();
         /**
+         * Special signal for high frequency (>100Hz) acceleration stream.  This signal is only for streaming,
+         * it does not support logging or data processing.
+         * @return Object representing a high frequency acceleration stream
+         */
+        DataSignal fromHighFreqAxes();
+        /**
          * Handle data from the x-axis.  Streaming data from only the x-axis is not supported
          * @return Object representing the data from the accelerometer x-axis sampling
          */

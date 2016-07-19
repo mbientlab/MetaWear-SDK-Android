@@ -67,6 +67,50 @@ public interface Gpio extends MetaWearBoard.Module {
     }
 
     /**
+     * Builder to construct parameters for the enhanced analog input read.
+     * @author Eric Tsai
+     */
+    interface AnalogInParameterBuilder {
+        /**
+         * Sets the GPIO pin that will be pulled up before the read.  If unused, no pin will be pulled up
+         * @param pin    Pullup pin
+         * @return Calling object
+         */
+        AnalogInParameterBuilder pullUpPin(byte pin);
+        /**
+         * Sets the GPIO pin that will be pulled down before the read.  If unused, no pin will be pulled down
+         * @param pin    Pulldown pin
+         * @return Calling object
+         */
+        AnalogInParameterBuilder pullDownPin(byte pin);
+        /**
+         * Sets how long to wait before reading from the pin.  If unused, the read will happen when the command is issued.
+         * @param delay    Delay time, in microseconds (&#956;s)
+         * @return Calling object
+         */
+        AnalogInParameterBuilder delay(short delay);
+        /**
+         * GPIO pin the returned data identifies as.  If used, the virtual pin value must match the pin used
+         * for {@link #readAnalogIn(byte, AnalogReadMode)} and {@link #readAnalogIn(byte, AnalogReadMode, boolean)}
+         * when constructing a data route for analog data.
+         * @param pin    Virtual pin identifying the data
+         * @return Calling object
+         */
+        AnalogInParameterBuilder virtualPin(byte pin);
+        /**
+         * Sets silent mode.  If unused, it will default to false.  The silent value must match the silent flag used
+         * for {@link #readAnalogIn(byte, AnalogReadMode, boolean)}.
+         * @param silent    True if read should be silent
+         * @return Calling object
+         */
+        AnalogInParameterBuilder silent(boolean silent);
+        /**
+         * Commit the read parameters to the board
+         */
+        void commit();
+    }
+
+    /**
      * Read the analog input voltage
      * @param pin     GPIO pin to read
      * @param mode    Analog read mode
@@ -78,6 +122,14 @@ public interface Gpio extends MetaWearBoard.Module {
      * @param mode    Analog read mode
      */
     void readAnalogIn(byte pin, AnalogReadMode mode, boolean silent);
+    /**
+     * Enhanced version of the readAnalogIn functions that combines analog reads with pullup/pulldown commands
+     * in one function.  This function is only available on boards running firmware v1.2.2 or later.
+     * @param pin     GPIO pin to read
+     * @param mode    Analog read mode
+     * @return Builder to assign desired parameters
+     */
+    AnalogInParameterBuilder initiateAnalogInRead(byte pin, AnalogReadMode mode);
 
     /**
      * Sets pull mode on a pin

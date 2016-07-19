@@ -18,6 +18,18 @@ public enum Bmm150MagnetometerRegister implements Register {
     },
     MAG_DATA {
         @Override public byte opcode() { return 0x5; }
+    },
+    THRESHOLD_INTERRUPT_ENABLE {
+        @Override public byte opcode() { return 0x6; }
+    },
+    THRESHOLD_CONFIG {
+        @Override public byte opcode() { return 0x7; }
+    },
+    THRESHOLD_INTERRUPT {
+        @Override public byte opcode() { return 0x8; }
+    },
+    PACKED_MAG_DATA {
+        @Override public byte opcode() { return 0x9; }
     };
 
     @Override

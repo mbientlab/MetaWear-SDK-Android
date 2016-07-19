@@ -24,12 +24,10 @@
 
 package com.mbientlab.metawear.impl.characteristic;
 
-import com.mbientlab.metawear.impl.Response;
-
 /**
  * Created by etsai on 6/16/2015.
  */
 public interface Register {
-    public byte opcode();
-    public byte moduleOpcode();
+    byte opcode();
+    byte moduleOpcode();
 }

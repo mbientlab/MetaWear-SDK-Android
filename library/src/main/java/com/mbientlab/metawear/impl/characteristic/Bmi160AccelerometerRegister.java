@@ -102,6 +102,9 @@ public enum Bmi160AccelerometerRegister implements Register {
     },
     STEP_COUNTER_RESET {
         @Override public byte opcode() { return 0x1b; }
+    },
+    PACKED_ACC_DATA {
+        @Override public byte opcode() { return 0x1c; }
     };
 
     @Override

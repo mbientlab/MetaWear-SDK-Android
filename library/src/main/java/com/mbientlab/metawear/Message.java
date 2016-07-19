@@ -25,6 +25,7 @@
 package com.mbientlab.metawear;
 
 import java.util.Calendar;
+import java.util.Locale;
 
 /**
  * Container class for a sample of sensor data.
@@ -67,7 +68,7 @@ public abstract class Message {
      * @see #getTimestamp()
      */
     public String getTimestampAsString() {
-        return String.format("%tY%<tm%<td-%<tH%<tM%<tS%<tL", timestamp);
+        return String.format(Locale.US, "%tY-%<tm-%<tdT%<tH:%<tM:%<tS.%<tL", timestamp);
     }
 
     /**

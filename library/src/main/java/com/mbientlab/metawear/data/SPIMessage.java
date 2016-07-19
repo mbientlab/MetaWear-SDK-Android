@@ -32,59 +32,25 @@
 package com.mbientlab.metawear.data;
 
 import com.mbientlab.metawear.Message;
-import com.mbientlab.metawear.module.Settings.BatteryState;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Calendar;
-import java.util.Locale;
 
 /**
- * Container class for data from the battery state.  The data can only be interpreted as a BatteryState class
+ * Container class for SPI data.  The data can only be interpreted as a byte array and the default
+ * {@link #getData()} function should be used.
  * @author Eric Tsai
- * @see BatteryState
  */
-public class BatteryStateMessage extends Message {
-    private final BatteryState state;
-
-    public BatteryStateMessage(byte[] data) {
-        this(null, data);
+public class SPIMessage extends Message {
+    public SPIMessage(byte[] data) {
+        super(data);
     }
 
-    public BatteryStateMessage(Calendar timestamp, final byte[] data) {
+    public SPIMessage(Calendar timestamp, byte[] data) {
         super(timestamp, data);
-
-        if (data.length < 3) {
-            state= null;
-        } else {
-            final short voltage= ByteBuffer.wrap(data, 1, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-
-            state= new BatteryState() {
-                @Override
-                public byte charge() {
-                    return data[0];
-                }
-
-                @Override
-                public short voltage() {
-                    return voltage;
-                }
-
-                @Override
-                public String toString() {
-                    return String.format(Locale.US, "{charge: %d%%, voltage: %dmV}", charge(), voltage());
-                }
-            };
-        }
     }
 
     @Override
     public <T> T getData(Class<T> type) {
-        if (type.equals(BatteryState.class)) {
-            return type.cast(state);
-        }
-
-        throw new UnsupportedOperationException(String.format("Type \'%s\' not supported for message class: %s",
-                type.toString(), getClass().toString()));
+        throw new UnsupportedOperationException("SPI data can only be interpreted as a byte array, use the default getData() method instead");
     }
 }

@@ -43,6 +43,10 @@ public enum Bmi160GyroRegister implements Register {
     DATA {
         @Override
         public byte opcode() { return 0x5; }
+    },
+    PACKED_GYRO_DATA {
+        @Override
+        public byte opcode() { return 0x7; }
     };
 
     @Override

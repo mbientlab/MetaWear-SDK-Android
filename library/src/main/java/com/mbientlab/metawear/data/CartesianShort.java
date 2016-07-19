@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.data;
 
+import java.util.Locale;
+
 /**
  * Subclass of the Cartesian interface that reports data as a Short
  * @author Eric Tsai
@@ -31,6 +33,6 @@ package com.mbientlab.metawear.data;
 public abstract class CartesianShort implements Cartesian<Short> {
     @Override
     public String toString() {
-        return String.format("(%d, %d, %d)", x(), y(), z());
+        return String.format(Locale.US, "(%d, %d, %d)", x(), y(), z());
     }
 }

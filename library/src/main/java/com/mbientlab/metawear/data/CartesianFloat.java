@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.data;
 
+import java.util.Locale;
+
 /**
  * Subclass of the Cartesian interface that reports data as a Float
  * @author Eric Tsai
@@ -31,6 +33,6 @@ package com.mbientlab.metawear.data;
 public abstract class CartesianFloat implements Cartesian<Float> {
     @Override
     public String toString() {
-        return String.format("(%.3f, %.3f, %.3f)", x(), y(), z());
+        return String.format(Locale.US, "(%.3f, %.3f, %.3f)", x(), y(), z());
     }
 }

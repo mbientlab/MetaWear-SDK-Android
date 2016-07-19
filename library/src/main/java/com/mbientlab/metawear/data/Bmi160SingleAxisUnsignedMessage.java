@@ -25,6 +25,7 @@
 package com.mbientlab.metawear.data;
 
 import java.util.Calendar;
+import java.util.Locale;
 
 /**
  * Container class for one axis of acceleration data from the BMI160 and BMA255 accelerometers that will always be positive.
@@ -75,6 +76,6 @@ public class Bmi160SingleAxisUnsignedMessage extends UnsignedMessage {
 
     @Override
     public String toString() {
-        return String.format("{%s, scale: %.3f}", super.toString(), scale);
+        return String.format(Locale.US, "{%s, scale: %.3f}", super.toString(), scale);
     }
 }

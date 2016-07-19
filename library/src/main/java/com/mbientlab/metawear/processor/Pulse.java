@@ -52,7 +52,9 @@ public class Pulse implements DataSignal.ProcessorConfig {
         /** Returns a running sum of all samples in the pulse */
         AREA,
         /** Returns the highest sample value in the pulse */
-        PEAK
+        PEAK,
+        /** Returns 0x1 as soon as a pulse is detected */
+        ON_DETECT
     }
 
     public final OutputMode mode;

@@ -25,6 +25,7 @@
 package com.mbientlab.metawear.data;
 
 import java.util.Calendar;
+import java.util.Locale;
 
 /**
  * Container class for acceleration data of one axis from the BMI160 and BMA255 accelerometers.  The data, by default, is
@@ -73,6 +74,6 @@ public class Bmi160SingleAxisMessage extends SignedMessage {
 
     @Override
     public String toString() {
-        return String.format("{%s, scale: %.3f}", super.toString(), scale);
+        return String.format(Locale.US, "{%s, scale: %.3f}", super.toString(), scale);
     }
 }

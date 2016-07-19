@@ -27,10 +27,14 @@ package com.mbientlab.metawear.impl.characteristic;
 /**
  * Created by etsai on 7/15/2015.
  */
-public enum I2CRegister implements Register {
-    READ_WRITE {
+public enum SerialPassthroughRegister implements Register {
+    I2C_READ_WRITE {
         @Override
         public byte opcode() { return 0x1; }
+    },
+    SPI_READ_WRITE {
+        @Override
+        public byte opcode() { return 0x2; }
     };
 
     @Override

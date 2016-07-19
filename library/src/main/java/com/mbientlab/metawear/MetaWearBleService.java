@@ -52,6 +52,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
@@ -554,6 +555,7 @@ public class MetaWearBleService extends Service {
 
         private final ConcurrentLinkedQueue<AsyncOperationAndroidImpl<Byte>> batteryResult= new ConcurrentLinkedQueue<>();
         private final ConcurrentLinkedQueue<AsyncOperationAndroidImpl<Boolean>> checkFirmwareResult= new ConcurrentLinkedQueue<>();
+        private final ConcurrentLinkedQueue<AsyncOperationAndroidImpl<File>> firmwareDlResult= new ConcurrentLinkedQueue<>();
         private final BluetoothDevice btDevice;
 
         private final AtomicBoolean uploadingFirmware= new AtomicBoolean();
@@ -606,7 +608,7 @@ public class MetaWearBleService extends Service {
                 @Override
                 public void run() {
                     state.rssiResult.remove(result);
-                    result.setResult(null, new TimeoutException(String.format("RSSI read timed out after %dms", READ_ATTR_TIMEOUT)));
+                    result.setResult(null, new TimeoutException(String.format(Locale.US, "RSSI read timed out after %dms", READ_ATTR_TIMEOUT)));
                 }
             }, READ_ATTR_TIMEOUT);
             gattManager.queueAction(new Action() {
@@ -634,7 +636,7 @@ public class MetaWearBleService extends Service {
                 @Override
                 public void run() {
                     batteryResult.remove(result);
-                    result.setResult(null, new TimeoutException(String.format("RSSI read timed out after %dms", READ_ATTR_TIMEOUT)));
+                    result.setResult(null, new TimeoutException(String.format(Locale.US, "RSSI read timed out after %dms", READ_ATTR_TIMEOUT)));
                 }
             }, READ_ATTR_TIMEOUT);
             gattManager.queueAction(new Action() {
@@ -802,6 +804,85 @@ public class MetaWearBleService extends Service {
             return updateFirmwareInner(firmwareStream, handler);
         }
 
+        public AsyncOperation<File> downloadLatestFirmware() {
+            AsyncOperationAndroidImpl<File> result= new AsyncOperationAndroidImpl<>();
+
+            if (!isConnected()) {
+                result.setResult(null, new RuntimeException("You must be connected to the board before downloading the latest firmware"));
+            } else {
+                firmwareDlResult.add(result);
+                backgroundFutures.add(backgroundThreadPool.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        HttpURLConnection urlConn = null;
+
+                        try {
+                            StringBuilder response = new StringBuilder();
+                            {
+                                URL infoJson = new URL("http://releases.mbientlab.com/metawear/info1.json");
+                                urlConn = (HttpURLConnection) infoJson.openConnection();
+                                InputStream ins = urlConn.getInputStream();
+
+
+                                byte data[] = new byte[1024];
+                                int count;
+                                while ((count = ins.read(data)) != -1) {
+                                    response.append(new String(data, 0, count));
+                                }
+                            }
+
+                            JSONObject releaseInfo = new JSONObject(response.toString());
+                            JSONObject models= releaseInfo.getJSONObject(gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.HARDWARE_VERSION));
+                            JSONObject builds = models.getJSONObject(gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER));
+                            JSONObject availableVersions = builds.getJSONObject(FIRMWARE_BUILD);
+
+                            Iterator<String> versionKeys = availableVersions.keys();
+                            TreeSet<Version> versions = new TreeSet<>();
+                            while (versionKeys.hasNext()) {
+                                versions.add(new Version(versionKeys.next()));
+                            }
+
+                            Iterator<Version> it = versions.descendingIterator();
+                            if (it.hasNext()) {
+                                urlConn.disconnect();
+                                String latest= it.next().toString();
+                                String filename= availableVersions.getJSONObject(latest).getString("filename");
+
+                                File localFirmwarePath = new File(getFilesDir(), filename);
+                                FileOutputStream fos = new FileOutputStream(localFirmwarePath);
+
+                                URL firmwareUrl = new URL(String.format("http://releases.mbientlab.com/metawear/%s/%s/%s/%s/%s",
+                                        gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.HARDWARE_VERSION),
+                                        gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER),
+                                        FIRMWARE_BUILD, latest, filename));
+                                urlConn = (HttpURLConnection) firmwareUrl.openConnection();
+                                InputStream ins = urlConn.getInputStream();
+
+                                byte data[] = new byte[1024];
+                                int count;
+                                while ((count = ins.read(data)) != -1) {
+                                    fos.write(data, 0, count);
+                                }
+                                fos.close();
+
+                                firmwareDlResult.poll().setResult(localFirmwarePath, null);
+                            } else {
+                                firmwareDlResult.poll().setResult(null, new RuntimeException("Cannot find the latest firmware from the info json file"));
+                            }
+                        } catch (Exception e) {
+                            firmwareDlResult.poll().setResult(null, e);
+                        } finally {
+                            if (urlConn != null) {
+                                urlConn.disconnect();
+                            }
+                        }
+                    }
+                }));
+            }
+
+            return result;
+        }
+
         @Override
         public AsyncOperation<Boolean> checkForFirmwareUpdate() {
             AsyncOperationAndroidImpl<Boolean> result= new AsyncOperationAndroidImpl<>();
@@ -815,7 +896,7 @@ public class MetaWearBleService extends Service {
                         HttpURLConnection urlConn = null;
 
                         try {
-                            URL infoJson = new URL("http://releases.mbientlab.com/metawear/info.json");
+                            URL infoJson = new URL("http://releases.mbientlab.com/metawear/info1.json");
                             urlConn = (HttpURLConnection) infoJson.openConnection();
                             InputStream ins = urlConn.getInputStream();
 
@@ -827,7 +908,8 @@ public class MetaWearBleService extends Service {
                             }
 
                             JSONObject releaseInfo = new JSONObject(response.toString());
-                            JSONObject builds = releaseInfo.getJSONObject(gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER));
+                            JSONObject models= releaseInfo.getJSONObject(gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.HARDWARE_VERSION));
+                            JSONObject builds = models.getJSONObject(gattConnectionStates.get(btDevice).devInfoValues.get(DevInfoCharacteristic.MODEL_NUMBER));
                             JSONObject availableVersions = builds.getJSONObject(FIRMWARE_BUILD);
 
                             Iterator<String> versionKeys = availableVersions.keys();

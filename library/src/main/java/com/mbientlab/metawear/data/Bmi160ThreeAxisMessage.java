@@ -29,6 +29,7 @@ import com.mbientlab.metawear.Message;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
+import java.util.Locale;
 
 /**
  * Container class for acceleration data from the BMI160 and BMA255 accelerometers.  By default, data is interpreted as
@@ -114,6 +115,6 @@ public class Bmi160ThreeAxisMessage extends Message {
 
     @Override
     public String toString() {
-        return String.format("{%s, scale: %.3f}", super.toString(), scale);
+        return String.format(Locale.US, "{%s, scale: %.3f}", super.toString(), scale);
     }
 }

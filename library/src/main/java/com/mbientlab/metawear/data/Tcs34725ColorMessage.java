@@ -37,6 +37,7 @@ import com.mbientlab.metawear.module.Tcs34725ColorDetector.ColorAdc;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
+import java.util.Locale;
 
 /**
  * Container class for color ADC data from the TCS34725 color detector.  Data is interpreted as a ColorAdc type.
@@ -85,7 +86,7 @@ public class Tcs34725ColorMessage extends Message {
 
                 @Override
                 public String toString() {
-                    return String.format("{clear: %d, red: %d, green: %d, blue: %d}", clear(), red(), green(), blue());
+                    return String.format(Locale.US, "{clear: %d, red: %d, green: %d, blue: %d}", clear(), red(), green(), blue());
                 }
             };
         } else {
