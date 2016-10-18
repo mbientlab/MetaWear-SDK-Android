@@ -643,6 +643,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         public void remove() {
             for(Byte id: logEntries.keySet()) {
                 dataLoggers.remove(new ResponseHeader(LoggingRegister.READOUT_NOTIFY, id));
+                writeRegister(LoggingRegister.REMOVE, id);
             }
         }
     }
@@ -924,6 +925,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                                 Loggable newLogger= new VariableLoggable(key, logIds, msgClass, outputSize);
                                 dataLoggerKeys.put(key, newLogger);
                                 manager.loggerKeys.add(key);
+
+                                logIds.clear();
                             }
                         }
                     });
@@ -4227,9 +4230,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
     @Override
     public void removeRoutes() {
-        for(Loggable it: dataLoggerKeys.values()) {
-            it.remove();
-        }
+        dataLoggers.clear();
         dataLoggerKeys.clear();
         writeRegister(LoggingRegister.REMOVE_ALL);
 
@@ -4253,6 +4254,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
     @Override
     public void tearDown() {
+        dataLoggers.clear();
         dataLoggerKeys.clear();
         writeRegister(LoggingRegister.REMOVE_ALL);
 
