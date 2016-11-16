@@ -22,33 +22,46 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.impl;
+package com.mbientlab.metawear.impl.characteristic;
 
 /**
- * Created by etsai on 7/8/2015.
+ * Created by etsai on 11/8/16.
  */
-public class Constant {
-    public static final String METAWEAR_R_MODULE = "0", METAWEAR_RG_MODULE= "1", METAWEAR_C_MODULE= "2";
-    public static final Version MULTI_CHANNEL_TEMP_MIN_FIRMWARE= new Version(1, 0, 4), SERVICE_DISCOVERY_MIN_FIRMWARE = MULTI_CHANNEL_TEMP_MIN_FIRMWARE,
-            MULTI_CHANNEL_MATH= new Version(1, 1, 0), DISCONNECTED_EVENT= MULTI_CHANNEL_MATH, MULTI_COMPARISON_MIN_FIRMWARE= new Version(1, 2, 3);
 
-    public static final byte SINGLE_CHANNEL_TEMP_IMPLEMENTATION= 0, MULTI_CHANNEL_TEMP_IMPLEMENTATION= 1;
+public enum SensorFusionRegister implements Register {
+    ENABLE {
+        @Override public byte opcode() { return 0x1; }
+    },
+    MODE {
+        @Override public byte opcode() { return 0x2; }
+    },
+    OUTPUT_ENABLE {
+        @Override public byte opcode() { return 0x3; }
+    },
+    CORRECTED_ACC {
+        @Override public byte opcode() { return 0x4; }
+    },
+    CORRECTED_GYRO {
+        @Override public byte opcode() { return 0x5; }
+    },
+    CORRECTED_MAG {
+        @Override public byte opcode() { return 0x6; }
+    },
+    QUATERNION {
+        @Override public byte opcode() { return 0x7; }
+    },
+    EULER_ANGLES {
+        @Override public byte opcode() { return 0x8; }
+    },
+    GRAVITY_VECTOR {
+        @Override public byte opcode() { return 0x9; }
+    },
+    LINEAR_ACC {
+        @Override public byte opcode() { return 0xa; }
+    };
 
-    public static final byte MMA8452Q_IMPLEMENTATION= 0, BMI160_IMPLEMENTATION= 1, BMA255_IMPLEMENTATION= 3;
-    public static final byte BMI160_GYRO_IMPLEMENTATION= 0;
-
-    public static final byte LTR329_LIGHT_SENSOR= 0;
-    public static final byte BMP280_BAROMETER= 0, BME280_BAROMETER= 1;
-
-    public static final byte EXTENDED_LOGGING_REVISION= 2;
-
-    public static final byte BMM150_MAGNETOMETER= 0;
-    public static final byte SETTINGS_CONN_PARAMS_REVISION= 1, SETTINGS_DISCONNECTED_EVENT_REVISION= 2, SETTINGS_BATTERY_REVISION= 3, SETTINGS_WATCHDOG_REVISION= 4;
-
-    public static final byte GSR_IMPLEMENTATION= 1;
-    public static final byte GPIO_ENHANCED_ANALOG= 2;
-
-    public static final byte LED_DELAYED_REVISION= 1;
-
-    public static final byte SPI_REVISION = 1;
+    @Override
+    public byte moduleOpcode() {
+        return InfoRegister.SENSOR_FUSION.moduleOpcode();
+    }
 }

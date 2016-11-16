@@ -22,27 +22,69 @@
  * hello@mbientlab.com.
  */
 
-apply plugin: 'com.android.library'
+package com.mbientlab.metawear.data;
 
-android {
-    compileSdkVersion 24
-    buildToolsVersion "24.0.2"
+import com.mbientlab.metawear.Message;
+import com.mbientlab.metawear.module.SensorFusion.Quaternion;
 
-    defaultConfig {
-        minSdkVersion 18
-        targetSdkVersion 24
-        versionCode 36
-        versionName "2.7.0"
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Calendar;
+import java.util.Locale;
+
+/**
+ * Created by etsai on 11/8/16.
+ */
+
+public class SensorFusionQuaternionMessage extends Message {
+    private final float w, x, y, z;
+
+    public SensorFusionQuaternionMessage(byte[] data) {
+        this(null, data);
     }
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+
+    public SensorFusionQuaternionMessage(Calendar timestamp, byte[] data) {
+        super(timestamp, data);
+
+        ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        w = buffer.getFloat();
+        x = buffer.getFloat();
+        y = buffer.getFloat();
+        z = buffer.getFloat();
+    }
+
+    @Override
+    public <T> T getData(Class<T> type) {
+        if (type.equals(Quaternion.class)) {
+            return type.cast(new Quaternion() {
+                @Override
+                public String toString() {
+                    return String.format(Locale.US, "{w: %.3f, x: %.3f, y: %.3f, z: %.3f}",
+                            w(), x(), y(), z());
+                }
+
+                @Override
+                public float w() {
+                    return w;
+                }
+
+                @Override
+                public float x() {
+                    return x;
+                }
+
+                @Override
+                public float y() {
+                    return y;
+                }
+
+                @Override
+                public float z() {
+                    return z;
+                }
+            });
         }
+        throw new UnsupportedOperationException(String.format("Type \'%s\' not supported for message class: %s",
+                type.toString(), getClass().toString()));
     }
-}
-
-dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    testCompile 'junit:junit:4.12'
 }

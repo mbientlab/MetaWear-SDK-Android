@@ -22,33 +22,56 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.impl;
+package com.mbientlab.metawear.data;
+
+import com.mbientlab.metawear.Message;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Calendar;
 
 /**
- * Created by etsai on 7/8/2015.
+ * Created by etsai on 11/9/16.
  */
-public class Constant {
-    public static final String METAWEAR_R_MODULE = "0", METAWEAR_RG_MODULE= "1", METAWEAR_C_MODULE= "2";
-    public static final Version MULTI_CHANNEL_TEMP_MIN_FIRMWARE= new Version(1, 0, 4), SERVICE_DISCOVERY_MIN_FIRMWARE = MULTI_CHANNEL_TEMP_MIN_FIRMWARE,
-            MULTI_CHANNEL_MATH= new Version(1, 1, 0), DISCONNECTED_EVENT= MULTI_CHANNEL_MATH, MULTI_COMPARISON_MIN_FIRMWARE= new Version(1, 2, 3);
 
-    public static final byte SINGLE_CHANNEL_TEMP_IMPLEMENTATION= 0, MULTI_CHANNEL_TEMP_IMPLEMENTATION= 1;
+public class SensorFusionCartesianFloatMessage extends Message {
+    private static float MSS_TO_G = 9.80665f;
+    private final float x, y, z;
 
-    public static final byte MMA8452Q_IMPLEMENTATION= 0, BMI160_IMPLEMENTATION= 1, BMA255_IMPLEMENTATION= 3;
-    public static final byte BMI160_GYRO_IMPLEMENTATION= 0;
+    public SensorFusionCartesianFloatMessage(byte[] data) {
+        this(null, data);
+    }
 
-    public static final byte LTR329_LIGHT_SENSOR= 0;
-    public static final byte BMP280_BAROMETER= 0, BME280_BAROMETER= 1;
+    public SensorFusionCartesianFloatMessage(Calendar timestamp, byte[] data) {
+        super(timestamp, data);
 
-    public static final byte EXTENDED_LOGGING_REVISION= 2;
+        ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        x = buffer.getFloat() / MSS_TO_G;
+        y = buffer.getFloat() / MSS_TO_G;
+        z = buffer.getFloat() / MSS_TO_G;
+    }
 
-    public static final byte BMM150_MAGNETOMETER= 0;
-    public static final byte SETTINGS_CONN_PARAMS_REVISION= 1, SETTINGS_DISCONNECTED_EVENT_REVISION= 2, SETTINGS_BATTERY_REVISION= 3, SETTINGS_WATCHDOG_REVISION= 4;
+    @Override
+    public <T> T getData(Class<T> type) {
+        if (type.equals(CartesianFloat.class)) {
+            return type.cast(new CartesianFloat() {
+                @Override
+                public Float x() {
+                    return x;
+                }
 
-    public static final byte GSR_IMPLEMENTATION= 1;
-    public static final byte GPIO_ENHANCED_ANALOG= 2;
+                @Override
+                public Float y() {
+                    return y;
+                }
 
-    public static final byte LED_DELAYED_REVISION= 1;
-
-    public static final byte SPI_REVISION = 1;
+                @Override
+                public Float z() {
+                    return z;
+                }
+            });
+        }
+        throw new UnsupportedOperationException(String.format("Type \'%s\' not supported for message class: %s",
+                type.toString(), getClass().toString()));
+    }
 }

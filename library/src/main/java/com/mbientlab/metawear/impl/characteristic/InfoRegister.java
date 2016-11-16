@@ -120,6 +120,10 @@ public enum InfoRegister implements Register {
         @Override
         public byte moduleOpcode() { return 0x18; }
     },
+    SENSOR_FUSION {
+        @Override
+        public byte moduleOpcode() { return 0x19; }
+    },
     DEBUG {
         @Override
         public byte moduleOpcode() { return (byte) 0xfe; }

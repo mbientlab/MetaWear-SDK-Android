@@ -54,6 +54,20 @@ public interface Bmm150Magnetometer extends MetaWearBoard.Module {
         ENHANCED_REGULAR,
         HIGH_ACCURACY
     }
+    /**
+     * Supported output data rates
+     * @author Eric Tsai
+     */
+    enum OutputDataRate {
+        ODR_10_HZ,
+        ODR_2_HZ,
+        ODR_6_HZ,
+        ODR_8_HZ,
+        ODR_15_HZ,
+        ODR_20_HZ,
+        ODR_25_HZ,
+        ODR_30_HZ
+    }
 
     /**
      * Threshold detection types supported on the BMM150 magnetometer
@@ -74,6 +88,36 @@ public interface Bmm150Magnetometer extends MetaWearBoard.Module {
         HIGH_Z
     }
 
+    /**
+     * Interface for configuring b field sampling, <b>for advanced users only</b>.  By default, the editor
+     * will choose the values corresponding to the {@link PowerPreset#REGULAR} preset.  It is recommended that
+     * you use {@link #setPowerPreset(PowerPreset)} unless there is a custom configuration you wish to use.
+     * @author Eric Tsai
+     */
+    interface BfieldSamplingConfigEditor {
+        /**
+         * Sets the number of repetitions for x/y-axis
+         * @param reps    Number of reps, between [1, 511]
+         * @return Calling object
+         */
+        BfieldSamplingConfigEditor setZReps(short reps);
+        /**
+         * Sets the number of repetitions for the z-axis
+         * @param reps    Number of reps, betewen [1, 256]
+         * @return Calling object
+         */
+        BfieldSamplingConfigEditor setXyReps(short reps);
+        /**
+         * Sets the output data rate
+         * @param odr    Output data rate
+         * @return Calling object
+         */
+        BfieldSamplingConfigEditor setOutputDataRate(OutputDataRate odr);
+        /**
+         * Write the changes to the sensor
+         */
+        void commit();
+    }
     /**
      * Interface for configuring threshold detection
      * @author Eric Tsai
@@ -159,6 +203,11 @@ public interface Bmm150Magnetometer extends MetaWearBoard.Module {
      * Disables magnetic field sampling
      */
     void enableBFieldSampling();
+    /**
+     * Configures b field sampling
+     * @return Editor object to configure the sensor
+     */
+    BfieldSamplingConfigEditor configureBFieldSampling();
 
     /**
      * Configure the threshold detection

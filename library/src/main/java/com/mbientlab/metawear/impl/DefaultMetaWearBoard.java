@@ -3053,6 +3053,149 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
 
+        public DataSignal fromSensorFusionEulerAngle() {
+            return new DataSource((byte) 4, (byte) 4, SensorFusionEulerAnglesMessage.class, new ResponseHeader(SensorFusionRegister.EULER_ANGLES), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SensorFusionRegister.EULER_ANGLES, (byte) 0x1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SensorFusionRegister.EULER_ANGLES, (byte) 0x0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
+        public DataSignal fromSensorFusionQuaternion() {
+            return new DataSource((byte) 4, (byte) 4, SensorFusionQuaternionMessage.class, new ResponseHeader(SensorFusionRegister.QUATERNION), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SensorFusionRegister.QUATERNION, (byte) 0x1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SensorFusionRegister.QUATERNION, (byte) 0x0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
+        public DataSignal fromSensorFusionCorrectedAcc() {
+            ///< 4x4 + 1 byte, not 13x1
+            return new DataSource((byte) 13, (byte) 1, SensorFusionCorrectedAccMessage.class, new ResponseHeader(SensorFusionRegister.CORRECTED_ACC), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SensorFusionRegister.CORRECTED_ACC, (byte) 0x1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SensorFusionRegister.CORRECTED_ACC, (byte) 0x0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
+        public DataSignal fromSensorFusionCorrectedGyro() {
+            ///< 4x4 + 1 byte, not 13x1
+            return new DataSource((byte) 13, (byte) 1, SensorFusionCorrectedCartesianFloatMessage.class, new ResponseHeader(SensorFusionRegister.CORRECTED_GYRO), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SensorFusionRegister.CORRECTED_GYRO, (byte) 0x1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SensorFusionRegister.CORRECTED_GYRO, (byte) 0x0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
+        public DataSignal fromSensorFusionCorrectedMag() {
+            ///< 4x4 + 1 byte, not 13x1
+            return new DataSource((byte) 13, (byte) 1, SensorFusionCorrectedCartesianFloatMessage.class, new ResponseHeader(SensorFusionRegister.CORRECTED_MAG), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SensorFusionRegister.CORRECTED_MAG, (byte) 0x1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SensorFusionRegister.CORRECTED_MAG, (byte) 0x0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
+        public DataSignal fromSensorFusionGravity() {
+            return new DataSource((byte) 4, (byte) 3, SensorFusionCartesianFloatMessage.class, new ResponseHeader(SensorFusionRegister.GRAVITY_VECTOR), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SensorFusionRegister.GRAVITY_VECTOR, (byte) 0x1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SensorFusionRegister.GRAVITY_VECTOR, (byte) 0x0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
+        public DataSignal fromSensorFusionLinearAcc() {
+            return new DataSource((byte) 4, (byte) 3, SensorFusionCartesianFloatMessage.class, new ResponseHeader(SensorFusionRegister.LINEAR_ACC), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return true;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SensorFusionRegister.LINEAR_ACC, (byte) 0x1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SensorFusionRegister.LINEAR_ACC, (byte) 0x0);
+                    super.unsubscribe();
+                }
+            };
+        }
+
         @Override
         public void receivedId(byte id) {
             creators.poll().receivedId(id);
@@ -3882,6 +4025,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 case Constant.SETTINGS_CONN_PARAMS_REVISION:
                 case Constant.SETTINGS_DISCONNECTED_EVENT_REVISION:
                 case Constant.SETTINGS_BATTERY_REVISION:
+                case Constant.SETTINGS_WATCHDOG_REVISION:
                     responses.put(new ResponseHeader(SettingsRegister.ADVERTISING_INTERVAL), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
@@ -3931,7 +4075,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     break;
             }
 
-            if (info.revision() == Constant.SETTINGS_BATTERY_REVISION) {
+            if (info.revision() >= Constant.SETTINGS_BATTERY_REVISION) {
                 responses.put(new ResponseHeader(SettingsRegister.BATTERY_STATE), new ResponseProcessor() {
                     @Override
                     public Response process(byte[] response) {
@@ -4061,6 +4205,77 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     });
 
                     return null;
+                }
+            });
+        } else if (info.id() == InfoRegister.SENSOR_FUSION.moduleOpcode()) {
+            responses.put(new ResponseHeader(SensorFusionRegister.CORRECTED_ACC), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new SensorFusionCorrectedCartesianFloatMessage(respBody),
+                            new ResponseHeader(response[0], response[1]));
+                }
+            });
+            responses.put(new ResponseHeader(SensorFusionRegister.CORRECTED_GYRO), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new SensorFusionCorrectedCartesianFloatMessage(respBody),
+                            new ResponseHeader(response[0], response[1]));
+                }
+            });
+            responses.put(new ResponseHeader(SensorFusionRegister.CORRECTED_MAG), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new SensorFusionCorrectedCartesianFloatMessage(respBody),
+                            new ResponseHeader(response[0], response[1]));
+                }
+            });
+            responses.put(new ResponseHeader(SensorFusionRegister.QUATERNION), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new SensorFusionQuaternionMessage(respBody),
+                            new ResponseHeader(response[0], response[1]));
+                }
+            });
+            responses.put(new ResponseHeader(SensorFusionRegister.EULER_ANGLES), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new SensorFusionEulerAnglesMessage(respBody),
+                            new ResponseHeader(response[0], response[1]));
+                }
+            });
+            responses.put(new ResponseHeader(SensorFusionRegister.GRAVITY_VECTOR), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new SensorFusionCartesianFloatMessage(respBody),
+                            new ResponseHeader(response[0], response[1]));
+                }
+            });
+            responses.put(new ResponseHeader(SensorFusionRegister.LINEAR_ACC), new ResponseProcessor() {
+                @Override
+                public Response process(byte[] response) {
+                    byte[] respBody = new byte[response.length - 2];
+                    System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                    return new Response(new SensorFusionCartesianFloatMessage(respBody),
+                            new ResponseHeader(response[0], response[1]));
                 }
             });
         }
@@ -5365,7 +5580,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             };
         }
     }
-
     private class SPIImpl implements SPI {
         private abstract class ParameterBuilderImpl implements ParameterBuilder {
             final byte[] config;
@@ -5460,6 +5674,233 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     return new RouteBuilder().fromSpi(numBytes, id);
                 }
             };
+        }
+    }
+
+    private SensorFusion.Mode sfOpMode = SensorFusion.Mode.SLEEP;
+    private class SensorFusionImpl implements SensorFusion {
+        @Override
+        public SourceSelector routeData() {
+            return new SourceSelector() {
+                @Override
+                public DataSignal fromCorrectedAcc() {
+                    return new RouteBuilder().fromSensorFusionCorrectedAcc();
+                }
+
+                @Override
+                public DataSignal fromCorrectedGyro() {
+                    return new RouteBuilder().fromSensorFusionCorrectedGyro();
+                }
+
+                @Override
+                public DataSignal fromCorrectedMag() {
+                    return new RouteBuilder().fromSensorFusionCorrectedMag();
+                }
+
+                @Override
+                public DataSignal fromGravity() {
+                    return new RouteBuilder().fromSensorFusionGravity();
+                }
+
+                @Override
+                public DataSignal fromEulerAngles() {
+                    return new RouteBuilder().fromSensorFusionEulerAngle();
+                }
+
+                @Override
+                public DataSignal fromQuaternions() {
+                    return new RouteBuilder().fromSensorFusionQuaternion();
+                }
+
+                @Override
+                public DataSignal fromLinearAcceleration() {
+                    return new RouteBuilder().fromSensorFusionLinearAcc();
+                }
+            };
+        }
+
+        @Override
+        public ConfigEditor configure() {
+            return new ConfigEditor() {
+                private AccRange newAccRange = null;
+                private GyroRange newGyroRange = null;
+                private Mode newMode = Mode.SLEEP;
+
+                @Override
+                public ConfigEditor setMode(Mode mode) {
+                    newMode = mode;
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setAccRange(AccRange range) {
+                    newAccRange = range;
+                    bmi160AccRange = Bmi160Accelerometer.AccRange.values()[range.ordinal()];
+                    return this;
+                }
+
+                @Override
+                public ConfigEditor setGyroRange(GyroRange range) {
+                    newGyroRange = range;
+                    bmi160GyroRange = Bmi160Gyro.FullScaleRange.values()[range.ordinal()];
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    sfOpMode = newMode;
+                    byte accRangeMask = (byte) (newAccRange == null ? bmi160AccRange.ordinal() : newAccRange.ordinal());
+                    byte gyroRangeMask = (byte) (newGyroRange == null ? bmi160GyroRange.ordinal() : newGyroRange.ordinal());
+
+                    writeRegister(SensorFusionRegister.MODE,
+                            (byte) newMode.ordinal(),
+                            (byte) ((accRangeMask & 0xf) | (((gyroRangeMask + 1) & 0xf) << 4)));
+
+                    // For now, only bm160 is supplying rotation and acceleration data
+                    Bmi160Accelerometer acc = lookupModule(Bmi160Accelerometer.class);
+                    Bmi160Gyro gyro = lookupModule(Bmi160Gyro.class);
+                    Bmm150Magnetometer mag = lookupModule(Bmm150Magnetometer.class);
+
+                    switch(sfOpMode) {
+                        case SLEEP:
+                            break;
+                        case NDOF:
+                            acc.configureAxisSampling()
+                                    .setFullScaleRange(Bmi160Accelerometer.AccRange.values()[accRangeMask])
+                                    .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_100_HZ)
+                                    .commit();
+                            gyro.configure()
+                                    .setFullScaleRange(Bmi160Gyro.FullScaleRange.values()[gyroRangeMask])
+                                    .setOutputDataRate(Bmi160Gyro.OutputDataRate.ODR_100_HZ)
+                                    .commit();
+                            mag.configureBFieldSampling()
+                                    .setOutputDataRate(Bmm150Magnetometer.OutputDataRate.ODR_25_HZ)
+                                    .commit();
+                            break;
+                        case IMU_PLUS:
+                            acc.configureAxisSampling()
+                                    .setFullScaleRange(Bmi160Accelerometer.AccRange.values()[accRangeMask])
+                                    .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_100_HZ)
+                                    .commit();
+                            gyro.configure()
+                                    .setFullScaleRange(Bmi160Gyro.FullScaleRange.values()[gyroRangeMask])
+                                    .setOutputDataRate(Bmi160Gyro.OutputDataRate.ODR_100_HZ)
+                                    .commit();
+                            break;
+                        case COMPASS:
+                            acc.configureAxisSampling()
+                                    .setFullScaleRange(Bmi160Accelerometer.AccRange.values()[accRangeMask])
+                                    .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_25_HZ)
+                                    .commit();
+                            mag.configureBFieldSampling()
+                                    .setOutputDataRate(Bmm150Magnetometer.OutputDataRate.ODR_25_HZ)
+                                    .commit();
+                            break;
+                        case M4G:
+                            acc.configureAxisSampling()
+                                    .setFullScaleRange(Bmi160Accelerometer.AccRange.values()[accRangeMask])
+                                    .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_50_HZ)
+                                    .commit();
+                            mag.configureBFieldSampling()
+                                    .setOutputDataRate(Bmm150Magnetometer.OutputDataRate.ODR_25_HZ)
+                                    .commit();
+                            break;
+                    }
+                }
+            };
+        }
+
+        @Override
+        public void start(DataOutput ... output) {
+            if (sfOpMode == Mode.SLEEP) {
+                return;
+            }
+
+            Accelerometer acc = lookupModule(Accelerometer.class);
+            Gyro gyro = lookupModule(Gyro.class);
+            Bmm150Magnetometer mag = lookupModule(Bmm150Magnetometer.class);
+
+            switch(sfOpMode) {
+                case NDOF:
+                    acc.enableAxisSampling();
+                    mag.enableBFieldSampling();
+
+                    acc.start();
+                    gyro.start();
+                    mag.start();
+                    break;
+                case IMU_PLUS:
+                    acc.enableAxisSampling();
+
+                    acc.start();
+                    gyro.start();
+                    break;
+                case COMPASS:
+                    acc.enableAxisSampling();
+                    mag.enableBFieldSampling();
+
+                    acc.start();
+                    mag.start();
+                    break;
+                case M4G:
+                    acc.enableAxisSampling();
+                    mag.enableBFieldSampling();
+
+                    acc.start();
+                    mag.start();
+                    break;
+            }
+
+            byte enableMask = 0;
+            for(DataOutput it: output) {
+                enableMask |= (1 << it.ordinal());
+            }
+
+            writeRegister(SensorFusionRegister.OUTPUT_ENABLE, enableMask, (byte) 0x0);
+            writeRegister(SensorFusionRegister.ENABLE, (byte) 1);
+        }
+
+        @Override
+        public void stop() {
+            writeRegister(SensorFusionRegister.ENABLE, (byte) 0);
+            writeRegister(SensorFusionRegister.OUTPUT_ENABLE, (byte) 0x0, (byte) 0x7f);
+
+            Accelerometer acc = lookupModule(Accelerometer.class);
+            Gyro gyro = lookupModule(Gyro.class);
+            Bmm150Magnetometer mag = lookupModule(Bmm150Magnetometer.class);
+
+            switch(sfOpMode) {
+                case NDOF:
+                    acc.stop();
+                    gyro.stop();
+                    mag.stop();
+
+                    acc.disableAxisSampling();
+                    mag.disableBFieldSampling();
+                    break;
+                case IMU_PLUS:
+                    acc.stop();
+                    gyro.stop();
+
+                    acc.disableAxisSampling();
+                    break;
+                case COMPASS:
+                    acc.stop();
+                    mag.stop();
+
+                    acc.disableAxisSampling();
+                    mag.disableBFieldSampling();
+                    break;
+                case M4G:
+                    acc.stop();
+                    mag.stop();
+
+                    acc.disableAxisSampling();
+                    mag.disableBFieldSampling();
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
@@ -5659,7 +6100,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public void disableAutoSleepMode() {
-            mma8452qDataSampling[3] &= 0x4;
+            mma8452qDataSampling[3] &= ~0x4;
         }
 
         @Override
@@ -7145,20 +7586,32 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         public void setPowerPreset(PowerPreset preset) {
             switch (preset) {
                 case LOW_POWER:
-                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) 1, (byte) 2);
-                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) 0);
+                    configureBFieldSampling()
+                            .setXyReps((short) 3)
+                            .setZReps((short) 3)
+                            .setOutputDataRate(OutputDataRate.ODR_10_HZ)
+                            .commit();
                     break;
                 case REGULAR:
-                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) 4, (byte) 14);
-                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) 0);
+                    configureBFieldSampling()
+                            .setXyReps((short) 9)
+                            .setZReps((short) 15)
+                            .setOutputDataRate(OutputDataRate.ODR_10_HZ)
+                            .commit();
                     break;
                 case ENHANCED_REGULAR:
-                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) 7, (byte) 26);
-                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) 0);
+                    configureBFieldSampling()
+                            .setXyReps((short) 15)
+                            .setZReps((short) 27)
+                            .setOutputDataRate(OutputDataRate.ODR_10_HZ)
+                            .commit();
                     break;
                 case HIGH_ACCURACY:
-                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) 23, (byte) 82);
-                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) 5);
+                    configureBFieldSampling()
+                            .setXyReps((short) 47)
+                            .setZReps((short) 83)
+                            .setOutputDataRate(OutputDataRate.ODR_20_HZ)
+                            .commit();
                     break;
             }
         }
@@ -7191,6 +7644,38 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         @Override
         public void enableBFieldSampling() {
             writeRegister(Bmm150MagnetometerRegister.DATA_INTERRUPT_ENABLE, (byte) 1, (byte) 0);
+        }
+
+        @Override
+        public BfieldSamplingConfigEditor configureBFieldSampling() {
+            return new BfieldSamplingConfigEditor() {
+                private short xyReps = 9, zReps = 15;
+                private OutputDataRate odr = OutputDataRate.ODR_10_HZ;
+
+                @Override
+                public BfieldSamplingConfigEditor setZReps(short reps) {
+                    zReps = reps;
+                    return this;
+                }
+
+                @Override
+                public BfieldSamplingConfigEditor setXyReps(short reps) {
+                    xyReps = reps;
+                    return this;
+                }
+
+                @Override
+                public BfieldSamplingConfigEditor setOutputDataRate(OutputDataRate odr) {
+                    this.odr = odr;
+                    return this;
+                }
+
+                @Override
+                public void commit() {
+                    writeRegister(Bmm150MagnetometerRegister.DATA_REPETITIONS, (byte) ((xyReps - 1) / 2), (byte) (zReps - 1));
+                    writeRegister(Bmm150MagnetometerRegister.DATA_RATE, (byte) odr.ordinal());
+                }
+            };
         }
 
         @Override
@@ -8072,6 +8557,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         if (moduleClass.equals(Bmm150Magnetometer.class)) {
             if (moduleInfo.containsKey(InfoRegister.MAGNETOMETER.moduleOpcode()) && moduleInfo.get(InfoRegister.MAGNETOMETER.moduleOpcode()).present()) {
                 return moduleClass.cast(new Bmm150MagnetometerImpl());
+            }
+            throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
+        }
+
+        if (moduleClass.equals(SensorFusion.class)) {
+            if (moduleInfo.containsKey(InfoRegister.SENSOR_FUSION.moduleOpcode()) && moduleInfo.get(InfoRegister.SENSOR_FUSION.moduleOpcode()).present()) {
+                return moduleClass.cast(new SensorFusionImpl());
             }
             throw new UnsupportedModuleException(createUnsupportedModuleMsg(moduleClass));
         }
