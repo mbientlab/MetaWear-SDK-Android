@@ -1,7 +1,8 @@
 # MetaWear Android API #
-The MetaWear Android API is a library for interacting with the MetaWear board on an Android device.  A minimum of Android 4.3 (SDK 18) is required to use this library however some features will not properly function due to the underlying Bluetooth LE implementation.  For the best results, it is recommended that users be on **Android 4.4 (SDK 19) or higher**.
+The MetaWear Android API is a library for interacting with [MbientLab's sensor boards](https://mbientlab.com/sensors/) on an Android device.  A minimum of Android 4.3 (SDK 18) is required to use this library, however for the best results, it is recommended that users be on **Android 4.4 (SDK 19) or higher**.  
 
-More information on MetaWear platform in on the MbientLab product page ([https://mbientlab.com/product/](https://mbientlab.com/product/)).
+### Warning ###
+API v3.0.0 is still in a beta state and may undergo breaking changes until the final release.  There are also key differences between this API and the previous v2.0 API.  See the [wiki](https://github.com/mbientlab/Metawear-AndroidAPI/wiki/API-v3.0.0-Changes) for more details.
 
 # Setup  #
 ## Adding Compile Dependency ##
@@ -20,7 +21,7 @@ Then, add the compile element to the dependencies closure in the module's *build
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:2.7.0'
+    compile 'com.mbientlab:metawear:3.0.0-beta01'
 }
 ```
 
@@ -33,7 +34,7 @@ Once your project has synced with the updated Gradle files, declare the MetaWear
     android:label="@string/app_name"
     android:theme="@style/AppTheme" >
 
-    <service android:name="com.mbientlab.metawear.MetaWearBleService" />
+    <service android:name="com.mbientlab.metawear.android.BtleService" />
     <!-- Other application info below i.e. activity definitions -->
 </application>
 ```
@@ -47,10 +48,10 @@ import android.content.*;
 import android.os.Bundle;
 import android.os.IBinder;
 
-import com.mbientlab.metawear.MetaWearBleService;
+import com.mbientlab.metawear.android.BtleService;
 
 public class ExampleActivity extends Activity implements ServiceConnection {
-    private MetaWearBleService.LocalBinder serviceBinder;
+    private BtleService.LocalBinder serviceBinder;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,7 +59,7 @@ public class ExampleActivity extends Activity implements ServiceConnection {
         setContentView(R.layout.activity_main);
 
         ///< Bind the service when the activity is created
-        getApplicationContext().bindService(new Intent(this, MetaWearBleService.class),
+        getApplicationContext().bindService(new Intent(this, BtleService.class),
                 this, Context.BIND_AUTO_CREATE);
     }
 
@@ -73,11 +74,10 @@ public class ExampleActivity extends Activity implements ServiceConnection {
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
         ///< Typecast the binder to the service's LocalBinder class
-        serviceBinder = (MetaWearBleService.LocalBinder) service;
+        serviceBinder = (BtleService.LocalBinder) service;
     }
 
     @Override
     public void onServiceDisconnected(ComponentName componentName) { }
 }
 ```
-With that, you are ready to interact with your board.  Further documentation and guides are available on the MbientLab web page ([https://mbientlab.com/androiddocs/](https://mbientlab.com/androiddocs/)).  Sample code is available both in the [Example](https://github.com/mbientlab/Metawear-AndroidAPI/tree/master/example/src/main/java/com/mbientlab/metawear/example/MainActivity.java) module and the MetaWear [Android app](https://github.com/mbientlab/Metawear-SampleAndroidApp).
