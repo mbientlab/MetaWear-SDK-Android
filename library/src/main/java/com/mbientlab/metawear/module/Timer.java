@@ -24,83 +24,24 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.AsyncOperation;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.CodeBlock;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
+import bolts.Task;
 
 /**
- * On-board timer for scheduling MetaWear commands
- * @author Eric Tsai
+ * Created by etsai on 9/17/16.
  */
-public interface Timer extends MetaWearBoard.Module {
-    /**
-     * Task that can be scheduled for periodic execution
-     * @author Eric Tsai
-     */
-    interface Task {
-        /**
-         * MetaWear commands to be executed
-         */
-        void commands();
-    }
-
-    /**
-     * Timer controller for managing the task execution
-     */
-    interface Controller {
-        /**
-         * Retrieve the ID representing the controller
-         * @return Controller ID
-         */
-        byte id();
-
-        /**
-         * Starts the periodic execution, does nothing if controller is inactive
-         */
+public interface Timer extends Module {
+    interface ScheduledTask {
         void start();
-
-        /**
-         * Stops the task execution, does nothing if controller is inactive
-         */
         void stop();
-
-        /**
-         * Removes the timer from the board, does nothing if controller is inactive
-         */
-        void remove();
-
-        /**
-         * Retrieves the active state
-         * @return True if the controller is active, false otherwise
-         */
         boolean isActive();
+        byte id();
+        void remove();
     }
 
-    /**
-     * Schedules a task to be periodically executed indefinitely
-     * @param mwTask    Task to be schedule
-     * @param period    How often to execute the task, in milliseconds
-     * @param delay     True if the first execution should be delayed by one {@code period} worth of time
-     * @return Timer controller, available when the timer has successfully committed
-     */
-    AsyncOperation<Controller> scheduleTask(Task mwTask, int period, boolean delay);
-    /**
-     * Schedules a task to be periodically executed for a fixed number of times
-     * @param mwTask    Task to be schedule
-     * @param period    How often to execute the task, in milliseconds
-     * @param delay     True if the first execution should be delayed by one {@code period} worth of time
-     * @return Timer controller, available when the timer has successfully committed
-     */
-    AsyncOperation<Controller> scheduleTask(Task mwTask, int period, boolean delay, short repetitions);
-
-    /**
-     * Removed all timers from the board.  All timer controllers will be marked inactive
-     */
-    void removeTimers();
-
-    /**
-     * Retrieve the controller corresponding to the ID
-     * @param controllerId    Controller ID to lookup
-     * @return Controller corresponding to the ID, null if the lookup failed
-     */
-    Controller getController(byte controllerId);
+    Task<ScheduledTask> schedule(int period, boolean delay, CodeBlock mwCode);
+    Task<ScheduledTask> schedule(int period, short repetitions, boolean delay, CodeBlock mwCode);
+    ScheduledTask lookupScheduledTask(byte id);
 }

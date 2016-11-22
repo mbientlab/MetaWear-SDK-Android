@@ -24,11 +24,13 @@
 
 package com.mbientlab.metawear.module;
 
+import com.mbientlab.metawear.ForcedDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
 /**
- * Interacts with a GSR (galvanic skin response) sensor
- * @author Eric Tsai
+ * Created by etsai on 9/21/16.
  */
-public interface Gsr extends Conductance {
+public interface Gsr extends Module {
     /**
      * Voltages that can be applied to the GSR electrodes
      */
@@ -41,8 +43,8 @@ public interface Gsr extends Conductance {
      * Gains that can be applied to the GSR circuit
      */
     enum Gain {
-        G_499K,
-        G_1M
+        GSR_499K,
+        GSR_1M
     }
 
     /**
@@ -69,9 +71,15 @@ public interface Gsr extends Conductance {
         void commit();
     }
 
+    interface Channel extends ForcedDataProducer { }
+
     /**
      * Configures GSR settings
      * @return Config object to edit the settings
      */
     ConfigEditor configure();
+
+    Channel[] channels();
+
+    void calibrate();
 }

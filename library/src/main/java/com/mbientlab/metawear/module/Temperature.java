@@ -24,50 +24,28 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.DataSignal;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.ForcedDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Generic class providing high level access to the temperature sensor.  If you know you are on firmware
- * v1.0.4 or higher, use the multi channel temperature class instead.  If you are on firmware v1.0.3 or
- * earlier, use the single channel temperature class.
- * @author Eric Tsai
- * @see MultiChannelTemperature
- * @see SingleChannelTemperature
+ * Created by etsai on 9/18/16.
  */
-public interface Temperature extends MetaWearBoard.Module {
-    /**
-     * Generic selector for temperature data
-     * @author Eric Tsai
-     */
-    interface SourceSelector {
-        /**
-         * Handle data from the temperature sensor
-         * @return Object representing temperature data
-         */
-        DataSignal fromSensor();
-        /**
-         * Handle data from the temperature sensor.  This version of the function pairs with the
-         * {@link #readTemperature(boolean)} variant
-         * @param silent    Same value as the silent parameter for calling {@link #readTemperature(boolean)}
-         * @return Object representing temperature data
-         */
-        DataSignal fromSensor(boolean silent);
+public interface Temperature extends Module {
+    enum SourceType {
+        NRF_SOC,
+        EXT_THERMISTOR,
+        BOSCH_ENV,
+        PRESET_THERMISTOR
     }
 
-    /**
-     * Reads value from a temperature sensor
-     */
-    void readTemperature();
-    /**
-     * Reads value from a temperature sensor
-     * @param silent    True if read should be silent
-     */
-    void readTemperature(boolean silent);
+    interface Source extends ForcedDataProducer {
+        SourceType type();
+    }
 
-    /**
-     * Initiates the creation of a route for temperature data
-     * @return Selection of available data sources
-     */
-    SourceSelector routeData();
+    interface ExternalThermistor extends Source {
+        void configure(byte dataPin, byte pulldownPin, boolean activeHigh);
+    }
+
+    Source[] sources();
+    Source[] findSource(SourceType type);
 }

@@ -24,13 +24,12 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Controls NeoPixel strands connected to the board
- * @author Eric Tsai
+ * Created by etsai on 9/18/16.
  */
-public interface NeoPixel extends MetaWearBoard.Module {
+public interface NeoPixel extends Module {
     /**
      * Color ordering for the NeoPixel color values
      * @author Eric Tsai
@@ -57,15 +56,89 @@ public interface NeoPixel extends MetaWearBoard.Module {
         FAST
     }
 
+    interface Strand {
+        /**
+         * Enumeration of rotation directions
+         * @author Eric Tsai
+         */
+        enum RotationDirection {
+            /** Move pixels towards the board */
+            TOWARDS,
+            /** Move pixels away from the board */
+            AWAY
+        }
+
+        /**
+         * Free resources allocated by the firmware for this strand.  After calling free,
+         * this object is no longer valid and should be discarded
+         */
+        void free();
+        /**
+         * Enables strand holding.  When enabled, the strand will not refresh with any LED changes until the hold
+         * is disabled.  This allows you to form complex LED patterns without having the strand refresh with partial changes.
+         */
+        void hold();
+        /**
+         * Disables strand holding.  The strand will be refreshed with any LED changes programmed while the hold was active
+         */
+        void release();
+        /**
+         * Turns off the pixels in the given range
+         * @param start Pixel index to start clearing from
+         * @param end Pixel index to clear to, inclusive
+         */
+        void turnOff(byte start, byte end);
+        /**
+         * Rotate the pixels on a strand
+         * @param direction Rotation direction
+         * @param repetitions Number of times to repeat the rotation
+         * @param period Amount of time, in milliseconds, between rotations
+         */
+        void rotate(RotationDirection direction, byte repetitions, short period);
+        /**
+         * Rotate the pixels on a strand indefinitely
+         * @param direction Rotation direction
+         * @param period Amount of time, in milliseconds, between rotations
+         */
+        void rotate(RotationDirection direction, short period);
+        /**
+         * Stops the LED rotation
+         */
+        void stopRotation();
+
+        /**
+         * Returns all of the Leds initialized for the strand as an array
+         * @return Array of Led objects
+         */
+        Led[] leds();
+
+        /**
+         * Returns the LED at index i
+         * @param i    Index to lookup, between [0, nLEds)
+         * @return LED at index i
+         * @throws ArrayIndexOutOfBoundsException If index is outside the range [0, nLeds)
+         */
+        Led led(int i);
+
+        /**
+         * Returns the number of Leds initialized for the strand
+         * @return
+         */
+        int nLeds();
+    }
+
     /**
-     * Enumeration of rotation directions
+     * RGB led on a NeoPixel strand
      * @author Eric Tsai
      */
-    enum RotationDirection {
-        /** Move pixels towards the board */
-        TOWARDS,
-        /** Move pixels away from the board */
-        AWAY
+    interface Led {
+        /**
+         * Set pixel color
+         * @param red Red value, between [0, 255]
+         * @param green Green value, between [0, 255]
+         * @param blue Blue value, between [0, 255]
+         */
+        void setRgb(byte red, byte green, byte blue);
     }
 
     /**
@@ -76,61 +149,7 @@ public interface NeoPixel extends MetaWearBoard.Module {
      * @param gpioPin GPIO pin the strand is connected to
      * @param length Number of pixels to initialize
      */
-    void initializeStrand(byte strand, ColorOrdering ordering, StrandSpeed speed, byte gpioPin, byte length);
-    /**
-     * Free resources on the MetaWeard board for a NeoPixel strand
-     * @param strand Strand index to free
-     */
-    void deinitializeStrand(byte strand);
+    Strand initializeStrand(byte strand, ColorOrdering ordering, StrandSpeed speed, byte gpioPin, byte length);
 
-    /**
-     * Enables strand holding.  When enabled, the strand will not refresh with any LED changes until the hold
-     * is disabled.  This allows you to form complex LED patterns without having the strand refresh with partial changes.
-     * @param strand    Strand number (id) to hold
-     */
-    void holdStrand(byte strand);
-
-    /**
-     * Disables strand holding.  The strand will be refreshed with any LED changes programmed while the hold was active
-     * @param strand    Strand number (id) to release
-     */
-    void releaseHold(byte strand);
-
-    /**
-     * Clear pixel states on a strand
-     * @param strand Strand number to clear
-     * @param start Pixel index to start clearing from
-     * @param end Pixel index to clear to, inclusive
-     */
-    void clearStrand(byte strand, byte start, byte end);
-    /**
-     * Set pixel color
-     * @param strand Strand number the pixel is on
-     * @param pixel Index of the pixel
-     * @param red Red value, between [0, 255]
-     * @param green Green value, between [0, 255]
-     * @param blue Blue value, between [0, 255]
-     */
-    void setPixel(byte strand, byte pixel, byte red, byte green, byte blue);
-
-    /**
-     * Rotate the pixels on a strand
-     * @param strand Strand to rotate
-     * @param direction Rotation direction
-     * @param repetitions Number of times to repeat the rotation
-     * @param period Amount of time, in milliseconds, between rotations
-     */
-    void rotate(byte strand, RotationDirection direction, byte repetitions, short period);
-    /**
-     * Rotate the pixels on a strand indefinitely
-     * @param strand Strand to rotate
-     * @param direction Rotation direction
-     * @param period Amount of time, in milliseconds, between rotations
-     */
-    void rotate(byte strand, RotationDirection direction, short period);
-    /**
-     * Stops the LED rotation
-     * @param strand    Strand to stop LED rotation
-     */
-    void stopRotation(byte strand);
+    Strand lookupStrand(byte strand);
 }

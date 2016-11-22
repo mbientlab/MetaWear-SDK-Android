@@ -24,16 +24,17 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.AsyncOperation;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.DataToken;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 import java.util.UUID;
 
+import bolts.Task;
+
 /**
- * Controller for IBeacon mode
- * @author Eric Tsai
+ * Created by etsai on 9/18/16.
  */
-public interface IBeacon extends MetaWearBoard.Module {
+public interface IBeacon extends Module {
     /**
      * Configures IBeacon settings
      * @return Editor object to configure various settings
@@ -70,11 +71,25 @@ public interface IBeacon extends MetaWearBoard.Module {
         ConfigEditor setMajor(short major);
 
         /**
+         * Sets the advertising major number
+         * @param major    New advertising major number
+         * @return Calling object
+         */
+        ConfigEditor setMajor(DataToken major);
+
+        /**
          * Sets the advertising minor number
          * @param minor    New advertising minor number
          * @return Calling object
          */
         ConfigEditor setMinor(short minor);
+
+        /**
+         * Sets the advertising minor number
+         * @param minor    New advertising minor number
+         * @return Calling object
+         */
+        ConfigEditor setMinor(DataToken minor);
 
         /**
          * Sets the advertising receiving power
@@ -112,7 +127,7 @@ public interface IBeacon extends MetaWearBoard.Module {
          * Retrieves the advertising UUID
          * @return Advertising UUID
          */
-        UUID adUuid();
+        UUID uuid();
 
         /**
          * Retrieves the advertising major number
@@ -142,12 +157,12 @@ public interface IBeacon extends MetaWearBoard.Module {
          * Retrieves the advertising period
          * @return Advertising period, in milliseconds
          */
-        short adPeriod();
+        short period();
     }
 
     /**
      * Read the current IBeacon configuration
      * @return Configuration object that will be available when the read operation completes
      */
-    AsyncOperation<Configuration> readConfiguration();
+    Task<Configuration> readConfiguration();
 }

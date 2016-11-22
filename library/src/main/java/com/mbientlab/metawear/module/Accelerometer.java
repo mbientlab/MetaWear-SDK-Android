@@ -24,119 +24,32 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.DataSignal;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Generic class providing high level access for an accelerometer sensor. If you know specifically which
- * accelerometer is on your board, use the appropriate Accelerometer subclass instead
- * @author Eric Tsai
- * @see Bmi160Accelerometer
- * @see Mma8452qAccelerometer
+ * Created by etsai on 9/1/16.
  */
-public interface Accelerometer extends MetaWearBoard.Module {
-    /**
-     * Orientation definitions for the board, providing a unified definition of board orientation amongst
-     * the R, RG, and RPro boards.  The entries are defined from the board's perspective as pictured in the
-     * mechanical specification section of the MetaWear product spec sheets.
-     * @author Eric Tsai
-     */
-    enum BoardOrientation {
-        FACE_UP_PORTRAIT_UPRIGHT,
-        FACE_UP_PORTRAIT_UPSIDE_DOWN,
-        FACE_UP_LANDSCAPE_LEFT,
-        FACE_UP_LANDSCAPE_RIGHT,
-        FACE_DOWN_PORTRAIT_UPRIGHT,
-        FACE_DOWN_PORTRAIT_UPSIDE_DOWN,
-        FACE_DOWN_LANDSCAPE_LEFT,
-        FACE_DOWN_LANDSCAPE_RIGHT
+public interface Accelerometer extends Module {
+    interface AccelerationDataProducer extends AsyncDataProducer {
+        String xAxisName();
+        String yAxisName();
+        String zAxisName();
     }
 
-    /**
-     * Sets the operating frequency of the accelerometer.  The closest, valid frequency will be chosen
-     * depending on underlying sensor
-     * @param frequency    Operating frequency, in Hz
-     * @return Selected operating frequency
-     */
-    float setOutputDataRate(float frequency);
-    /**
-     * Sets the sampling range for the accelerometer.  The closest, valid range will be chosen depending
-     * on the underlying sensor
-     * @param range    Sampling range, in G's
-     * @return Selected acceleration range
-     */
-    float setAxisSamplingRange(float range);
+    AccelerationDataProducer acceleration();
+    AsyncDataProducer packedAcceleration();
 
-    /**
-     * Enables sampling of the XYZ axes
-     */
-    void enableAxisSampling();
-    /**
-     * Disables sampling of the XYZ axes
-     */
-    void disableAxisSampling();
-
-    /**
-     * Enables orientation detection when the accelerometer is active
-     */
-    void enableOrientationDetection();
-    /**
-     * Disables orientation detection
-     */
-    void disableOrientationDetection();
-
-    /**
-     * Global function that starts accelerometer activity.  The accelerometer cannot be configured until
-     * the {@link #stop()} method is called
-     */
     void start();
-    /**
-     * Global function that stops accelerometer activity
-     */
     void stop();
 
-    /**
-     * Generic selector for accelerometer data sources
-     * @author Eric Tsai
-     */
-    interface SourceSelector {
-        /**
-         * Handle data from all 3 axes of the accelerometer
-         * @return Object representing the data from the accelerometer XYZ axis sampling
-         */
-        DataSignal fromAxes();
-        /**
-         * Special signal for high frequency (>100Hz) acceleration stream.  This signal is only for streaming,
-         * it does not support logging or data processing.
-         * @return Object representing a high frequency acceleration stream
-         */
-        DataSignal fromHighFreqAxes();
-        /**
-         * Handle data from the x-axis.  Streaming data from only the x-axis is not supported
-         * @return Object representing the data from the accelerometer x-axis sampling
-         */
-        DataSignal fromXAxis();
-        /**
-         * Handle data from the y-axis.  Streaming data from only the y-axis is not supported
-         * @return Object representing the data from the accelerometer y-axis sampling
-         */
-        DataSignal fromYAxis();
-        /**
-         * Handle data from the z-axis.  Streaming data from only the z-axis is not supported
-         * @return Object representing the data from the accelerometer z-axis sampling
-         */
-        DataSignal fromZAxis();
-
-        /**
-         * Handle data from orientation changes
-         * @return Object representing the orientation data
-         */
-        DataSignal fromOrientation();
+    interface ConfigEditorBase<T extends ConfigEditorBase> {
+        T odr(float odr);
+        T range(float fsr);
+        void commit();
     }
 
-    /**
-     * Initiates the creation of a route for accelerometer data
-     * @return Selection of available data sources
-     */
-    SourceSelector routeData();
+    ConfigEditorBase<? extends ConfigEditorBase> configure();
+    float getOdr();
+    float getRange();
 }

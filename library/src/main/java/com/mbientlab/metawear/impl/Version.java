@@ -24,25 +24,27 @@
 
 package com.mbientlab.metawear.impl;
 
+import java.io.Serializable;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Created by etsai on 7/26/2015.
+ * Created by etsai on 9/5/16.
  */
-public class Version implements Comparable<Version> {
+class Version implements Comparable<Version>, Serializable {
     private static final Pattern VERSION_STRING_PATTERN = Pattern.compile("(\\d)+\\.(\\d)+\\.(\\d)");
+    private static final long serialVersionUID = -6928626294821091652L;
 
     private final int major, minor, step;
 
-    public Version(int major, int minor, int step) {
+    Version(int major, int minor, int step) {
         this.major= major;
         this.minor= minor;
         this.step= step;
     }
 
-    public Version(String versionString) {
+    Version(String versionString) {
         Matcher m= VERSION_STRING_PATTERN.matcher(versionString);
 
         if (!m.matches()) {
@@ -62,6 +64,7 @@ public class Version implements Comparable<Version> {
         }
         return 0;
     }
+
     @Override
     public int compareTo(Version version) {
         int sum= 4 * weightedCompare(major, version.major) + 2 * weightedCompare(minor, version.minor) + weightedCompare(step, version.step);

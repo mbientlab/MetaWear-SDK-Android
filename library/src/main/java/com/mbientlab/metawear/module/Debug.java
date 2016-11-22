@@ -24,38 +24,17 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
+import bolts.Task;
 
 /**
- * Debug functions for advanced use
- * @author Eric Tsai
+ * Created by etsai on 10/11/16.
  */
-public interface Debug extends MetaWearBoard.Module {
-    /**
-     * Restart the board
-     */
-    void resetDevice();
 
-    /**
-     * Restart the board in bootloader mode
-     */
-    void jumpToBootloader();
-
-    /**
-     * Restart the board after performing garbage collection.  This method should be
-     * used in lieu of {@link #resetDevice()} if a user wishes to restart the board
-     * after erasing macros or log entries.
-     * @see Logging#clearEntries()
-     * @see Macro#eraseMacros()
-     */
-    void resetAfterGarbageCollect();
-
-    /**
-     * Have the board terminate the connection, as opposed to {@link MetaWearBoard#disconnect()} where
-     * the mobile device terminates the connection.  On devices running Lollipop or later, this will call
-     * the {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#failure(int, Throwable) ConnectionStateHandler.failure}
-     * function with a status of 19 rather than
-     * {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#disconnected() ConnectionStateHandler.disconnected}
-     */
-    void disconnect();
+public interface Debug extends Module {
+    Task<Void> reset();
+    Task<Void> disconnect();
+    Task<Void> jumpToBootloader();
+    void resetAfterGc();
 }

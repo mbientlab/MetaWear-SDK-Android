@@ -24,13 +24,12 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Communicates with the haptic driver.
- * @author Eric Tsai
+ * Created by etsai on 9/18/16.
  */
-public interface Haptic extends MetaWearBoard.Module {
+public interface Haptic extends Module {
     /**
      * Start pulsing a motor with a duty cycle of 100%
      * @param pulseWidth How long to run the motor (ms)

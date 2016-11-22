@@ -25,11 +25,12 @@
 package com.mbientlab.metawear;
 
 import java.io.File;
-import java.io.InputStream;
 import java.util.UUID;
 
+import bolts.Task;
+
 /**
- * Controller for communicating with a MetaWear board
+ * Object representing a MetaWear board
  * @author Eric Tsai
  */
 public interface MetaWearBoard {
@@ -39,272 +40,131 @@ public interface MetaWearBoard {
      */
     UUID METAWEAR_SERVICE_UUID= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
     /**
-     * Old name for the MetaWear service UUID, replaced in v2.1.0
-     * #deprecated Used {@link #METAWEAR_SERVICE_UUID} instead
-     */
-    @Deprecated
-    UUID META_WEAR_SERVICE_UUID= METAWEAR_SERVICE_UUID;
-    /**
      * Service UUID identifying a MetaWear board in MetaBoot mode
      */
-    UUID METABOOT_SERVICE_UUID= new UUID(0x000015301212EFDEL, 0x1523785FEABCD123L);
+    UUID METABOOT_SERVICE_UUID= UUID.fromString("00001530-1212-efde-1523-785feabcd123");
+
+    /** On-board sensor, peripheral, or firmware feature */
+    interface Module { }
+
+    /**
+     * Handler for when the Bluetooth connection is unexpectedly dropped
+     * @author Eric Tsai
+     */
+    interface UnexpectedDisconnectHandler {
+        /**
+         * Callback method that is invoked when the Bluetooth connection is unexpectedly dropped
+         * @param status    Status from the connection changed callback
+         */
+        void disconnected(int status);
+    }
 
     /**
      * Retrieves the MAC address of the board
      * @return Board's MAC address
      */
     String getMacAddress();
-
     /**
-     * Checks if the board is in MetaBoot mode
-     * @return True if it is in MetaBoot mode
+     * Reads the current RSSI value
+     * @return Task holding the returned RSSI value
      */
-    boolean inMetaBootMode();
-
+    Task<Integer> readRssiAsync();
     /**
-     * Class for handling notifications from the device firmware update operation
-     * @author Eric Tsai
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
+     * Reads the battery level characteristic
+     * @return Task holding the battery level
      */
-    @Deprecated
-    interface DfuProgressHandler {
-        /**
-         * Enumeration of the DFU operation states
-         */
-        enum State {
-            /** Downloading the new firmware from the internet */
-            DOWNLOADING,
-            /** Preparing the board and library for the update */
-            INITIALIZING,
-            /** Starting the update */
-            STARTING,
-            /** Validating the firmware upload */
-            VALIDATING,
-            /** Disconnecting from the board */
-            DISCONNECTING
-        }
-
-        /**
-         * Called when the DFU has progressed to a new state
-         * @param dfuState    New state of the update operation
-         */
-        void reachedCheckpoint(State dfuState);
-
-        /**
-         * Called when upload completion progress has been received.  This method also functions as
-         * an implied "uploading" state.
-         * @param progress    Integer between [0, 100] representing completion percentage
-         */
-        void receivedUploadProgress(int progress);
-    }
+    Task<Byte> readBatteryLevelAsync();
     /**
-     * Updates the firmware on the board to the latest available release.  The update requires an active internet
-     * connection on your Android device and will terminate the Bluetooth connection when completed without calling the
-     * {@link ConnectionStateHandler#disconnect() disconnected()} callback function.  You must be connected to the board
-     * before calling this function, otherwise, it will fail.
-     * @param handler    Handler for processing DFU progress notifications
-     * @return Result of the operation that will be available when the DFU is finished
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     * @see #downloadLatestFirmware()
+     * Reads supported characteristics from the Device Information service
+     * @return Task holding the device information
      */
-    @Deprecated
-    AsyncOperation<Void> updateFirmware(DfuProgressHandler handler);
-    /**
-     * Updates the firmware on the board with a user specified firmware file.  Executing this function will terminate the Bluetooth
-     * connection without calling the {@link ConnectionStateHandler#disconnect() disconnected()} callback function.  You must be connected
-     * to the board before calling this feature, otherwise, it will fail.
-     * @param firmwareHexPath    Path to the firmware file
-     * @param handler            Handler for processing DFU progress notifications
-     * @return Result of the operation that will be available when the DFU is finished
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     * @see #downloadLatestFirmware()
-     */
-    @Deprecated
-    AsyncOperation<Void> updateFirmware(File firmwareHexPath, DfuProgressHandler handler);
-    /**
-     * Updates the firmware on the board using data from the provided input stream.  Executing this function will terminate the Bluetooth
-     * connection without calling the {@link ConnectionStateHandler#disconnect() disconnected()} callback function.  You must be connected
-     * to the board before calling this feature, otherwise, it will fail.
-     * @param firmwareStream    Path to the firmware file
-     * @param handler            Handler for processing DFU progress notifications
-     * @return Result of the operation that will be available when the DFU is finished
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     * @see #downloadLatestFirmware()
-     */
-    @Deprecated
-    AsyncOperation<Void> updateFirmware(InputStream firmwareStream, DfuProgressHandler handler);
-    /**
-     * Terminates a DFU in progress, resulting in a failure.  Does nothing if no DFU is in progress
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     * @see #downloadLatestFirmware()
-     */
-    @Deprecated
-    void abortFirmwareUpdate();
-
+    Task<DeviceInformation> readDeviceInformationAsync();
     /**
      * Downloads the latest firmware release for the board to your Android device.  You must be connected to the
      * board before calling this function.
-     * @return Path to where the firmware resides on the Android device, available when the download is completed
+     * @return Task holding the file pointing to where the downloaded firmware resides on the Android device
      */
-    AsyncOperation<File> downloadLatestFirmware();
+    Task<File> downloadLatestFirmwareAsync();
     /**
-     * Checks if there is a newer version of the firmware available for your board.  If a newer firmware version
-     * exists, the operation will return true.  The firmware check requires an active internet connection on your
-     * Android device.
-     * @return Result of operation that will be available when the firmware check is completed
+     * Checks if there is a newer version of the firmware available for your board.  The firmware check requires
+     * you to be connected to your board and an active internet connection on your Android device.
+     * @return Task holding the result of the firmware check, true if a firmware update is available
      */
-    AsyncOperation<Boolean> checkForFirmwareUpdate();
+    Task<Boolean> checkForFirmwareUpdateAsync();
 
     /**
-     * Base class for on-board sensors or features supported by the board's firmware
-     * @author Eric Tsai
+     * Establishes a Bluetooth Low Energy connection to the MetaWear board
+     * @return Task holding the result of the connect attempt
      */
-    interface Module { }
+    Task<Void> connectAsync();
     /**
-     * Retrieves a pointer to the requested module, if supported by the current board and firmware, and
-     * the board is not in MetaBoot mode.  The API must be connected to the board to use this function.
-     * @param moduleClass    Module class to lookup
-     * @return Reference to the requested module, null if the BLE connection is not active
-     * @throws UnsupportedModuleException if the module is not available on the board, or the board is in
-     * MetaBoot mode
+     * Establishes a Bluetooth Low Energy connection to the MetaWear board
+     * @param delay    How long to wait (in milliseconds) before attempting to connect
+     * @return Task holding the result of the connect attempt
      */
-    <T extends Module> T getModule(Class<T> moduleClass) throws UnsupportedModuleException;
+    Task<Void> connectAsync(long delay);
+    /**
+     * Disconnects from the board
+     * @return Task holding the result of the disconnect attempt
+     */
+    Task<Void> disconnectAsync();
+    /**
+     * Set a handler for unexpected disconnects
+     * @param handler    Handler for unexpected disconnects
+     */
+    void onUnexpectedDisconnect(UnexpectedDisconnectHandler handler);
 
     /**
-     * Variant of #{@link #getModule(Class)} that does not throw a checked exception.  The API must be
-     * connected to the board to use this function.
-     * @param moduleClass    Module class to lookup
-     * @return Reference to the module class, null if not supported, board is in MetaBoot mode, or
-     * the API is not connected to the board
-     */
-    <T extends Module> T lookupModule(Class<T> moduleClass);
-
-    /**
-     * Wrapper class around the data from the device information service
-     * @author Eric Tsai
-     */
-    interface DeviceInformation {
-        /**
-         * Retrieves the device's manufacturer
-         * @return Manufacturer name
-         */
-        String manufacturer();
-
-        /**
-         * Retrieves the device's model number
-         * @return Module number
-         */
-        String modelNumber();
-
-        /**
-         * Retrieves the device's serial number
-         * @return Serial number
-         */
-        String serialNumber();
-
-        /**
-         * Retrieves the revision of the firmware running on the device
-         * @return Firmware revision
-         */
-        String firmwareRevision();
-
-        /**
-         * Retrieves the revision of the hardware within the device
-         * @return Hardware revision
-         */
-        String hardwareRevision();
-    }
-    /**
-     * Reads supported characteristics from the Device Information service
-     * @return DeviceInformation object that will be available when the read operation completes
-     */
-    AsyncOperation<DeviceInformation> readDeviceInformation();
-    /**
-     * Reads the current RSSI value
-     * @return RSSI value that will be available when the read operation completes
-     */
-    AsyncOperation<Integer> readRssi();
-    /**
-     * Reads the battery level characteristic
-     * @return Battery level that will be available when the read operation completes
-     */
-    AsyncOperation<Byte> readBatteryLevel();
-
-    /**
-     * Class for handling Bluetooth LE connection events
-     * @author Eric Tsai
-     */
-    abstract class ConnectionStateHandler {
-        /**
-         * Called when a connection to the MetaWear board is established and ready to be used
-         */
-        public void connected() { }
-
-        /**
-         * Called when the connection is lost
-         */
-        public void disconnected() { }
-
-        /**
-         * Called if a connection attempt failed
-         * @param status    Status code reported by one of the BluetoothGattCallback methods, -1 if a
-         *                  a connection timeout occurred
-         * @param error     Error thrown by one of the BluetoothGattCallback methods
-         */
-        public void failure(int status, Throwable error) { }
-    }
-    /**
-     * Sets the connection state handler
-     * @param handler    Handler to use for connection events
-     */
-    void setConnectionStateHandler(ConnectionStateHandler handler);
-    /**
-     * Establish a connection to the board and prepare the API to communicate with the board.  If this
-     * is not completed within a timeout interval, the
-     * {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#failure(int, Throwable) failure} callback
-     * function will be called with a TimeoutException
-     */
-    void connect();
-    /**
-     * Close the connection to the board
-     */
-    void disconnect();
-    /**
-     * Retrieves the connection state
-     * @return True if a connection is currently established
+     * Gets the connection state
+     * @return True if a btle connection is active, false otherwise
      */
     boolean isConnected();
+    /**
+     * Checks if the board is in the MetaBoot (bootloader) mode.  If it is, you will not be able to interact
+     * with the board outside of reading RSSI values and updating firmware.
+     * @return True if the board is in MetaBoot mode, false otherwise
+     */
+    boolean inMetaBoot();
 
     /**
-     * Retrieves a route manager
+     * Retrieves a reference to the requested module if supported.  You must connected to the board before
+     * calling this function and the board must not be in MetaBoot mode
+     * @param moduleClass    Module class to lookup
+     * @return Reference to the requested module, null if the board is not connected, module not supported, or board is in MetaBoot mode
+     */
+    <T extends Module> T getModule(Class<T> moduleClass);
+    /**
+     * Retrieves a reference to the requested module if supported, throws a checked exception if the function fails.
+     * You must connected to the board before calling this function and the board must not be in MetaBoot mode
+     * @param moduleClass    ModuleId class to lookup
+     * @return Reference to the requested module
+     * @throws UnsupportedModuleException If the requested module is not supported or the board is in MetaBoot mode
+     */
+    <T extends Module> T getModuleOrThrow(Class<T> moduleClass) throws UnsupportedModuleException;
+
+    /**
+     * Retrieves a route
      * @param id    Numerical ID to look up
-     * @return Manager corresponding to the specified ID, null if none can be found
+     * @return Route corresponding to the specified ID, null if none can be found
      */
-    RouteManager getRouteManager(int id);
+    Route lookupRoute(int id);
     /**
-     * Remove all data routes
+     * Retrieves an observer
+     * @param id    Numerical ID to look up
+     * @return Observer corresponding to the specified ID, null if none can be found
      */
-    void removeRoutes();
-
+    Observer lookupObserver(int id);
     /**
-     * Removes all routes and timers from the board.  It does not reset the board so any configuration
-     * changes are preserved
+     * Removes all allocated resources on the board i.e. routes, observers, data processors, timers, etc.
      */
     void tearDown();
 
     /**
-     * Serializes the internal state of the class
-     * @return Byte array representing the class' state
+     * Serialize object state and write the state to disk
      */
-    byte[] serializeState();
+    void serialize();
     /**
-     * Updates the internal state with the values in the byte array
-     * @param state    New state of the class
+     * Restore serialized state from disk if available
      */
-    void deserializeState(byte[] state);
+    void deserialize();
 }

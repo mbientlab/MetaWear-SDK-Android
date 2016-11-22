@@ -24,109 +24,128 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Communicates with the ultra-bright LED
+ * Ultra bright rgb LED
  * @author Eric Tsai
  */
-public interface Led extends MetaWearBoard.Module {
+public interface Led extends Module {
     /**
-     * Available colors on the LED
+     * Constant for PatternEditor.setRepeatCount indicating the pattern should repeat forever
+     * @see PatternEditor#setRepeatCount(byte)
+     */
+    byte PATTERN_REPEAT_INDEFINITELY= -1;
+
+    /**
+     * Enumeration of available colors on the LED
      * @author Eric Tsai
      */
-    enum ColorChannel {
+    enum Color {
         GREEN,
         RED,
         BLUE
     }
 
     /**
-     * Interface for configuring the color channels of the LED
+     * Enumeration of patterns from the <a href="http://projects.mbientlab.com/?p=656">blog post</a>
      * @author Eric Tsai
      */
-    interface ColorChannelEditor {
+    enum PatternPreset {
+        BLINK,
+        PULSE,
+        SOLID
+    }
+
+    /**
+     * Interface to edit pattern attributes
+     * @author Eric Tsai
+     */
+    interface PatternEditor {
         /**
          * Intensity value of the high state
          * @param intensity LED intensity the high state should be in, between [0 - 31]
          * @return Calling object
          */
-        ColorChannelEditor setHighIntensity(byte intensity);
+        PatternEditor setHighIntensity(byte intensity);
         /**
          * Intensity value of the low state
          * @param intensity LED intensity the low state should be in, between [0 - 31]
          * @return Calling object
          */
-        ColorChannelEditor setLowIntensity(byte intensity);
+        PatternEditor setLowIntensity(byte intensity);
         /**
          * How long the transition should take from low to high state, in milliseconds
          * @param time Transition time (ms) from low to high state
          * @return Calling object
          */
-        ColorChannelEditor setRiseTime(short time);
+        PatternEditor setRiseTime(short time);
         /**
          * How long the pulse stays in the high state
          * @param time Length of time (ms) to spend in the high state
          * @return Calling object
          */
-        ColorChannelEditor setHighTime(short time);
+        PatternEditor setHighTime(short time);
         /**
          * How long the transition should take from high to low state, in milliseconds
          * @param time Length of time (ms) from high to low state
          * @return Calling object
          */
-        ColorChannelEditor setFallTime(short time);
+        PatternEditor setFallTime(short time);
         /**
          * How long one pulse is
          * @param duration Length of one pulse (ms)
          * @return Calling object
          */
-        ColorChannelEditor setPulseDuration(short duration);
+        PatternEditor setPulseDuration(short duration);
         /**
          * How long to wait before starting the pattern.  This function is ignored on boards running firmware
          * older than v1.2.3
          * @param delay    Length of the delay (ms)
          * @return Calling object
          */
-        ColorChannelEditor setDelay(short delay);
+        PatternEditor setDelay(short delay);
         /**
          * How many times to repeat a pulse pattern
-         * @param count Number of repetitions, set to 255 to repeat indefinitely
+         * @param count Number of repetitions, use {@link #PATTERN_REPEAT_INDEFINITELY} to repeat forever
          * @return Calling object
          */
-        ColorChannelEditor setRepeatCount(byte count);
+        PatternEditor setRepeatCount(byte count);
 
         /** Write the settings to the board */
         void commit();
     }
 
     /**
-     * Configures the pulse paramters for a color channel
-     * @param channel    Channel to modify
-     * @return Editor object to configure various settings
+     * Edits the pattern attributes for the desired color
+     * @param ledColor    Color to configure
+     * @return Editor object to configure the pattern attributes
      */
-    ColorChannelEditor configureColorChannel(ColorChannel channel);
+    PatternEditor editPattern(Color ledColor);
+    /**
+     * Edits the pattern attributes for the desired color using a preset pattern as the initial attribute parameters
+     * @param ledColor    Color to configure
+     * @param preset      Pattern preset to use
+     * @return Editor object to configure the pattern attributes
+     */
+    PatternEditor editPattern(Color ledColor, PatternPreset preset);
 
     /**
-     * Play or resume patterns
-     * @param autoplay    True if a pattern should immediately begin upon being programmed
+     * Plays any programmed patterns and immediately plays patterns programmed later
      */
-    void play(boolean autoplay);
+    void autoplay();
 
     /**
-     * Pause the LED patterns
+     * Plays any programmed patterns
+     */
+    void play();
+    /**
+     * Pauses the pattern playback
      */
     void pause();
-
     /**
-     * Stop all patterns and reset the pulse time to 0
-     * @param resetChannelAttrs    True to clear all patterns
+     * Stops playing LED patterns
+     * @param clear    True if the patterns should be cleared as well
      */
-    void stop(boolean resetChannelAttrs);
-
-    /**
-     * Configure advanced LED features
-     * @param config    Byte representation of the configuration
-     */
-    void configureSecondaryMode(byte[] config);
+    void stop(boolean clear);
 }

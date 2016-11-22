@@ -24,28 +24,60 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.DataSignal;
+import com.mbientlab.metawear.ForcedDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+import com.mbientlab.metawear.builder.filter.Comparison;
+import com.mbientlab.metawear.builder.filter.Passthrough;
 
 /**
- * Manipulates sensor data on-board
- * @author Eric Tsai
+ * Created by eric on 10/12/16.
  */
-public interface DataProcessor {
-    /**
-     * Base class for a processors' internal state
-     * @author Eric Tsai
-     */
-    interface State { }
 
-    /**
-     * Sets the internal state of a data processor
-     * @param newState    Object representing the new state
-     */
-    void setState(State newState);
+public interface DataProcessor extends Module {
+    <T extends Editor> T edit(String name, Class<T> processorClass);
+    ForcedDataProducer state(String name);
 
-    /**
-     * Reconfigures an existing processor.  Note that some configuration settings cannot be changed
-     * @param newConfig    Object representing the new configuration
-     */
-    void modifyConfiguration(DataSignal.ProcessorConfig newConfig);
+    interface Editor { }
+
+    interface Comparator extends Editor {
+        void modify(Comparison op, Number... references);
+    }
+
+    interface ThresholdDetector extends Editor {
+        void modify(Number threshold, Number hysteresis);
+    }
+
+    interface DifferentialDetector extends Editor {
+        void modify(Number difference);
+    }
+
+    interface Averager extends Editor {
+        void modify(byte samples);
+        void reset();
+    }
+
+    interface Mapper extends Editor {
+        void modifyRhs(Number rhs);
+    }
+
+    interface Accumulator extends Editor {
+        void reset();
+    }
+
+    interface Counter extends Editor {
+        void reset();
+    }
+
+    interface TimeLimiter extends Editor {
+        void modify(int period);
+    }
+
+    interface PassthroughLimiter extends Editor {
+        void set(short value);
+        void modify(Passthrough type, short value);
+    }
+
+    interface PulseFinder extends Editor {
+        void modify(Number threshold, short samples);
+    }
 }

@@ -24,53 +24,45 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.AsyncOperation;
-import com.mbientlab.metawear.DataSignal;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.CodeBlock;
+import com.mbientlab.metawear.Observer;
+import com.mbientlab.metawear.ForcedDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
+import java.util.Locale;
+
+import bolts.Task;
 
 /**
- * Configures Bluetooth LE advertisement settings
- * @author Eric Tsai
+ * Created by etsai on 9/20/16.
  */
-public interface Settings extends MetaWearBoard.Module {
+public interface Settings extends Module {
     /**
      * Configures the connection parameters
      * @return Editor object to configure the connection parameters
      */
-    ConnectionParameterEditor configureConnectionParameters();
+    ConnectionParametersEditor configureConnectionParameters();
     /**
      * Reads the current connection parameters
      * @return ConnectionParameters object, available when the read is completed
      */
-    AsyncOperation<ConnectionParameters> readConnectionParameters();
+    Task<ConnectionParameters> readConnectionParameters();
 
     /**
      * Configures advertisement settings
      * @return Editor object to configure settings
      */
-    ConfigEditor configure();
+    AdvertisementConfigEditor configure();
     /**
      * Reads the current advertisement settings
      * @return Advertisement configuration object, available when the read is completed
      */
-    AsyncOperation<AdvertisementConfig> readAdConfig();
+    Task<AdvertisementConfig> readAdConfig();
 
-    /**
-     * Remove Bluetooth bond to the board on disconnect
-     */
-    void removeBond();
-    /**
-     * Keep the bond on disconnect
-     */
-    void keepBond();
     /**
      * Trigger the board to start advertising
      */
     void startAdvertisement();
-    /**
-     * Trigger the board to initiate the Bluetooth bonding process with the connected Android device
-     */
-    void initiateBonding();
 
     /**
      * Wrapper class encapsulating the advertisement configuration
@@ -111,13 +103,13 @@ public interface Settings extends MetaWearBoard.Module {
      * Interface for configuring the advertisement settings
      * @author Eric Tsai
      */
-    interface ConfigEditor {
+    interface AdvertisementConfigEditor {
         /**
          * Sets the device's advertising name
          * @param name    Device name, max of 8 ASCII characters
          * @return Calling object
          */
-        ConfigEditor setDeviceName(String name);
+        AdvertisementConfigEditor deviceName(String name);
 
         /**
          * Sets advertising intervals
@@ -125,21 +117,21 @@ public interface Settings extends MetaWearBoard.Module {
          * @param timeout     Advertisement timeout, between [0, 180] seconds where 0 indicates no timeout
          * @return Calling object
          */
-        ConfigEditor setAdInterval(short interval, byte timeout);
+        AdvertisementConfigEditor adInterval(short interval, byte timeout);
 
         /**
          * Sets advertising transmitting power.  If a non valid value is set, the nearest valid value will be used instead
          * @param power    Valid values are: 4, 0, -4, -8, -12, -16, -20, -30
          * @return Calling object
          */
-        ConfigEditor setTxPower(byte power);
+        AdvertisementConfigEditor txPower(byte power);
 
         /**
          * Set a custom scan response packet
          * @param response    Byte representation of the response
          * @return Calling object
          */
-        ConfigEditor setScanResponse(byte[] response);
+        AdvertisementConfigEditor scanResponse(byte[] response);
 
         /**
          * Writes the new settings to the board
@@ -180,34 +172,34 @@ public interface Settings extends MetaWearBoard.Module {
      * Interface for configuring the Bluetooth LE connection parameters
      * @author Eric Tsai
      */
-    interface ConnectionParameterEditor {
+    interface ConnectionParametersEditor {
         /**
          * Sets the lower bound of the connection interval
          * @param interval    Lower bound, at least 7.5ms
          * @return Calling object
          */
-        ConnectionParameterEditor setMinConnectionInterval(float interval);
+        ConnectionParametersEditor minConnectionInterval(float interval);
 
         /**
          * Sets the upper bound of the connection interval
          * @param interval    Upper bound, at most 4000ms
          * @return Calling object
          */
-        ConnectionParameterEditor setMaxConnectionInterval(float interval);
+        ConnectionParametersEditor maxConnectionInterval(float interval);
 
         /**
          * Sets the number of connection intervals to skip
          * @param latency    Number of connection intervals to skip, between [0, 1000]
          * @return Calling object
          */
-        ConnectionParameterEditor setSlaveLatency(short latency);
+        ConnectionParametersEditor slaveLatency(short latency);
 
         /**
          * Sets the maximum amount of time between data exchanges until the connection is considered to be lost
          * @param timeout    Timeout value between [10, 32000] ms
          * @return Calling object
          */
-        ConnectionParameterEditor setSupervisorTimeout(short timeout);
+        ConnectionParametersEditor supervisorTimeout(short timeout);
 
         /**
          * Writes the new connection parameters to the board
@@ -215,72 +207,50 @@ public interface Settings extends MetaWearBoard.Module {
         void commit();
     }
 
-    /**
-     * Wrapper class encapsulating battery state information
-     * @author Eric Tsai
-     */
-    interface BatteryState {
-        /**
-         * Percent charged
-         * @return Charge percentage between [0, 100]
-         */
-        byte charge();
-        /**
-         * Battery voltage
-         * @return Voltage level in mV
-         */
-        short voltage();
+    final class BatteryState {
+        /** Percent charged, between [0, 100] */
+        public final byte charge;
+        /** Battery voltage level in mV */
+        public final short voltage;
+
+        public BatteryState(byte charge, short voltage) {
+            this.charge = charge;
+            this.voltage = voltage;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            // generated by intellij
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            BatteryState that = (BatteryState) o;
+
+            return charge == that.charge && voltage == that.voltage;
+
+        }
+
+        @Override
+        public int hashCode() {
+            // generated by intellij
+
+            int result = (int) charge;
+            result = 31 * result + (int) voltage;
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return String.format(Locale.US, "{charge: %d%%, voltage: %dmV}", charge, voltage);
+        }
     }
 
-    /**
-     * Selector for available events
-     * @author Eric Tsai
-     */
-    interface EventSelector {
-        /**
-         * Handles disconnect events.  The disconnected event data signal cannot use the full data signal features
-         * until transformed by a counter processor
-         * @return Object representing the event
-         */
-        DataSignal fromDisconnect();
+    interface BatteryDataProducer extends ForcedDataProducer {
+        String chargeName();
+        String voltageName();
     }
 
-    /**
-     * Selector for available data
-     * @author Eric Tsai
-     */
-    interface SourceSelector {
-        /**
-         * Handles battery state data.  This version defaults to handling data from a non-silent read
-         * @return Object representing the data
-         */
-        DataSignal fromBattery();
-        /**
-         * Handles battery state data
-         * @param silent    True if the data signal should handle data from silent reads, false if from non-silent reads
-         * @return Object representing the data
-         */
-        DataSignal fromBattery(boolean silent);
-    }
+    BatteryDataProducer battery();
 
-    /**
-     * Initiates the creation of a route for handling settings events
-     * @return Selection of available events
-     */
-    EventSelector handleEvent();
-    /**
-     *
-     * @return Selection of available data sources
-     */
-    SourceSelector routeData();
-
-    /**
-     * Reads the battery state, defaults to non-silent read
-     */
-    void readBatteryState();
-    /**
-     * Reads the battery state
-     * @param silent    True if it should be a silent read
-     */
-    void readBatteryState(boolean silent);
+    Task<Observer> onDisconnect(CodeBlock codeBlock);
 }

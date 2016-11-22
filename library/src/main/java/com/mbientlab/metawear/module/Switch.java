@@ -24,28 +24,11 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.DataSignal;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Push button switch
- * @author Eric Tsai
+ * Created by etsai on 9/4/16.
  */
-public interface Switch extends MetaWearBoard.Module {
-    /**
-     * Generic selector for switch data
-     * @author Eric Tsai
-     */
-    interface SourceSelector {
-        /**
-         * Handle data from the switch
-         * @return Object representing switch state
-         */
-        DataSignal fromSensor();
-    }
-    /**
-     * Initiates the creation of a route for switch data
-     * @return Object representing the switch data
-     */
-    SourceSelector routeData();
+public interface Switch extends Module, AsyncDataProducer {
 }
