@@ -33,7 +33,7 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 public interface Led extends Module {
     /**
      * Constant for PatternEditor.setRepeatCount indicating the pattern should repeat forever
-     * @see PatternEditor#setRepeatCount(byte)
+     * @see PatternEditor#repeatCount(byte)
      */
     byte PATTERN_REPEAT_INDEFINITELY= -1;
 
@@ -67,50 +67,50 @@ public interface Led extends Module {
          * @param intensity LED intensity the high state should be in, between [0 - 31]
          * @return Calling object
          */
-        PatternEditor setHighIntensity(byte intensity);
+        PatternEditor highIntensity(byte intensity);
         /**
          * Intensity value of the low state
          * @param intensity LED intensity the low state should be in, between [0 - 31]
          * @return Calling object
          */
-        PatternEditor setLowIntensity(byte intensity);
+        PatternEditor lowIntensity(byte intensity);
         /**
          * How long the transition should take from low to high state, in milliseconds
          * @param time Transition time (ms) from low to high state
          * @return Calling object
          */
-        PatternEditor setRiseTime(short time);
+        PatternEditor riseTime(short time);
         /**
          * How long the pulse stays in the high state
          * @param time Length of time (ms) to spend in the high state
          * @return Calling object
          */
-        PatternEditor setHighTime(short time);
+        PatternEditor highTime(short time);
         /**
          * How long the transition should take from high to low state, in milliseconds
          * @param time Length of time (ms) from high to low state
          * @return Calling object
          */
-        PatternEditor setFallTime(short time);
+        PatternEditor fallTime(short time);
         /**
          * How long one pulse is
          * @param duration Length of one pulse (ms)
          * @return Calling object
          */
-        PatternEditor setPulseDuration(short duration);
+        PatternEditor pulseDuration(short duration);
         /**
          * How long to wait before starting the pattern.  This function is ignored on boards running firmware
          * older than v1.2.3
          * @param delay    Length of the delay (ms)
          * @return Calling object
          */
-        PatternEditor setDelay(short delay);
+        PatternEditor delay(short delay);
         /**
          * How many times to repeat a pulse pattern
          * @param count Number of repetitions, use {@link #PATTERN_REPEAT_INDEFINITELY} to repeat forever
          * @return Calling object
          */
-        PatternEditor setRepeatCount(byte count);
+        PatternEditor repeatCount(byte count);
 
         /** Write the settings to the board */
         void commit();

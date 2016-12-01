@@ -52,6 +52,7 @@ interface MetaWearBoardPrivate {
     DataTypeBase lookupProducer(String name);
     boolean hasProducer(String name);
     void removeProducerTag(String name);
+    boolean creatingRoutes();
 
     ModuleInfo lookupModuleInfo(ModuleId id);
     Map<Class<? extends Module>, Module> getModules();

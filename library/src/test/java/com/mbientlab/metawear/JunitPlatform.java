@@ -68,7 +68,7 @@ class JunitPlatform implements Platform {
     private final Map<Byte, byte[]> customModuleInfo= new HashMap<>();
 
     public byte maxProcessors= 28, maxLoggers= 8, maxTimers= 8, maxEvents= 28;
-    public byte timerId= 0, eventId= 0, loggerId= 0, dataProcessorId= 0;
+    public byte timerId= 0, eventId= 0, loggerId= 0, dataProcessorId= 0, macroId = 0;
     private final ScheduledExecutorService scheduledTaskService= Executors.newSingleThreadScheduledExecutor();
     private final MwBridge bridge;
     private final ArrayList<byte[]> commandHistory= new ArrayList<>(), connectCmds= new ArrayList<>();
@@ -138,7 +138,7 @@ class JunitPlatform implements Platform {
     }
 
     @Override
-    public void writeGattCharacteristic(Pair<UUID, UUID> gattCharr, byte[] value) {
+    public void writeGattCharacteristic(GattCharWriteType writeType, Pair<UUID, UUID> gattCharr, byte[] value) {
         if (value[1] == (byte) 0x80) {
             connectCmds.add(value);
             byte[] response = customModuleInfo.containsKey(value[0]) ?
@@ -169,8 +169,12 @@ class JunitPlatform implements Platform {
                 loggerId++;
                 scheduleMockResponse(response);
             } else if (dataProcessorId < maxProcessors && value[0] == 0x9 && value[1] == 0x2) {
-                byte[] response= {value[0], 0x2, dataProcessorId};
+                byte[] response = {value[0], 0x2, dataProcessorId};
                 dataProcessorId++;
+                scheduleMockResponse(response);
+            } else if (value[0] == 0xf && value[1] == 0x2) {
+                byte[] response = {value[2], 0x2, macroId};
+                macroId++;
                 scheduleMockResponse(response);
             } else if (value[0] == (byte) 0xb && value[1] == (byte) 0x85) {
                 bridge.sendMockResponse(new byte[] {0x0b, (byte) 0x85, (byte) 0x9e, 0x01, 0x00, 0x00});

@@ -22,70 +22,28 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear;
+package com.mbientlab.metawear.module;
 
-import org.junit.Before;
-import org.junit.Test;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
-import static org.junit.Assert.assertArrayEquals;
+import bolts.Task;
 
 /**
- * Created by etsai on 10/8/16.
+ * Created by etsai on 11/30/16.
  */
-
-public class TestDeserializeGpioFeedback extends UnitTestBase {
-    @Before
-    public void setup() throws Exception {
-        btlePlaform.firmware= "1.1.3";
-        btlePlaform.boardStateSuffix = "gpio_feedback";
-        mwBoard.deserialize();
-
-        connectToBoard();
-    }
-
-    @Test
-    public void deserializeGpioFeedback() {
-        byte[][] expected= {
-                {0x09, 0x06, 0x00},
-                {0x09, 0x06, 0x01},
-                {0x09, 0x06, 0x02},
-                {0x09, 0x06, 0x03},
-                {0x09, 0x06, 0x04},
-                {0x09, 0x06, 0x05},
-                {0x09, 0x06, 0x06},
-                {0x09, 0x06, 0x07},
-                {0x0a, 0x04, 0x00},
-                {0x0a, 0x04, 0x01},
-                {0x0a, 0x04, 0x02},
-                {0x0a, 0x04, 0x03},
-                {0x0a, 0x04, 0x04},
-                {0x0a, 0x04, 0x05},
-                {0x0a, 0x04, 0x06}
-        };
-
-        mwBoard.lookupRoute(0).remove();
-
-        assertArrayEquals(expected, btlePlaform.getCommands());
-    }
-
-    @Test
-    public void tearDown() {
-        byte[][] expected= {
-                {0x09, 0x08},
-                {0x0a, 0x05},
-                {0x0b, 0x0a},
-                {0x0c, 0x05, 0x00},
-                {0x0c, 0x05, 0x01},
-                {0x0c, 0x05, 0x02},
-                {0x0c, 0x05, 0x03},
-                {0x0c, 0x05, 0x04},
-                {0x0c, 0x05, 0x05},
-                {0x0c, 0x05, 0x06},
-                {0x0c, 0x05, 0x07}
-        };
-
-        mwBoard.tearDown();
-
-        assertArrayEquals(expected, btlePlaform.getCommands());
-    }
+public interface Macro extends Module {
+    void startRecord();
+    void startRecord(boolean execOnBoot);
+    Task<Byte> endRecord();
+    /**
+     * Executes the commands corresponding to the macro ID
+     * @param id        Numerical ID of the macro to execute
+     */
+    void execute(byte id);
+    /**
+     * Removes all macros on the flash memory.  The erase operation will not be performed until
+     * you disconnect from the board.  If you wish to reset the board after the erase operation,
+     * use the {@link Debug#resetAfterGc()} method.
+     */
+    void eraseAll();
 }

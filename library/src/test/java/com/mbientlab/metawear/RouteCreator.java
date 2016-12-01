@@ -32,6 +32,8 @@ import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.module.Led;
+import com.mbientlab.metawear.module.Switch;
 
 import bolts.Task;
 
@@ -91,6 +93,36 @@ class RouteCreator {
                                     }
                                 })
                             .end()
+                        .end();
+            }
+        });
+    }
+
+    static Task<Route> createLedController(MetaWearBoard board) {
+        final Led led= board.getModule(Led.class);
+        return board.getModule(Switch.class).addRoute(new RouteBuilder() {
+            @Override
+            public void configure(RouteElement source) {
+                source.count().map(Function2.MODULUS, 2)
+                        .multicast()
+                        .to().filter(Comparison.EQ, 1).react(new RouteElement.Action() {
+                    @Override
+                    public void execute(DataToken token) {
+                                led.editPattern(Led.Color.BLUE)
+                                        .highIntensity((byte) 16).lowIntensity((byte) 16)
+                                        .pulseDuration((short) 1000)
+                                        .highTime((short) 500)
+                                        .repeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
+                                        .commit();
+                                led.play();
+                            }
+                        })
+                        .to().filter(Comparison.EQ, 0).react(new RouteElement.Action() {
+                    @Override
+                    public void execute(DataToken token) {
+                                led.stop(true);
+                            }
+                        })
                         .end();
             }
         });

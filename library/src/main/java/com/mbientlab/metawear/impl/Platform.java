@@ -37,13 +37,18 @@ import bolts.Task;
  * Created by etsai on 8/31/16.
  */
 public interface Platform {
+    enum GattCharWriteType {
+        WRITE_WITH_RESPONSE,
+        WRITE_WITHOUT_RESPONSE
+    }
+
     void serializeBoardInfo(Serializable boardInfo) throws IOException;
     Object deserializeBoardInfo() throws IOException, ClassNotFoundException;
 
     void serializeBoardState(Serializable persist) throws IOException;
     Object deserializeBoardState() throws IOException, ClassNotFoundException;
 
-    void writeGattCharacteristic(Pair<UUID, UUID> gattCharr, byte[] value);
+    void writeGattCharacteristic(GattCharWriteType writeType, Pair<UUID, UUID> gattCharr, byte[] value);
     void readGattCharacteristic(Pair<UUID, UUID> gattCharr);
 
     boolean inMetaBoot();

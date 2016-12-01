@@ -24,68 +24,41 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.Macro;
+
 import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
 
 /**
- * Created by etsai on 10/8/16.
+ * Created by etsai on 12/1/16.
  */
 
-public class TestDeserializeGpioFeedback extends UnitTestBase {
+public class TestMacroControl extends UnitTestBase {
+    private Macro macro;
+
     @Before
     public void setup() throws Exception {
-        btlePlaform.firmware= "1.1.3";
-        btlePlaform.boardStateSuffix = "gpio_feedback";
-        mwBoard.deserialize();
-
+        btlePlaform.boardInfo= MetaWearBoardInfo.RPRO;
         connectToBoard();
+
+        macro = mwBoard.getModule(Macro.class);
     }
 
     @Test
-    public void deserializeGpioFeedback() {
-        byte[][] expected= {
-                {0x09, 0x06, 0x00},
-                {0x09, 0x06, 0x01},
-                {0x09, 0x06, 0x02},
-                {0x09, 0x06, 0x03},
-                {0x09, 0x06, 0x04},
-                {0x09, 0x06, 0x05},
-                {0x09, 0x06, 0x06},
-                {0x09, 0x06, 0x07},
-                {0x0a, 0x04, 0x00},
-                {0x0a, 0x04, 0x01},
-                {0x0a, 0x04, 0x02},
-                {0x0a, 0x04, 0x03},
-                {0x0a, 0x04, 0x04},
-                {0x0a, 0x04, 0x05},
-                {0x0a, 0x04, 0x06}
-        };
+    public void eraseAll() {
+        byte[] expected = new byte[] {0x0f, 0x08};
 
-        mwBoard.lookupRoute(0).remove();
-
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        macro.eraseAll();
+        assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
     @Test
-    public void tearDown() {
-        byte[][] expected= {
-                {0x09, 0x08},
-                {0x0a, 0x05},
-                {0x0b, 0x0a},
-                {0x0c, 0x05, 0x00},
-                {0x0c, 0x05, 0x01},
-                {0x0c, 0x05, 0x02},
-                {0x0c, 0x05, 0x03},
-                {0x0c, 0x05, 0x04},
-                {0x0c, 0x05, 0x05},
-                {0x0c, 0x05, 0x06},
-                {0x0c, 0x05, 0x07}
-        };
+    public void execute() {
+        byte[] expected = new byte[] {0x0f, 0x05, 0x00};
 
-        mwBoard.tearDown();
-
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        macro.execute((byte) 0);
+        assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 }

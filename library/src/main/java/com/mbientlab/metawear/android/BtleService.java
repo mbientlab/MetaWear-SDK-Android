@@ -454,7 +454,7 @@ public class BtleService extends Service {
                     }
 
                     @Override
-                    public void writeGattCharacteristic(final Pair<UUID, UUID> gattCharr, final byte[] value) {
+                    public void writeGattCharacteristic(final GattCharWriteType writeType, final Pair<UUID, UUID> gattCharr, final byte[] value) {
                         gattScheduler.queueAction(new Callable<Boolean>() {
                             @Override
                             public Boolean call() throws Exception {
@@ -462,7 +462,10 @@ public class BtleService extends Service {
 
                                 BluetoothGattService service = state.btGatt.getService(gattCharr.first);
                                 BluetoothGattCharacteristic characteristic = service.getCharacteristic(gattCharr.second);
-                                characteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+                                characteristic.setWriteType(writeType == GattCharWriteType.WRITE_WITHOUT_RESPONSE ?
+                                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
+                                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                                );
                                 characteristic.setValue(value);
 
                                 state.btGatt.writeCharacteristic(characteristic);

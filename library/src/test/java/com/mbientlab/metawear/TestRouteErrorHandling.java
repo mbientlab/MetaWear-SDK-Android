@@ -305,10 +305,10 @@ public class TestRouteErrorHandling extends UnitTestBase {
                             @Override
                             public void execute(DataToken token) {
                                     led.editPattern(Led.Color.BLUE)
-                                            .setHighIntensity((byte) 16).setLowIntensity((byte) 16)
-                                            .setPulseDuration((short) 1000)
-                                            .setHighTime((short) 500)
-                                            .setRepeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
+                                            .highIntensity((byte) 16).lowIntensity((byte) 16)
+                                            .pulseDuration((short) 1000)
+                                            .highTime((short) 500)
+                                            .repeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
                                             .commit();
                                     led.play();
                                 }
@@ -392,10 +392,10 @@ public class TestRouteErrorHandling extends UnitTestBase {
             @Override
             public void program() {
                 led.editPattern(Led.Color.BLUE)
-                        .setHighIntensity((byte) 16).setLowIntensity((byte) 16)
-                        .setPulseDuration((short) 1000)
-                        .setHighTime((short) 500)
-                        .setRepeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
+                        .highIntensity((byte) 16).lowIntensity((byte) 16)
+                        .pulseDuration((short) 1000)
+                        .highTime((short) 500)
+                        .repeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
                         .commit();
                 led.play();
                 haptic.startMotor(100f, (short) 3000);

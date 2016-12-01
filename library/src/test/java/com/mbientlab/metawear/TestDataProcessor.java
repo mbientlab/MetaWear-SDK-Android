@@ -133,33 +133,8 @@ public class TestDataProcessor extends UnitTestBase {
                 {0x0a, 0x03, 0x01}
         };
 
-        final Led led= mwBoard.getModule(Led.class);
-        mwBoard.getModule(Switch.class).addRoute(new RouteBuilder() {
-            @Override
-            public void configure(RouteElement source) {
-                source.count().map(Function2.MODULUS, 2)
-                        .multicast()
-                            .to().filter(Comparison.EQ, 1).react(new RouteElement.Action() {
-                                @Override
-                                public void execute(DataToken token) {
-                                    led.editPattern(Led.Color.BLUE)
-                                            .setHighIntensity((byte) 16).setLowIntensity((byte) 16)
-                                            .setPulseDuration((short) 1000)
-                                            .setHighTime((short) 500)
-                                            .setRepeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
-                                            .commit();
-                                    led.play();
-                                }
-                            })
-                            .to().filter(Comparison.EQ, 0).react(new RouteElement.Action() {
-                                @Override
-                                public void execute(DataToken token) {
-                                    led.stop(true);
-                                }
-                            })
-                        .end();
-            }
-        }).continueWith(new Continuation<Route, Void>() {
+
+        RouteCreator.createLedController(mwBoard).continueWith(new Continuation<Route, Void>() {
             @Override
             public Void then(Task<Route> task) throws Exception {
                 synchronized (TestDataProcessor.this) {

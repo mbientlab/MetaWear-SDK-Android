@@ -136,8 +136,8 @@ public class TestLedPattern extends UnitTestBase {
     @Test
     public void writePresetPattern() {
         mwBoard.getModule(Led.class).editPattern(color, pattern)
-                .setDelay(delay)
-                .setRepeatCount(repeat)
+                .delay(delay)
+                .repeatCount(repeat)
                 .commit();
         assertArrayEquals(expected, btlePlaform.getLastCommand());
     }

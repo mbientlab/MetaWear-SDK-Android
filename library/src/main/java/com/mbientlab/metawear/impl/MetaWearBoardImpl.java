@@ -76,11 +76,14 @@ import bolts.Task;
 import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.ModuleId.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.ModuleId.MACRO;
+import static com.mbientlab.metawear.impl.Platform.GattCharWriteType.*;
 
 /**
  * Created by etsai on 8/31/16.
  */
 public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
+    private static final ScheduledExecutorService SCHEDULED_TASK_THREADPOOL = Executors.newScheduledThreadPool(4);
     private static final long RELEASE_INFO_TTL = 1800000L;
     private static final byte READ_INFO_REGISTER= Util.setRead((byte) 0x0);
     private static final Pair<UUID, UUID> MW_CMD_GATT_CHAR= new Pair<>(
@@ -285,11 +288,11 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
     private DataProcessorImpl dataprocessor;
     private TimerImpl mwTimer;
     private EventImpl event;
+    private MacroImpl macro;
 
     private final HashSet<Pair<Byte, Byte>> dataIdHeaders= new HashSet<>();
     private final Map<Tuple3<Byte, Byte, Byte>, ArrayList<RegisterResponseHandler>> dataHandlers= new HashMap<>();
     private final Map<Pair<Byte, Byte>, RegisterResponseHandler> registerResponseHandlers= new HashMap<>();
-    private final ScheduledExecutorService scheduledTaskService= Executors.newScheduledThreadPool(2);
 
     private final String macAddress;
     private final Platform platform;
@@ -678,6 +681,12 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
             dataprocessor= (DataProcessorImpl) persist.modules.get(DataProcessor.class);
             mwTimer= (TimerImpl) persist.modules.get(Timer.class);
             event = (EventImpl) persist.modules.get(EventImpl.class);
+
+            // Macro module wasn't available when serialization was released
+            if (!persist.modules.containsKey(Macro.class)) {
+                persist.modules.put(Macro.class, new MacroImpl(this));
+            }
+            macro = (MacroImpl) persist.modules.get(Macro.class);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -693,7 +702,12 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
         if (event.getEventConfig() != null) {
             event.convertToEventCommand(command);
         } else {
-            platform.writeGattCharacteristic(MW_CMD_GATT_CHAR, command);
+            platform.writeGattCharacteristic(command[0] == MACRO.id ? WRITE_WITH_RESPONSE : WRITE_WITHOUT_RESPONSE,
+                    MW_CMD_GATT_CHAR, command);
+
+            if (macro.isRecording()) {
+                macro.collectCommand(command);
+            }
         }
     }
 
@@ -757,6 +771,11 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
     }
 
     @Override
+    public boolean creatingRoutes() {
+        return !routeTypes.isEmpty();
+    }
+
+    @Override
     public ModuleInfo lookupModuleInfo(ModuleId id) {
         return persist.boardInfo.moduleInfo.get(id);
     }
@@ -794,7 +813,7 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
         if (moduleQueries.isEmpty()) {
             logger.queryTime().continueWith(timeReadContinuation);
         } else {
-            platform.writeGattCharacteristic(MW_CMD_GATT_CHAR, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
+            platform.writeGattCharacteristic(WRITE_WITHOUT_RESPONSE, MW_CMD_GATT_CHAR, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
         }
     }
 
@@ -912,6 +931,8 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
                 persist.modules.put(SerialPassthrough.class, new SerialPassthroughImpl(this));
                 break;
             case MACRO:
+                macro = new MacroImpl(this);
+                persist.modules.put(Macro.class, macro);
                 break;
             case GSR:
                 persist.modules.put(Gsr.class, new GsrImpl(this));
@@ -980,7 +1001,7 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
             if (moduleQueries.isEmpty()) {
                 logger.queryTime().continueWith(timeReadContinuation);
             } else {
-                platform.writeGattCharacteristic(MW_CMD_GATT_CHAR, new byte[] {moduleQueries.poll().id, READ_INFO_REGISTER});
+                platform.writeGattCharacteristic(WRITE_WITHOUT_RESPONSE, MW_CMD_GATT_CHAR, new byte[] {moduleQueries.poll().id, READ_INFO_REGISTER});
             }
         }
     }
@@ -1038,7 +1059,7 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
 
     @Override
     public ScheduledFuture<?> scheduleTask(Runnable r, long delay) {
-        return scheduledTaskService.schedule(r, delay, TimeUnit.MILLISECONDS);
+        return SCHEDULED_TASK_THREADPOOL.schedule(r, delay, TimeUnit.MILLISECONDS);
     }
 
     @Override

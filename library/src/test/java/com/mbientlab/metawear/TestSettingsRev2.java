@@ -81,10 +81,10 @@ public class TestSettingsRev2 extends UnitTestBase {
             @Override
             public void program() {
                 led.editPattern(Led.Color.BLUE)
-                        .setHighTime((short) 50)
-                        .setPulseDuration((short) 500)
-                        .setHighIntensity((byte) 31)
-                        .setRepeatCount((byte) 10)
+                        .highTime((short) 50)
+                        .pulseDuration((short) 500)
+                        .highIntensity((byte) 31)
+                        .repeatCount((byte) 10)
                         .commit();
                 led.play();
             }

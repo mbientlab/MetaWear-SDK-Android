@@ -48,47 +48,47 @@ class LedImpl extends ModuleImplBase implements Led {
 
         return new PatternEditor() {
             @Override
-            public PatternEditor setHighIntensity(byte intensity) {
+            public PatternEditor highIntensity(byte intensity) {
                 command[4]= intensity;
                 return this;
             }
 
             @Override
-            public PatternEditor setLowIntensity(byte intensity) {
+            public PatternEditor lowIntensity(byte intensity) {
                 command[5]= intensity;
                 return this;
             }
 
             @Override
-            public PatternEditor setRiseTime(short time) {
+            public PatternEditor riseTime(short time) {
                 command[7]= (byte)((time >> 8) & 0xff);
                 command[6]= (byte)(time & 0xff);
                 return this;
             }
 
             @Override
-            public PatternEditor setHighTime(short time) {
+            public PatternEditor highTime(short time) {
                 command[9]= (byte)((time >> 8) & 0xff);
                 command[8]= (byte)(time & 0xff);
                 return this;
             }
 
             @Override
-            public PatternEditor setFallTime(short time) {
+            public PatternEditor fallTime(short time) {
                 command[11]= (byte)((time >> 8) & 0xff);
                 command[10]= (byte)(time & 0xff);
                 return this;
             }
 
             @Override
-            public PatternEditor setPulseDuration(short duration) {
+            public PatternEditor pulseDuration(short duration) {
                 command[13]= (byte)((duration >> 8) & 0xff);
                 command[12]= (byte)(duration & 0xff);
                 return this;
             }
 
             @Override
-            public PatternEditor setDelay(short delay) {
+            public PatternEditor delay(short delay) {
                 if (mwPrivate.lookupModuleInfo(ModuleId.LED).revision >= REVISION_LED_DELAYED) {
                     command[15]= (byte)((delay >> 8) & 0xff);
                     command[14]= (byte)(delay & 0xff);
@@ -100,7 +100,7 @@ class LedImpl extends ModuleImplBase implements Led {
             }
 
             @Override
-            public PatternEditor setRepeatCount(byte count) {
+            public PatternEditor repeatCount(byte count) {
                 command[16]= count;
                 return this;
             }
@@ -118,22 +118,22 @@ class LedImpl extends ModuleImplBase implements Led {
 
         switch(preset) {
             case BLINK:
-                editor.setHighIntensity((byte) 31)
-                        .setHighTime((short) 50)
-                        .setPulseDuration((short) 500);
+                editor.highIntensity((byte) 31)
+                        .highTime((short) 50)
+                        .pulseDuration((short) 500);
                 break;
             case PULSE:
-                editor.setHighIntensity((byte) 31)
-                        .setRiseTime((short) 725)
-                        .setHighTime((short) 500)
-                        .setFallTime((short) 725)
-                        .setPulseDuration((short) 2000);
+                editor.highIntensity((byte) 31)
+                        .riseTime((short) 725)
+                        .highTime((short) 500)
+                        .fallTime((short) 725)
+                        .pulseDuration((short) 2000);
                 break;
             case SOLID:
-                editor.setHighIntensity((byte) 31)
-                        .setLowIntensity((byte) 31)
-                        .setHighTime((short) 500)
-                        .setPulseDuration((short) 1000);
+                editor.highIntensity((byte) 31)
+                        .lowIntensity((byte) 31)
+                        .highTime((short) 500)
+                        .pulseDuration((short) 1000);
                 break;
         }
         return editor;
