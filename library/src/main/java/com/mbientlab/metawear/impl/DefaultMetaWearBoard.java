@@ -3849,17 +3849,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     responses.put(new ResponseHeader(Mma8452qAccelerometerRegister.PACKED_ACC_DATA), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
-                            final Queue<byte[]> unpacked= unpackData(response);
+                            ResponseHeader key = new ResponseHeader(response[0], response[1]);
+                            if (responseProcessors.containsKey(key)) {
+                                final Queue<byte[]> unpacked = unpackData(response);
 
-                            final RouteManager.MessageHandler handler= responseProcessors.get(new ResponseHeader(response[0], response[1]));
-                            conn.executeTask(new Runnable() {
-                                @Override
-                                public void run() {
-                                    while(!unpacked.isEmpty()) {
-                                        handler.process(new Mma8452qThreeAxisMessage(unpacked.poll()));
+                                final RouteManager.MessageHandler handler = responseProcessors.get(key);
+                                conn.executeTask(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        while (!unpacked.isEmpty()) {
+                                            handler.process(new Mma8452qThreeAxisMessage(unpacked.poll()));
+                                        }
                                     }
-                                }
-                            });
+                                });
+                            }
 
                             return null;
                         }
@@ -3954,18 +3957,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     responses.put(new ResponseHeader(Bmi160AccelerometerRegister.PACKED_ACC_DATA), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
-                            final Queue<byte[]> unpacked= unpackData(response);
+                            ResponseHeader key = new ResponseHeader(response[0], response[1]);
+                            if (responseProcessors.containsKey(key)) {
+                                final Queue<byte[]> unpacked = unpackData(response);
 
-                            final RouteManager.MessageHandler handler= responseProcessors.get(new ResponseHeader(response[0], response[1]));
-                            conn.executeTask(new Runnable() {
-                                @Override
-                                public void run() {
-                                    while(!unpacked.isEmpty()) {
-                                        handler.process(new Bmi160ThreeAxisMessage(unpacked.poll(), bmi160AccRange.scale()));
+                                final RouteManager.MessageHandler handler = responseProcessors.get(key);
+                                conn.executeTask(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        while (!unpacked.isEmpty()) {
+                                            handler.process(new Bmi160ThreeAxisMessage(unpacked.poll(), bmi160AccRange.scale()));
+                                        }
                                     }
-                                }
-                            });
-
+                                });
+                            }
                             return null;
                         }
                     });
@@ -4122,18 +4127,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     responses.put(new ResponseHeader(Bmm150MagnetometerRegister.PACKED_MAG_DATA), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
-                            final Queue<byte[]> unpacked= unpackData(response);
+                            ResponseHeader key = new ResponseHeader(response[0], response[1]);
+                            if (responseProcessors.containsKey(key)) {
+                                final Queue<byte[]> unpacked = unpackData(response);
 
-                            final RouteManager.MessageHandler handler= responseProcessors.get(new ResponseHeader(response[0], response[1]));
-                            conn.executeTask(new Runnable() {
-                                @Override
-                                public void run() {
-                                    while(!unpacked.isEmpty()) {
-                                        handler.process(new Bmm150ThreeAxisMessage(unpacked.poll()));
+                                final RouteManager.MessageHandler handler = responseProcessors.get(key);
+                                conn.executeTask(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        while (!unpacked.isEmpty()) {
+                                            handler.process(new Bmm150ThreeAxisMessage(unpacked.poll()));
+                                        }
                                     }
-                                }
-                            });
-
+                                });
+                            }
                             return null;
                         }
                     });
@@ -4192,17 +4199,20 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             responses.put(new ResponseHeader(Bmi160GyroRegister.PACKED_GYRO_DATA), new ResponseProcessor() {
                 @Override
                 public Response process(byte[] response) {
-                    final Queue<byte[]> unpacked= unpackData(response);
+                    ResponseHeader key = new ResponseHeader(response[0], response[1]);
+                    if (responseProcessors.containsKey(key)) {
+                        final Queue<byte[]> unpacked = unpackData(response);
 
-                    final RouteManager.MessageHandler handler= responseProcessors.get(new ResponseHeader(response[0], response[1]));
-                    conn.executeTask(new Runnable() {
-                        @Override
-                        public void run() {
-                            while(!unpacked.isEmpty()) {
-                                handler.process(new Bmi160ThreeAxisGyroMessage(unpacked.poll(), bmi160GyroRange.scale()));
+                        final RouteManager.MessageHandler handler = responseProcessors.get(key);
+                        conn.executeTask(new Runnable() {
+                            @Override
+                            public void run() {
+                                while (!unpacked.isEmpty()) {
+                                    handler.process(new Bmi160ThreeAxisGyroMessage(unpacked.poll(), bmi160GyroRange.scale()));
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
 
                     return null;
                 }
