@@ -1207,10 +1207,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                         @Override
                         protected byte[] processorConfigToBytes(ProcessorConfig newConfig) {
+                            int modeMask = moduleInfo.get(InfoRegister.DATA_PROCESSOR.moduleOpcode()).revision() >= Constant.DATA_PROCESSOR_TIME_PASSTHROUGH_REVISION && params.mode == Time.OutputMode.ABSOLUTE ? 2 : params.mode.ordinal();
                             ///< Do not allow time mode to be changed
                             Time timeConfig = (Time) newConfig;
                             ByteBuffer buffer = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN).put((byte) 0x8)
-                                    .put((byte) ((outputSize - 1) | (params.mode.ordinal() << 3))).putInt(timeConfig.period);
+                                    .put((byte) (((outputSize - 1) & 0x7) | (modeMask << 3))).putInt(timeConfig.period);
                             return buffer.array();
                         }
 
@@ -2922,7 +2923,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             if (moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode()).revision() < Constant.SETTINGS_BATTERY_REVISION) {
                 return new InvalidDataSignal(new UnsupportedOperationException("Battery state only supported on firmware version 1.1.1 and later"));
             }
-            return new DataSource((byte) 3, (byte) 1, BatteryStateMessage.class, new ResponseHeader(SettingsRegister.BATTERY_STATE), type) {
+            return new DataSource((byte) 3, (byte) 1, UnsignedMessage.class, new ResponseHeader(SettingsRegister.BATTERY_STATE), type) {
                 @Override
                 public boolean isSigned() {
                     return false;
@@ -2930,6 +2931,56 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
                 @Override
                 public void enableNotifications() { }
+
+            };
+        }
+
+        public DataSignal fromSettingsPowerStatus() {
+            ModuleInfo info = moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode());
+            if (info.revision() < Constant.SETTINGS_CHARGE_STATUS_REVISION || (info.extra() != null && (info.extra()[0] & 0x1) != 0x1)) {
+                return new InvalidDataSignal(new UnsupportedOperationException("Power status notifications not supported on this board/firmware"));
+            }
+            return new DataSource((byte) 1, (byte) 1, BatteryStateMessage.class, new ResponseHeader(SettingsRegister.POWER_STATUS), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SettingsRegister.POWER_STATUS, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SettingsRegister.POWER_STATUS, (byte) 0);
+                    super.unsubscribe();
+                }
+
+            };
+        }
+
+        public DataSignal fromSettingsChargerStatus() {
+            ModuleInfo info = moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode());
+            if (info.revision() < Constant.SETTINGS_CHARGE_STATUS_REVISION || (info.extra() != null && (info.extra()[0] & 0x2) != 0x2)) {
+                return new InvalidDataSignal(new UnsupportedOperationException("Charger status notifications not supported on this board/firmware"));
+            }
+            return new DataSource((byte) 3, (byte) 1, BatteryStateMessage.class, new ResponseHeader(SettingsRegister.CHARGER_STATUS), ReadType.NONE) {
+                @Override
+                public boolean isSigned() {
+                    return false;
+                }
+
+                @Override
+                public void enableNotifications() {
+                    writeRegister(SettingsRegister.CHARGER_STATUS, (byte) 1);
+                }
+
+                @Override
+                public void unsubscribe() {
+                    writeRegister(SettingsRegister.CHARGER_STATUS, (byte) 0);
+                    super.unsubscribe();
+                }
 
             };
         }
@@ -3275,7 +3326,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private interface ResponseProcessor {
         Response process(byte[] response);
     }
-    private final HashMap<ResponseHeader, ResponseProcessor> responses;
+    private final HashMap<ResponseHeader, ResponseProcessor> responses, readResponses;
 
     ///< General class variables
     private Version firmwareVersion;
@@ -3330,6 +3381,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             }
         };
 
+        readResponses = new HashMap<>();
         responses= new HashMap<>();
         responses.put(new ResponseHeader(SwitchRegister.STATE), new ResponseProcessor() {
             @Override
@@ -3849,11 +3901,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     responses.put(new ResponseHeader(Mma8452qAccelerometerRegister.PACKED_ACC_DATA), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
-                            ResponseHeader key = new ResponseHeader(response[0], response[1]);
-                            if (responseProcessors.containsKey(key)) {
+                            final RouteManager.MessageHandler handler = responseProcessors.get(new ResponseHeader(response[0], response[1]));
+                            if (handler != null) {
                                 final Queue<byte[]> unpacked = unpackData(response);
-
-                                final RouteManager.MessageHandler handler = responseProcessors.get(key);
                                 conn.executeTask(new Runnable() {
                                     @Override
                                     public void run() {
@@ -3957,11 +4007,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     responses.put(new ResponseHeader(Bmi160AccelerometerRegister.PACKED_ACC_DATA), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
-                            ResponseHeader key = new ResponseHeader(response[0], response[1]);
-                            if (responseProcessors.containsKey(key)) {
+                            final RouteManager.MessageHandler handler = responseProcessors.get(new ResponseHeader(response[0], response[1]));
+                            if (handler != null) {
                                 final Queue<byte[]> unpacked = unpackData(response);
-
-                                final RouteManager.MessageHandler handler = responseProcessors.get(key);
                                 conn.executeTask(new Runnable() {
                                     @Override
                                     public void run() {
@@ -4031,6 +4079,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 case Constant.SETTINGS_DISCONNECTED_EVENT_REVISION:
                 case Constant.SETTINGS_BATTERY_REVISION:
                 case Constant.SETTINGS_WATCHDOG_REVISION:
+                case Constant.SETTINGS_CHARGE_STATUS_REVISION:
                     responses.put(new ResponseHeader(SettingsRegister.ADVERTISING_INTERVAL), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
@@ -4091,6 +4140,49 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     }
                 });
             }
+            if (info.revision() >= Constant.SETTINGS_CHARGE_STATUS_REVISION) {
+                ResponseHeader powerHeader = new ResponseHeader(SettingsRegister.POWER_STATUS),
+                        chargeHeader = new ResponseHeader(SettingsRegister.CHARGER_STATUS);
+
+                responses.put(powerHeader, new ResponseProcessor() {
+                    @Override
+                    public Response process(byte[] response) {
+                        byte[] respBody = new byte[response.length - 2];
+                        System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                        return new Response(new UnsignedMessage(respBody), new ResponseHeader(response[0], response[1]));
+                    }
+                });
+                responses.put(chargeHeader, new ResponseProcessor() {
+                    @Override
+                    public Response process(byte[] response) {
+                        byte[] respBody = new byte[response.length - 2];
+                        System.arraycopy(response, 2, respBody, 0, respBody.length);
+
+                        return new Response(new UnsignedMessage(respBody), new ResponseHeader(response[0], response[1]));
+                    }
+                });
+
+                readResponses.put(powerHeader.markAsRead(), new ResponseProcessor() {
+                    @Override
+                    public Response process(byte[] response) {
+                        if (!powerStatusResults.isEmpty()) {
+                            conn.setResultReady(powerStatusResults.poll(), response[2], null);
+                        }
+
+                        return null;
+                    }
+                });
+                readResponses.put(chargeHeader.markAsRead(), new ResponseProcessor() {
+                    @Override
+                    public Response process(byte[] response) {
+                        if (!chargeStatusResults.isEmpty()) {
+                            conn.setResultReady(chargeStatusResults.poll(), response[2], null);
+                        }
+                        return null;
+                    }
+                });
+            }
         } else if (info.id() == InfoRegister.LOGGING.moduleOpcode()) {
             switch(info.revision()) {
                 case Constant.EXTENDED_LOGGING_REVISION:
@@ -4127,11 +4219,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     responses.put(new ResponseHeader(Bmm150MagnetometerRegister.PACKED_MAG_DATA), new ResponseProcessor() {
                         @Override
                         public Response process(byte[] response) {
-                            ResponseHeader key = new ResponseHeader(response[0], response[1]);
-                            if (responseProcessors.containsKey(key)) {
+                            final RouteManager.MessageHandler handler = responseProcessors.get(new ResponseHeader(response[0], response[1]));
+                            if (handler != null) {
                                 final Queue<byte[]> unpacked = unpackData(response);
-
-                                final RouteManager.MessageHandler handler = responseProcessors.get(key);
                                 conn.executeTask(new Runnable() {
                                     @Override
                                     public void run() {
@@ -4199,11 +4289,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             responses.put(new ResponseHeader(Bmi160GyroRegister.PACKED_GYRO_DATA), new ResponseProcessor() {
                 @Override
                 public Response process(byte[] response) {
-                    ResponseHeader key = new ResponseHeader(response[0], response[1]);
-                    if (responseProcessors.containsKey(key)) {
+                    final RouteManager.MessageHandler handler = responseProcessors.get(new ResponseHeader(response[0], response[1]));
+                    if (handler != null) {
                         final Queue<byte[]> unpacked = unpackData(response);
-
-                        final RouteManager.MessageHandler handler = responseProcessors.get(key);
                         conn.executeTask(new Runnable() {
                             @Override
                             public void run() {
@@ -4213,7 +4301,6 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                             }
                         });
                     }
-
                     return null;
                 }
             });
@@ -4507,11 +4594,13 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     }
 
     public void receivedResponse(byte[] response) {
-        response[1]&= 0x7f;
         ResponseHeader header= new ResponseHeader(response[0], response[1]);
+        ResponseHeader maskedHeader = header.clearRead();
 
-        if (responses.containsKey(header)) {
-            final Response resp= responses.get(header).process(response);
+        if (readResponses.containsKey(header)) {
+            readResponses.get(header).process(response);
+        } else if (responses.containsKey(maskedHeader)) {
+            final Response resp= responses.get(maskedHeader).process(response);
             if (resp != null && responseProcessors.containsKey(resp.header)) {
                 final RouteManager.MessageHandler handler= responseProcessors.get(resp.header);
                 conn.executeTask(new Runnable() {
@@ -5322,6 +5411,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     private byte[] advResponse;
     private final ConcurrentLinkedQueue<AsyncOperation<Settings.AdvertisementConfig>> advertisementConfigResults= new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<AsyncOperation<Settings.ConnectionParameters>> connectionParameterResults= new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<AsyncOperation<Byte>> powerStatusResults= new ConcurrentLinkedQueue<>(),
+            chargeStatusResults= new ConcurrentLinkedQueue<>();
     private class SettingsImpl implements Settings {
         public static final float AD_INTERVAL_STEP= 0.625f, CONN_INTERVAL_STEP= 1.25f, SUPERVISOR_TIMEOUT_STEP= 10;
         private static final long READ_CONFIG_TIMEOUT= 5000L;
@@ -5514,6 +5605,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 public DataSignal fromBattery(boolean silent) {
                     return new RouteBuilder().fromSettingsBatteryState(silent ? ReadType.SILENT : ReadType.NORMAL);
                 }
+
+                @Override
+                public DataSignal fromPowerStatus() {
+                    return new RouteBuilder().fromSettingsPowerStatus();
+                }
+
+                @Override
+                public DataSignal fromChargerStatus() {
+                    return new RouteBuilder().fromSettingsChargerStatus();
+                }
             };
         }
 
@@ -5525,6 +5626,48 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         @Override
         public void readBatteryState(boolean silent) {
             readRegister(SettingsRegister.BATTERY_STATE, silent);
+        }
+
+        @Override
+        public AsyncOperation<Byte> readPowerStatus() {
+            final AsyncOperation<Byte> result= conn.createAsyncOperation();
+
+            ModuleInfo info = moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode());
+            if (info.revision() < Constant.SETTINGS_CHARGE_STATUS_REVISION || (info.extra() != null && (info.extra()[0] & 0x1) != 0x1)) {
+                conn.setResultReady(result, null, new UnsupportedOperationException("Power status data not available for this board and/or firmware"));
+            } else {
+                powerStatusResults.add(result);
+                conn.setOpTimeout(result, new Runnable() {
+                    @Override
+                    public void run() {
+                        powerStatusResults.remove(result);
+                        conn.setResultReady(result, null, new TimeoutException(String.format(Locale.US, "Reading power status timed out after %dms", READ_CONFIG_TIMEOUT)));
+                    }
+                }, READ_CONFIG_TIMEOUT);
+                readRegister(SettingsRegister.POWER_STATUS, false);
+            }
+            return result;
+        }
+
+        @Override
+        public AsyncOperation<Byte> readChargeStatus() {
+            final AsyncOperation<Byte> result= conn.createAsyncOperation();
+
+            ModuleInfo info = moduleInfo.get(InfoRegister.SETTINGS.moduleOpcode());
+            if (info.revision() < Constant.SETTINGS_CHARGE_STATUS_REVISION || (info.extra() != null && (info.extra()[0] & 0x2) != 0x2)) {
+                conn.setResultReady(result, null, new UnsupportedOperationException("Charge status data not available for this board and/or firmware"));
+            } else {
+                chargeStatusResults.add(result);
+                conn.setOpTimeout(result, new Runnable() {
+                    @Override
+                    public void run() {
+                        chargeStatusResults.remove(result);
+                        conn.setResultReady(result, null, new TimeoutException(String.format(Locale.US, "Reading charge status timed out after %dms", READ_CONFIG_TIMEOUT)));
+                    }
+                }, READ_CONFIG_TIMEOUT);
+                readRegister(SettingsRegister.CHARGER_STATUS, false);
+            }
+            return result;
         }
     }
 

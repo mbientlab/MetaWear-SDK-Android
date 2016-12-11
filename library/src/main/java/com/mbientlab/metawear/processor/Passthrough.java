@@ -62,7 +62,7 @@ public class Passthrough implements DataSignal.ProcessorConfig {
     public enum Mode {
         /** Allow all data through */
         ALL,
-        /** Only allow data through if value > 0 */
+        /** Only allow data through if value &gt; 0 */
         CONDITIONAL,
         /** Only allow a fixed number of data samples through */
         COUNT

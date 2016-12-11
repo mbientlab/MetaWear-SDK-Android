@@ -261,6 +261,16 @@ public interface Settings extends MetaWearBoard.Module {
          * @return Object representing the data
          */
         DataSignal fromBattery(boolean silent);
+        /**
+         * Handles notifications from the battery power status pin
+         * @return Object representing the data
+         */
+        DataSignal fromPowerStatus();
+        /**
+         * Handles notifications from the battery charger status pin
+         * @return Object representing the data
+         */
+        DataSignal fromChargerStatus();
     }
 
     /**
@@ -283,4 +293,15 @@ public interface Settings extends MetaWearBoard.Module {
      * @param silent    True if it should be a silent read
      */
     void readBatteryState(boolean silent);
+
+    /**
+     * Read the current power status.
+     * @return 1 if power source attached, 0 if removed; available when read operation is finished
+     */
+    AsyncOperation<Byte> readPowerStatus();
+    /**
+     * Read the current charge status.
+     * @return 1 if battery is charging, 0 if not charging; available when read operation is finished
+     */
+    AsyncOperation<Byte> readChargeStatus();
 }

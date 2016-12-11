@@ -77,6 +77,14 @@ public enum SettingsRegister implements Register {
     BATTERY_STATE {
         @Override
         public byte opcode() { return 0xc; }
+    },
+    POWER_STATUS {
+        @Override
+        public byte opcode() { return 0x11; }
+    },
+    CHARGER_STATUS {
+        @Override
+        public byte opcode() { return 0x12; }
     };
 
     @Override
