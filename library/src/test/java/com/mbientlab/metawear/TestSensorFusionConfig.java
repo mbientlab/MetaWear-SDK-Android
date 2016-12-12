@@ -26,9 +26,9 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.impl.Pair;
 import com.mbientlab.metawear.module.GyroBmi160;
-import com.mbientlab.metawear.module.SensorFusion;
-import com.mbientlab.metawear.module.SensorFusion.AccRange;
-import com.mbientlab.metawear.module.SensorFusion.GyroRange;
+import com.mbientlab.metawear.module.SensorFusionBosch;
+import com.mbientlab.metawear.module.SensorFusionBosch.AccRange;
+import com.mbientlab.metawear.module.SensorFusionBosch.GyroRange;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -41,7 +41,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 
-import static com.mbientlab.metawear.module.SensorFusion.Mode.*;
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.*;
 import static org.junit.Assert.assertArrayEquals;
 
 /**
@@ -90,14 +90,14 @@ public class TestSensorFusionConfig extends UnitTestBase {
     @Parameter(value = 1)
     public GyroRange gyroRange;
 
-    private SensorFusion sensorFusion;
+    private SensorFusionBosch sensorFusion;
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.MOTIOON_R;
+        btlePlaform.boardInfo = MetaWearBoardInfo.MOTION_R;
         connectToBoard();
 
-        sensorFusion = mwBoard.getModule(SensorFusion.class);
+        sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
     }
 
     private byte[] gyroConfig() {

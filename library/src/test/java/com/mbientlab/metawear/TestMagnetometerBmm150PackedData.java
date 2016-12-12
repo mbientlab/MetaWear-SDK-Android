@@ -26,8 +26,8 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
-import com.mbientlab.metawear.datatype.CartesianFloat;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
+import com.mbientlab.metawear.data.MagneticField;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -51,7 +51,7 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
                 { MetaWearBoardInfo.CPRO },
-                { MetaWearBoardInfo.MOTIOON_R }
+                { MetaWearBoardInfo.MOTION_R}
         });
     }
 
@@ -72,7 +72,7 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {
-                        ((ArrayList<CartesianFloat>) env[0]).add(data.value(CartesianFloat.class));
+                        ((ArrayList<MagneticField>) env[0]).add(data.value(MagneticField.class));
                     }
                 });
             }
@@ -83,17 +83,17 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
     public void interpretPackedData() {
         byte[] response= new byte[] {0x15, 0x09, (byte) 0xb6, 0x0c, 0x72, (byte) 0xf7, (byte) 0x89, (byte) 0xee, (byte) 0xb6,
                 0x0b, 0x5a, (byte) 0xf8, 0x32, (byte) 0xee, (byte) 0xe6, 0x0a, (byte) 0xa2, (byte) 0xf7, 0x25, (byte) 0xef};
-        CartesianFloat[] expected = new CartesianFloat[] {
-                new CartesianFloat(Float.intBitsToFloat(0x434b6000), Float.intBitsToFloat(0xc308e000), Float.intBitsToFloat(0xc38bb800)),
-                new CartesianFloat(Float.intBitsToFloat(0x433b6000), Float.intBitsToFloat(0xc2f4c000), Float.intBitsToFloat(0xc38e7000)),
-                new CartesianFloat(Float.intBitsToFloat(0x432e6000), Float.intBitsToFloat(0xc305e000), Float.intBitsToFloat(0xc386d800))
+        MagneticField[] expected = new MagneticField[] {
+                new MagneticField(Float.intBitsToFloat(0x434b6000), Float.intBitsToFloat(0xc308e000), Float.intBitsToFloat(0xc38bb800)),
+                new MagneticField(Float.intBitsToFloat(0x433b6000), Float.intBitsToFloat(0xc2f4c000), Float.intBitsToFloat(0xc38e7000)),
+                new MagneticField(Float.intBitsToFloat(0x432e6000), Float.intBitsToFloat(0xc305e000), Float.intBitsToFloat(0xc386d800))
         };
 
-        final ArrayList<CartesianFloat> received = new ArrayList<>();
+        final ArrayList<MagneticField> received = new ArrayList<>();
         mwBoard.lookupRoute(0).setEnvironment(0, received);
 
         sendMockResponse(response);
-        CartesianFloat[] actual = new CartesianFloat[3];
+        MagneticField[] actual = new MagneticField[3];
         received.toArray(actual);
 
         assertArrayEquals(expected, actual);

@@ -36,6 +36,7 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.Collection;
 
+import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
 
@@ -108,5 +109,45 @@ public class TestSettingsRev2 extends UnitTestBase {
     @Test
     public void batteryNull() {
         assertNull(settings.battery());
+    }
+
+    @Test
+    public void powerStatusNull() {
+        assertNull(settings.powerStatus());
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void readPowerStatusFail() throws Exception {
+        final Capture<Exception> actual= new Capture<>();
+
+        settings.readPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
+            @Override
+            public Void then(Task<Byte> task) throws Exception {
+                actual.set(task.getError());
+                return null;
+            }
+        });
+
+        throw actual.get();
+    }
+
+    @Test
+    public void chargeStatusNull() {
+        assertNull(settings.chargeStatus());
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void readChargeStatusFail() throws Exception {
+        final Capture<Exception> actual= new Capture<>();
+
+        settings.readChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
+            @Override
+            public Void then(Task<Byte> task) throws Exception {
+                actual.set(task.getError());
+                return null;
+            }
+        });
+
+        throw actual.get();
     }
 }

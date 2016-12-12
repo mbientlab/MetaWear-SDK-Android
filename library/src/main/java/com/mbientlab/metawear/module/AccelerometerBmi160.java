@@ -28,7 +28,8 @@ import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.ForcedDataProducer;
 
 /**
- * Created by etsai on 9/1/16.
+ * Extension of the {@link AccelerometerBosch} interface that provides finer control of the BMI160 accelerometer features
+ * @author Eric Tsai
  */
 public interface AccelerometerBmi160 extends AccelerometerBosch {
     /**
@@ -36,19 +37,32 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
      * @author Eric Tsai
      */
     enum OutputDataRate {
+        /** 0.78125 Hz */
         ODR_0_78125_HZ(0.78125f),
+        /** 1.5625 Hz */
         ODR_1_5625_HZ(1.5625f),
+        /** 3.125 Hz */
         ODR_3_125_HZ(3.125f),
+        /** 6.25 Hz */
         ODR_6_25_HZ(6.25f),
+        /** 12.5 Hz */
         ODR_12_5_HZ(12.5f),
+        /** 25 Hz */
         ODR_25_HZ(25f),
+        /** 50 Hz */
         ODR_50_HZ(50f),
+        /** 100 Hz */
         ODR_100_HZ(100f),
+        /** 200 Hz */
         ODR_200_HZ(200f),
+        /** 400 Hz */
         ODR_400_HZ(400f),
+        /** 800 Hz */
         ODR_800_HZ(800f),
+        /** 1600 Hz */
         ODR_1600_HZ(1600f);
 
+        /** Frequency represented as a float value */
         public final float frequency;
 
         OutputDataRate(float frequency) {
@@ -66,11 +80,29 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
         }
     }
 
+    /**
+     * Accelerometer configuration editor specific to the BMI160 accelerometer
+     * @author Eric Tsai
+     */
     interface Bmi160ConfigEditor extends ConfigEditorBase<Bmi160ConfigEditor> {
+        /**
+         * Sets the output data rate
+         * @param odr    New output data rate
+         * @return Calling object
+         */
         Bmi160ConfigEditor odr(OutputDataRate odr);
+        /**
+         * Sets the data range
+         * @param fsr    New data range
+         * @return Calling object
+         */
         Bmi160ConfigEditor range(AccRange fsr);
     }
 
+    /**
+     * Configure the BMI160 accelerometer
+     * @return Editor object specific to the BMI160 accelerometer
+     */
     @Override
     Bmi160ConfigEditor configure();
 
@@ -86,25 +118,59 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
         /** Gives few false positives but eventually more false negatives */
         ROBUST
     }
+
+    /**
+     * Configuration editor for the step detection algorithm
+     * @author Eric Tsai
+     */
     interface StepDetectorConfigEditor {
         /**
-         * Sets the operational mode of the step detector.  The setting balances sensitivity and robustness.
+         * Sets the operational mode of the step detector balancing sensitivity and robustness.
          * @param mode    Detector sensitivity
          * @return Calling object
          */
         StepDetectorConfigEditor mode(StepDetectorMode mode);
+        /**
+         * Write the configuration to the sensor
+         */
         void commit();
     }
-
+    /**
+     * Interrupt driven step detection where each detected step triggers a data interrupt
+     * @author Eric Tsai
+     */
     interface StepDetectorDataProducer extends AsyncDataProducer {
+        /**
+         * Configure the step detection algorithm
+         * @return Editor object
+         */
         StepDetectorConfigEditor configure();
     }
+    /**
+     * Gets an object to control the step detection algorithm
+     * @return Object controlling the step detection algorithm
+     */
     StepDetectorDataProducer stepDetector();
 
+    /**
+     * Accumulates the number of detected steps in a counter that will send it's current value on request
+     * @author Eric Tsai
+     */
     interface StepCounterDataProducer extends ForcedDataProducer {
+        /**
+         * Configure the step detection algorithm
+         * @return Editor object
+         */
         StepDetectorConfigEditor configure();
+        /**
+         * Resets the internal step counter
+         */
         void reset();
     }
+    /**
+     * Gets an object to control the step counter algorithm
+     * @return Object controlling the step counter algorithm
+     */
     StepCounterDataProducer stepCounter();
 
     /**
@@ -121,31 +187,47 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
         /** 2560 milliseconds */
         FHT_2560_MS(2560);
 
-        public final float period;
+        /** Delays represented as a float value */
+        public final float delay;
 
-        FlatHoldTime(float period) {
-            this.period = period;
+        FlatHoldTime(float delay) {
+            this.delay = delay;
         }
 
-        public static float[] periods() {
+        public static float[] delays() {
             FlatHoldTime[] values= values();
-            float[] pers= new float[values.length];
-            for(byte i= 0; i < pers.length; i++) {
-                pers[i]= values[i].period;
+            float[] delayValues= new float[values.length];
+            for(byte i= 0; i < delayValues.length; i++) {
+                delayValues[i]= values[i].delay;
             }
 
-            return pers;
+            return delayValues;
         }
     }
 
+    /**
+     * Extension of the FlatDataProducer specific to the BMA255 accelerometer
+     * @author Eric Tsai
+     */
     interface FlatDataProducer extends AccelerometerBosch.FlatDataProducer {
+        /**
+         * Configuration editor specific to BMI160 flat detection
+         * @author Eric Tsai
+         */
         interface ConfigEditor extends ConfigEditorBase<ConfigEditor> {
             ConfigEditor holdTime(FlatHoldTime time);
         }
-
+        /**
+         * Configures the flat detection algorithm
+         * @return Configuration editor object
+         */
         @Override
         ConfigEditor configure();
     }
+    /**
+     * Gets an object to control the flat detection algorithm
+     * @return Object controlling flat detection
+     */
     @Override
     FlatDataProducer flatDetector();
 
@@ -154,9 +236,13 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
      * @author Eric Tsai
      */
     enum SkipTime {
+        /** 1.5s */
         ST_1_5_S,
+        /** 3s */
         ST_3_S,
+        /** 6s */
         ST_6_S,
+        /** 12s */
         ST_12_S
     }
     /**
@@ -164,15 +250,23 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
      * @author Eric Tsai
      */
     enum ProofTime {
+        /** 0.25s */
         PT_0_25_S,
+        /** 0.5s */
         PT_0_5_S,
+        /** 1s */
         PT_1_S,
+        /** 2s */
         PT_2_S
     }
 
+    /**
+     * Extension of the MotionDataProducer specific to the BMI160 accelerometer
+     * @author Eric Tsai
+     */
     interface MotionDataProducer extends AccelerometerBosch.MotionDataProducer {
         /**
-         * Interface for configuring significant motion detection
+         * Configuration editor specific to BMI160 significant motion detection
          * @author Eric Tsai
          */
         interface SignificantMotionConfigEditor {
@@ -189,12 +283,16 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
              */
             SignificantMotionConfigEditor proofTime(ProofTime time);
             /**
-             * Writes the settings to the board
+             * Writes the settings to the sensor
              */
             void commit();
         }
         SignificantMotionConfigEditor configureSignificantMotion();
     }
+    /**
+     * Gets an object to control the motion detection algorithm
+     * @return Object controlling motion detection
+     */
     @Override
     MotionDataProducer motionDetector();
 }

@@ -25,9 +25,15 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.GyroBmi160;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Calendar;
 
 import bolts.Task;
 
@@ -45,7 +51,7 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
             ROT_PACKED_PRODUCER= "com.mbientlab.metawear.impl.GyroBmi160Impl.ROT_PACKED_PRODUCER";
     private static final long serialVersionUID = 4400485740135675260L;
 
-    private static class BoschGyrCartesianFloatData extends CartesianFloatData {
+    private static class BoschGyrCartesianFloatData extends FloatVectorData {
         private static final long serialVersionUID = -3634187442404058486L;
 
         BoschGyrCartesianFloatData() {
@@ -73,6 +79,29 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
         @Override
         protected float scale(MetaWearBoardPrivate owner) {
             return ((GyroBmi160Impl) owner.getModules().get(GyroBmi160.class)).getGyrDataScale();
+        }
+
+        @Override
+        public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+            short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
+            float scale= scale(owner);
+            final AngularVelocity value= new AngularVelocity(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
+
+            return new DataPrivate(timestamp, data) {
+                @Override
+                public Class<?>[] types() {
+                    return new Class<?>[] {AngularVelocity.class};
+                }
+
+                @Override
+                public <T> T value(Class<T> clazz) {
+                    if (clazz == AngularVelocity.class) {
+                        return clazz.cast(value);
+                    }
+                    return super.value(clazz);
+                }
+            };
         }
     }
     private static class BoschGyrSFloatData extends SFloatData {
@@ -152,9 +181,9 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
     }
 
     @Override
-    public RotationalSpeedDataProducer angularVelocity() {
+    public AngularVelocityDataProducer angularVelocity() {
         if (rotationalSpeed == null) {
-            rotationalSpeed = new RotationalSpeedDataProducer() {
+            rotationalSpeed = new AngularVelocityDataProducer() {
                 @Override
                 public String xAxisName() {
                     return ROT_X_AXIS_PRODUCER;
@@ -191,7 +220,7 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
                 }
             };
         }
-        return (RotationalSpeedDataProducer) rotationalSpeed;
+        return (AngularVelocityDataProducer) rotationalSpeed;
     }
 
     @Override

@@ -44,7 +44,7 @@ import static com.mbientlab.metawear.MetaWearBoardInfo.*;
 public abstract class UnitTestBase implements MwBridge {
     public static Collection<Object[]> allBoardsParams() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTIOON_R}) {
+        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R}) {
             parameters.add(new Object[] {info});
         }
 

@@ -32,7 +32,8 @@ import java.util.UUID;
 import bolts.Task;
 
 /**
- * Created by etsai on 9/18/16.
+ * Controls the iBeacon feature
+ * @author Eric Tsai
  */
 public interface IBeacon extends Module {
     /**
@@ -106,8 +107,8 @@ public interface IBeacon extends Module {
         ConfigEditor setTxPower(byte power);
 
         /**
-         * Sets the advertising period
-         * @param period    New advertising period, in milliseconds
+         * Sets the advertising delay
+         * @param period    New advertising delay, in milliseconds
          * @return Calling object
          */
         ConfigEditor setAdPeriod(short period);
@@ -154,8 +155,8 @@ public interface IBeacon extends Module {
         byte txPower();
 
         /**
-         * Retrieves the advertising period
-         * @return Advertising period, in milliseconds
+         * Retrieves the advertising delay
+         * @return Advertising delay, in milliseconds
          */
         short period();
     }

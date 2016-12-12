@@ -30,8 +30,9 @@ package com.mbientlab.metawear.builder;
  */
 public interface RouteSplit {
     /**
-     * Separates multi=component data into its individual values
-     * @return Element for building routes for component data values
+     * Gets a specific component value from the split data value
+     * @param i    Position in the split values array to return
+     * @return Object representing the component value
      */
     RouteElement index(int i);
 }

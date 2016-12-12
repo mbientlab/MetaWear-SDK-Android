@@ -28,11 +28,15 @@ import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/20/16.
+ * Generic interface providing high level access for a barometer. If you know specifically which
+ * barometer is on your board, use the appropriate Barometer subclass instead.
+ * @author Eric Tsai
+ * @see BarometerBme280
+ * @see BarometerBmp280
  */
 public interface BarometerBosch extends Module {
     /**
-     * Supported oversampling modes on the BMP280 sensor
+     * Supported oversampling modes on a Bosch barometer
      * @author Eric Tsai
      */
     enum OversamplingMode {
@@ -57,8 +61,8 @@ public interface BarometerBosch extends Module {
     }
 
     /**
-     * Interface for configuring pressure sampling
-     * @author Eric Tsai
+     * Barometer agnostic interface for configuring the sensor
+     * @param <T>    Type of barometer config editor
      */
     interface ConfigEditorBase<T extends ConfigEditorBase> {
         /**
@@ -76,34 +80,40 @@ public interface BarometerBosch extends Module {
         T filterCoeff(FilterCoeff coeff);
 
         /**
-         * Sets the standby time
+         * Sets the standby time.  The closest, valid standby time will be chosen
+         * depending on the underlying sensor
          * @param time    New standby time
          * @return Calling object
          */
         T standbyTime(float time);
-
         /**
-         * Writes the new settings to the board
+         * Writes the new settings to the barometer
          */
         void commit();
     }
-
     /**
-     * Configures the settings for operating the pressure sensor
-     * @return Editor to configure various settings
+     * Configure the barometer
+     * @return Generic editor object
      */
     ConfigEditorBase<? extends ConfigEditorBase> configure();
 
+    /**
+     * Gets an object to control the pressure data
+     * @return Object controlling pressure data
+     */
     AsyncDataProducer pressure();
+    /**
+     * Gets an object to control the altitude data
+     * @return Object controlling altitude data
+     */
     AsyncDataProducer altitude();
 
     /**
-     * Start sampling for the barometer sensor
+     * Start data sampling
      */
     void start();
-
     /**
-     * Stop sampling for the barometer sensor
+     * Stop data sampling
      */
     void stop();
 }

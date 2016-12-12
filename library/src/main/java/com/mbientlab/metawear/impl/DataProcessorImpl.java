@@ -48,6 +48,7 @@ import static com.mbientlab.metawear.impl.ModuleId.DATA_PROCESSOR;
  */
 class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     private static final long serialVersionUID = -7439066046235167486L;
+    static final byte TIME_PASSTHROUGH_REVISION = 1;
 
     static abstract class EditorImplBase implements Editor, Serializable {
         private static final long serialVersionUID = 4723697652659135045L;

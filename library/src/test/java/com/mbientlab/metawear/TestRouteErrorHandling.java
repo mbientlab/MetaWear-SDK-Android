@@ -137,10 +137,10 @@ public class TestRouteErrorHandling extends UnitTestBase {
 
     @Test(expected = IllegalRouteOperationException.class)
     public void duplicateKey2() throws Exception {
-        final Temperature.Source source1= mwBoard.getModule(Temperature.class).sources()[0],
-                source2= mwBoard.getModule(Temperature.class).sources()[1];
+        final Temperature.Sensor sensor1 = mwBoard.getModule(Temperature.class).sensors()[0],
+                sensor2 = mwBoard.getModule(Temperature.class).sensors()[1];
 
-        source1.addRoute(new RouteBuilder() {
+        sensor1.addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.map(Function2.SUBTRACT, 273.15).name("duplicate_key");
@@ -148,7 +148,7 @@ public class TestRouteErrorHandling extends UnitTestBase {
         }).continueWithTask(new Continuation<Route, Task<Route>>() {
             @Override
             public Task<Route> then(Task<Route> task) throws Exception {
-                return source2.addRoute(new RouteBuilder() {
+                return sensor2.addRoute(new RouteBuilder() {
                     @Override
                     public void configure(RouteElement source) {
                         source.map(Function2.MULTIPLY, 1.8f)
@@ -169,10 +169,10 @@ public class TestRouteErrorHandling extends UnitTestBase {
 
     @Test
     public void duplicateKey3() throws InterruptedException {
-        final Temperature.Source source1= mwBoard.getModule(Temperature.class).sources()[0],
-                source2= mwBoard.getModule(Temperature.class).sources()[1];
+        final Temperature.Sensor sensor1 = mwBoard.getModule(Temperature.class).sensors()[0],
+                sensor2 = mwBoard.getModule(Temperature.class).sensors()[1];
 
-        source1.addRoute(new RouteBuilder() {
+        sensor1.addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.map(Function2.SUBTRACT, 273.15).name("duplicate_key");
@@ -180,7 +180,7 @@ public class TestRouteErrorHandling extends UnitTestBase {
         }).continueWithTask(new Continuation<Route, Task<Route>>() {
             @Override
             public Task<Route> then(Task<Route> task) throws Exception {
-                return source2.addRoute(new RouteBuilder() {
+                return sensor2.addRoute(new RouteBuilder() {
                     @Override
                     public void configure(RouteElement source) {
                         source.map(Function2.MULTIPLY, 1.8f).name("new_key")
@@ -191,7 +191,7 @@ public class TestRouteErrorHandling extends UnitTestBase {
         }).continueWithTask(new Continuation<Route, Task<Route>>() {
             @Override
             public Task<Route> then(Task<Route> task) throws Exception {
-                return source2.addRoute(new RouteBuilder() {
+                return sensor2.addRoute(new RouteBuilder() {
                     @Override
                     public void configure(RouteElement source) {
                         source.map(Function2.MULTIPLY, 1.8f).name("new_key")

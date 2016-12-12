@@ -30,14 +30,9 @@ import com.mbientlab.metawear.module.IBeacon;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Locale;
-import java.util.Queue;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeoutException;
 
 import bolts.Task;
-import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.ModuleId.IBEACON;
 
@@ -118,7 +113,7 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
 
                 @Override
                 public String toString() {
-                    return String.format(Locale.US, "{uuid: %s, major: %d, minor: %d, rx: %d, tx: %d, period: %d}",
+                    return String.format(Locale.US, "{uuid: %s, major: %d, minor: %d, rx: %d, tx: %d, delay: %d}",
                             uuid(), major(), minor(), rxPower(), txPower(), period());
                 }
             };
@@ -126,9 +121,7 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
     }
 
     private transient ConfigurationBuilder builder;
-    private transient ScheduledFuture<?> timeoutFuture;
-    private transient Queue<TaskCompletionSource<Configuration>> readConfigTaskSources = new ConcurrentLinkedQueue<>();
-    private transient Runnable taskTimeout;
+    private transient AsyncTaskManager<Configuration> readConfigTasks;
 
     IBeaconImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -136,13 +129,7 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
 
     @Override
     protected void init() {
-        taskTimeout= new Runnable() {
-            @Override
-            public void run() {
-                readConfigTaskSources.poll().setError(new TimeoutException("Reading IBeacon configuration timed out"));
-                readConfiguration(true);
-            }
-        };
+        readConfigTasks = new AsyncTaskManager<>(mwPrivate, "Reading IBeacon configuration timed out");
 
         this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(AD_UUID)), new MetaWearBoardImpl.RegisterResponseHandler() {
             @Override
@@ -184,11 +171,10 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
         this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(PERIOD)), new MetaWearBoardImpl.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                timeoutFuture.cancel(false);
-                builder.setPeriod(ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
-                readConfigTaskSources.poll().setResult(builder.build());
+                readConfigTasks.cancelTimeout();
 
-                readConfiguration(true);
+                builder.setPeriod(ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
+                readConfigTasks.setResult(builder.build());
             }
         });
     }
@@ -310,16 +296,11 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
 
     @Override
     public Task<Configuration> readConfiguration() {
-        TaskCompletionSource<Configuration> taskSrc= new TaskCompletionSource<>();
-        readConfigTaskSources.add(taskSrc);
-        readConfiguration(false);
-        return taskSrc.getTask();
-    }
-
-    private void readConfiguration(boolean ready) {
-        if (!readConfigTaskSources.isEmpty() && (ready || readConfigTaskSources.size() == 1)) {
-            mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(AD_UUID)});
-            timeoutFuture= mwPrivate.scheduleTask(taskTimeout, 1500L);
-        }
+        return readConfigTasks.queueTask(1500L, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(AD_UUID)});
+            }
+        });
     }
 }

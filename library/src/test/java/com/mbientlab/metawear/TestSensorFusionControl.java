@@ -24,8 +24,7 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.GyroBmi160;
-import com.mbientlab.metawear.module.SensorFusion;
+import com.mbientlab.metawear.module.SensorFusionBosch;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -40,10 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
-import static com.mbientlab.metawear.TestGyroBmi160Config.ODR_BITMASK;
-import static com.mbientlab.metawear.TestGyroBmi160Config.RANGE_BITMASK;
-import static com.mbientlab.metawear.TestSensorFusionConfig.BMI160_ACC_RANGE_BITMASK;
-import static com.mbientlab.metawear.module.SensorFusion.Mode.*;
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.*;
 import static org.junit.Assert.assertArrayEquals;
 
 /**
@@ -180,7 +176,7 @@ public class TestSensorFusionControl extends UnitTestBase {
     }
 
     @Parameter
-    public SensorFusion.Mode opMode;
+    public SensorFusionBosch.Mode opMode;
 
     @Parameter(value = 1)
     public byte[][] expected;
@@ -188,19 +184,19 @@ public class TestSensorFusionControl extends UnitTestBase {
     @Parameter(value = 2)
     public String fnName;
 
-    private SensorFusion sensorFusion;
+    private SensorFusionBosch sensorFusion;
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.MOTIOON_R;
+        btlePlaform.boardInfo = MetaWearBoardInfo.MOTION_R;
         connectToBoard();
 
-        sensorFusion = mwBoard.getModule(SensorFusion.class);
+        sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
     }
 
     @Test
     public void startAndStop() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Method m = SensorFusion.class.getMethod(fnName);
+        Method m = SensorFusionBosch.class.getMethod(fnName);
         AsyncDataProducer producer = (AsyncDataProducer) m.invoke(sensorFusion);
 
         sensorFusion.configure()

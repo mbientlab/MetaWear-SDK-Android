@@ -32,6 +32,8 @@ import com.mbientlab.metawear.builder.RouteElement;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.concurrent.TimeoutException;
+
 import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
@@ -60,6 +62,14 @@ public class TestI2C extends UnitTestBase {
         i2c = mwBoard.getModule(SerialPassthrough.class).i2cData((byte) 1, (byte) 0xa);
     }
 
+    @Test
+    public void readWhoAmI() {
+        byte[] expected= new byte[] {0x0d, (byte) 0xc1, 0x1c, 0x0d, 0x0a, 0x01};
+
+        i2c.read((byte) 0x1c, (byte) 0xd);
+        assertArrayEquals(expected, btlePlaform.getLastCommand());
+    }
+
     protected Task<Route> setupI2cRoute() {
         return i2c.addRoute(new RouteBuilder() {
             @Override
@@ -67,14 +77,6 @@ public class TestI2C extends UnitTestBase {
                 source.stream(DATA_HANDLER);
             }
         });
-    }
-
-    @Test
-    public void readWhoAmI() {
-        byte[] expected= new byte[] {0x0d, (byte) 0xc1, 0x1c, 0x0d, 0x0a, 0x01};
-
-        i2c.read((byte) 0x1c, (byte) 0xd);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
     @Test
@@ -98,5 +100,55 @@ public class TestI2C extends UnitTestBase {
         */
 
         assertArrayEquals(expected, actual.get());
+    }
+
+    @Test
+    public void directReadWhoAmI() {
+        byte[] expected= new byte[] {0x0d, (byte) 0x81, 0x1c, 0x0d, (byte) 0xff, 0x01};
+
+        mwBoard.getModule(SerialPassthrough.class).readI2cAsync((byte) 0x1c, (byte) 0x0d, (byte) 1);
+        assertArrayEquals(expected, btlePlaform.getLastCommand());
+    }
+
+    @Test
+    public void directReadWhoAmIData() {
+        byte[] expected= new byte[] {0x2a};
+        final Capture<byte[]> actual= new Capture<>();
+
+        mwBoard.getModule(SerialPassthrough.class).readI2cAsync((byte) 0x1c, (byte) 0x0d, (byte) 1)
+                .continueWith(new Continuation<byte[], Void>() {
+                    @Override
+                    public Void then(Task<byte[]> task) throws Exception {
+                        actual.set(task.getResult());
+                        return null;
+                    }
+                });
+
+        sendMockResponse(new byte[] {0x0d, (byte) 0x81, (byte) 0xff, 0x2a});
+        assertArrayEquals(expected, actual.get());
+    }
+
+    @Test(expected = TimeoutException.class)
+    public void directReadWhoAmITimeout() throws Exception {
+        final Capture<Exception> actual= new Capture<>();
+
+        mwBoard.getModule(SerialPassthrough.class).readI2cAsync((byte) 0x1c, (byte) 0x0d, (byte) 1)
+                .continueWith(new Continuation<byte[], Void>() {
+                    @Override
+                    public Void then(Task<byte[]> task) throws Exception {
+                        actual.set(task.getError());
+
+                        synchronized (TestI2C.this) {
+                            TestI2C.this.notifyAll();
+                        }
+                        return null;
+                    }
+                });
+
+        synchronized (this) {
+            wait();
+
+            throw actual.get();
+        }
     }
 }

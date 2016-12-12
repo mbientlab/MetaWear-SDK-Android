@@ -76,7 +76,7 @@ public class TestDeserializeMultiComparator extends UnitTestBase {
         btlePlaform.boardStateSuffix = "multi_comparator";
         mwBoard.deserialize();
 
-        mwBoard.getModule(DataProcessor.class).edit("multi_comp", DataProcessor.Comparator.class)
+        mwBoard.getModule(DataProcessor.class).edit("multi_comp", DataProcessor.ComparatorEditor.class)
                 .modify(Comparison.LT, 128, 256);
 
         assertArrayEquals(expected, btlePlaform.getLastCommand());

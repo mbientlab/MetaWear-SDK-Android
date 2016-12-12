@@ -25,7 +25,8 @@
 package com.mbientlab.metawear.module;
 
 /**
- * Created by etsai on 9/1/16.
+ * Extension of the {@link AccelerometerBosch} interface that provides finer control of the BMA255 accelerometer
+ * @author Eric Tsai
  */
 public interface AccelerometerBma255 extends AccelerometerBosch {
     /**
@@ -33,15 +34,24 @@ public interface AccelerometerBma255 extends AccelerometerBosch {
      * @author Eric Tsai
      */
     enum OutputDataRate {
+        /** 15.62 Hz */
         ODR_15_62HZ(15.62f),
+        /** 31.26 Hz */
         ODR_31_26HZ(31.26f),
+        /** 62.5 Hz */
         ODR_62_5HZ(62.5f),
+        /** 125 Hz */
         ODR_125HZ(125f),
+        /** 250 Hz */
         ODR_250HZ(250f),
+        /** 500 Hz */
         ODR_500HZ(500f),
+        /** 1000 Hz */
         ODR_1000HZ(1000f),
+        /** 2000 Hz */
         ODR_2000HZ(2000f);
 
+        /** Frequency represented as a float value */
         public final float frequency;
 
         OutputDataRate(float frequency) {
@@ -59,12 +69,28 @@ public interface AccelerometerBma255 extends AccelerometerBosch {
         }
     }
 
+    /**
+     * Accelerometer configuration editor specific to the BMA255 accelerometer
+     * @author Eric Tsai
+     */
     interface Bma255ConfigEditor extends ConfigEditorBase<Bma255ConfigEditor> {
+        /**
+         * Sets the output data rate
+         * @param odr    New output data rate
+         * @return Calling object
+         */
         Bma255ConfigEditor odr(OutputDataRate odr);
+        /**
+         * Sets the data range
+         * @param fsr    New data range
+         * @return Calling object
+         */
         Bma255ConfigEditor range(AccRange fsr);
-        void commit();
     }
-
+    /**
+     * Configure the BMA255 accelerometer
+     * @return Editor object specific to the BMA255 accelerometer
+     */
     @Override
     Bma255ConfigEditor configure();
 
@@ -78,7 +104,7 @@ public interface AccelerometerBma255 extends AccelerometerBosch {
         /** Same as any motion exceed without information on which axis triggered the interrupt */
         SLOW_MOTION,
         /** Detects motion using the slope of successive acceleration signals */
-        ANY_MOTION,
+        ANY_MOTION
     }
 
     /**
@@ -95,6 +121,7 @@ public interface AccelerometerBma255 extends AccelerometerBosch {
         /** 2048 milliseconds */
         FHT_2048_MS(2048);
 
+        /** Periods represented as a float value */
         public final float period;
 
         FlatHoldTime(float period) {
@@ -112,14 +139,30 @@ public interface AccelerometerBma255 extends AccelerometerBosch {
         }
     }
 
+    /**
+     * Extension of the FlatDataProducer specific to the BMA255 accelerometer
+     * @author Eric Tsai
+     */
     interface FlatDataProducer extends AccelerometerBosch.FlatDataProducer {
+        /**
+         * Configuration editor specific to BMA255 flat detection
+         * @author Eric Tsai
+         */
         interface ConfigEditor extends ConfigEditorBase<ConfigEditor> {
             ConfigEditor holdTime(FlatHoldTime time);
         }
 
+        /**
+         * Configures the flat detection algorithm
+         * @return Configuration editor object
+         */
         @Override
         ConfigEditor configure();
     }
+    /**
+     * Interacts with the flat detection algorithm on the BMA255 accelerometer
+     * @return Object representing flat detection
+     */
     @Override
     FlatDataProducer flatDetector();
 }

@@ -45,6 +45,7 @@ import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 /**
  * Created by etsai on 10/3/16.
@@ -168,5 +169,45 @@ public class TestSettingsRev3 extends UnitTestBase {
         sendMockResponse(new byte[] {0x11, (byte) 0x8c, 0x63, 0x34, 0x10});
 
         assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void powerStatusNull() {
+        assertNull(settings.powerStatus());
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void readPowerStatusFail() throws Exception {
+        final Capture<Exception> actual= new Capture<>();
+
+        settings.readPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
+            @Override
+            public Void then(Task<Byte> task) throws Exception {
+                actual.set(task.getError());
+                return null;
+            }
+        });
+
+        throw actual.get();
+    }
+
+    @Test
+    public void chargeStatusNull() {
+        assertNull(settings.chargeStatus());
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void readChargeStatusFail() throws Exception {
+        final Capture<Exception> actual= new Capture<>();
+
+        settings.readChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
+            @Override
+            public Void then(Task<Byte> task) throws Exception {
+                actual.set(task.getError());
+                return null;
+            }
+        });
+
+        throw actual.get();
     }
 }

@@ -66,14 +66,14 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
         }
     }
 
-    private static class SourceImpl implements Source, Serializable {
+    private static class SensorImpl implements Sensor, Serializable {
         private static final long serialVersionUID = 6237752475101914419L;
 
-        private final SourceType type;
+        private final SensorType type;
         final byte channel;
         transient MetaWearBoardPrivate owner;
 
-        private SourceImpl(SourceType type, byte channel, MetaWearBoardPrivate owner) {
+        private SensorImpl(SensorType type, byte channel, MetaWearBoardPrivate owner) {
             this.type = type;
             this.channel= channel;
             this.owner= owner;
@@ -101,16 +101,16 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
         }
 
         @Override
-        public SourceType type() {
+        public SensorType type() {
             return type;
         }
     }
 
-    private static class ExternalThermistorImpl extends SourceImpl implements ExternalThermistor {
+    private static class ExternalThermistorImpl extends SensorImpl implements ExternalThermistor {
         private static final long serialVersionUID = 4055746069062728410L;
 
         private ExternalThermistorImpl(byte channel, MetaWearBoardPrivate owner) {
-            super(SourceType.EXT_THERMISTOR, channel, owner);
+            super(SensorType.EXT_THERMISTOR, channel, owner);
         }
 
         @Override
@@ -119,27 +119,27 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
         }
     }
 
-    private final SourceImpl[] sources;
+    private final SensorImpl[] sources;
 
     TemperatureImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
         byte channel= 0;
-        SourceType[] sourceTypes= SourceType.values();
-        sources= new SourceImpl[mwPrivate.lookupModuleInfo(TEMPERATURE).extra.length];
+        SensorType[] sensorTypes = SensorType.values();
+        sources= new SensorImpl[mwPrivate.lookupModuleInfo(TEMPERATURE).extra.length];
         for(byte type: mwPrivate.lookupModuleInfo(TEMPERATURE).extra) {
-            switch(sourceTypes[type]) {
+            switch(sensorTypes[type]) {
                 case NRF_SOC:
-                    sources[channel]= new SourceImpl(SourceType.NRF_SOC, channel, mwPrivate);
+                    sources[channel]= new SensorImpl(SensorType.NRF_SOC, channel, mwPrivate);
                     break;
                 case EXT_THERMISTOR:
                     sources[channel]= new ExternalThermistorImpl(channel, mwPrivate);
                     break;
                 case BOSCH_ENV:
-                    sources[channel]= new SourceImpl(SourceType.BOSCH_ENV, channel, mwPrivate);
+                    sources[channel]= new SensorImpl(SensorType.BOSCH_ENV, channel, mwPrivate);
                     break;
                 case PRESET_THERMISTOR:
-                    sources[channel]= new SourceImpl(SourceType.PRESET_THERMISTOR, channel, mwPrivate);
+                    sources[channel]= new SensorImpl(SensorType.PRESET_THERMISTOR, channel, mwPrivate);
                     break;
             }
             channel++;
@@ -150,18 +150,18 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
     public void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
         super.restoreTransientVars(mwPrivate);
 
-        for(SourceImpl it: sources) {
+        for(SensorImpl it: sources) {
             it.restoreTransientVars(mwPrivate);
         }
     }
 
     @Override
-    public Source[] sources() {
+    public Sensor[] sensors() {
         return sources;
     }
 
     @Override
-    public Source[] findSource(SourceType type) {
+    public Sensor[] findSensors(SensorType type) {
         ArrayList<Integer> matchIndices= new ArrayList<>();
         for(int i= 0; i < sources.length; i++) {
             if (sources[i].type() == type) {
@@ -169,7 +169,11 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
             }
         }
 
-        Source[] matches= new Source[matchIndices.size()];
+        if (matchIndices.isEmpty()) {
+            return null;
+        }
+
+        Sensor[] matches= new Sensor[matchIndices.size()];
         int i= 0;
         for(Integer it: matchIndices) {
             matches[i]= sources[it];

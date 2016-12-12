@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.module;
 
+import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.Observer;
 import com.mbientlab.metawear.ForcedDataProducer;
@@ -34,7 +35,8 @@ import java.util.Locale;
 import bolts.Task;
 
 /**
- * Created by etsai on 9/20/16.
+ * Configures Bluetooth settings and auxiliary hardware and firmware features
+ * @author Eric Tsai
  */
 public interface Settings extends Module {
     /**
@@ -60,7 +62,7 @@ public interface Settings extends Module {
     Task<AdvertisementConfig> readAdConfig();
 
     /**
-     * Trigger the board to start advertising
+     * Starts advertising
      */
     void startAdvertisement();
 
@@ -207,6 +209,10 @@ public interface Settings extends Module {
         void commit();
     }
 
+    /**
+     * Wrapper class encapsulating the battery state data
+     * @author Eric Tsai
+     */
     final class BatteryState {
         /** Percent charged, between [0, 100] */
         public final byte charge;
@@ -244,13 +250,54 @@ public interface Settings extends Module {
             return String.format(Locale.US, "{charge: %d%%, voltage: %dmV}", charge, voltage);
         }
     }
-
+    /**
+     * Produces battery data that can be used with the firmware features
+     * @author Eric Tsai
+     */
     interface BatteryDataProducer extends ForcedDataProducer {
+        /**
+         * Get the name for battery charge data
+         * @return Battery charge data name
+         */
         String chargeName();
+        /**
+         * Get the name for battery voltage data
+         * @return Battery voltage data name
+         */
         String voltageName();
     }
-
+    /**
+     * Gets an object to use the battery data
+     * @return Object representing battery data, null if battery data is not supported
+     */
     BatteryDataProducer battery();
+    /**
+     * Gets an object to control power status notifications
+     * @return Object representing power status notifications, null if power status not supported
+     */
+    AsyncDataProducer powerStatus();
+    /**
+     * Gets an object to control charging status notifications
+     * @return Object representing charging status notifications, null if charging status not supported
+     */
+    AsyncDataProducer chargeStatus();
+    /**
+     * Reads the current power status if available.  On unsupported boards and firmware, this operation will
+     * fail with an {@link UnsupportedOperationException}
+     * @return Task holding the power status; 1 if power source is attached, 0 otherwise
+     */
+    Task<Byte> readPowerStatusAsync();
+    /**
+     * Reads the current charge status.  On unsupported boards and firmware, this operation will
+     * fail with an {@link UnsupportedOperationException}
+     * @return Task holding the charge status; 1 if battery is charging, 0 otherwise
+     */
+    Task<Byte> readChargeStatusAsync();
 
+    /**
+     * Programs a task that will be execute on-board when a disconnect occurs
+     * @param codeBlock    MetaWear commands composing the task
+     * @return Task holding the result of the program request
+     */
     Task<Observer> onDisconnect(CodeBlock codeBlock);
 }

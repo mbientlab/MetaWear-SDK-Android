@@ -681,11 +681,6 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
             dataprocessor= (DataProcessorImpl) persist.modules.get(DataProcessor.class);
             mwTimer= (TimerImpl) persist.modules.get(Timer.class);
             event = (EventImpl) persist.modules.get(EventImpl.class);
-
-            // Macro module wasn't available when serialization was released
-            if (!persist.modules.containsKey(Macro.class)) {
-                persist.modules.put(Macro.class, new MacroImpl(this));
-            }
             macro = (MacroImpl) persist.modules.get(Macro.class);
         } catch (Exception e) {
             e.printStackTrace();
@@ -974,7 +969,7 @@ public class MetaWearBoardImpl implements MetaWearBoard, MetaWearBoardPrivate {
                 persist.modules.put(ProximityTsl2671.class, new ProximityTsl2671Impl(this));
                 break;
             case SENSOR_FUSION:
-                persist.modules.put(SensorFusion.class, new SensorFusionImpl(this));
+                persist.modules.put(SensorFusionBosch.class, new SensorFusionBoschImpl(this));
                 break;
             case DEBUG:
                 persist.modules.put(Debug.class, new DebugImpl(this));

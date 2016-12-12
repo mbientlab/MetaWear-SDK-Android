@@ -29,12 +29,26 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 import bolts.Task;
 
 /**
- * Created by etsai on 11/30/16.
+ * Controls the macro functionality
+ * @author Eric Tsai
  */
 public interface Macro extends Module {
+    /**
+     * Begin macro recording.  Every MetaWear command issued will be recorded to the flash memory and
+     * will execute when the board powers on.
+     */
     void startRecord();
+    /**
+     * Begin macro recording.  Every MetaWear command issued will be recorded to the flash memory.
+     * @param execOnBoot    True if the commands should be executed when the board powers on
+     */
     void startRecord(boolean execOnBoot);
+    /**
+     * Ends macro recording
+     * @return Task containing the id of the recorded task
+     */
     Task<Byte> endRecord();
+
     /**
      * Executes the commands corresponding to the macro ID
      * @param id        Numerical ID of the macro to execute

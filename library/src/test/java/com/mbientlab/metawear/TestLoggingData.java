@@ -24,8 +24,8 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.datatype.CartesianFloat;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
@@ -57,7 +57,7 @@ public class TestLoggingData extends TestLogDataBase {
     private static final Subscriber LOG_DATA_HANDLER= new Subscriber() {
         @Override
         public void apply(Data data, Object ... env) {
-            ((List<CartesianFloat>) env[0]).add(data.value(CartesianFloat.class));
+            ((List<Acceleration>) env[0]).add(data.value(Acceleration.class));
         }
     };
 
@@ -76,8 +76,8 @@ public class TestLoggingData extends TestLogDataBase {
 
     @Test
     public void checkAccelerometerData() throws InterruptedException, IOException, JSONException {
-        final List<CartesianFloat> actual= new ArrayList<>();
-        final CartesianFloat[] expected = readCartesianFloatData("bmi160_expected_values");
+        final List<Acceleration> actual= new ArrayList<>();
+        final Acceleration[] expected = readAccelerationValues("bmi160_expected_values");
 
         setupLogDataRoute().continueWith(new Continuation<Route, Void>() {
             @Override
@@ -105,7 +105,7 @@ public class TestLoggingData extends TestLogDataBase {
                     .continueWith(new Continuation<Void, Void>() {
                         @Override
                         public Void then(Task<Void> task) throws Exception {
-                            CartesianFloat[] actualArray= new CartesianFloat[actual.size()];
+                            Acceleration[] actualArray= new Acceleration[actual.size()];
                             actual.toArray(actualArray);
 
                             assertArrayEquals(expected, actualArray);

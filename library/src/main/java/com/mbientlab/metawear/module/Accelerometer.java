@@ -26,30 +26,96 @@ package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
+import com.mbientlab.metawear.data.Acceleration;
 
 /**
- * Created by etsai on 9/1/16.
+ * Generic interface providing high level access for an accelerometer. If you know specifically which
+ * accelerometer is on your board, use the appropriate Accelerometer subclass instead.
+ * @author Eric Tsai
+ * @see AccelerometerBma255
+ * @see AccelerometerBmi160
+ * @see AccelerometerMma8452q
  */
 public interface Accelerometer extends Module {
+    /**
+     * Reports measured acceleration values from the sensor
+     * @author Eric Tsai
+     */
     interface AccelerationDataProducer extends AsyncDataProducer {
+        /**
+         * Get the name for x-axis data
+         * @return X-axis data name
+         */
         String xAxisName();
+        /**
+         * Get the name for y-axis data
+         * @return Y-axis data name
+         */
         String yAxisName();
+        /**
+         * Get the name for z-axis data
+         * @return Z-axis data name
+         */
         String zAxisName();
     }
-
+    /**
+     * Interacts with acceleration data, measured in g's and represented by the {@link Acceleration} data type
+     * @return Object representing acceleration sampling
+     */
     AccelerationDataProducer acceleration();
+    /**
+     * Variant of acceleration data that packs multiple data samples into 1 BLE packet to increase the
+     * data throughput.  Only streaming is supported for this data producer.
+     * @return Object representing packed acceleration data
+     */
     AsyncDataProducer packedAcceleration();
 
+    /**
+     * Switch the accelerometer into active mode
+     */
     void start();
+    /**
+     * Switch the accelerometer into standby mode
+     */
     void stop();
 
+    /**
+     * Accelerometer agnostic interface for configuring the sensor
+     * @param <T>    Type of accelerometer config editor
+     */
     interface ConfigEditorBase<T extends ConfigEditorBase> {
+        /**
+         * Generic function for setting the output data rate.  The closest, valid frequency will be chosen
+         * depending on the underlying sensor
+         * @param odr    New output data rate, in Hz
+         * @return Calling object
+         */
         T odr(float odr);
+        /**
+         * Generic function for setting the data range.  The closest, valid range will be chosen
+         * depending on the underlying sensor
+         * @param fsr    New data range, in g's
+         * @return Calling object
+         */
         T range(float fsr);
+        /**
+         * Write the new configuration to the accelerometer
+         */
         void commit();
     }
-
+    /**
+     * Configure the accelerometer
+     * @return Generic editor object
+     */
     ConfigEditorBase<? extends ConfigEditorBase> configure();
+    /**
+     * Gets the current output data rate
+     * @return Selected output data rate
+     */
     float getOdr();
+    /**
+     * Gets the current data range
+     * @return Selected data range
+     */
     float getRange();
 }

@@ -29,9 +29,9 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 import bolts.Task;
 
 /**
- * Created by etsai on 10/11/16.
+ * Debug functions, for advanced use only
+ * @author Eric Tsai
  */
-
 public interface Debug extends Module {
     Task<Void> reset();
     Task<Void> disconnect();

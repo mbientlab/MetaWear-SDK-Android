@@ -26,8 +26,8 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
-import com.mbientlab.metawear.datatype.CartesianFloat;
 import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.data.AngularVelocity;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -51,7 +51,7 @@ public class TestGyroBmi160PackedData extends UnitTestBase {
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
                 { MetaWearBoardInfo.CPRO },
-                { MetaWearBoardInfo.MOTIOON_R }
+                { MetaWearBoardInfo.MOTION_R}
         });
     }
 
@@ -71,7 +71,7 @@ public class TestGyroBmi160PackedData extends UnitTestBase {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {
-                        ((ArrayList<CartesianFloat>) env[0]).add(data.value(CartesianFloat.class));
+                        ((ArrayList<AngularVelocity>) env[0]).add(data.value(AngularVelocity.class));
                     }
                 });
             }
@@ -82,21 +82,21 @@ public class TestGyroBmi160PackedData extends UnitTestBase {
     public void interpretPackedData() {
         byte[] response = new byte[] {0x13, 0x07, 0x09, 0x15, (byte) 0xad, 0x26, 0x08, (byte) 0xde, (byte) 0x8a, 0x1a, 0x0d,
                 0x26, 0x65, (byte) 0xe4, (byte) 0x8d, 0x20, (byte) 0xac, 0x27, 0x73, (byte) 0xec};
-        CartesianFloat[] expected = new CartesianFloat[] {
-                new CartesianFloat(Float.intBitsToFloat(0x43242d45), Float.intBitsToFloat(0x4396ee0d), Float.intBitsToFloat(0xc3848f9c)),
-                new CartesianFloat(Float.intBitsToFloat(0x434f2258), Float.intBitsToFloat(0x43947da9), Float.intBitsToFloat(0xc3577513)),
-                new CartesianFloat(Float.intBitsToFloat(0x437e0e0d), Float.intBitsToFloat(0x439ad12c), Float.intBitsToFloat(0xc318976a))
+        AngularVelocity[] expected = new AngularVelocity[] {
+                new AngularVelocity(Float.intBitsToFloat(0x43242d45), Float.intBitsToFloat(0x4396ee0d), Float.intBitsToFloat(0xc3848f9c)),
+                new AngularVelocity(Float.intBitsToFloat(0x434f2258), Float.intBitsToFloat(0x43947da9), Float.intBitsToFloat(0xc3577513)),
+                new AngularVelocity(Float.intBitsToFloat(0x437e0e0d), Float.intBitsToFloat(0x439ad12c), Float.intBitsToFloat(0xc318976a))
         };
 
         gyroBmi160.configure()
                 .range(GyroBmi160.Range.FSR_1000)
                 .commit();
 
-        final ArrayList<CartesianFloat> received = new ArrayList<>();
+        final ArrayList<AngularVelocity> received = new ArrayList<>();
         mwBoard.lookupRoute(0).setEnvironment(0, received);
 
         sendMockResponse(response);
-        CartesianFloat[] actual = new CartesianFloat[3];
+        AngularVelocity[] actual = new AngularVelocity[3];
         received.toArray(actual);
 
         assertArrayEquals(expected, actual);

@@ -28,10 +28,13 @@ import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.datatype.CartesianAxis;
-import com.mbientlab.metawear.datatype.SensorOrientation;
+import com.mbientlab.metawear.data.Acceleration;
+import com.mbientlab.metawear.data.CartesianAxis;
+import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Calendar;
 
@@ -73,7 +76,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
             TAP_PRODUCER= "com.mbientlab.metawear.impl.AccelerometerBoschImpl.TAP_PRODUCER";
     private static final float ORIENT_HYS_G_PER_STEP= 0.0625f, THETA_STEP= (float) (44.8/63.f);
 
-    private static class BoschAccCartesianFloatData extends CartesianFloatData {
+    private static class BoschAccCartesianFloatData extends FloatVectorData {
         private static final long serialVersionUID = -758164941443260674L;
 
         public BoschAccCartesianFloatData() {
@@ -101,6 +104,29 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         @Override
         protected float scale(MetaWearBoardPrivate owner) {
             return ((AccelerometerBoschImpl) owner.getModules().get(AccelerometerBosch.class)).getAccDataScale();
+        }
+
+        @Override
+        public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+            short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
+            float scale= scale(owner);
+            final Acceleration value= new Acceleration(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
+
+            return new DataPrivate(timestamp, data) {
+                @Override
+                public Class<?>[] types() {
+                    return new Class<?>[] {Acceleration.class};
+                }
+
+                @Override
+                public <T> T value(Class<T> clazz) {
+                    if (clazz == Acceleration.class) {
+                        return clazz.cast(value);
+                    }
+                    return super.value(clazz);
+                }
+            };
         }
     }
     private static class BoschAccSFloatData extends SFloatData {

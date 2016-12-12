@@ -28,12 +28,13 @@ import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/20/16.
+ * Controls the BMM150 geomagnetic sensor
+ * @author Eric Tsai
  */
 public interface MagnetometerBmm150 extends Module {
     /**
-     * Preset power modes for the magnetometer as outlined in the specs sheet.
-     * <table>
+     * Recommended configurations for the magnetometer as outlined in the specs sheet.
+     * <table summary="Recommended sensor configurations">
      *     <thead>
      *         <tr>
      *             <th>Setting</th>
@@ -82,30 +83,87 @@ public interface MagnetometerBmm150 extends Module {
      * @author Eric Tsai
      */
     enum OutputDataRate {
+        /** 10Hz */
         ODR_10_HZ,
+        /** 2Hz */
         ODR_2_HZ,
+        /** 6Hz */
         ODR_6_HZ,
+        /** 8Hz */
         ODR_8_HZ,
+        /** 15Hz */
         ODR_15_HZ,
+        /** 20Hz */
         ODR_20_HZ,
+        /** 25Hz */
         ODR_25_HZ,
+        /** 30Hz */
         ODR_30_HZ
     }
 
     interface MagneticFieldDataProducer extends AsyncDataProducer {
+        /**
+         * Get the name for x-axis data
+         * @return X-axis data name
+         */
         String xAxisName();
+        /**
+         * Get the name for y-axis data
+         * @return Y-axis data name
+         */
         String yAxisName();
+        /**
+         * Get the name for z-axis data
+         * @return Z-axis data name
+         */
         String zAxisName();
     }
+    /**
+     * Gets an object to control B field data
+     * @return Object controlling B field data
+     */
     MagneticFieldDataProducer magneticField();
+    /**
+     * Variant of B field data that packs multiple data samples into 1 BLE packet to increase the
+     * data throughput.  Only streaming is supported for this data producer.
+     * @return Object representing packed acceleration data
+     */
     AsyncDataProducer packedMagneticField();
 
+    /**
+     * Sensor configuration editor, only for advanced users.  It is recommended that one of the {@link Preset}
+     * configurations be used.
+     * @author Eric Tsai
+     */
     interface ConfigEditor {
+        /**
+         * Sets the number of repetitions on the XY axis
+         * @param reps    nXY repetitions, between [1, 511]
+         * @return Calling object
+         */
         ConfigEditor xyReps(short reps);
+        /**
+         * sets the number of repetitions on the Z axis
+         * @param reps    nZ repetitions, between [1, 256]
+         * @return Calling object
+         */
         ConfigEditor zReps(short reps);
+
+        /**
+         * Sets the output data rate
+         * @param odr    New output data rate
+         * @return Calling object
+         */
         ConfigEditor outputDataRate(OutputDataRate odr);
+        /**
+         * Write the configuration to the sensor
+         */
         void commit();
     }
+    /**
+     * Configures the sensor
+     * @return Configuration editor object
+     */
     ConfigEditor configure();
 
     /**

@@ -254,7 +254,7 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
 
                 @Override
                 public ConfigEditor holdTime(float time) {
-                    return holdTime(FlatHoldTime.values()[Util.closestIndex(FlatHoldTime.periods(), time)]);
+                    return holdTime(FlatHoldTime.values()[Util.closestIndex(FlatHoldTime.delays(), time)]);
                 }
 
                 @Override

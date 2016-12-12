@@ -47,7 +47,7 @@ public class TestHaptic extends UnitTestBase {
     @Parameters(name = "board: {0}")
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTIOON_R}) {
+        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R}) {
             parameters.add(new Object[] {info});
         }
 

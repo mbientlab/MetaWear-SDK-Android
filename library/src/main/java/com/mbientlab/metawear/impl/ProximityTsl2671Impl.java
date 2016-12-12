@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.impl.DataAttributes;
@@ -45,15 +46,12 @@ class ProximityTsl2671Impl extends ModuleImplBase implements ProximityTsl2671 {
     private static final byte ADC= 1, MODE= 2;
     private static final long serialVersionUID = -3980380296316444383L;
 
+    private transient ForcedDataProducer proximityProducer;
+
     ProximityTsl2671Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
         mwPrivate.tagProducer(PRODUCER, new UintData(PROXIMITY, Util.setSilentRead(ADC), new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false)));
-    }
-
-    @Override
-    public void read() {
-        mwPrivate.lookupProducer(PRODUCER).read(mwPrivate);
     }
 
     @Override
@@ -97,12 +95,25 @@ class ProximityTsl2671Impl extends ModuleImplBase implements ProximityTsl2671 {
     }
 
     @Override
-    public Task<Route> addRoute(RouteBuilder builder) {
-        return mwPrivate.queueRouteBuilder(builder, PRODUCER);
-    }
+    public ForcedDataProducer adc() {
+        if (proximityProducer == null) {
+            proximityProducer = new ForcedDataProducer() {
+                @Override
+                public void read() {
+                    mwPrivate.lookupProducer(PRODUCER).read(mwPrivate);
+                }
 
-    @Override
-    public String name() {
-        return PRODUCER;
+                @Override
+                public Task<Route> addRoute(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, PRODUCER);
+                }
+
+                @Override
+                public String name() {
+                    return PRODUCER;
+                }
+            };
+        }
+        return proximityProducer;
     }
 }

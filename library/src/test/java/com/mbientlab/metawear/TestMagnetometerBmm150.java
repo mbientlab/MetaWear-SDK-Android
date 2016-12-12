@@ -24,10 +24,10 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.datatype.CartesianFloat;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.data.MagneticField;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -55,7 +55,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
                 { MetaWearBoardInfo.CPRO },
-                { MetaWearBoardInfo.MOTIOON_R }
+                { MetaWearBoardInfo.MOTION_R}
         });
     }
 
@@ -138,8 +138,8 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
 
     @Test
     public void bFieldData() {
-        CartesianFloat expected= new CartesianFloat(Float.intBitsToFloat(0xc37b2000), Float.intBitsToFloat(0x43253000), Float.intBitsToFloat(0x428ea000));
-        final Capture<CartesianFloat> actual= new Capture<>();
+        MagneticField expected= new MagneticField(Float.intBitsToFloat(0xc37b2000), Float.intBitsToFloat(0x43253000), Float.intBitsToFloat(0x428ea000));
+        final Capture<MagneticField> actual= new Capture<>();
 
         mag.magneticField().addRoute(new RouteBuilder() {
             @Override
@@ -147,7 +147,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
-                        ((Capture<CartesianFloat>) env[0]).set(data.value(CartesianFloat.class));
+                        ((Capture<MagneticField>) env[0]).set(data.value(MagneticField.class));
                     }
                 });
             }

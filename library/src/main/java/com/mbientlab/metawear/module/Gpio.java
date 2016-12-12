@@ -29,7 +29,8 @@ import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/6/16.
+ * Controls the general purpose i/o pins
+ * @author Eric Tsai
  */
 public interface Gpio extends Module {
     /**
@@ -55,24 +56,84 @@ public interface Gpio extends Module {
         NO_PULL
     }
 
+    /**
+     * Represents one gpio pin
+     * @author Eric Tsai
+     */
     interface Pin {
+        /**
+         * Checks if the pin is a virtual pin
+         * @return True if virtual
+         */
         boolean isVirtual();
 
+        /**
+         * Sets the pin change type to look for
+         * @param type    New pin change type
+         */
         void setChangeType(PinChangeType type);
+        /**
+         * Sets the pin's pull mode
+         * @param mode    New pull mode
+         */
         void setPullMode(PullMode mode);
+        /**
+         * Clears the pin's output voltage i.e. logical low
+         */
         void clearOutput();
+        /**
+         * Sets the pin's output voltage i.e. logical high
+         */
         void setOutput();
 
+        /**
+         * Gets an object that represents analog adc data
+         * @return Object representing analog adc data
+         */
         Analog analogAdc();
+        /**
+         * Gets an object that represents analog reference voltage data
+         * @return Object representing analog reference voltage data
+         */
         Analog analogAbsRef();
+        /**
+         * Gets an object that represents digital data
+         * @return Object representing digital data
+         */
         ForcedDataProducer digital();
+        /**
+         * Gets an object that represents digital pin monitoring data data
+         * @return Object representing digital pin monitoring data
+         */
         AsyncDataProducer monitor();
     }
 
+    /**
+     * Measures analog data from a gpio pin
+     * @author Eric Tsai
+     */
     interface Analog extends ForcedDataProducer {
+        /**
+         * Variant of the {@link #read()} function that provides finer control of the analog read operation
+         * @param pullup      Pin that will be pulled up before the read, 0xff if unused
+         * @param pulldown    Pin that will be pulled down before the read, 0xff if unused
+         * @param delay       How long to wait before reading from the pin, in microseconds, set to 0 if unused
+         * @param virtual     Pin number the data will identify as.  Object representing virtual pins can be
+         *                    created by calling {@link #createVirtualPin(byte)}
+         */
         void read(byte pullup, byte pulldown, short delay, byte virtual);
     }
 
+    /**
+     * Returns an object representing the gpio pin
+     * @param pin    Pin to use
+     * @return Object representing the gpio pin
+     */
     Pin getPin(byte pin);
+    /**
+     * Creates a virtual pin to manipulate data from the
+     * @param pin    Virtual pin to interact with
+     * @return Object representing the virtual pin
+     */
     Pin createVirtualPin(byte pin);
 }

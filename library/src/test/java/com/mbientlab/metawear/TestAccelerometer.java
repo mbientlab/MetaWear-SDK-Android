@@ -24,8 +24,8 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.datatype.CartesianFloat;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
@@ -257,28 +257,28 @@ public class TestAccelerometer extends UnitTestBase {
 
     @Test
     public void receiveAccData() {
-        CartesianFloat expected= null;
+        Acceleration expected= null;
         byte[] response= null;
-        final Capture<CartesianFloat> actual= new Capture<>();
+        final Capture<Acceleration> actual= new Capture<>();
 
 
         if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
             // (-4.7576f, 2.2893f, 2.9182f)
-            expected = new CartesianFloat(Float.intBitsToFloat(0xc0983e00), Float.intBitsToFloat(0x40128400), Float.intBitsToFloat(0x403ac400));
+            expected = new Acceleration(Float.intBitsToFloat(0xc0983e00), Float.intBitsToFloat(0x40128400), Float.intBitsToFloat(0x403ac400));
             response= new byte[] { 0x03, 0x04, (byte) 0xe1, (byte) 0xb3, (byte) 0xa1, 0x24, (byte) 0xb1, 0x2e };
             accelerometer.configure()
                     .range(8f)
                     .commit();
         } else if (boardInfo == MetaWearBoardInfo.RG) {
             // (-1.872f, -2.919f, -1.495f)
-            expected= new CartesianFloat(Float.intBitsToFloat(0xbfefa800), Float.intBitsToFloat(0xc03ad800), Float.intBitsToFloat(0xbfbf5800));
+            expected= new Acceleration(Float.intBitsToFloat(0xbfefa800), Float.intBitsToFloat(0xc03ad800), Float.intBitsToFloat(0xbfbf5800));
             response= new byte[] {0x03, 0x04, 0x16, (byte) 0xc4, (byte) 0x94, (byte) 0xa2, 0x2a, (byte) 0xd0};
             accelerometer.configure()
                     .range(4f)
                     .commit();
         } else if (boardInfo == MetaWearBoardInfo.R) {
             // (-1.450f, -2.555f, 0.792f)
-            expected= new CartesianFloat(Float.intBitsToFloat(0xbfb9999a), Float.intBitsToFloat(0xc023851f), Float.intBitsToFloat(0x3f4ac083));
+            expected= new Acceleration(Float.intBitsToFloat(0xbfb9999a), Float.intBitsToFloat(0xc023851f), Float.intBitsToFloat(0x3f4ac083));
             response= new byte[] {0x03, 0x04, 0x56, (byte) 0xfa, 0x05, (byte) 0xf6, 0x18, 0x03};
         }
 
@@ -288,7 +288,7 @@ public class TestAccelerometer extends UnitTestBase {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
-                        ((Capture<CartesianFloat>) env[0]).set(data.value(CartesianFloat.class));
+                        ((Capture<Acceleration>) env[0]).set(data.value(Acceleration.class));
                     }
                 });
             }
@@ -371,15 +371,15 @@ public class TestAccelerometer extends UnitTestBase {
 
     @Test
     public void receivedPackedData() {
-        CartesianFloat[] expected= null;
+        Acceleration[] expected= null;
         byte[] response= null;
-        CartesianFloat[] actual = new CartesianFloat[3];
+        Acceleration[] actual = new Acceleration[3];
 
         if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
-            expected = new CartesianFloat[] {
-                    new CartesianFloat(Float.intBitsToFloat(0x3f98c400), Float.intBitsToFloat(0xbe556000), Float.intBitsToFloat(0x406eca00)),
-                    new CartesianFloat(Float.intBitsToFloat(0x3fa4e400), Float.intBitsToFloat(0xbf91dc00), Float.intBitsToFloat(0x407ffa00)),
-                    new CartesianFloat(Float.intBitsToFloat(0x3ff65400), Float.intBitsToFloat(0xbffa7c00), Float.intBitsToFloat(0x407fe200))
+            expected = new Acceleration[] {
+                    new Acceleration(Float.intBitsToFloat(0x3f98c400), Float.intBitsToFloat(0xbe556000), Float.intBitsToFloat(0x406eca00)),
+                    new Acceleration(Float.intBitsToFloat(0x3fa4e400), Float.intBitsToFloat(0xbf91dc00), Float.intBitsToFloat(0x407ffa00)),
+                    new Acceleration(Float.intBitsToFloat(0x3ff65400), Float.intBitsToFloat(0xbffa7c00), Float.intBitsToFloat(0x407fe200))
             };
             response = new byte[] {0x03, 0x1c, 0x31, 0x26, 0x55, (byte) 0xf9, 0x65, 0x77, 0x39, 0x29, (byte) 0x89, (byte) 0xdb,
                     (byte) 0xfd, 0x7f, (byte) 0x95, 0x3d, 0x61, (byte) 0xc1, (byte) 0xf1, 0x7f};
@@ -387,10 +387,10 @@ public class TestAccelerometer extends UnitTestBase {
                     .range(4f)
                     .commit();
         } else if (boardInfo == MetaWearBoardInfo.RG) {
-            expected = new CartesianFloat[] {
-                    new CartesianFloat(Float.intBitsToFloat(0xc0913c00), Float.intBitsToFloat(0x3f553000), Float.intBitsToFloat(0xbe05c000)),
-                    new CartesianFloat(Float.intBitsToFloat(0xc03fa800), Float.intBitsToFloat(0x3f64d000), Float.intBitsToFloat(0x3e15c000)),
-                    new CartesianFloat(Float.intBitsToFloat(0xbcec0000), Float.intBitsToFloat(0x3eb42000), Float.intBitsToFloat(0x3d850000))
+            expected = new Acceleration[] {
+                    new Acceleration(Float.intBitsToFloat(0xc0913c00), Float.intBitsToFloat(0x3f553000), Float.intBitsToFloat(0xbe05c000)),
+                    new Acceleration(Float.intBitsToFloat(0xc03fa800), Float.intBitsToFloat(0x3f64d000), Float.intBitsToFloat(0x3e15c000)),
+                    new Acceleration(Float.intBitsToFloat(0xbcec0000), Float.intBitsToFloat(0x3eb42000), Float.intBitsToFloat(0x3d850000))
             };
             response= new byte[] {0x03, 0x1c, 0x62, (byte) 0xb7, 0x53, 0x0d, (byte) 0xe9, (byte) 0xfd, 0x16, (byte) 0xd0, 0x4d,
                     0x0e, 0x57, 0x02, (byte) 0x8a, (byte) 0xff, (byte) 0xa1, 0x05, 0x0a, 0x01};
@@ -398,23 +398,23 @@ public class TestAccelerometer extends UnitTestBase {
                     .range(8f)
                     .commit();
         } else if (boardInfo == MetaWearBoardInfo.R) {
-            expected = new CartesianFloat[] {
-                    new CartesianFloat(Float.intBitsToFloat(0xc0948312), Float.intBitsToFloat(0x40b5999a), Float.intBitsToFloat(0xbe70a3d7)),
-                    new CartesianFloat(Float.intBitsToFloat(0xbfb49ba6), Float.intBitsToFloat(0x3fa16873), Float.intBitsToFloat(0x403072b0)),
-                    new CartesianFloat(Float.intBitsToFloat(0xbf9d9168), Float.intBitsToFloat(0xbfea1cac), Float.intBitsToFloat(0xc05d8106))
+            expected = new Acceleration[] {
+                    new Acceleration(Float.intBitsToFloat(0xc0948312), Float.intBitsToFloat(0x40b5999a), Float.intBitsToFloat(0xbe70a3d7)),
+                    new Acceleration(Float.intBitsToFloat(0xbfb49ba6), Float.intBitsToFloat(0x3fa16873), Float.intBitsToFloat(0x403072b0)),
+                    new Acceleration(Float.intBitsToFloat(0xbf9d9168), Float.intBitsToFloat(0xbfea1cac), Float.intBitsToFloat(0xc05d8106))
             };
             response= new byte[] {0x03, 0x12, (byte) 0xdf, (byte) 0xed, 0x2b, 0x16, 0x15, (byte) 0xff, 0x7d, (byte) 0xfa,
                     (byte) 0xed, 0x04, (byte) 0xc5, 0x0a, 0x31, (byte) 0xfb, (byte) 0xdb, (byte) 0xf8, 0x7b, (byte) 0xf2};
         }
 
-        final ArrayList<CartesianFloat> received = new ArrayList<>();
+        final ArrayList<Acceleration> received = new ArrayList<>();
         accelerometer.packedAcceleration().addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {
-                        ((ArrayList<CartesianFloat>) env[0]).add(data.value(CartesianFloat.class));
+                        ((ArrayList<Acceleration>) env[0]).add(data.value(Acceleration.class));
                     }
                 });
             }

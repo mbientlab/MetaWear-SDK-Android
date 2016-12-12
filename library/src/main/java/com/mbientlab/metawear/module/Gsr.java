@@ -28,7 +28,8 @@ import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/21/16.
+ * Interacts with a GSR (galvanic skin response) sensor
+ * @author Eric Tsai
  */
 public interface Gsr extends Module {
     /**
@@ -71,15 +72,20 @@ public interface Gsr extends Module {
         void commit();
     }
 
-    interface Channel extends ForcedDataProducer { }
-
     /**
      * Configures GSR settings
      * @return Config object to edit the settings
      */
     ConfigEditor configure();
 
-    Channel[] channels();
-
+    /**
+     * Gets a list of available conductance channels
+     * @return List of available conductance channels
+     */
+    ForcedDataProducer[] channels();
+    /**
+     * Initiates automatic calibration.  This should be done before the first conductance read or
+     * if there are changes in temperature
+     */
     void calibrate();
 }

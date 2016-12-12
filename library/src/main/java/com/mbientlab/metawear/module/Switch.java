@@ -28,7 +28,8 @@ import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/4/16.
+ * Controls the on-board push button switch
+ * @author Eric Tsai
  */
 public interface Switch extends Module, AsyncDataProducer {
 }

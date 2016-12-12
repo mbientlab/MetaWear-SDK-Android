@@ -106,6 +106,8 @@ class ColorDetectorTcs34725Impl extends ModuleImplBase implements ColorDetectorT
         }
     }
 
+    private transient ColorAdcDataProducer adcProducer;
+
     ColorDetectorTcs34725Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
@@ -115,11 +117,6 @@ class ColorDetectorTcs34725Impl extends ModuleImplBase implements ColorDetectorT
         this.mwPrivate.tagProducer(ADC_RED_PRODUCER, adcProducer.split[1]);
         this.mwPrivate.tagProducer(ADC_GREEN_PRODUCER, adcProducer.split[2]);
         this.mwPrivate.tagProducer(ADC_BLUE_PRODUCER, adcProducer.split[3]);
-    }
-
-    @Override
-    public void read() {
-        mwPrivate.lookupProducer(ADC_PRODUCER).read(mwPrivate);
     }
 
     @Override
@@ -155,32 +152,45 @@ class ColorDetectorTcs34725Impl extends ModuleImplBase implements ColorDetectorT
     }
 
     @Override
-    public String clearName() {
-        return ADC_CLEAR_PRODUCER;
-    }
+    public ColorAdcDataProducer adc() {
+        if (adcProducer == null) {
+            adcProducer = new ColorAdcDataProducer() {
+                @Override
+                public void read() {
+                    mwPrivate.lookupProducer(ADC_PRODUCER).read(mwPrivate);
+                }
 
-    @Override
-    public String redName() {
-        return ADC_RED_PRODUCER;
-    }
+                @Override
+                public String clearName() {
+                    return ADC_CLEAR_PRODUCER;
+                }
 
-    @Override
-    public String greenName() {
-        return ADC_GREEN_PRODUCER;
-    }
+                @Override
+                public String redName() {
+                    return ADC_RED_PRODUCER;
+                }
 
-    @Override
-    public String blueName() {
-        return ADC_BLUE_PRODUCER;
-    }
+                @Override
+                public String greenName() {
+                    return ADC_GREEN_PRODUCER;
+                }
 
-    @Override
-    public Task<Route> addRoute(RouteBuilder builder) {
-        return mwPrivate.queueRouteBuilder(builder, ADC_PRODUCER);
-    }
+                @Override
+                public String blueName() {
+                    return ADC_BLUE_PRODUCER;
+                }
 
-    @Override
-    public String name() {
-        return ADC_PRODUCER;
+                @Override
+                public Task<Route> addRoute(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, ADC_PRODUCER);
+                }
+
+                @Override
+                public String name() {
+                    return ADC_PRODUCER;
+                }
+            };
+        }
+        return adcProducer;
     }
 }

@@ -57,13 +57,13 @@ public class TestProximityTsl2671 extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x18, (byte) 0x81};
 
-        proximity.addRoute(new RouteBuilder() {
+        proximity.adc().addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.stream(null);
             }
         });
-        proximity.read();
+        proximity.adc().read();
         assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
@@ -71,7 +71,7 @@ public class TestProximityTsl2671 extends UnitTestBase {
     public void readSilent() {
         byte[] expected= new byte[] {0x18, (byte) 0xc1};
 
-        proximity.read();
+        proximity.adc().read();
         assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
@@ -80,7 +80,7 @@ public class TestProximityTsl2671 extends UnitTestBase {
         short expected= 1522;
         final Capture<Short> actual= new Capture<>();
 
-        proximity.addRoute(new RouteBuilder() {
+        proximity.adc().addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.stream(new Subscriber() {

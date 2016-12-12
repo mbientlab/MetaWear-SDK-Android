@@ -58,13 +58,13 @@ public class TestColorDetectorTcs34725 extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x17, (byte) 0x81};
 
-        colorTcs34725.addRoute(new RouteBuilder() {
+        colorTcs34725.adc().addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.stream(null);
             }
         });
-        colorTcs34725.read();
+        colorTcs34725.adc().read();
         assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
@@ -72,7 +72,7 @@ public class TestColorDetectorTcs34725 extends UnitTestBase {
     public void readSilent() {
         byte[] expected= new byte[] {0x17, (byte) 0xc1};
 
-        colorTcs34725.read();
+        colorTcs34725.adc().read();
         assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
@@ -81,7 +81,7 @@ public class TestColorDetectorTcs34725 extends UnitTestBase {
         ColorAdc expected= new ColorAdc(418, 123, 154, 124);
         final Capture<ColorAdc> actual= new Capture<>();
 
-        colorTcs34725.addRoute(new RouteBuilder() {
+        colorTcs34725.adc().addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.stream(new Subscriber() {
@@ -108,7 +108,7 @@ public class TestColorDetectorTcs34725 extends UnitTestBase {
         int[] expected = new int[] {418, 123, 154, 124};
         final int[] actual= new int[4];
 
-        colorTcs34725.addRoute(new RouteBuilder() {
+        colorTcs34725.adc().addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.split()

@@ -54,6 +54,8 @@ import bolts.TaskCompletionSource;
  * Created by etsai on 8/31/16.
  */
 class JunitPlatform implements Platform {
+    private static final ScheduledExecutorService SCHEDULED_TASK_THREADPOOL = Executors.newSingleThreadScheduledExecutor();
+
     interface MwBridge {
         void disconnected();
         void sendMockResponse(byte[] response);
@@ -69,7 +71,6 @@ class JunitPlatform implements Platform {
 
     public byte maxProcessors= 28, maxLoggers= 8, maxTimers= 8, maxEvents= 28;
     public byte timerId= 0, eventId= 0, loggerId= 0, dataProcessorId= 0, macroId = 0;
-    private final ScheduledExecutorService scheduledTaskService= Executors.newSingleThreadScheduledExecutor();
     private final MwBridge bridge;
     private final ArrayList<byte[]> commandHistory= new ArrayList<>(), connectCmds= new ArrayList<>();
     private final ArrayList<Pair<UUID, UUID>> gattCharReadHistory = new ArrayList<>();
@@ -83,7 +84,7 @@ class JunitPlatform implements Platform {
     }
 
     private void scheduleMockResponse(final byte[] response) {
-        scheduledTaskService.schedule(new Runnable() {
+        SCHEDULED_TASK_THREADPOOL.schedule(new Runnable() {
             @Override
             public void run() {
                 bridge.sendMockResponse(response);
@@ -92,7 +93,7 @@ class JunitPlatform implements Platform {
     }
 
     private void scheduleMockGattCharReadValue(final Pair<UUID, UUID> gattChar, final byte[] response) {
-        scheduledTaskService.schedule(new Runnable() {
+        SCHEDULED_TASK_THREADPOOL.schedule(new Runnable() {
             @Override
             public void run() {
                 bridge.sendMockGattCharReadValue(gattChar, response);
@@ -101,7 +102,7 @@ class JunitPlatform implements Platform {
     }
 
     public void scheduleTask(Runnable r, long timeout) {
-        scheduledTaskService.schedule(r, timeout, TimeUnit.MILLISECONDS);
+        SCHEDULED_TASK_THREADPOOL.schedule(r, timeout, TimeUnit.MILLISECONDS);
     }
 
     @Override

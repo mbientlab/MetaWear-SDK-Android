@@ -27,7 +27,8 @@ package com.mbientlab.metawear.module;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/18/16.
+ * Controls NeoPixel strands connected to the board
+ * @author Eric Tsai
  */
 public interface NeoPixel extends Module {
     /**
@@ -56,6 +57,10 @@ public interface NeoPixel extends Module {
         FAST
     }
 
+    /**
+     * Represents a NeoPixel strand
+     * @author Eric Tsai
+     */
     interface Strand {
         /**
          * Enumeration of rotation directions
@@ -122,7 +127,7 @@ public interface NeoPixel extends Module {
 
         /**
          * Returns the number of Leds initialized for the strand
-         * @return
+         * @return Number of initialized LEDs
          */
         int nLeds();
     }
@@ -148,8 +153,13 @@ public interface NeoPixel extends Module {
      * @param speed Operating speed
      * @param gpioPin GPIO pin the strand is connected to
      * @param length Number of pixels to initialize
+     * @return Object representing the initialized strand
      */
     Strand initializeStrand(byte strand, ColorOrdering ordering, StrandSpeed speed, byte gpioPin, byte length);
-
+    /**
+     * Finds the object corresponding to the strand number
+     * @param strand    Strand number to look up
+     * @return Strand object matching the number, null if no match is found
+     */
     Strand lookupStrand(byte strand);
 }

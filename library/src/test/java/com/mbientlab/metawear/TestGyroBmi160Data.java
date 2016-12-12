@@ -24,8 +24,8 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.datatype.CartesianFloat;
 import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.GyroBmi160.Range;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
@@ -88,8 +88,8 @@ public class TestGyroBmi160Data extends UnitTestBase {
 
     @Test
     public void interpretData() {
-        CartesianFloat expected= new CartesianFloat(Float.intBitsToFloat(0x4383344b), Float.intBitsToFloat(0x43f9bf9c), Float.intBitsToFloat(0xc3f9c190));
-        final Capture<CartesianFloat> actual= new Capture<>();
+        AngularVelocity expected= new AngularVelocity(Float.intBitsToFloat(0x4383344b), Float.intBitsToFloat(0x43f9bf9c), Float.intBitsToFloat(0xc3f9c190));
+        final Capture<AngularVelocity> actual= new Capture<>();
 
         gyroBmi160.configure()
                 .range(Range.FSR_500)
@@ -100,7 +100,7 @@ public class TestGyroBmi160Data extends UnitTestBase {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
-                        ((Capture<CartesianFloat>) env[0]).set(data.value(CartesianFloat.class));
+                        ((Capture<AngularVelocity>) env[0]).set(data.value(AngularVelocity.class));
                     }
                 });
             }

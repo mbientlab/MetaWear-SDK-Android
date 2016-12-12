@@ -129,14 +129,16 @@ public interface MetaWearBoard {
     /**
      * Retrieves a reference to the requested module if supported.  You must connected to the board before
      * calling this function and the board must not be in MetaBoot mode
-     * @param moduleClass    Module class to lookup
+     * @param moduleClass   Module class to lookup
+     * @param <T>           Runtime type the return value is casted as
      * @return Reference to the requested module, null if the board is not connected, module not supported, or board is in MetaBoot mode
      */
     <T extends Module> T getModule(Class<T> moduleClass);
     /**
      * Retrieves a reference to the requested module if supported, throws a checked exception if the function fails.
      * You must connected to the board before calling this function and the board must not be in MetaBoot mode
-     * @param moduleClass    ModuleId class to lookup
+     * @param moduleClass   ModuleId class to lookup
+     * @param <T>           Runtime type the return value is casted as
      * @return Reference to the requested module
      * @throws UnsupportedModuleException If the requested module is not supported or the board is in MetaBoot mode
      */

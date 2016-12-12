@@ -200,10 +200,10 @@ class RouteElementImpl implements RouteElement {
         return postCreate(source.dataProcessorStateCopy(source, source.attributes), new NullEditor(config, processor, persistantData.mwPrivate));
     }
 
-    private static class CounterInner extends EditorImplBase implements DataProcessor.Counter {
+    private static class CounterEditorInner extends EditorImplBase implements DataProcessor.CounterEditor {
         private static final long serialVersionUID = 4873789798519714460L;
 
-        CounterInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        CounterEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -213,10 +213,10 @@ class RouteElementImpl implements RouteElement {
                     0x00, 0x00, 0x00, 0x00});
         }
     }
-    private static class AccumulatorInner extends EditorImplBase implements DataProcessor.Accumulator {
+    private static class AccumulatorEditorInner extends EditorImplBase implements DataProcessor.AccumulatorEditor {
         private static final long serialVersionUID = -5044680524938752249L;
 
-        AccumulatorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        AccumulatorEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -244,8 +244,8 @@ class RouteElementImpl implements RouteElement {
                 source.dataProcessorCopy(source, attributes);
         byte[] config= new byte[] {0x2, (byte) (((output - 1) & 0x3) | (((source.attributes.length() - 1) & 0x3) << 2) | (counter ? 0x10 : 0))};
         EditorImplBase editor= counter ?
-                new CounterInner(config, processor, persistantData.mwPrivate) :
-                new AccumulatorInner(config, processor, persistantData.mwPrivate);
+                new CounterEditorInner(config, processor, persistantData.mwPrivate) :
+                new AccumulatorEditorInner(config, processor, persistantData.mwPrivate);
 
         DataTypeBase state= counter ?
                 new UintData(null, DATA_PROCESSOR, Util.setSilentRead(DataProcessorImpl.STATE), DataTypeBase.NO_DATA_ID, attributes) :
@@ -263,10 +263,10 @@ class RouteElementImpl implements RouteElement {
         return createReducer(false);
     }
 
-    private static class AveragerInner extends EditorImplBase implements DataProcessor.Averager {
+    private static class AverageEditorInner extends EditorImplBase implements DataProcessor.AverageEditor {
         private static final long serialVersionUID = 998301829125848762L;
 
-        AveragerInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        AverageEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -297,7 +297,7 @@ class RouteElementImpl implements RouteElement {
                 samples
         };
 
-        return postCreate(null, new AveragerInner(config, processor, persistantData.mwPrivate));
+        return postCreate(null, new AverageEditorInner(config, processor, persistantData.mwPrivate));
     }
 
     @Override
@@ -325,7 +325,7 @@ class RouteElementImpl implements RouteElement {
         final byte signedMask = (byte) (source.attributes.signed ? 0x80 : 0x0);
         // assume sizes array is filled with the same value
         DataAttributes attributes= new DataAttributes(new byte[] {source.attributes.sizes[0]}, (byte) 1, (byte) 0, false);
-        DataTypeBase processor= source instanceof CartesianFloatData ?
+        DataTypeBase processor= source instanceof FloatVectorData ?
                 new UFloatData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes) :
                 new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes);
         byte[] config= new byte[] {
@@ -368,12 +368,12 @@ class RouteElementImpl implements RouteElement {
             case ABS_VALUE:
                 return applyMath(MathOp.ABS_VALUE, 0);
             case RMS:
-                if (source instanceof CartesianFloatData || source instanceof ColorAdcData) {
+                if (source instanceof FloatVectorData || source instanceof ColorAdcData) {
                     return createCombiner(source, (byte) 0);
                 }
                 return null;
             case RSS:
-                if (source instanceof CartesianFloatData || source instanceof ColorAdcData) {
+                if (source instanceof FloatVectorData || source instanceof ColorAdcData) {
                     return createCombiner(source, (byte) 1);
                 }
                 return null;
@@ -430,10 +430,10 @@ class RouteElementImpl implements RouteElement {
         }
     }
 
-    private static class MapperInner extends EditorImplBase implements DataProcessor.Mapper {
+    private static class MapEditorInner extends EditorImplBase implements DataProcessor.MapEditor {
         private static final long serialVersionUID = 8475942086629415224L;
 
-        MapperInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        MapEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -584,13 +584,13 @@ class RouteElementImpl implements RouteElement {
             buffer.put((byte) (source.attributes.sizes.length - 1));
         }
 
-        return postCreate(null, new MapperInner(buffer.array(), processor, persistantData.mwPrivate));
+        return postCreate(null, new MapEditorInner(buffer.array(), processor, persistantData.mwPrivate));
     }
 
-    private static class TimeLimiterInner extends EditorImplBase implements DataProcessor.TimeLimiter {
+    private static class TimeEditorInner extends EditorImplBase implements DataProcessor.TimeEditor {
         private static final long serialVersionUID = -3775715195615375018L;
 
-        TimeLimiterInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        TimeEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -608,20 +608,22 @@ class RouteElementImpl implements RouteElement {
             throw new IllegalRouteOperationException("Cannot limit frequency of null data");
         }
 
-        if (source.eventConfig[0] == SENSOR_FUSION.id) {
+        boolean hasTimePassthrough = persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision >= DataProcessorImpl.TIME_PASSTHROUGH_REVISION;
+        if (!hasTimePassthrough && source.eventConfig[0] == SENSOR_FUSION.id) {
             throw new IllegalRouteOperationException("Cannot limit frequency of sensor fusion data");
         }
 
+        int outputMask = hasTimePassthrough ? 2 : 0;
         final DataTypeBase processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
         byte[] config= ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN).put((byte) 0x8)
-                .put((byte) ((source.attributes.length() - 1))).putInt(period).array();
-        return postCreate(null, new TimeLimiterInner(config, processor, persistantData.mwPrivate));
+                .put((byte) ((source.attributes.length() - 1) & 0x7 | (outputMask << 3))).putInt(period).array();
+        return postCreate(null, new TimeEditorInner(config, processor, persistantData.mwPrivate));
     }
 
-    private static class PassthroughLimiterInner extends EditorImplBase implements DataProcessor.PassthroughLimiter {
+    private static class PassthroughEditorInner extends EditorImplBase implements DataProcessor.PassthroughEditor {
         private static final long serialVersionUID = 3157873682587128118L;
 
-        PassthroughLimiterInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        PassthroughEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -654,13 +656,13 @@ class RouteElementImpl implements RouteElement {
                 .putShort(value).array();
         DataTypeBase state= new UintData(DATA_PROCESSOR, Util.setSilentRead(DataProcessorImpl.STATE), DataTypeBase.NO_DATA_ID,
                 new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false));
-        return postCreate(state, new PassthroughLimiterInner(config, processor, persistantData.mwPrivate));
+        return postCreate(state, new PassthroughEditorInner(config, processor, persistantData.mwPrivate));
     }
 
-    private static class PulseFinderInner extends EditorImplBase implements DataProcessor.PulseFinder {
+    private static class PulseEditorInner extends EditorImplBase implements DataProcessor.PulseEditor {
         private static final long serialVersionUID = -274897612921984101L;
 
-        PulseFinderInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        PulseEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -720,7 +722,7 @@ class RouteElementImpl implements RouteElement {
                 .putShort(samples)
                 .array();
 
-        return postCreate(null, new PulseFinderInner(config, processor, persistantData.mwPrivate));
+        return postCreate(null, new PulseEditorInner(config, processor, persistantData.mwPrivate));
     }
 
     @Override
@@ -752,10 +754,10 @@ class RouteElementImpl implements RouteElement {
         return next;
     }
 
-    private static class SingleValueComparator extends EditorImplBase implements DataProcessor.Comparator {
+    private static class SingleValueComparatorEditor extends EditorImplBase implements DataProcessor.ComparatorEditor {
         private static final long serialVersionUID = -8891137550284171832L;
 
-        SingleValueComparator(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        SingleValueComparatorEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -771,7 +773,7 @@ class RouteElementImpl implements RouteElement {
             owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
-    private static class MultiValueComparator extends EditorImplBase implements DataProcessor.Comparator {
+    private static class MultiValueComparatorEditor extends EditorImplBase implements DataProcessor.ComparatorEditor {
         private static final long serialVersionUID = 893378903150606106L;
 
         static void fillReferences(DataTypeBase source, MetaWearBoardPrivate owner, ByteBuffer buffer, byte length, Number... references) {
@@ -795,7 +797,7 @@ class RouteElementImpl implements RouteElement {
         }
 
 
-        MultiValueComparator(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        MultiValueComparatorEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -840,7 +842,7 @@ class RouteElementImpl implements RouteElement {
                     .put((byte) op.ordinal())
                     .put((byte) 0)
                     .putInt(scaledReference.intValue()).array();
-            return postCreate(null, new SingleValueComparator(config, processor, persistantData.mwPrivate));
+            return postCreate(null, new SingleValueComparatorEditor(config, processor, persistantData.mwPrivate));
         }
 
         boolean anySigned= false;
@@ -860,15 +862,15 @@ class RouteElementImpl implements RouteElement {
         ByteBuffer buffer= ByteBuffer.allocate(2 + references.length * source.attributes.length()).order(ByteOrder.LITTLE_ENDIAN)
                 .put((byte) 0x6)
                 .put((byte) ((signed ? 1 : 0) | ((source.attributes.length() - 1) << 1) | (op.ordinal() << 3) | (type.ordinal() << 6)));
-        MultiValueComparator.fillReferences(processor, persistantData.mwPrivate, buffer, source.attributes.length(), references);
+        MultiValueComparatorEditor.fillReferences(processor, persistantData.mwPrivate, buffer, source.attributes.length(), references);
 
-        return postCreate(null, new MultiValueComparator(buffer.array(), processor, persistantData.mwPrivate));
+        return postCreate(null, new MultiValueComparatorEditor(buffer.array(), processor, persistantData.mwPrivate));
     }
 
-    private static class ThresholdDetectorInner extends EditorImplBase implements DataProcessor.ThresholdDetector {
+    private static class ThresholdEditorInner extends EditorImplBase implements DataProcessor.ThresholdEditor {
         private static final long serialVersionUID = 7819456776691980008L;
 
-        ThresholdDetectorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        ThresholdEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -924,13 +926,13 @@ class RouteElementImpl implements RouteElement {
                 .putShort(firmwareHysteresis.shortValue())
                 .array();
 
-        return postCreate(null, new ThresholdDetectorInner(config, processor, persistantData.mwPrivate));
+        return postCreate(null, new ThresholdEditorInner(config, processor, persistantData.mwPrivate));
     }
 
-    private static class DifferentialDetectorInner extends EditorImplBase implements DataProcessor.DifferentialDetector {
+    private static class DifferentialEditorInner extends EditorImplBase implements DataProcessor.DifferentialEditor {
         private static final long serialVersionUID = -1856057294039232525L;
 
-        DifferentialDetectorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        DifferentialEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
             super(config, source, owner);
         }
 
@@ -980,7 +982,7 @@ class RouteElementImpl implements RouteElement {
                 .putInt(firmwareUnits.intValue())
                 .array();
 
-        return postCreate(null, new DifferentialDetectorInner(config, processor, persistantData.mwPrivate));
+        return postCreate(null, new DifferentialEditorInner(config, processor, persistantData.mwPrivate));
     }
 
     private RouteElementImpl postCreate(DataTypeBase state, EditorImplBase editor) {

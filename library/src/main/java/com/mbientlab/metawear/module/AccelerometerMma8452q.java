@@ -25,10 +25,10 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
-import com.mbientlab.metawear.datatype.CartesianAxis;
+import com.mbientlab.metawear.data.CartesianAxis;
 
 /**
- * Accelerometer for the MetaWear R board
+ * Extension of the {@link Accelerometer} interface that provides finer control of the MMA8452Q accelerometer
  * @author Eric Tsai
  */
 public interface AccelerometerMma8452q extends Accelerometer {
@@ -37,13 +37,21 @@ public interface AccelerometerMma8452q extends Accelerometer {
      * @author Eric Tsai
      */
     enum OutputDataRate {
+        /** 800Hz */
         ODR_800_HZ(800f),
+        /** 400Hz */
         ODR_400_HZ(400f),
+        /** 200Hz */
         ODR_200_HZ(200f),
+        /** 100Hz */
         ODR_100_HZ(100f),
+        /** 50Hz */
         ODR_50_HZ(50f),
+        /** 12.5Hz */
         ODR_12_5_HZ(12.5f),
+        /** 6.25Hz */
         ODR_6_25_HZ(6.25f),
+        /** 1.56Hz */
         ODR_1_56_HZ(1.56f);
 
         public final float frequency;
@@ -64,12 +72,15 @@ public interface AccelerometerMma8452q extends Accelerometer {
     }
 
     /**
-     * Max ranges of the MMA8452Q accelerometer data
+     * Available data ranges
      * @author Eric Tsai
      */
     enum FullScaleRange {
+        /** +/-2g */
         FSR_2G(2f),
+        /** +/-4g */
         FSR_4G(4f),
+        /** +/-8g */
         FSR_8G(8f);
 
         public final float range;
@@ -99,19 +110,37 @@ public interface AccelerometerMma8452q extends Accelerometer {
         /** Movement is in the negative polarity */
         NEGATIVE,
     }
-
+    /**
+     * Accelerometer configuration editor specific to the MMA8452Q accelerometer
+     * @author Eric Tsai
+     */
     interface Mma8452qConfigEditor extends ConfigEditorBase<Mma8452qConfigEditor> {
+        /**
+         * Sets the output data rate
+         * @param odr    New output data rate
+         * @return Calling object
+         */
         Mma8452qConfigEditor odr(OutputDataRate odr);
+        /**
+         * Sets the data range
+         * @param fsr    New data range
+         * @return Calling object
+         */
         Mma8452qConfigEditor range(FullScaleRange fsr);
-        void commit();
     }
-
+    /**
+     * Configure the MMA8452Q accelerometer
+     * @return Editor object specific to the MMA8452Q accelerometer
+     */
     @Override
     Mma8452qConfigEditor configure();
-
+    /**
+     * On-board algorithm that detects changes in the sensor's orientation
+     * @author Eric Tsai
+     */
     interface OrientationDataProducer extends AsyncDataProducer {
         /**
-         * Interface for configuring settings for orientation detection
+         * Configuration editor for the orientation detection algorithm
          * @author Eric Tsai
          */
         interface ConfigEditor {
@@ -122,19 +151,26 @@ public interface AccelerometerMma8452q extends Accelerometer {
              * @return Calling object
              */
             ConfigEditor delay(int delay);
-
             /**
-             * Write the changes to the board
+             * Write the changes to the accelerometer
              */
             void commit();
         }
-
+        /**
+         * Configure the orientation detection algorithm
+         * @return Configuration editor object
+         */
         ConfigEditor configure();
     }
+    /**
+     * Gets an object to control the orientation detection algorithm
+     * @return Object controlling the orientation detection algorithm
+     */
     OrientationDataProducer orientationDetection();
 
     /**
      * Base class for configuring the built-in classification algorithms
+     * @param <T>    Type of classification config editor
      * @author Eric Tsai
      */
     interface ClassificationConfigEditor<T extends ClassificationConfigEditor> {
@@ -144,28 +180,33 @@ public interface AccelerometerMma8452q extends Accelerometer {
          * @return Calling object
          */
         T threshold(float threshold);
-
         /**
          * Sets the duration for which a condition must be met to trigger a data event
          * @param duration    Duration for the condition to be met
          * @return Calling object
          */
         T duration(int duration);
-
         /**
-         * Write the new settings to the board
+         * Write the new settings to the accelerometer
          */
         void commit();
     }
 
+    /**
+     * Wrapper class encapsulating shake data
+     * @author Eric Tsai
+     */
     interface Shake {
         boolean exceedsThreshold(CartesianAxis axis);
         Polarity polarity(CartesianAxis axis);
     }
-
+    /**
+     * On-board algorithm that detects when the sensor is shaken
+     * @author Eric Tsai
+     */
     interface ShakeDataProducer extends AsyncDataProducer {
         /**
-         * Interface for configuring shake detection
+         * Configuration editor for the shake detection algorithm
          * @author Eric Tsai
          */
         interface ConfigEditor extends ClassificationConfigEditor<ConfigEditor> {
@@ -176,9 +217,16 @@ public interface AccelerometerMma8452q extends Accelerometer {
              */
             ConfigEditor axis(CartesianAxis axis);
         }
-
+        /**
+         * Configure the shake detection algorithm
+         * @return Configuration editor object
+         */
         ConfigEditor configure();
     }
+    /**
+     * Gets an object to control the shake detection algorithm
+     * @return Object controlling the shake detection algorithm
+     */
     ShakeDataProducer shakeDetection();
 
     /**
@@ -190,29 +238,34 @@ public interface AccelerometerMma8452q extends Accelerometer {
         DOUBLE
     }
 
+    /**
+     * Wrapper class encapsulating tap data
+     * @author Eric Tsai
+     */
     interface Tap {
         boolean active(CartesianAxis axis);
         Polarity polarity(CartesianAxis axis);
         TapType type();
     }
-
+    /**
+     * On-board algorithm that detects taps
+     * @author Eric Tsai
+     */
     interface TapDataProducer extends AsyncDataProducer {
         /**
-         * Interface for configuring tap detection parameters
+         * Configuration editor for the tap detection algorithm
          * @author Eric Tsai
          */
         interface ConfigEditor extends ClassificationConfigEditor<ConfigEditor> {
             /**
-             * Set the latency value
-             * @param latency Wait time, in ms, between the end of the 1st shock and
-             * when the 2nd shock can be detected
+             * Set the wait time between the end of the 1st shock and when the 2nd shock can be detected
+             * @param latency    New latency time, in milliseconds
              * @return Calling object
              */
             ConfigEditor latency(int latency);
             /**
-             * Set the window value
-             * @param window Time, in ms, in which a second shock must begin after
-             * the latency expires
+             * Set the time in which a second shock must begin after the latency expires
+             * @param window    New window time, in milliseconds
              * @return Calling object
              */
             ConfigEditor window(int window);
@@ -228,11 +281,23 @@ public interface AccelerometerMma8452q extends Accelerometer {
              * @return Calling object
              */
             ConfigEditor axis(CartesianAxis axis);
+            /**
+             * Sets which tap types to detect
+             * @param types    Tap types to detect
+             * @return Calling object
+             */
             ConfigEditor type(TapType ... types);
         }
-
+        /**
+         * Configure the tap detection algorithm
+         * @return Configuration editor object
+         */
         ConfigEditor configure();
     }
+    /**
+     * Gets an object to control the tap detection algorithm
+     * @return Object controlling the tap detection algorithm
+     */
     TapDataProducer tapDetection();
 
     /**
@@ -243,13 +308,21 @@ public interface AccelerometerMma8452q extends Accelerometer {
         FREE_FALL,
         MOTION
     }
+    /**
+     * Wrapper interface encapsulating movement data
+     * @author Eric Tsai
+     */
     interface Movement {
         boolean crossedThreshold(CartesianAxis axis);
         Polarity polarity(CartesianAxis axis);
     }
+    /**
+     * On-board algorithm that detects sensor movement
+     * @author Eric Tsai
+     */
     interface MovementDataProducer extends AsyncDataProducer {
         /**
-         * Interface for configuring motion / free fall detection
+         * Configuration editor for the movement detection algorithm
          * @author Eric Tsai
          */
         interface ConfigEditor extends ClassificationConfigEditor<ConfigEditor> {
@@ -260,9 +333,17 @@ public interface AccelerometerMma8452q extends Accelerometer {
              */
             ConfigEditor axes(CartesianAxis ... axes);
         }
-
+        /**
+         * Configure the movement detection algorithm
+         * @param type    Type of movement the algorithm should detect
+         * @return Configuration editor object
+         */
         ConfigEditor configure(MovementType type);
     }
+    /**
+     * Gets an object to control the movement detection algorithm
+     * @return Object controlling the movement detection algorithm
+     */
     MovementDataProducer movementDetection();
 
     /**
@@ -270,9 +351,13 @@ public interface AccelerometerMma8452q extends Accelerometer {
      * @author Eric Tsai
      */
     enum SleepModeRate {
+        /** 50Hz */
         SMR_50_HZ,
+        /** 12.5Hz */
         SMR_12_5_HZ,
+        /** 6.25Hz */
         SMR_6_25_HZ,
+        /** 1.56Hz */
         SMR_1_56_HZ
     }
 
@@ -287,9 +372,14 @@ public interface AccelerometerMma8452q extends Accelerometer {
         LOW_POWER
     }
 
+    /**
+     * Accelerometer feature where the sensor transitions between different sampling rates depending on
+     * the frequency of interrupts
+     * @author Eric Tsai
+     */
     interface AutoSleep {
         /**
-         * Interface for configuring auto sleep mode
+         * Configuration editor for the auto sleep mode
          * @author Eric Tsai
          */
         interface ConfigEditor {
@@ -300,8 +390,8 @@ public interface AccelerometerMma8452q extends Accelerometer {
              */
             ConfigEditor dataRate(SleepModeRate rate);
             /**
-             * Sets the timeout period
-             * @param timeout    How long to idle in active mode before switching to sleep mode, in milliseconds
+             * Sets how long to idle in active mode before switching to sleep mode
+             * @param timeout    New timeout value, in milliseconds
              * @return Calling object
              */
             ConfigEditor timeout(int timeout);
@@ -311,11 +401,28 @@ public interface AccelerometerMma8452q extends Accelerometer {
              * @return Calling object
              */
             ConfigEditor powerMode(PowerMode powerMode);
+            /**
+             * Write the changes
+             */
             void commit();
         }
+        /**
+         * Configure auto sleep mode
+         * @return Configuration editor object
+         */
         ConfigEditor configure();
+        /**
+         * Enable auto sleep mode.  Change will not be written to the sensor until {@link Mma8452qConfigEditor#commit()} is called
+         */
         void enable();
+        /**
+         * Disable auto sleep mode.  Change will not be written to the sensor until {@link Mma8452qConfigEditor#commit()} is called
+         */
         void disable();
     }
+    /**
+     * Gets an object to control the auto sleep feature
+     * @return Object controlling the auto sleep feature
+     */
     AutoSleep autosleep();
 }

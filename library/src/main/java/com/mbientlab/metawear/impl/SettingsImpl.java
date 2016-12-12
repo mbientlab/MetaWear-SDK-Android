@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Observer;
@@ -36,10 +37,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
 import java.util.Locale;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeoutException;
 
 import bolts.Task;
 import bolts.TaskCompletionSource;
@@ -53,16 +50,20 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     private static final long serialVersionUID = -8845055245623576362L;
     private final static String BATTERY_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.BATTERY_PRODUCER",
             BATTERY_CHARGE_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.BATTERY_CHARGE_PRODUCER",
-            BATTERY_VOLTAGE_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.BATTERY_VOLTAGE_PRODUCER";
+            BATTERY_VOLTAGE_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.BATTERY_VOLTAGE_PRODUCER",
+            POWER_STATUS_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.POWER_STATUS_PRODUCER",
+            CHARGE_STATUS_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.CHARGE_STATUS_PRODUCER";
 
-    private static final byte CONN_PARAMS_REVISION= 1, DISCONNECTED_EVENT_REVISION= 2, BATTERY_REVISION= 3;
+    private static final byte CONN_PARAMS_REVISION= 1, DISCONNECTED_EVENT_REVISION= 2, BATTERY_REVISION= 3, CHARGE_STATUS_REVISION = 5;
     private static final float AD_INTERVAL_STEP= 0.625f, CONN_INTERVAL_STEP= 1.25f, SUPERVISOR_TIMEOUT_STEP= 10f;
     private static final byte DEVICE_NAME = 1, AD_INTERVAL = 2, TX_POWER = 3,
         START_ADVERTISING = 5,
         SCAN_RESPONSE = 7, PARTIAL_SCAN_RESPONSE = 8,
         CONNECTION_PARAMS = 9,
         DISCONNECT_EVENT = 0xa,
-        BATTERY_STATE= 0xc;
+        BATTERY_STATE= 0xc,
+        POWER_STATUS = 0x11,
+        CHARGE_STATUS = 0x12;
 
     private static class AdvertisementConfigBuilder {
         private String deviceName;
@@ -184,10 +185,9 @@ class SettingsImpl extends ModuleImplBase implements Settings {
 
     private DataTypeBase disconnectDummyProducer;
     private transient AdvertisementConfigBuilder adConfigBuilder;
-    private transient ScheduledFuture<?> timeoutFuture, adConfigTimeoutFuture;
-    private transient Queue<TaskCompletionSource<ConnectionParameters>> readConnParamsTaskSources;
-    private transient Queue<TaskCompletionSource<AdvertisementConfig>> readConfigTaskSources;
-    private transient Runnable taskTimeout, readAdConfigTaskTimeout;
+    private transient AsyncTaskManager<ConnectionParameters> connParamsTasks;
+    private transient AsyncTaskManager<AdvertisementConfig> adConfigTasks;
+    private transient AsyncTaskManager<Byte> powerStatusTasks, chargeStatusTasks;
 
     SettingsImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -196,28 +196,18 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         this.mwPrivate.tagProducer(BATTERY_PRODUCER, batteryProducer);
         this.mwPrivate.tagProducer(BATTERY_CHARGE_PRODUCER, batteryProducer.split[0]);
         this.mwPrivate.tagProducer(BATTERY_VOLTAGE_PRODUCER, batteryProducer.split[1]);
+        this.mwPrivate.tagProducer(POWER_STATUS_PRODUCER, new UintData(SETTINGS, POWER_STATUS, new DataAttributes(new byte[] { 1 }, (byte) 1, (byte) 0, false)));
+        this.mwPrivate.tagProducer(CHARGE_STATUS_PRODUCER, new UintData(SETTINGS, CHARGE_STATUS, new DataAttributes(new byte[] { 1 }, (byte) 1, (byte) 0, false)));
 
         disconnectDummyProducer= new UintData(SETTINGS, DISCONNECT_EVENT, new DataAttributes(new byte[] {}, (byte) 0, (byte) 0, false));
     }
 
     @Override
     protected void init() {
-        readConnParamsTaskSources = new ConcurrentLinkedQueue<>();
-        readConfigTaskSources = new ConcurrentLinkedQueue<>();
-        taskTimeout= new Runnable() {
-            @Override
-            public void run() {
-                readConnParamsTaskSources.poll().setError(new TimeoutException("Reading connection parameters timed out"));
-                readConnectionParameters(true);
-            }
-        };
-        readAdConfigTaskTimeout= new Runnable() {
-            @Override
-            public void run() {
-                readConfigTaskSources.poll().setError(new TimeoutException("Reading advertising configuration timed out"));
-                readAdConfig(true);
-            }
-        };
+        connParamsTasks = new AsyncTaskManager<>(mwPrivate, "Reading connection parameters timed out");
+        adConfigTasks = new AsyncTaskManager<>(mwPrivate, "Reading advertising configuration timed out");
+        powerStatusTasks = new AsyncTaskManager<>(mwPrivate, "Reading power status timed out");
+        chargeStatusTasks = new AsyncTaskManager<>(mwPrivate, "Reading charge status timed out");
 
         this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(DEVICE_NAME)), new MetaWearBoardImpl.RegisterResponseHandler() {
             @Override
@@ -244,14 +234,8 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(SCAN_RESPONSE)), new MetaWearBoardImpl.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                adConfigTimeoutFuture.cancel(false);
-
-                byte[] adScanResponse = new byte[response.length - 2];
-                System.arraycopy(response, 2, adScanResponse, 0, adScanResponse.length);
-                adConfigBuilder.setScanResponse(adScanResponse);
-
-                readConfigTaskSources.poll().setResult(adConfigBuilder.build());
-                readAdConfig(true);
+                adConfigTasks.cancelTimeout();
+                adConfigTasks.setResult(adConfigBuilder.build());
             }
         });
 
@@ -271,10 +255,10 @@ class SettingsImpl extends ModuleImplBase implements Settings {
             this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(CONNECTION_PARAMS)), new MetaWearBoardImpl.RegisterResponseHandler() {
                 @Override
                 public void onResponseReceived(byte[] response) {
-                    timeoutFuture.cancel(false);
-                    final ByteBuffer buffer = ByteBuffer.wrap(response).order(ByteOrder.LITTLE_ENDIAN);
+                    connParamsTasks.cancelTimeout();
 
-                    readConnParamsTaskSources.poll().setResult(new Settings.ConnectionParameters() {
+                    final ByteBuffer buffer = ByteBuffer.wrap(response).order(ByteOrder.LITTLE_ENDIAN);
+                    connParamsTasks.setResult(new Settings.ConnectionParameters() {
                         @Override
                         public float minConnectionInterval() {
                             return buffer.getShort(2) * SettingsImpl.CONN_INTERVAL_STEP;
@@ -301,8 +285,6 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                                     minConnectionInterval(), maxConnectionInterval(), slaveLatency(), supervisorTimeout());
                         }
                     });
-
-                    readConnectionParameters(true);
                 }
             });
         } else {
@@ -313,6 +295,23 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                     adConfigBuilder.setTimeout(response[4]);
 
                     SettingsImpl.this.mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(TX_POWER)});
+                }
+            });
+        }
+
+        if (mwPrivate.lookupModuleInfo(SETTINGS).revision >= CHARGE_STATUS_REVISION) {
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(POWER_STATUS)), new MetaWearBoardImpl.RegisterResponseHandler() {
+                @Override
+                public void onResponseReceived(byte[] response) {
+                    powerStatusTasks.cancelTimeout();
+                    powerStatusTasks.setResult(response[2]);
+                }
+            });
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(CHARGE_STATUS)), new MetaWearBoardImpl.RegisterResponseHandler() {
+                @Override
+                public void onResponseReceived(byte[] response) {
+                    chargeStatusTasks.cancelTimeout();
+                    chargeStatusTasks.setResult(response[2]);
                 }
             });
         }
@@ -363,8 +362,12 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         if (mwPrivate.lookupModuleInfo(SETTINGS).revision < CONN_PARAMS_REVISION) {
             taskSource.setError(new UnsupportedOperationException("Connection parameters not supported on this firmware"));
         } else {
-            readConnParamsTaskSources.add(taskSource);
-            readConnectionParameters(false);
+            return connParamsTasks.queueTask(250L, new Runnable() {
+                @Override
+                public void run() {
+                    mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CONNECTION_PARAMS)});
+                }
+            });
         }
 
         return taskSource.getTask();
@@ -443,12 +446,12 @@ class SettingsImpl extends ModuleImplBase implements Settings {
 
     @Override
     public Task<AdvertisementConfig> readAdConfig() {
-        TaskCompletionSource<AdvertisementConfig> taskSource= new TaskCompletionSource<>();
-
-        readConfigTaskSources.add(taskSource);
-        readAdConfig(false);
-
-        return taskSource.getTask();
+        return adConfigTasks.queueTask(1800L, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(DEVICE_NAME)});
+            }
+        });
     }
 
     @Override
@@ -490,26 +493,90 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     }
 
     @Override
+    public AsyncDataProducer powerStatus() {
+        ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
+        if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x1) == 0x1)) {
+            return new AsyncDataProducer() {
+                @Override
+                public void start() { }
+
+                @Override
+                public void stop() { }
+
+                @Override
+                public Task<Route> addRoute(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, POWER_STATUS_PRODUCER);
+                }
+
+                @Override
+                public String name() {
+                    return POWER_STATUS_PRODUCER;
+                }
+            };
+        }
+        return null;
+    }
+
+    @Override
+    public AsyncDataProducer chargeStatus() {
+        ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
+        if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x2) == 0x2)) {
+            return new AsyncDataProducer() {
+                @Override
+                public void start() { }
+
+                @Override
+                public void stop() { }
+
+                @Override
+                public Task<Route> addRoute(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, CHARGE_STATUS_PRODUCER);
+                }
+
+                @Override
+                public String name() {
+                    return CHARGE_STATUS_PRODUCER;
+                }
+            };
+        }
+        return null;
+    }
+
+    @Override
+    public Task<Byte> readPowerStatusAsync() {
+        ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
+        if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x1) == 0x1)) {
+            return powerStatusTasks.queueTask(250L, new Runnable() {
+                @Override
+                public void run() {
+                    mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(POWER_STATUS)});
+                }
+            });
+
+        }
+        return Task.forError(new UnsupportedOperationException("Power status not supported on this board / firmware"));
+    }
+
+    @Override
+    public Task<Byte> readChargeStatusAsync() {
+        ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
+        if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x2) == 0x2)) {
+            return chargeStatusTasks.queueTask(250L, new Runnable() {
+                @Override
+                public void run() {
+                    mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CHARGE_STATUS)});
+                }
+            });
+        }
+
+        return Task.forError(new UnsupportedOperationException("Charge status not supported on this board / firmware"));
+    }
+
+    @Override
     public Task<Observer> onDisconnect(CodeBlock codeBlock) {
         if (mwPrivate.lookupModuleInfo(SETTINGS).revision < DISCONNECTED_EVENT_REVISION) {
-            TaskCompletionSource<Observer> error= new TaskCompletionSource<>();
-            error.setError(new UnsupportedOperationException("Responding to disconnect events on-board is not supported on this firmware"));
-            return error.getTask();
+            return Task.forError(new UnsupportedOperationException("Responding to disconnect events on-board is not supported on this firmware"));
         }
         return mwPrivate.queueEvent(disconnectDummyProducer, codeBlock);
-    }
-
-    private void readConnectionParameters(boolean ready) {
-        if (!readConnParamsTaskSources.isEmpty() && (ready || readConnParamsTaskSources.size() == 1)) {
-            mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CONNECTION_PARAMS)});
-            timeoutFuture= mwPrivate.scheduleTask(taskTimeout, 250L);
-        }
-    }
-
-    private void readAdConfig(boolean ready) {
-        if (!readConfigTaskSources.isEmpty() && (ready || readConfigTaskSources.size() == 1)) {
-            mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(DEVICE_NAME)});
-            adConfigTimeoutFuture= mwPrivate.scheduleTask(readAdConfigTaskTimeout, 1800L);
-        }
     }
 }

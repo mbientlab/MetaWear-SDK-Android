@@ -28,10 +28,13 @@ import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.datatype.CartesianAxis;
-import com.mbientlab.metawear.datatype.SensorOrientation;
+import com.mbientlab.metawear.data.Acceleration;
+import com.mbientlab.metawear.data.CartesianAxis;
+import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Calendar;
 
 import bolts.Task;
@@ -86,7 +89,7 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         orientationSteps= motionCountSteps;
     }
 
-    private static class Mma8452QCartesianFloatData extends CartesianFloatData {
+    private static class Mma8452QCartesianFloatData extends FloatVectorData {
         private static final long serialVersionUID = 8580438661319009866L;
 
         Mma8452QCartesianFloatData() {
@@ -113,6 +116,29 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         @Override
         public DataTypeBase[] createSplits() {
             return new DataTypeBase[] {new Mma8452QSFloatData((byte) 0), new Mma8452QSFloatData((byte) 2), new Mma8452QSFloatData((byte) 4)};
+        }
+
+        @Override
+        public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+            short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
+            float scale= scale(owner);
+            final Acceleration value= new Acceleration(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
+
+            return new DataPrivate(timestamp, data) {
+                @Override
+                public Class<?>[] types() {
+                    return new Class<?>[] {Acceleration.class};
+                }
+
+                @Override
+                public <T> T value(Class<T> clazz) {
+                    if (clazz == Acceleration.class) {
+                        return clazz.cast(value);
+                    }
+                    return super.value(clazz);
+                }
+            };
         }
     }
     private static class Mma8452QSFloatData extends SFloatData {

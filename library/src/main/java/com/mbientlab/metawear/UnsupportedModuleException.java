@@ -29,6 +29,8 @@ package com.mbientlab.metawear;
  * @author Eric Tsai
  */
 public class UnsupportedModuleException extends Exception {
+    private static final long serialVersionUID = -2869845467241050695L;
+
     /**
      * Creates an exception with the given message
      * @param msg    Data to accompany the exception

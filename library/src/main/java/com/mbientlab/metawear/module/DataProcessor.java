@@ -26,58 +26,170 @@ package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
+import com.mbientlab.metawear.builder.RouteElement;
 import com.mbientlab.metawear.builder.filter.Comparison;
+import com.mbientlab.metawear.builder.filter.ComparisonOutput;
+import com.mbientlab.metawear.builder.filter.DifferentialOutput;
 import com.mbientlab.metawear.builder.filter.Passthrough;
+import com.mbientlab.metawear.builder.filter.ThresholdOutput;
+import com.mbientlab.metawear.builder.function.Function2;
+import com.mbientlab.metawear.builder.predicate.PulseOutput;
 
 /**
- * Created by eric on 10/12/16.
+ * Provides access to data processors that are editable and readable internal states
+ * @author Eric Tsai
  */
-
 public interface DataProcessor extends Module {
+    /**
+     * Edits a data processor created in a route
+     * @param name              Processor name to look up, set by {@link RouteElement#name(String)}
+     * @param processorClass    Processor class the
+     * @param <T>               Runtime type the return value is casted as
+     * @return Editor object to modify the processor
+     */
     <T extends Editor> T edit(String name, Class<T> processorClass);
+    /**
+     * Gets an object that represents the state of a processor
+     * @param name    Processor name to look up, set by {@link RouteElement#name(String)}
+     * @return Object representing the processor state, null if the processor does not have a readable state
+     */
     ForcedDataProducer state(String name);
 
+    /** Common base class for all data processor editors */
     interface Editor { }
 
-    interface Comparator extends Editor {
+    /**
+     * Edits a fixed value comparator filter
+     * @author Eric Tsai
+     * @see RouteElement#filter(Comparison, Number...)
+     * @see RouteElement#filter(Comparison, ComparisonOutput, Number...)
+     */
+    interface ComparatorEditor extends Editor {
+        /**
+         * Modifies the references values and comparison operation
+         * @param op            New comparison operation
+         * @param references    New reference values, can be multiple values if the board is running
+         *                      firmware v1.2.3 or later
+         */
         void modify(Comparison op, Number... references);
     }
-
-    interface ThresholdDetector extends Editor {
+    /**
+     * Edits a threshold filter
+     * @author Eric Tsai
+     * @see RouteElement#filter(ThresholdOutput, Number)
+     * @see RouteElement#filter(ThresholdOutput, Number, Number)
+     */
+    interface ThresholdEditor extends Editor {
+        /**
+         * Modifies the threshold and hysteresis values
+         * @param threshold     New threshold value
+         * @param hysteresis    New hysteresis value
+         */
         void modify(Number threshold, Number hysteresis);
     }
-
-    interface DifferentialDetector extends Editor {
+    /**
+     * Edits a differential filter
+     * @author Eric Tsai
+     * @see RouteElement#filter(DifferentialOutput, Number)
+     */
+    interface DifferentialEditor extends Editor {
+        /**
+         * Modifies the minimum distance from the reference value
+         * @param difference    New difference value
+         */
         void modify(Number difference);
     }
-
-    interface Averager extends Editor {
+    /**
+     * Edits an average processor
+     * @author Eric Tsai
+     * @see RouteElement#average(byte)
+     */
+    interface AverageEditor extends Editor {
+        /**
+         * Change how many samples are used in the average calculation
+         * @param samples    New sample size
+         */
         void modify(byte samples);
+        /**
+         * Reset the running average
+         */
         void reset();
     }
-
-    interface Mapper extends Editor {
+    /**
+     * Edits a data processor created with the fixed value map construct
+     * @author Eric Tsai
+     * @see RouteElement#map(Function2, Number)
+     */
+    interface MapEditor extends Editor {
+        /**
+         * Modifies the right hand value used in the computation
+         * @param rhs    New right hand value
+         */
         void modifyRhs(Number rhs);
     }
-
-    interface Accumulator extends Editor {
+    /**
+     * Edits an accumulator
+     * @author Eric Tsai
+     * @see RouteElement#accumulate()
+     */
+    interface AccumulatorEditor extends Editor {
+        /**
+         * Reset the running sum
+         */
         void reset();
     }
-
-    interface Counter extends Editor {
+    /**
+     * Edits a counter
+     * @author Eric Tsai
+     * @see RouteElement#accumulate()
+     */
+    interface CounterEditor extends Editor {
+        /**
+         * Reset the internal counter
+         */
         void reset();
     }
-
-    interface TimeLimiter extends Editor {
+    /**
+     * Edits a time limiter
+     * @author Eric Tsai
+     * @see RouteElement#limit(int)
+     */
+    interface TimeEditor extends Editor {
+        /**
+         * Change how often to allow data through
+         * @param period    New sampling delay
+         */
         void modify(int period);
     }
-
-    interface PassthroughLimiter extends Editor {
+    /**
+     * Edits a passthrough limiter
+     * @author Eric Tsai
+     * @see RouteElement#limit(Passthrough, short)
+     */
+    interface PassthroughEditor extends Editor {
+        /**
+         * Sets the internal value
+         * @param value    New internal value
+         */
         void set(short value);
+        /**
+         * Changes the passthrough type and initial value
+         * @param type     New passthrough type to use
+         * @param value    Initial value of the modified filter
+         */
         void modify(Passthrough type, short value);
     }
-
-    interface PulseFinder extends Editor {
+    /**
+     * Edits a pulse finder
+     * @author Eric Tsai
+     * @see RouteElement#find(PulseOutput, Number, short)
+     */
+    interface PulseEditor extends Editor {
+        /**
+         * Change the criteria that classifies a pulse
+         * @param threshold    New boundary the data must exceed
+         * @param samples      New minimum data sample size
+         */
         void modify(Number threshold, short samples);
     }
 }

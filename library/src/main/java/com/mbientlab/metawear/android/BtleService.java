@@ -608,18 +608,26 @@ public class BtleService extends Service {
             }
             return mwBoards.get(btDevice);
         }
-
+        /**
+         * Removes the MetaWearBoard object associated with the BluetoothDevice object
+         * @param btDevice    BluetoothDevice object corresponding to the target MetaWear board
+         */
         public void removeMetaWearBoard(final BluetoothDevice btDevice) {
             mwBoards.remove(btDevice);
         }
-
+        /**
+         * Removes the saved serialized state of the MetaWearBoard object associated with the BluetoothDevice object
+         * @param btDevice    BluetoothDevice object corresponding to the target MetaWear board
+         */
         public void clearSerializedState(final BluetoothDevice btDevice) {
             SharedPreferences.Editor editor= BtleService.this.getSharedPreferences(btDevice.getAddress(), MODE_PRIVATE).edit();
             editor.remove(MODULE_INFO);
             editor.remove(BOARD_STATE);
             editor.apply();
         }
-
+        /**
+         * Removes cached firmware files from the Android device
+         */
         public void clearFirmwareCache() {
             File firmwareDir = new File(getFilesDir(), FIRMWARE_DIR_NAME);
             for(File it: firmwareDir.listFiles()) {

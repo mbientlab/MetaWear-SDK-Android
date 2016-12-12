@@ -25,18 +25,30 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
-import com.mbientlab.metawear.datatype.CartesianAxis;
+import com.mbientlab.metawear.data.CartesianAxis;
 
 import java.util.HashMap;
 
 /**
- * Created by etsai on 9/1/16.
+ * Generic class providing high level access for a Bosch accelerometer.  If you know specifically which
+ * accelerometer is on your board, use the appropriate Accelerometer subclass instead.
+ * @author Eric Tsai
+ * @see AccelerometerBma255
+ * @see AccelerometerBmi160
  */
 public interface AccelerometerBosch extends Accelerometer {
+    /**
+     * Available data ranges
+     * @author Eric Tsai
+     */
     enum AccRange {
+        /** +/-2g */
         AR_2G((byte) 0x3, 16384f, 2f),
+        /** +/-4g */
         AR_4G((byte) 0x5, 8192f, 4f),
+        /** +/-8g */
         AR_8G((byte) 0x8, 4096, 8f),
+        /** +/-16g */
         AR_16G((byte) 0xc, 2048f, 16f);
 
         public final byte bitmask;
@@ -72,7 +84,7 @@ public interface AccelerometerBosch extends Accelerometer {
     }
 
     /**
-     * Calculation modes that control the conditions that determine the board's orientation
+     * Calculation modes controlling the conditions that determine the sensor's orientation
      * @author Eric Tsai
      */
     enum OrientationMode {
@@ -81,9 +93,13 @@ public interface AccelerometerBosch extends Accelerometer {
         HIGH_ASYMMETRICAL,
         LOW_ASYMMETRICAL
     }
+    /**
+     * On-board algorithm that detects changes in the sensor's orientation
+     * @author Eric Tsai
+     */
     interface OrientationDataProducer extends AsyncDataProducer {
         /**
-         * Interface for configuring orientation detection
+         * Configuration editor for the orientation detection algorithm
          * @author Eric Tsai
          */
         interface ConfigEditor {
@@ -99,25 +115,37 @@ public interface AccelerometerBosch extends Accelerometer {
              * @return Calling object
              */
             ConfigEditor mode(OrientationMode mode);
-
             /**
-             * writes the new settings to the board
+             * writes the new settings to the sensor
              */
             void commit();
         }
-
+        /**
+         * Configure the orientation detection algorithm
+         * @return Configuration editor object
+         */
         ConfigEditor configure();
     }
+    /**
+     * Gets an object to control the orientation detection algorithm
+     * @return Object controlling the orientation detection algorithm
+     */
     OrientationDataProducer orientationDetector();
 
+    /**
+     * On-board algorithm that detects when the senor is laying flat or not
+     * @author Eric Tsai
+     */
     interface FlatDataProducer extends AsyncDataProducer {
         /**
-         * Interface for configuring flat detection
+         * Accelerometer agnostic interface for configuring flat detection algorithm
+         * @param <T>    Type of flat detection config editor
          * @author Eric Tsai
          */
         interface ConfigEditorBase<T extends ConfigEditorBase> {
             /**
-             * Sets the delay for which the flat value must remain stable for a flat interrupt
+             * Sets the delay for which the flat value must remain stable for a flat interrupt.  The closest,
+             * valid delay will be chosen depending on underlying sensor
              * @param time    Delay time for a stable value
              * @return Calling object
              */
@@ -133,9 +161,16 @@ public interface AccelerometerBosch extends Accelerometer {
              */
             void commit();
         }
-
+        /**
+         * Configure the flat detection algorithm
+         * @return Generic editor object
+         */
         ConfigEditorBase<? extends ConfigEditorBase> configure();
     }
+    /**
+     * Gets an object to control the flat detection algorithm
+     * @return Object controlling the flat detection algorithm
+     */
     FlatDataProducer flatDetector();
 
     /**
@@ -157,7 +192,7 @@ public interface AccelerometerBosch extends Accelerometer {
         NEGATIVE
     }
     /**
-     * Wrapper class encapsulating the data from a low/high g intereupt
+     * Wrapper class encapsulating the data from a low/high g interrupt
      */
     interface LowHighResponse {
         /**
@@ -183,15 +218,35 @@ public interface AccelerometerBosch extends Accelerometer {
          */
         Sign highSign();
     }
+    /**
+     * On-board algorithm that detects when low (i.e. free fall) or high g acceleration is measured
+     * @author Eric Tsai
+     */
     interface LowHighDataProducer extends AsyncDataProducer {
         /**
-         * Interface for configuring low/high G detection
+         * Interface for configuring low/high g detection
          * @author Eric Tsai
          */
         interface ConfigEditor {
+            /**
+             * Enable low g detection on all 3 axes
+             * @return Calling object
+             */
             ConfigEditor enableLowG();
+            /**
+             * Enable high g detection on the x-axis
+             * @return Calling object
+             */
             ConfigEditor enableHighGx();
+            /**
+             * Enable high g detection on the y-axis
+             * @return Calling object
+             */
             ConfigEditor enableHighGy();
+            /**
+             * Enable high g detection on the z-axis
+             * @return Calling object
+             */
             ConfigEditor enableHighGz();
 
             /**
@@ -241,9 +296,16 @@ public interface AccelerometerBosch extends Accelerometer {
              */
             void commit();
         }
-
+        /**
+         * Configure the low/high g detection algorithm
+         * @return Configuration editor object
+         */
         ConfigEditor configure();
     }
+    /**
+     * Gets an object to control the low/high g detection algorithm
+     * @return Object controlling the low/high g detection algorithm
+     */
     LowHighDataProducer lowHighDetector();
 
     /**
@@ -264,9 +326,13 @@ public interface AccelerometerBosch extends Accelerometer {
          */
         boolean anyMotionDetected(CartesianAxis axis);
     }
+    /**
+     * On-board algorithm that detects different types of motion
+     * @author Eric Tsai
+     */
     interface MotionDataProducer extends AsyncDataProducer {
         /**
-         * Configures no motion detection
+         * Configuration editor for no-motion detection
          * @author Eric Tsai
          */
         interface NoMotionConfigEditor {
@@ -288,10 +354,14 @@ public interface AccelerometerBosch extends Accelerometer {
              */
             void commit();
         }
+        /**
+         * Configure the no-motion detection algorithm
+         * @return Calling object
+         */
         NoMotionConfigEditor configureNoMotion();
 
         /**
-         * Configures any motion detection
+         * Configuration editor for no-motion detection
          * @author Eric Tsai
          */
         interface AnyMotionConfigEditor {
@@ -312,10 +382,14 @@ public interface AccelerometerBosch extends Accelerometer {
              */
             void commit();
         }
+        /**
+         * Configure the any-motion detection algorithm
+         * @return Calling object
+         */
         AnyMotionConfigEditor configureAnyMotion();
 
         /**
-         * Configures slow motion detection
+         * Configuration editor for slow-motion detection
          * @author Eric Tsai
          */
         interface SlowMotionConfigEditor {
@@ -336,8 +410,16 @@ public interface AccelerometerBosch extends Accelerometer {
              */
             void commit();
         }
+        /**
+         * Configure the slow-motion detection algorithm
+         * @return Calling object
+         */
         SlowMotionConfigEditor configureSlowMotion();
     }
+    /**
+     * Gets an object to control the motion detection algorithm
+     * @return Object controlling the motion detection algorithm
+     */
     MotionDataProducer motionDetector();
 
     /**
@@ -345,7 +427,9 @@ public interface AccelerometerBosch extends Accelerometer {
      * @author Eric Tsai
      */
     enum TapQuietTime {
+        /** 30ms */
         TQT_30_MS,
+        /** 20ms */
         TQT_20_MS
     }
 
@@ -354,7 +438,9 @@ public interface AccelerometerBosch extends Accelerometer {
      * @author Eric Tsai
      */
     enum TapShockTime {
+        /** 50ms */
         TST_50_MS,
+        /** 75ms */
         TST_75_MS
     }
 
@@ -363,13 +449,21 @@ public interface AccelerometerBosch extends Accelerometer {
      * @author Eric Tsai
      */
     enum DoubleTapWindow {
+        /** 50ms */
         DTW_50_MS,
+        /** 100ms */
         DTW_100_MS,
+        /** 150ms */
         DTW_150_MS,
+        /** 200ms */
         DTW_200_MS,
+        /** 250ms */
         DTW_250_MW,
+        /** 375ms */
         DTW_375_MS,
+        /** 500ms */
         DTW_500_MS,
+        /** 700ms */
         DTW_700_MS
     }
 
@@ -398,44 +492,60 @@ public interface AccelerometerBosch extends Accelerometer {
          */
         Sign sign();
     }
-
+    /**
+     * On-board algorithm that detects taps
+     * @author Eric Tsai
+     */
     interface TapDataProducer extends AsyncDataProducer {
         /**
-         * Interface for configuring tap detection
+         * Configuration editor for the tap detection algorithm
          * @author Eric Tsai
          */
         interface ConfigEditor {
             /**
-             * Sets the quiet time for double tap
-             * @param time    Time that must pass before a second tap can occur
+             * Sets the time that must pass before a second tap can occur
+             * @param time    New quiet time
              * @return Calling object
              */
             ConfigEditor quietTime(TapQuietTime time);
             /**
-             * Sets the shock time
-             * @param time    Time to lock the data in the status register
+             * Sets the time to lock the data in the status register
+             * @param time    New shock time
              * @return Calling object
              */
             ConfigEditor shockTime(TapShockTime time);
             /**
-             * Sets the double tap window
-             * @param window    Length of time for a second shock to occur for a double tap
+             * Sets the length of time for a second shock to occur for a double tap
+             * @param window    New double tap window
              * @return Calling object
              */
             ConfigEditor doubleTapWindow(DoubleTapWindow window);
             /**
-             * Sets the tap threshold
-             * @param threshold    Threshold the acceleration difference must exceed for a tap, in Gs
+             * Sets the threshold that the acceleration difference must exceed for a tap, in g's
+             * @param threshold    New tap threshold
              * @return Calling object
              */
             ConfigEditor threshold(float threshold);
+            /**
+             * Sets which tap types to detect
+             * @param types    Tap types to detect
+             * @return Calling object
+             */
             ConfigEditor type(TapType ... types);
             /**
-             * Writes the changes to the board
+             * Writes the configuration to the sensor
              */
             void commit();
         }
+        /**
+         * Configure the tap detection algorithm
+         * @return Configuration editor object
+         */
         ConfigEditor configure();
     }
+    /**
+     * Gets an object to control the tap detection algorithm
+     * @return Object controlling the tap detection algorithm
+     */
     TapDataProducer tapDetector();
 }

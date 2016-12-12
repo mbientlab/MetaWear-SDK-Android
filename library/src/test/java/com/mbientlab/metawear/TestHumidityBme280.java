@@ -57,13 +57,13 @@ public class TestHumidityBme280 extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x16, (byte) 0x81};
 
-        humidity.addRoute(new RouteBuilder() {
+        humidity.value().addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.stream(null);
             }
         });
-        humidity.read();
+        humidity.value().read();
         assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
@@ -71,7 +71,7 @@ public class TestHumidityBme280 extends UnitTestBase {
     public void readSilent() {
         byte[] expected= new byte[] {0x16, (byte) 0xc1};
 
-        humidity.read();
+        humidity.value().read();
         assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
@@ -80,7 +80,7 @@ public class TestHumidityBme280 extends UnitTestBase {
         float expected= 63.1943359375f;
         final Capture<Float> actual= new Capture<>();
 
-        humidity.addRoute(new RouteBuilder() {
+        humidity.value().addRoute(new RouteBuilder() {
             @Override
             public void configure(RouteElement source) {
                 source.stream(new Subscriber() {

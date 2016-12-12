@@ -24,31 +24,11 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.filter.Comparison;
-import com.mbientlab.metawear.builder.filter.ComparisonOutput;
-import com.mbientlab.metawear.builder.function.Function2;
-
-import bolts.Task;
-
 /**
  * Data creator that only produces data when a {@link #read()} command is issued
- * @author Erici Tsai
+ * @author Eric Tsai
  */
-public interface ForcedDataProducer {
-    /**
-     * Adds a route to direct where the data will go
-     * @param builder   Builder object to construct the route
-     * @return Created route
-     */
-    Task<Route> addRoute(RouteBuilder builder);
-    /**
-     * Unique name identifying the data, used for data processor loops
-     * @return DataToken name
-     * @see com.mbientlab.metawear.builder.RouteElement#filter(Comparison, ComparisonOutput, String...)
-     * @see com.mbientlab.metawear.builder.RouteElement#map(Function2, String...)
-     */
-    String name();
+public interface ForcedDataProducer extends DataProducer {
     /**
      * Sends a read command to the producer
      */

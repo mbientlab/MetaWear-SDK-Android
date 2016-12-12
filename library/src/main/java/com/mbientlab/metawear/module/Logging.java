@@ -31,14 +31,14 @@ import java.util.Calendar;
 import bolts.Task;
 
 /**
- * Created by etsai on 9/4/16.
+ * Controls the on-board logger
+ * @author Eric Tsai
  */
 public interface Logging extends Module {
-    enum DownloadError {
-        UNKNOWN_LOG_ENTRY,
-        UNHANDLED_LOG_DATA
-    }
 
+    /**
+     * Handler for processing download updates
+     */
     interface LogDownloadUpdateHandler {
         /**
          * Called when a progress update is received from the board
@@ -48,6 +48,17 @@ public interface Logging extends Module {
         void receivedUpdate(long nEntriesLeft, long totalEntries);
     }
 
+    /**
+     * Types of errors encountered during a log download
+     * @author Eric Tsai
+     */
+    enum DownloadError {
+        UNKNOWN_LOG_ENTRY,
+        UNHANDLED_LOG_DATA
+    }
+    /**
+     * Handler for processing download errors
+     */
     interface LogDownloadErrorHandler {
         /**
          * Called when a log entry has been received but cannot be matched to a data logger
@@ -85,6 +96,7 @@ public interface Logging extends Module {
     Task<Void> download(int nUpdates, LogDownloadUpdateHandler updateHandler);
     /**
      * Download saved data from the flash memory with no progress updates
+     * @param errorHandler    Handler to process encountered errors during the download
      * @return Object holding the result of the task
      */
     Task<Void> download(LogDownloadErrorHandler errorHandler);

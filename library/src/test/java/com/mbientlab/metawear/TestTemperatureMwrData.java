@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Temperature;
-import com.mbientlab.metawear.module.Temperature.Source;
+import com.mbientlab.metawear.module.Temperature.Sensor;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
 
@@ -62,14 +62,14 @@ public class TestTemperatureMwrData extends UnitTestBase {
     @Parameter
     public int sourceIdx;
 
-    private Source currentSrc;
+    private Sensor currentSrc;
 
     @Before
     public void setup() throws Exception {
         btlePlaform.boardInfo= MetaWearBoardInfo.R;
         connectToBoard();
 
-        currentSrc= mwBoard.getModule(Temperature.class).sources()[sourceIdx];
+        currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx];
     }
 
     @Test

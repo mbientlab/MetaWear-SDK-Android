@@ -24,7 +24,7 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.datatype.CartesianFloat;
+import com.mbientlab.metawear.data.Acceleration;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -44,8 +44,8 @@ import java.util.List;
 abstract class TestLogDataBase extends UnitTestBase {
     protected static final File rootPath = new File("src/test/res");
 
-    static CartesianFloat[] readCartesianFloatData(String filename) throws IOException, JSONException {
-        List<CartesianFloat> expectedList = new ArrayList<>();
+    static Acceleration[] readAccelerationValues(String filename) throws IOException, JSONException {
+        List<Acceleration> expectedList = new ArrayList<>();
         BufferedReader br = new BufferedReader(new FileReader(new File(rootPath, filename)));
         String line;
 
@@ -56,10 +56,10 @@ abstract class TestLogDataBase extends UnitTestBase {
                 rawBytes[i] = array.getInt(i);
             }
 
-            expectedList.add(new CartesianFloat(Float.intBitsToFloat(rawBytes[0]), Float.intBitsToFloat(rawBytes[1]), Float.intBitsToFloat(rawBytes[2])));
+            expectedList.add(new Acceleration(Float.intBitsToFloat(rawBytes[0]), Float.intBitsToFloat(rawBytes[1]), Float.intBitsToFloat(rawBytes[2])));
         }
 
-        CartesianFloat[] expected = new CartesianFloat[expectedList.size()];
+        Acceleration[] expected = new Acceleration[expectedList.size()];
         expectedList.toArray(expected);
 
         return expected;

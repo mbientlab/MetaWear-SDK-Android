@@ -25,9 +25,15 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.data.MagneticField;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Calendar;
 
 import bolts.Task;
 
@@ -47,7 +53,7 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
         PACKED_MAG_DATA = 0x09;
     private static final long serialVersionUID = -8266211541629259291L;
 
-    private static class Bmm150CartesianFloatData extends CartesianFloatData {
+    private static class Bmm150CartesianFloatData extends FloatVectorData {
         private static final long serialVersionUID = -1411571904651005619L;
 
         Bmm150CartesianFloatData() {
@@ -75,6 +81,29 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
         @Override
         public DataTypeBase[] createSplits() {
             return new DataTypeBase[] {new Bmm150SFloatData((byte) 0), new Bmm150SFloatData((byte) 2), new Bmm150SFloatData((byte) 4)};
+        }
+
+        @Override
+        public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+            ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+            short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
+            float scale= scale(owner);
+            final MagneticField value= new MagneticField(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
+
+            return new DataPrivate(timestamp, data) {
+                @Override
+                public Class<?>[] types() {
+                    return new Class<?>[] {MagneticField.class};
+                }
+
+                @Override
+                public <T> T value(Class<T> clazz) {
+                    if (clazz == MagneticField.class) {
+                        return clazz.cast(value);
+                    }
+                    return super.value(clazz);
+                }
+            };
         }
     }
     private static class Bmm150SFloatData extends SFloatData {

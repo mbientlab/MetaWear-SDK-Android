@@ -52,9 +52,9 @@ class RouteCreator {
                             .limit(Passthrough.COUNT, (short) 0).name("adc").react(new Action() {
                                 @Override
                                 public void execute(DataToken token) {
-                                    dataprocessor.edit("lte_count", DataProcessor.Counter.class)
+                                    dataprocessor.edit("lte_count", DataProcessor.CounterEditor.class)
                                             .reset();
-                                    dataprocessor.edit("gt_count", DataProcessor.Counter.class)
+                                    dataprocessor.edit("gt_count", DataProcessor.CounterEditor.class)
                                             .reset();
                                 }
                             })
@@ -64,7 +64,7 @@ class RouteCreator {
                                 .filter(Comparison.GT, 0).react(new Action() {
                                     @Override
                                     public void execute(DataToken token) {
-                                        dataprocessor.edit("lte_count", DataProcessor.Counter.class)
+                                        dataprocessor.edit("lte_count", DataProcessor.CounterEditor.class)
                                                 .reset();
                                     }
                                 })
@@ -72,7 +72,7 @@ class RouteCreator {
                                 .filter(Comparison.EQ, 16).react(new Action() {
                                     @Override
                                     public void execute(DataToken token) {
-                                        dataprocessor.edit("adc", DataProcessor.PassthroughLimiter.class)
+                                        dataprocessor.edit("adc", DataProcessor.PassthroughEditor.class)
                                                 .set((short) 1);
                                     }
                                 })
@@ -80,7 +80,7 @@ class RouteCreator {
                                 .filter(Comparison.LTE, 0).name("lte").react(new Action() {
                                     @Override
                                     public void execute(DataToken token) {
-                                        dataprocessor.edit("gt_count", DataProcessor.Counter.class)
+                                        dataprocessor.edit("gt_count", DataProcessor.CounterEditor.class)
                                                 .reset();
                                     }
                                 })
@@ -88,7 +88,7 @@ class RouteCreator {
                                 .filter(Comparison.EQ, 16).react(new Action() {
                                     @Override
                                     public void execute(DataToken data) {
-                                        dataprocessor.edit("adc", DataProcessor.PassthroughLimiter.class)
+                                        dataprocessor.edit("adc", DataProcessor.PassthroughEditor.class)
                                                 .set((short) 1);
                                     }
                                 })

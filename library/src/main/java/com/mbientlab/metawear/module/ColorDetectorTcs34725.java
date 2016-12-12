@@ -30,9 +30,10 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 import java.util.Locale;
 
 /**
- * Created by etsai on 9/19/16.
+ * Controls the TCS34725 color detector adc data
+ * @author Eric Tsai
  */
-public interface ColorDetectorTcs34725 extends Module, ForcedDataProducer {
+public interface ColorDetectorTcs34725 extends Module {
     /**
      * Analog gain scales
      * @author Eric Tsai
@@ -45,7 +46,42 @@ public interface ColorDetectorTcs34725 extends Module, ForcedDataProducer {
     }
 
     /**
-     * Wrapper class encapsulating ADC data from the sensor
+     * Interface for configuring the color detector
+     * @author Eric Tsai
+     */
+    interface ConfigEditor {
+        /**
+         * Set the integration time.  This impacts both resolution and sensitivity of the adc values.
+         * @param time    Between [2.4, 614.4] milliseconds
+         * @return Calling object
+         */
+        ConfigEditor integrationTime(float time);
+        /**
+         * Sets the analog gain
+         * @param gain    Gain scale
+         * @return Calling object
+         */
+        ConfigEditor gain(Gain gain);
+        /**
+         * Enable or disable the illuminator LED
+         * @param enable    True if it should be used
+         * @return Calling object
+         */
+        ConfigEditor illuminatorLed(boolean enable);
+        /**
+         * Write the changes to the board
+         */
+        void commit();
+    }
+    /**
+     * Configure the color detector
+     *
+     * @return Editor object to configure the detector
+     */
+    ConfigEditor configure();
+
+    /**
+     * Wrapper class encapsulating adc data from the sensor
      * @author Eric Tsai
      */
     final class ColorAdc {
@@ -87,44 +123,36 @@ public interface ColorDetectorTcs34725 extends Module, ForcedDataProducer {
             return result;
         }
     }
-
     /**
-     * Interface for configuring the color detector
+     * Extension of the {@link ForcedDataProducer} interface providing names for the component values
+     * of the color adc data
      * @author Eric Tsai
      */
-    interface ConfigEditor {
+    interface ColorAdcDataProducer extends ForcedDataProducer {
         /**
-         * Set the integration time.  This impacts both resolution and sensitivity of the ADC values.
-         * @param time    Between [2.4, 614.4] milliseconds
-         * @return Calling object
+         * Get the name for clear adc data
+         * @return Clear adc data name
          */
-        ConfigEditor integrationTime(float time);
+        String clearName();
         /**
-         * Sets the analog gain
-         * @param gain    Gain scale
-         * @return Calling object
+         * Get the name for red adc data
+         * @return Red adc data name
          */
-        ConfigEditor gain(Gain gain);
+        String redName();
         /**
-         * Enable or disable the illuminator LED
-         * @param enable    True if it should be used
-         * @return Calling object
+         * Get the name for green adc data
+         * @return Green adc data name
          */
-        ConfigEditor illuminatorLed(boolean enable);
+        String greenName();
         /**
-         * Write the changes to the board
+         * Get the name for blue adc data
+         * @return Blue adc data name
          */
-        void commit();
+        String blueName();
     }
-
     /**
-     * Configure the color detector
-     * @return Editor object to configure the detector
+     * Gets an object to manage the adc data from the color detector
+     * @return Object managing the adc data
      */
-    ConfigEditor configure();
-
-    String clearName();
-    String redName();
-    String greenName();
-    String blueName();
+    ColorAdcDataProducer adc();
 }

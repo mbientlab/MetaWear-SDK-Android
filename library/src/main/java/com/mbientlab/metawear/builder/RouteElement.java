@@ -158,7 +158,7 @@ public interface RouteElement {
     RouteElement map(Function2 fn, String ... dataNames);
 
     /**
-     * Reduce the amount of data allowed through such that the output data rate matches the period
+     * Reduce the amount of data allowed through such that the output data rate matches the delay
      * @param period    How often to allow data through, in milliseconds (ms)
      * @return Object representing the output of the limiter
      */

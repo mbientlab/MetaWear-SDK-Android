@@ -73,8 +73,8 @@ class UFloatData extends DataTypeBase {
             throw new NullPointerException("SFloatData cannot have null input variable");
         }
 
-        if (input instanceof CartesianFloatData) {
-            return ((CartesianFloatData) input).scale(owner);
+        if (input instanceof FloatVectorData) {
+            return ((FloatVectorData) input).scale(owner);
         } else if (input instanceof UFloatData) {
             return ((UFloatData) input).scale(owner);
         } else if (input instanceof SFloatData) {

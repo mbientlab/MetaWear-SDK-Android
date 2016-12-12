@@ -26,11 +26,13 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
-import com.mbientlab.metawear.datatype.CartesianFloat;
-import com.mbientlab.metawear.module.SensorFusion;
-import com.mbientlab.metawear.module.SensorFusion.CorrectedFloatVector3;
-import com.mbientlab.metawear.module.SensorFusion.EulerAngle;
-import com.mbientlab.metawear.module.SensorFusion.Quaternion;
+import com.mbientlab.metawear.data.Acceleration;
+import com.mbientlab.metawear.module.SensorFusionBosch;
+import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedAcceleration;
+import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedAngularVelocity;
+import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedMagneticField;
+import com.mbientlab.metawear.data.EulerAngle;
+import com.mbientlab.metawear.data.Quaternion;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -48,7 +50,7 @@ import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
 
-import static com.mbientlab.metawear.MetaWearBoardInfo.MOTIOON_R;
+import static com.mbientlab.metawear.MetaWearBoardInfo.MOTION_R;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -62,17 +64,17 @@ public class TestSensorFusionData extends UnitTestBase {
             {
                 "correctedAcceleration",
                 new byte[] {0x19, 0x04, 0x20, 0x3e, 0x53, (byte) 0xc5, 0x0c, (byte) 0xfe, 0x79, 0x46, 0x0c, (byte) 0xfe, 0x79, (byte) 0xc6, 0x00},
-                new CorrectedFloatVector3(Float.intBitsToFloat(0xc0585000), Float.intBitsToFloat(0x417ffe00), Float.intBitsToFloat(0xc17ffe00), (byte) 0x00)
+                new CorrectedAcceleration(Float.intBitsToFloat(0xc0585000), Float.intBitsToFloat(0x417ffe00), Float.intBitsToFloat(0xc17ffe00), (byte) 0x00)
             },
             {
                 "correctedRotation",
                 new byte[] {0x19, 0x05, 0x7a, 0x56, (byte) 0x91, 0x42, (byte) 0xb4, 0x62, 0x60, (byte) 0xc2, 0x73, 0x34, 0x04, 0x44, 0x00},
-                new CorrectedFloatVector3(Float.intBitsToFloat(0x4291567a), Float.intBitsToFloat(0xc26062b4), Float.intBitsToFloat(0x44043473), (byte) 0x00)
+                new CorrectedAngularVelocity(Float.intBitsToFloat(0x4291567a), Float.intBitsToFloat(0xc26062b4), Float.intBitsToFloat(0x44043473), (byte) 0x00)
             },
             {
                 "correctedBField",
                 new byte[] {0x19, 0x06, 0x00, 0x00, 0x02, 0x42, (byte) 0xcd, (byte) 0xcc, 0x6c, (byte) 0xc1, (byte) 0x9a, (byte) 0x99, (byte) 0xed, 0x41, 0x03},
-                new CorrectedFloatVector3(Float.intBitsToFloat(0x42020000), Float.intBitsToFloat(0xc16ccccd), Float.intBitsToFloat(0x41ed999a), (byte) 0x03)
+                new CorrectedMagneticField(Float.intBitsToFloat(0x42020000), Float.intBitsToFloat(0xc16ccccd), Float.intBitsToFloat(0x41ed999a), (byte) 0x03)
             },
             {
                 "quaternion",
@@ -87,12 +89,12 @@ public class TestSensorFusionData extends UnitTestBase {
             {
                 "gravity",
                 new byte[] {0x19, 0x09, (byte) 0xee, 0x20, (byte) 0xd3, 0x3e, (byte) 0xb2, (byte) 0x93, 0x01, 0x41, 0x04, 0x59, (byte) 0xb0, (byte) 0xc0},
-                new CartesianFloat(Float.intBitsToFloat(0x3d2c3ba8), Float.intBitsToFloat(0x3f536925), Float.intBitsToFloat(0xbf0fdc15))
+                new Acceleration(Float.intBitsToFloat(0x3d2c3ba8), Float.intBitsToFloat(0x3f536925), Float.intBitsToFloat(0xbf0fdc15))
             },
             {
                 "linearAcceleration",
                 new byte[] {0x19, 0x0a, 0x2f, (byte) 0xca, 0x39, 0x40, (byte) 0x86, (byte) 0xd4, 0x61, 0x41, (byte) 0x80, 0x4c, 0x6e, (byte) 0xc0},
-                new CartesianFloat(Float.intBitsToFloat(0x3e978ff1), Float.intBitsToFloat(0x3fb839e5), Float.intBitsToFloat(0xbec265d2))
+                new Acceleration(Float.intBitsToFloat(0x3e978ff1), Float.intBitsToFloat(0x3fb839e5), Float.intBitsToFloat(0xbec265d2))
             }
         });
     }
@@ -106,19 +108,19 @@ public class TestSensorFusionData extends UnitTestBase {
     @Parameter(value = 2)
     public Object expected;
 
-    private SensorFusion sensorFusion;
+    private SensorFusionBosch sensorFusion;
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MOTIOON_R;
+        btlePlaform.boardInfo = MOTION_R;
         connectToBoard();
 
-        sensorFusion = mwBoard.getModule(SensorFusion.class);
+        sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
     }
 
     @Test
     public void receivedData() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Method m = SensorFusion.class.getMethod(methodName);
+        Method m = SensorFusionBosch.class.getMethod(methodName);
         AsyncDataProducer producer = (AsyncDataProducer) m.invoke(sensorFusion);
         final Capture<Object> actual = new Capture<>();
 

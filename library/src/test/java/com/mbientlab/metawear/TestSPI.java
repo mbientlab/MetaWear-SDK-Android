@@ -27,9 +27,12 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.module.SerialPassthrough;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.module.SerialPassthrough.SpiParameterBuilder;
 
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
 import bolts.Continuation;
@@ -42,6 +45,17 @@ import static org.junit.Assert.assertArrayEquals;
  */
 
 public class TestSPI extends UnitTestBase {
+    private static <T> SpiParameterBuilder<T> setParameters(SpiParameterBuilder<T> builder) {
+        return builder.data(new byte[] {(byte) 0xda})
+                .mode((byte) 3)
+                .frequency(SerialPassthrough.SpiFrequency.FREQ_8_MHZ)
+                .slaveSelectPin((byte) 10)
+                .clockPin((byte) 0)
+                .mosiPin((byte) 11)
+                .misoPin((byte) 7)
+                .useNativePins();
+    }
+
     private SerialPassthrough.Spi spi;
 
     @Before
@@ -57,15 +71,7 @@ public class TestSPI extends UnitTestBase {
     public void readBmi160() {
         byte[] expected= new byte[] {0x0d, (byte) 0xc2, 0x0a, 0x00, 0x0b, 0x07, 0x76, (byte) 0xe4, (byte) 0xda};
 
-        spi.read(new byte[] {(byte) 0xda})
-                .mode((byte) 3)
-                .frequency(SerialPassthrough.SpiFrequency.FREQ_8_MHZ)
-                .slaveSelectPin((byte) 10)
-                .clockPin((byte) 0)
-                .mosiPin((byte) 11)
-                .misoPin((byte) 7)
-                .useNativePins()
-                .commit();
+        setParameters(spi.read()).commit();
         assertArrayEquals(expected, btlePlaform.getLastCommand());
     }
 
@@ -106,5 +112,56 @@ public class TestSPI extends UnitTestBase {
         */
 
         assertArrayEquals(expected, actual.get());
+    }
+
+    @Test
+    public void directReadBmi160() {
+        byte[] expected= new byte[] {0x0d, (byte) 0x82, 0x0a, 0x00, 0x0b, 0x07, 0x76, (byte) 0xf4, (byte) 0xda};
+
+        setParameters(mwBoard.getModule(SerialPassthrough.class).readSpiAsync((byte) 5)).commit();
+        assertArrayEquals(expected, btlePlaform.getLastCommand());
+    }
+
+    @Test
+    public void directReadBmi160Data() {
+        byte[] expected= new byte[] {0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0};
+        final Capture<byte[]> actual= new Capture<>();
+
+        setParameters(mwBoard.getModule(SerialPassthrough.class).readSpiAsync((byte) 5)).commit()
+                .continueWith(new Continuation<byte[], Void>() {
+                    @Override
+                    public Void then(Task<byte[]> task) throws Exception {
+                        actual.set(task.getResult());
+                        return null;
+                    }
+                });
+
+        sendMockResponse(new byte[] {0x0d, (byte) 0x82, (byte) 0x0f, 0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0});
+        assertArrayEquals(expected, actual.get());
+    }
+
+    @Test(expected = TimeoutException.class)
+    public void directReadBmi160Timeout() throws Exception {
+        final Capture<Exception> actual= new Capture<>();
+
+        setParameters(mwBoard.getModule(SerialPassthrough.class).readSpiAsync((byte) 5)).commit()
+                .continueWith(new Continuation<byte[], Void>() {
+                    @Override
+                    public Void then(Task<byte[]> task) throws Exception {
+                        actual.set(task.getError());
+
+                        synchronized (TestSPI.this) {
+                            TestSPI.this.notifyAll();
+                        }
+
+                        return null;
+                    }
+                });
+
+        synchronized (this) {
+            wait();
+
+            throw actual.get();
+        }
     }
 }

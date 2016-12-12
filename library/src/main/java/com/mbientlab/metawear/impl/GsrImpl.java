@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.module.Gsr;
@@ -44,13 +45,13 @@ class GsrImpl extends ModuleImplBase implements Gsr {
     private static final String CONDUCTANCE_PRODUCER_FORMAT= "com.mbientlab.metawear.impl.GsrImpl.CONDUCTANCE_PRODUCER_%d";
     private static final byte CONDUCTANCE = 0x1, CALIBRATE = 0x2, CONFIG= 0x3;
 
-    private static class ChannelInner implements Channel, Serializable {
+    private static class Channel implements ForcedDataProducer, Serializable {
         private static final long serialVersionUID = 5552089355271489517L;
 
         private final byte id;
         private transient MetaWearBoardPrivate owner;
 
-        ChannelInner(byte id, MetaWearBoardPrivate owner) {
+        Channel(byte id, MetaWearBoardPrivate owner) {
             this.id= id;
             this.owner= owner;
             owner.tagProducer(name(), new UintData(GSR, Util.setSilentRead(CONDUCTANCE), id, new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, false)));
@@ -76,14 +77,14 @@ class GsrImpl extends ModuleImplBase implements Gsr {
         }
     }
 
-    private ChannelInner[] conductanceChannels;
+    private Channel[] conductanceChannels;
     GsrImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
         byte[] extra= mwPrivate.lookupModuleInfo(GSR).extra;
-        conductanceChannels= new ChannelInner[extra[0]];
+        conductanceChannels= new Channel[extra[0]];
         for(byte i= 0; i < extra[0]; i++) {
-            conductanceChannels[i]= new ChannelInner(i, mwPrivate);
+            conductanceChannels[i]= new Channel(i, mwPrivate);
         }
     }
 
@@ -91,7 +92,7 @@ class GsrImpl extends ModuleImplBase implements Gsr {
     public void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
         super.restoreTransientVars(mwPrivate);
 
-        for(ChannelInner it: conductanceChannels) {
+        for(Channel it: conductanceChannels) {
             it.restoreTransientVariables(mwPrivate);
         }
     }

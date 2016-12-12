@@ -24,19 +24,23 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.ForcedDataProducer;
+import com.mbientlab.metawear.DataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
-/**
- * Created by etsai on 10/3/16.
- */
+import bolts.Task;
 
+/**
+ * Interacts with the serial buses on the board
+ * @author Eric Tsai
+ */
 public interface SerialPassthrough extends Module {
-    interface I2c extends ForcedDataProducer {
+    /**
+     * Data received from the I2C bus
+     * @author Eric Tsai
+     */
+    interface I2c extends DataProducer {
         /**
-         * Read data via the I2C bus.  This version of the function uses the data route system.  The user ID
-         * and data length (numBytes parameters) must match their respective parameters in the SourceSelector.fromId
-         * function
+         * Read data via the I2C bus
          * @param deviceAddr      Device to read from
          * @param registerAddr    Device's register to read
          */
@@ -44,101 +48,150 @@ public interface SerialPassthrough extends Module {
     }
 
     /**
-     * Support SPI frequencies
+     * Supported SPI frequencies
      * @author Eric Tsai
      */
     enum SpiFrequency {
+        /** 125 KHz */
         FREQ_125_KHZ,
+        /** 250 KHz */
         FREQ_250_KHZ,
+        /** 500 KHz */
         FREQ_500_KHZ,
+        /** 1 MHz */
         FREQ_1_MHZ,
+        /** 2 MHz */
         FREQ_2_MHZ,
+        /** 4 MHz */
         FREQ_4_MHZ,
+        /** 8 MHz */
         FREQ_8_MHZ
     }
-
     /**
-     * Builder to construct common parameters for an SPI read/write operation.  All of these parameters
-     * must be set before starting the operation
+     * Builder to construct common parameters for an SPI read/write operation.  The {@link #lsbFirst()}
+     * and {@link #useNativePins()} parameters are optional and default to false if not set; the {@link #data(byte[])}
+     * parameter is also optional for a read operation but required for writes.  All other parameters are required.
+     * @param <T>    Return type of the commit function
      * @author Eric Tsai
      */
-    interface SpiParameterBuilder {
+    interface SpiParameterBuilder<T> {
+        /**
+         * Data to write to the sensor.  If used with a read operation, the data will be written prior to the read
+         * @param data    Data to write
+         * @return Calling object
+         */
+        SpiParameterBuilder<T> data(byte[] data);
         /**
          * Pin for slave select
          * @param pin    Pin value
          * @return Calling object
          */
-        SpiParameterBuilder slaveSelectPin(byte pin);
+        SpiParameterBuilder<T> slaveSelectPin(byte pin);
         /**
          * Pin for serial clock
          * @param pin     Pin value
          * @return Calling object
          */
-        SpiParameterBuilder clockPin(byte pin);
+        SpiParameterBuilder<T> clockPin(byte pin);
         /**
          * Pin for master output, slave input
          * @param pin    Pin value
          * @return Calling object
          */
-        SpiParameterBuilder mosiPin(byte pin);
+        SpiParameterBuilder<T> mosiPin(byte pin);
         /**
          * Pin for master input, slave output
          * @param pin    Pin value
          * @return Calling object
          */
-        SpiParameterBuilder misoPin(byte pin);
+        SpiParameterBuilder<T> misoPin(byte pin);
         /**
          * Call to have LSB sent first
          * @return Calling object
          */
-        SpiParameterBuilder lsbFirst();
+        SpiParameterBuilder<T> lsbFirst();
         /**
          * SPI operating mode, see <a href="https://en.wikipedia.org/wiki/Serial_Peripheral_Interface_Bus#Mode_numbers">SPI Wiki Page</a>
          * for details on the mode values
          * @param mode    Value between [0, 3]
          * @return Calling object
          */
-        SpiParameterBuilder mode(byte mode);
+        SpiParameterBuilder<T> mode(byte mode);
         /**
          * SPI operating frequency
          * @param freq    Operating frequency
          * @return Calling object
          */
-        SpiParameterBuilder frequency(SpiFrequency freq);
+        SpiParameterBuilder<T> frequency(SpiFrequency freq);
         /**
          * Call to use the nRF pin mappings rather than the GPIO pin mappings
          * @return Calling object
          */
-        SpiParameterBuilder useNativePins();
+        SpiParameterBuilder<T> useNativePins();
         /**
          * Commit the parameters
          */
-        void commit();
+        T commit();
     }
-
-    interface Spi extends ForcedDataProducer {
+    /**
+     * Data received from the SPI bus
+     * @author Eric Tsai
+     */
+    interface Spi extends DataProducer {
         /**
          * Reads data from a device through the SPI bus
-         * @param data      DataToken to write on the bus before reading, null if nothing to write
          * @return Builder to set additional parameters
          */
-        SpiParameterBuilder read(byte[] data);
+        SpiParameterBuilder<Void> read();
     }
 
+    /**
+     * Gets an object representing the I2C data corresponding to the id.  If the id value cannot be matched
+     * with an existing object, the API will create a new object using the {@code length} parameter otherwise
+     * the existing object will be returned
+     * @param length    Expected length of the data
+     * @param id        Value between [0, 254]
+     * @return I2c object representing I2C data
+     */
     I2c i2cData(byte length, byte id);
     /**
-     * Write data via the I2C bus.
+     * Write data to a sensor via the I2C bus.
      * @param deviceAddr Device to write to
      * @param registerAddr Device's register to write to
      * @param data DataToken to write, up to 10 bytes
      */
     void writeI2c(byte deviceAddr, byte registerAddr, byte[] data);
+    /**
+     * Read data from a sensor via the I2C bus.  Unlike {@link I2c#read(byte, byte)}, this function provides
+     * a direct way to access I2C data as opposed to creating a data route.
+     * @param deviceAddr      Address of the slave device
+     * @param registerAddr    Register on the slave device to access
+     * @param length          How many bytes to read
+     * @return Task holding the returned value
+     */
+    Task<byte[]> readI2cAsync(byte deviceAddr, byte registerAddr, byte length);
 
+    /**
+     * Gets an object representing the SPI data corresponding to the id.  If the id value cannot be matched
+     * with an existing object, the API will create a new object using the {@code length} parameter otherwise
+     * the existing object will be returned
+     * @param length    Expected length of the data
+     * @param id        Value between [0, 14]
+     * @return I2c object representing SPI data, null if the SPI bus is not accessible with the current firmware
+     */
     Spi spiData(byte length, byte id);
     /**
-     * Writes data to a device through the SPI bus
-     * @param data    DataToken to send
-     * @return Builder to set additional parameters
+     * Write data to a sensor via the SPI bus.  The data to be written to the board is set with the
+     * {@link SpiParameterBuilder#data(byte[])} method
+     * @return Builder to set additional parameters, null if the SPI bus is not accessible with the current firmware
      */
-    SpiParameterBuilder writeSpi(byte[] data);
+    SpiParameterBuilder<Void> writeSpi();
+    /**
+     * Read data from a sensor via the SPI bus.  Unlike {@link Spi#read()}, this function provides a direct
+     * way to access SPI data as opposed to creating a data route.  If the SPI bus is not accessible with
+     * the current firmware, the operation will fail with an {@link UnsupportedOperationException}.
+     * @param length    How many bytes to read
+     * @return Editor object to configure the read parameters
+     */
+    SpiParameterBuilder<Task<byte[]>> readSpiAsync(byte length);
 }

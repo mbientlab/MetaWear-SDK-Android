@@ -30,7 +30,8 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 import java.util.HashMap;
 
 /**
- * Created by etsai on 9/20/16.
+ * Controls the gyro features of the BMI160 6-axis IMU
+ * @author Eric Tsai
  */
 public interface GyroBmi160 extends Module {
     /**
@@ -38,13 +39,21 @@ public interface GyroBmi160 extends Module {
      * @author Eric Tsai
      */
     enum OutputDataRate {
+        /** 25Hz */
         ODR_25_HZ,
+        /** 50Hz */
         ODR_50_HZ,
+        /** 100Hz */
         ODR_100_HZ,
+        /** 200Hz */
         ODR_200_HZ,
+        /** 400Hz */
         ODR_400_HZ,
+        /** 800Hz */
         ODR_800_HZ,
+        /** 1600Hz */
         ODR_1600_HZ,
+        /** 3200Hz */
         ODR_3200_HZ;
 
         public final byte bitmask;
@@ -91,7 +100,7 @@ public interface GyroBmi160 extends Module {
     }
 
     /**
-     * Interface to configure parameters for measuring angular rate
+     * Interface to configure parameters for measuring angular velocity
      * @author Eric Tsai
      */
     interface ConfigEditor {
@@ -120,15 +129,45 @@ public interface GyroBmi160 extends Module {
      */
     ConfigEditor configure();
 
-    interface RotationalSpeedDataProducer extends AsyncDataProducer {
+    /**
+     * Reports measured angular velocity values from the gyro
+     * @author Eric Tsai
+     */
+    interface AngularVelocityDataProducer extends AsyncDataProducer {
+        /**
+         * Get the name for x-axis data
+         * @return X-axis data name
+         */
         String xAxisName();
+        /**
+         * Get the name for y-axis data
+         * @return Y-axis data name
+         */
         String yAxisName();
+        /**
+         * Get the name for z-axis data
+         * @return Z-axis data name
+         */
         String zAxisName();
     }
-
-    RotationalSpeedDataProducer angularVelocity();
+    /**
+     * Gets an object to control angular velocity data
+     * @return Object controlling angular velocity data
+     */
+    AngularVelocityDataProducer angularVelocity();
+    /**
+     * Variant of angular velocity data that packs multiple data samples into 1 BLE packet to increase the
+     * data throughput.  Only streaming is supported for this data producer.
+     * @return Object representing packed acceleration data
+     */
     AsyncDataProducer packedAngularVelocity();
 
+    /**
+     * Starts the gyo
+     */
     void start();
+    /**
+     * Stops the gyo
+     */
     void stop();
 }

@@ -28,11 +28,12 @@ import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/19/16.
+ * Controls the BME280 humidity sensor
+ * @author Eric Tsai
  */
-public interface HumidityBme280 extends Module, ForcedDataProducer {
+public interface HumidityBme280 extends Module {
     /**
-     * Available overampling settings for the sensor
+     * Available oversampling settings for the sensor
      * @author Eric Tsai
      */
     enum OversamplingMode {
@@ -42,10 +43,15 @@ public interface HumidityBme280 extends Module, ForcedDataProducer {
         SETTING_8X,
         SETTING_16X
     }
-
     /**
      * Set oversampling mode
      * @param mode    New mode to use
      */
     void setOversampling(OversamplingMode mode);
+
+    /**
+     * Gets an object to manage the humidity values from the environmental sensor
+     * @return Object managing the humidity values
+     */
+    ForcedDataProducer value();
 }

@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.module.HumidityBme280;
@@ -62,6 +63,8 @@ class HumidityBme280Impl extends ModuleImplBase implements HumidityBme280 {
         }
     }
 
+    private transient ForcedDataProducer humidityProducer;
+
     HumidityBme280Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
@@ -74,17 +77,25 @@ class HumidityBme280Impl extends ModuleImplBase implements HumidityBme280 {
     }
 
     @Override
-    public void read() {
-        mwPrivate.lookupProducer(PRODUCER).read(mwPrivate);
-    }
+    public ForcedDataProducer value() {
+        if (humidityProducer == null) {
+            humidityProducer = new ForcedDataProducer() {
+                @Override
+                public void read() {
+                    mwPrivate.lookupProducer(PRODUCER).read(mwPrivate);
+                }
 
-    @Override
-    public Task<Route> addRoute(RouteBuilder builder) {
-        return mwPrivate.queueRouteBuilder(builder, PRODUCER);
-    }
+                @Override
+                public Task<Route> addRoute(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, PRODUCER);
+                }
 
-    @Override
-    public String name() {
-        return PRODUCER;
+                @Override
+                public String name() {
+                    return PRODUCER;
+                }
+            };
+        }
+        return humidityProducer;
     }
 }

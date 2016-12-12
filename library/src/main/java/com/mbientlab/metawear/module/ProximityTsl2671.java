@@ -28,9 +28,10 @@ import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/19/16.
+ * Controls the TSL2671 proximity sensor adc data
+ * @author Eric Tsai
  */
-public interface ProximityTsl2671 extends Module, ForcedDataProducer {
+public interface ProximityTsl2671 extends Module {
     /**
      * Photodiodes the sensor should use for proximity detection
      * @author Eric Tsai
@@ -43,7 +44,6 @@ public interface ProximityTsl2671 extends Module, ForcedDataProducer {
         /** Use both photodiodes */
         BOTH
     }
-
     /**
      * Amount of current to drive the sensor
      * @author Eric Tsai
@@ -54,7 +54,6 @@ public interface ProximityTsl2671 extends Module, ForcedDataProducer {
         CURRENT_25MA,
         CURRENT_12_5MA,
     }
-
     /**
      * Interface for configuring the sensor
      * @author Eric Tsai
@@ -89,10 +88,14 @@ public interface ProximityTsl2671 extends Module, ForcedDataProducer {
          */
         void commit();
     }
-
     /**
      * Configure the proximity detector
      * @return Editor to configure the settings
      */
     ConfigEditor configure();
+    /**
+     * Gets an object to manage the adc data from the proximity sensor
+     * @return Object managing the proximity data
+     */
+    ForcedDataProducer adc();
 }

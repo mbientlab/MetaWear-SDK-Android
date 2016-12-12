@@ -28,24 +28,59 @@ import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/18/16.
+ * Controls the on-board temperature sensors
+ * @author Eric Tsai
  */
 public interface Temperature extends Module {
-    enum SourceType {
+    /**
+     * Available types of temperature sensors.  Different boards will have a different combination
+     * of sensor types
+     * @author Eric Tsai
+     */
+    enum SensorType {
+        /** Data provided by the nRF SOC */
         NRF_SOC,
+        /** Data provided by an externally connected thermistor */
         EXT_THERMISTOR,
+        /** Data provided by either the BMP280 or BME280 sensor */
         BOSCH_ENV,
+        /** Data provided by an on-board thermistor */
         PRESET_THERMISTOR
     }
-
-    interface Source extends ForcedDataProducer {
-        SourceType type();
+    /**
+     * Data measured by a temperature sensor
+     * @author Eric Tsai
+     */
+    interface Sensor extends ForcedDataProducer {
+        /**
+         * Gets the type of temperature sensor measuring the data
+         * @return Sensor type
+         */
+        SensorType type();
     }
-
-    interface ExternalThermistor extends Source {
+    /**
+     * Temperature data measured by an externally connected thermistor
+     * @author Eric Tsai
+     */
+    interface ExternalThermistor extends Sensor {
+        /**
+         * Configures the settings for the thermistor
+         * @param dataPin           GPIO pin that reads the data
+         * @param pulldownPin       GPIO pin the pulldown resistor is connected to
+         * @param activeHigh        True if the pulldown pin is active high
+         */
         void configure(byte dataPin, byte pulldownPin, boolean activeHigh);
     }
 
-    Source[] sources();
-    Source[] findSource(SourceType type);
+    /**
+     * Gets an array of available temperature sensors
+     * @return Temperature sensors array
+     */
+    Sensor[] sensors();
+    /**
+     * Finds all temperature sensors whose {@link Sensor#type()} function matches the {@code type} parameter
+     * @param type    Sensor type to look for
+     * @return Array of sensors matching the sensor type, null if no matches found
+     */
+    Sensor[] findSensors(SensorType type);
 }

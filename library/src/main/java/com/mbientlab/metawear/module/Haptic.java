@@ -27,7 +27,8 @@ package com.mbientlab.metawear.module;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/18/16.
+ * Communicates with the haptic driver.
+ * @author Eric Tsai
  */
 public interface Haptic extends Module {
     /**

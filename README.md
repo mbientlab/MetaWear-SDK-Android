@@ -21,7 +21,7 @@ Then, add the compile element to the dependencies closure in the module's *build
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:3.0.0-beta02'
+    compile 'com.mbientlab:metawear:3.0.0-beta03'
 }
 ```
 

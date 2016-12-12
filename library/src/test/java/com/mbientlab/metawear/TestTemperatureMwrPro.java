@@ -49,7 +49,7 @@ public class TestTemperatureMwrPro extends UnitTestBase {
     @Parameters
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, RG, MOTIOON_R}) {
+        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, RG, MOTION_R}) {
             parameters.add(new Object[] {info});
         }
 
@@ -72,7 +72,7 @@ public class TestTemperatureMwrPro extends UnitTestBase {
     @Test
     public void configureExtThermistor() {
         byte[] expected= new byte[] {0x04, 0x02, 0x02, 0x00, 0x01, 0x00};
-        ((ExternalThermistor) temp.findSource(Temperature.SourceType.EXT_THERMISTOR)[0])
+        ((ExternalThermistor) temp.findSensors(Temperature.SensorType.EXT_THERMISTOR)[0])
                 .configure((byte) 0, (byte) 1, false);
 
         assertArrayEquals(expected, btlePlaform.getLastCommand());
@@ -80,6 +80,6 @@ public class TestTemperatureMwrPro extends UnitTestBase {
 
     @Test
     public void checkNSources() {
-        assertEquals(4, temp.sources().length);
+        assertEquals(4, temp.sensors().length);
     }
 }

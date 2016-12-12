@@ -28,9 +28,10 @@ import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Created by etsai on 9/20/16.
+ * Controls the LTR329 ambient light sensor
+ * @author Eric Tsai
  */
-public interface AmbientLightLtr329 extends Module, AsyncDataProducer {
+public interface AmbientLightLtr329 extends Module {
     /**
      * Controls the range and resolution of illuminance values
      * @author Eric Tsai
@@ -56,7 +57,6 @@ public interface AmbientLightLtr329 extends Module, AsyncDataProducer {
             this.bitmask= mask;
         }
     }
-
     /**
      * Measurement time for each cycle
      * @author Eric Tsai
@@ -77,7 +77,6 @@ public interface AmbientLightLtr329 extends Module, AsyncDataProducer {
             this.bitmask= mask;
         }
     }
-
     /**
      * How frequently to update the illuminance data.
      * @author Eric Tsai
@@ -125,10 +124,14 @@ public interface AmbientLightLtr329 extends Module, AsyncDataProducer {
          */
         void commit();
     }
-
     /**
      * Configures the sensor
      * @return Editor object to set various parameters
      */
     ConfigEditor configure();
+    /**
+     * Gets an object to manage the illuminance data from the environmental sensor
+     * @return Object managing the illuminance data
+     */
+    AsyncDataProducer illuminance();
 }

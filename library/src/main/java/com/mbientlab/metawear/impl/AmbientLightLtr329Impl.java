@@ -24,12 +24,9 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.impl.DataAttributes;
-import com.mbientlab.metawear.impl.MetaWearBoardPrivate;
-import com.mbientlab.metawear.impl.ModuleImplBase;
-import com.mbientlab.metawear.impl.UintData;
 import com.mbientlab.metawear.module.AmbientLightLtr329;
 
 import bolts.Task;
@@ -43,6 +40,8 @@ class AmbientLightLtr329Impl extends ModuleImplBase implements AmbientLightLtr32
     private final static String ILLUMINANCE_PRODUCER= "com.mbientlab.metawear.impl.AmbientLightLtr329Impl.ILLUMINANCE_PRODUCER";
     private static final byte ENABLE = 1, CONFIG = 2, OUTPUT = 3;
     private static final long serialVersionUID = 8287988596635899285L;
+
+    private transient AsyncDataProducer illuminanceProducer;
 
     AmbientLightLtr329Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -85,22 +84,30 @@ class AmbientLightLtr329Impl extends ModuleImplBase implements AmbientLightLtr32
     }
 
     @Override
-    public Task<Route> addRoute(RouteBuilder builder) {
-        return mwPrivate.queueRouteBuilder(builder, ILLUMINANCE_PRODUCER);
-    }
+    public AsyncDataProducer illuminance() {
+        if (illuminanceProducer == null) {
+            illuminanceProducer = new AsyncDataProducer() {
+                @Override
+                public Task<Route> addRoute(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, ILLUMINANCE_PRODUCER);
+                }
 
-    @Override
-    public String name() {
-        return ILLUMINANCE_PRODUCER;
-    }
+                @Override
+                public String name() {
+                    return ILLUMINANCE_PRODUCER;
+                }
 
-    @Override
-    public void start() {
-        mwPrivate.sendCommand(new byte[] {AMBIENT_LIGHT.id, ENABLE, 0x1});
-    }
+                @Override
+                public void start() {
+                    mwPrivate.sendCommand(new byte[] {AMBIENT_LIGHT.id, ENABLE, 0x1});
+                }
 
-    @Override
-    public void stop() {
-        mwPrivate.sendCommand(new byte[] {AMBIENT_LIGHT.id, ENABLE, 0x0});
+                @Override
+                public void stop() {
+                    mwPrivate.sendCommand(new byte[] {AMBIENT_LIGHT.id, ENABLE, 0x0});
+                }
+            };
+        }
+        return illuminanceProducer;
     }
 }

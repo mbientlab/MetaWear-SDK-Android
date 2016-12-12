@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Temperature.ExternalThermistor;
-import com.mbientlab.metawear.module.Temperature.SourceType;
+import com.mbientlab.metawear.module.Temperature.SensorType;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -52,7 +52,7 @@ public class TestTemperatureMwr extends UnitTestBase {
     @Test
     public void configureExtThermistor() {
         byte[] expected= new byte[] {0x04, 0x02, 0x01, 0x00, 0x01, 0x00};
-        ((ExternalThermistor) temp.findSource(SourceType.EXT_THERMISTOR)[0])
+        ((ExternalThermistor) temp.findSensors(SensorType.EXT_THERMISTOR)[0])
                 .configure((byte) 0, (byte) 1, false);
 
         assertArrayEquals(expected, btlePlaform.getLastCommand());
@@ -60,6 +60,6 @@ public class TestTemperatureMwr extends UnitTestBase {
 
     @Test
     public void checkNSources() {
-        assertEquals(2, temp.sources().length);
+        assertEquals(2, temp.sensors().length);
     }
 }

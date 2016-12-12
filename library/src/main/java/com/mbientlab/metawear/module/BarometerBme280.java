@@ -25,21 +25,30 @@
 package com.mbientlab.metawear.module;
 
 /**
- * Created by etsai on 9/20/16.
+ * Extension of the {@link BarometerBosch} interface that provides finer control of the BME280 barometer
+ * @author Eric Tsai
  */
 public interface BarometerBme280 extends BarometerBosch {
     /**
-     * Supported stand by times on the BMP280 sensor
+     * Supported stand by times on the BME280 barometer
      * @author Eric Tsai
      */
     enum StandbyTime {
+        /** 0.5ms */
         TIME_0_5(0.5f),
-        TIME_62_5(61.5f),
+        /** 62.5ms */
+        TIME_62_5(62.5f),
+        /** 125ms */
         TIME_125(125f),
+        /** 250ms */
         TIME_250(250f),
+        /** 500ms */
         TIME_500(500f),
+        /** 1000ms */
         TIME_1000(1000f),
+        /** 10ms */
         TIME_10(10f),
+        /** 20ms */
         TIME_20(20f);
 
         public final float time;
@@ -63,7 +72,7 @@ public interface BarometerBme280 extends BarometerBosch {
     }
 
     /**
-     * Interface for configuring pressure sampling
+     * Barometer configuration editor specific to the BME280 barometer
      * @author Eric Tsai
      */
     interface ConfigEditor extends BarometerBosch.ConfigEditorBase<ConfigEditor> {
@@ -76,8 +85,8 @@ public interface BarometerBme280 extends BarometerBosch {
     }
 
     /**
-     * Configures the settings for operating the pressure sensor
-     * @return Editor to configure various settings
+     * Configures BME280 barometer
+     * @return Editor object specific to the BMP280 barometer
      */
     @Override
     ConfigEditor configure();
