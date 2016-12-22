@@ -35,8 +35,8 @@ public class Bmi160MotionMessage extends Message {
 
             @Override
             public String toString() {
-                return String.format("{any_motion_x: %s, any_motion_y: %s, any_motion_z: %s}",
-                        anyMotionDetected(Axis.X), anyMotionDetected(Axis.Y), anyMotionDetected(Axis.Z));
+                return String.format("{any_motion_sign: %s, any_motion_x: %s, any_motion_y: %s, any_motion_z: %s}",
+                        anyMotionSign(), anyMotionDetected(Axis.X), anyMotionDetected(Axis.Y), anyMotionDetected(Axis.Z));
             }
         };
     }

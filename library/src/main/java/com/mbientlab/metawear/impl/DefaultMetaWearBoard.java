@@ -4601,8 +4601,9 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             readResponses.get(header).process(response);
         } else if (responses.containsKey(maskedHeader)) {
             final Response resp= responses.get(maskedHeader).process(response);
-            if (resp != null && responseProcessors.containsKey(resp.header)) {
-                final RouteManager.MessageHandler handler= responseProcessors.get(resp.header);
+            ResponseHeader masked = resp.header.clearRead();
+            if (resp != null && responseProcessors.containsKey(masked)) {
+                final RouteManager.MessageHandler handler= responseProcessors.get(masked);
                 conn.executeTask(new Runnable() {
                     @Override
                     public void run() {
@@ -7244,7 +7245,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                 public void commit() {
                     if (count != null) {
                         motionConfig[0]&= 0x3;
-                        motionConfig[0]|= (count << 2);
+                        motionConfig[0]|= (count - 1) << 2;
                     }
                     if (threshold != null) {
                         noMotionThs= threshold;
@@ -7833,7 +7834,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
 
         @Override
         public ThresholdDetectionConfigEditor configureThresholdDetection() {
-            final byte THS_SCALE= 6;
+            final byte THS_SCALE= 16;
 
             return new ThresholdDetectionConfigEditor() {
                 private byte[] config= new byte[2];
@@ -8103,7 +8104,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         motionConfig[0]&= 0x3;
 
                         if (duration >= 1000 && duration <= 16000) {
-                            motionConfig[0]|= ((byte) (duration / 1000 - 1000)) << 2;
+                            motionConfig[0]|= (byte) (((duration - 1000) / 1000) << 2);
                         } else if (duration >= 20000 && duration <= 80000) {
                             motionConfig[0]|= (((byte) (duration - 20000) / 4000) << 2) | 0x40;
                         } else if (duration >= 88000 && duration <= 336000) {
@@ -8347,11 +8348,11 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         lowHighConfig[2]|= (lowGMode.ordinal() << 2);
                     }
                     if (lowHysteresis != null) {
-                        bmi160LowHighConfig[2]&= 0xfc;
-                        bmi160LowHighConfig[2]|= ((byte) (lowHysteresis / LOW_HYSTERESIS_STEP) & 0x3);
+                        lowHighConfig[2]&= 0xfc;
+                        lowHighConfig[2]|= ((byte) (lowHysteresis / LOW_HYSTERESIS_STEP) & 0x3);
                     }
                     if (highDuration != null) {
-                        bmi160LowHighConfig[3]= (byte) ((highDuration / DURATION_STEP) - 1);
+                        lowHighConfig[3]= (byte) ((highDuration / DURATION_STEP) - 1);
                     }
                     if (newHighThreshold != null) {
                         highThreshold= newHighThreshold;

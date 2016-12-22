@@ -81,7 +81,7 @@ public class Bmi160LowHighMessage extends Message {
             @Override
             public String toString() {
                 return String.format("{low: %s, high: %s, high_x: %s, high_y: %s, high_z: %s, high_direction: %s}",
-                        isLow(), isLow(), highG(Axis.X), highG(Axis.Y), highG(Axis.Z), highSign().toString());
+                        isLow(), isHigh(), highG(Axis.X), highG(Axis.Y), highG(Axis.Z), highSign().toString());
             }
         };
     }
