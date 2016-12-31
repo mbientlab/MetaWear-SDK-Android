@@ -4601,15 +4601,17 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             readResponses.get(header).process(response);
         } else if (responses.containsKey(maskedHeader)) {
             final Response resp= responses.get(maskedHeader).process(response);
-            ResponseHeader masked = resp.header.clearRead();
-            if (resp != null && responseProcessors.containsKey(masked)) {
-                final RouteManager.MessageHandler handler= responseProcessors.get(masked);
-                conn.executeTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        handler.process(resp.body);
-                    }
-                });
+            if (resp != null) {
+                ResponseHeader masked = resp.header.clearRead();
+                if (responseProcessors.containsKey(masked)) {
+                    final RouteManager.MessageHandler handler = responseProcessors.get(masked);
+                    conn.executeTask(new Runnable() {
+                        @Override
+                        public void run() {
+                            handler.process(resp.body);
+                        }
+                    });
+                }
             }
         }
     }
