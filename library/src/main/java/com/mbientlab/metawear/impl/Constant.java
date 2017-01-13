@@ -35,6 +35,7 @@ public class Constant {
     public static final byte SINGLE_CHANNEL_TEMP_IMPLEMENTATION= 0, MULTI_CHANNEL_TEMP_IMPLEMENTATION= 1;
 
     public static final byte MMA8452Q_IMPLEMENTATION= 0, BMI160_IMPLEMENTATION= 1, BMA255_IMPLEMENTATION= 3;
+    static final byte BMI160_FLAT_REV = 2, BMA255_FLAT_REV = 2;
     public static final byte BMI160_GYRO_IMPLEMENTATION= 0;
 
     public static final byte LTR329_LIGHT_SENSOR= 0;

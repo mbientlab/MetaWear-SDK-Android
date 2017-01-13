@@ -504,12 +504,16 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
             try {
                 final Message logMsg;
 
+                if (msgClass.equals(Bmi160FlatMessage.class)) {
+                    data[0] = boschFlatBitSwap(data[0]);
+                }
+
                 if (bmi160AccMessageClasses.contains(msgClass)) {
                     Constructor<?> cTor = msgClass.getConstructor(Calendar.class, byte[].class, float.class);
                     logMsg= (Message) cTor.newInstance(timestamp, data, bmi160AccRange.scale());
                 } else if (bmi160GyroMessageClasses.contains(msgClass)) {
                     Constructor<?> cTor = msgClass.getConstructor(Calendar.class, byte[].class, float.class);
-                    logMsg= (Message) cTor.newInstance(timestamp, data, bmi160GyroRange.scale());
+                    logMsg = (Message) cTor.newInstance(timestamp, data, bmi160GyroRange.scale());
                 } else {
                     Constructor<?> cTor= msgClass.getConstructor(Calendar.class, byte[].class);
                     logMsg= (Message) cTor.newInstance(timestamp, data);
@@ -3369,6 +3373,17 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
     ///< Timer variables
     private final HashMap<Byte, TimerControllerImpl> timerControllers= new HashMap<>();
 
+    private byte boschFlatBitSwap(byte original) {
+        byte accImpl = moduleInfo.get(InfoRegister.ACCELEROMETER.moduleOpcode()).implementation();
+        byte accRev = moduleInfo.get(InfoRegister.ACCELEROMETER.moduleOpcode()).revision();
+        if (accImpl == Constant.BMA255_IMPLEMENTATION && accRev >= Constant.BMA255_FLAT_REV ||
+                accImpl == Constant.BMI160_IMPLEMENTATION && accRev >= Constant.BMI160_FLAT_REV) {
+            return (byte) ((original & 0x1) | ((original & 0x4) >> 1) | ((original & 0x2) << 1));
+        }
+
+        return original;
+    }
+
     protected DefaultMetaWearBoard(final Connection conn) {
         this.conn= conn;
         final ResponseProcessor idProcessor= new ResponseProcessor() {
@@ -3378,6 +3393,36 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                     pendingRoutes.peek().receivedId(response[2]);
                 }
                 return null;
+            }
+        }, dataProcessor = new ResponseProcessor() {
+            @Override
+            public Response process(byte[] response) {
+                try {
+                    byte[] respBody = new byte[response.length - 3];
+                    System.arraycopy(response, 3, respBody, 0, respBody.length);
+                    ResponseHeader header = new ResponseHeader(response[0], response[1], response[2]);
+
+                    if (bmi160AccMessageClasses.contains(dataProcMsgClasses.get(header))) {
+                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
+                        return new Response((Message) cTor.newInstance(respBody, bmi160AccRange.scale()), header);
+                    }
+
+                    if (bmi160GyroMessageClasses.contains(dataProcMsgClasses.get(header))) {
+                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
+                        return new Response((Message) cTor.newInstance(respBody, bmi160GyroRange.scale()), header);
+                    }
+
+                    if (dataProcMsgClasses.get(header).equals(Bmi160FlatMessage.class)) {
+                        respBody[0] = boschFlatBitSwap(respBody[0]);
+                    }
+
+                    Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class);
+                    return new Response((Message) cTor.newInstance(respBody), header);
+                } catch (NullPointerException ex) {
+                    return null;
+                } catch (Exception ex) {
+                    throw new RuntimeException("Cannot create a message processor for filter: " + Arrays.toString(response), ex);
+                }
             }
         };
 
@@ -3454,60 +3499,8 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
         });
         responses.put(new ResponseHeader(LoggingRegister.TRIGGER), idProcessor);
         responses.put(new ResponseHeader(DataProcessorRegister.ADD), idProcessor);
-        responses.put(new ResponseHeader(DataProcessorRegister.NOTIFY), new ResponseProcessor() {
-            @Override
-            public Response process(byte[] response) {
-                try {
-                    byte[] respBody = new byte[response.length - 3];
-                    System.arraycopy(response, 3, respBody, 0, respBody.length);
-                    ResponseHeader header = new ResponseHeader(response[0], response[1], response[2]);
-
-                    if (bmi160AccMessageClasses.contains(dataProcMsgClasses.get(header))) {
-                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
-                        return new Response((Message) cTor.newInstance(respBody, bmi160AccRange.scale()), header);
-                    }
-
-                    if (bmi160GyroMessageClasses.contains(dataProcMsgClasses.get(header))) {
-                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
-                        return new Response((Message) cTor.newInstance(respBody, bmi160GyroRange.scale()), header);
-                    }
-
-                    Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class);
-                    return new Response((Message) cTor.newInstance(respBody), header);
-                } catch (NullPointerException ex) {
-                    return null;
-                } catch (Exception ex) {
-                    throw new RuntimeException("Cannot create a message processor for filter: " + Arrays.toString(response), ex);
-                }
-            }
-        });
-        responses.put(new ResponseHeader(DataProcessorRegister.STATE), new ResponseProcessor() {
-            @Override
-            public Response process(byte[] response) {
-                try {
-                    byte[] respBody = new byte[response.length - 3];
-                    System.arraycopy(response, 3, respBody, 0, respBody.length);
-                    ResponseHeader header = new ResponseHeader(response[0], response[1], response[2]);
-
-                    if (bmi160AccMessageClasses.contains(dataProcMsgClasses.get(header))) {
-                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
-                        return new Response((Message) cTor.newInstance(respBody, bmi160AccRange.scale()), header);
-                    }
-
-                    if (bmi160GyroMessageClasses.contains(dataProcMsgClasses.get(header))) {
-                        Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class, float.class);
-                        return new Response((Message) cTor.newInstance(respBody, bmi160GyroRange.scale()), header);
-                    }
-
-                    Constructor<?> cTor = dataProcMsgClasses.get(header).getConstructor(byte[].class);
-                    return new Response((Message) cTor.newInstance(respBody), header);
-                } catch (NullPointerException ex) {
-                    return null;
-                } catch (Exception ex) {
-                    throw new RuntimeException("Cannot create a message processor for filter state: " + Arrays.toString(response), ex);
-                }
-            }
-        });
+        responses.put(new ResponseHeader(DataProcessorRegister.NOTIFY), dataProcessor);
+        responses.put(new ResponseHeader(DataProcessorRegister.STATE), dataProcessor);
         responses.put(new ResponseHeader(TimerRegister.TIMER_ENTRY), new ResponseProcessor() {
             @Override
             public Response process(final byte[] response) {
@@ -3955,6 +3948,7 @@ public abstract class DefaultMetaWearBoard implements MetaWearBoard {
                         public Response process(byte[] response) {
                             byte[] respBody= new byte[response.length - 2];
                             System.arraycopy(response, 2, respBody, 0, respBody.length);
+                            respBody[0] = boschFlatBitSwap(respBody[0]);
 
                             return new Response(new Bmi160FlatMessage(respBody), new ResponseHeader(response[0], response[1]));
                         }
