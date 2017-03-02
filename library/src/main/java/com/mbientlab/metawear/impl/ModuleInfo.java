@@ -24,14 +24,36 @@
 
 package com.mbientlab.metawear.impl;
 
-/**
- * Created by etsai on 7/25/2015.
- */
-public interface ModuleInfo {
-    byte id();
-    byte implementation();
-    byte revision();
-    byte[] extra();
+import java.io.Serializable;
 
-    boolean present();
+/**
+ * Created by etsai on 8/31/16.
+ */
+class ModuleInfo implements Serializable {
+    private static final long serialVersionUID = -8120230312302254264L;
+
+    final byte id, implementation, revision;
+    final byte[] extra;
+
+    public ModuleInfo(byte[] response) {
+        id= response[0];
+        if (response.length > 2) {
+            implementation = response[2];
+            revision = response[3];
+        } else {
+            implementation= (byte) 0xff;
+            revision= (byte) 0xff;
+        }
+
+        if (response.length > 4) {
+            extra= new byte[response.length - 4];
+            System.arraycopy(response, 4, extra, 0, extra.length);
+        } else {
+            extra= new byte[0];
+        }
+    }
+
+    boolean present() {
+        return implementation != (byte) 0xff && revision != (byte) 0xff;
+    }
 }

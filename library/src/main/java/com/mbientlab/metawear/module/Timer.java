@@ -24,83 +24,68 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.AsyncOperation;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.CodeBlock;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
+import bolts.Task;
 
 /**
- * On-board timer for scheduling MetaWear commands
+ * On-board scheduler for executing MetaWear commands in the future
  * @author Eric Tsai
  */
-public interface Timer extends MetaWearBoard.Module {
+public interface Timer extends Module {
     /**
-     * Task that can be scheduled for periodic execution
+     * A task comprising of MetaWear commands programmed to run on-board at a certain times
      * @author Eric Tsai
      */
-    interface Task {
+    interface ScheduledTask {
         /**
-         * MetaWear commands to be executed
-         */
-        void commands();
-    }
-
-    /**
-     * Timer controller for managing the task execution
-     */
-    interface Controller {
-        /**
-         * Retrieve the ID representing the controller
-         * @return Controller ID
-         */
-        byte id();
-
-        /**
-         * Starts the periodic execution, does nothing if controller is inactive
+         * Start task execution
          */
         void start();
-
         /**
-         * Stops the task execution, does nothing if controller is inactive
+         * Stop task execution
          */
         void stop();
-
         /**
-         * Removes the timer from the board, does nothing if controller is inactive
-         */
-        void remove();
-
-        /**
-         * Retrieves the active state
-         * @return True if the controller is active, false otherwise
+         * Checks if this object represents an active task
+         * @return True if task is still scheduled on-board
          */
         boolean isActive();
+        /**
+         * Get the numerical id of this task
+         * @return Task ID
+         */
+        byte id();
+        /**
+         * Removes this task from the board
+         */
+        void remove();
     }
 
     /**
-     * Schedules a task to be periodically executed indefinitely
-     * @param mwTask    Task to be schedule
+     * Schedule a task to be indefinitely executed on-board at fixed intervals
      * @param period    How often to execute the task, in milliseconds
-     * @param delay     True if the first execution should be delayed by one {@code period} worth of time
-     * @return Timer controller, available when the timer has successfully committed
+     * @param delay     True if first execution should be delayed by one {@code delay}
+     * @param mwCode    MetaWear commands composing the task
+     * @return Task holding the result of the scheduled request
+     * @see ScheduledTask
      */
-    AsyncOperation<Controller> scheduleTask(Task mwTask, int period, boolean delay);
+    Task<ScheduledTask> scheduleAsync(int period, boolean delay, CodeBlock mwCode);
     /**
-     * Schedules a task to be periodically executed for a fixed number of times
-     * @param mwTask    Task to be schedule
-     * @param period    How often to execute the task, in milliseconds
-     * @param delay     True if the first execution should be delayed by one {@code period} worth of time
-     * @return Timer controller, available when the timer has successfully committed
+     * Schedule a task to be executed on-board at fixed intervals for a specific number of repetitions
+     * @param period         How often to execute the task, in milliseconds
+     * @param repetitions    How many times to execute the task
+     * @param delay          True if first execution should be delayed by one {@code delay}
+     * @param mwCode         MetaWear commands composing the task
+     * @return Task holding the result of the scheduled task
+     * @see ScheduledTask
      */
-    AsyncOperation<Controller> scheduleTask(Task mwTask, int period, boolean delay, short repetitions);
-
+    Task<ScheduledTask> scheduleAsync(int period, short repetitions, boolean delay, CodeBlock mwCode);
     /**
-     * Removed all timers from the board.  All timer controllers will be marked inactive
+     * Find the {@link ScheduledTask} object corresponding to the given id
+     * @param id    Task id to lookup
+     * @return Schedule task matching the id, null if no matches
      */
-    void removeTimers();
-
-    /**
-     * Retrieve the controller corresponding to the ID
-     * @param controllerId    Controller ID to lookup
-     * @return Controller corresponding to the ID, null if the lookup failed
-     */
-    Controller getController(byte controllerId);
+    ScheduledTask lookupScheduledTask(byte id);
 }

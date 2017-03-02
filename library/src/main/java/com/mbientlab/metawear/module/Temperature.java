@@ -24,50 +24,63 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.DataSignal;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.ForcedDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Generic class providing high level access to the temperature sensor.  If you know you are on firmware
- * v1.0.4 or higher, use the multi channel temperature class instead.  If you are on firmware v1.0.3 or
- * earlier, use the single channel temperature class.
+ * Accesses the temperature sensors
  * @author Eric Tsai
- * @see MultiChannelTemperature
- * @see SingleChannelTemperature
  */
-public interface Temperature extends MetaWearBoard.Module {
+public interface Temperature extends Module {
     /**
-     * Generic selector for temperature data
+     * Available types of temperature sensors.  Different boards will have a different combination
+     * of sensor types
      * @author Eric Tsai
      */
-    interface SourceSelector {
+    enum SensorType {
+        /** Temperature measured by the nRF SOC */
+        NRF_SOC,
+        /** Temperature measured by an externally connected thermistor */
+        EXT_THERMISTOR,
+        /** Temperature measured by either the BMP280 or BME280 sensor */
+        BOSCH_ENV,
+        /** Temperature measured by an on-board thermistor */
+        PRESET_THERMISTOR
+    }
+    /**
+     * Data measured by a temperature sensor
+     * @author Eric Tsai
+     */
+    interface Sensor extends ForcedDataProducer {
         /**
-         * Handle data from the temperature sensor
-         * @return Object representing temperature data
+         * Get the type of temperature sensor measuring the data
+         * @return Sensor type
          */
-        DataSignal fromSensor();
+        SensorType type();
+    }
+    /**
+     * Temperature data measured by an externally connected thermistor
+     * @author Eric Tsai
+     */
+    interface ExternalThermistor extends Sensor {
         /**
-         * Handle data from the temperature sensor.  This version of the function pairs with the
-         * {@link #readTemperature(boolean)} variant
-         * @param silent    Same value as the silent parameter for calling {@link #readTemperature(boolean)}
-         * @return Object representing temperature data
+         * Configures the settings for the thermistor
+         * @param dataPin           GPIO pin that reads the data
+         * @param pulldownPin       GPIO pin the pulldown resistor is connected to
+         * @param activeHigh        True if the pulldown pin is active high
          */
-        DataSignal fromSensor(boolean silent);
+        void configure(byte dataPin, byte pulldownPin, boolean activeHigh);
     }
 
     /**
-     * Reads value from a temperature sensor
+     * Get an array of available temperature sensors
+     * @return Temperature sensors array
      */
-    void readTemperature();
+    Sensor[] sensors();
     /**
-     * Reads value from a temperature sensor
-     * @param silent    True if read should be silent
+     * Find all temperature sensors whose {@link Sensor#type()} function matches the {@code type} parameter
+     * @param type    Sensor type to look for
+     * @return Array of sensors matching the sensor type, null if no matches found
      */
-    void readTemperature(boolean silent);
-
-    /**
-     * Initiates the creation of a route for temperature data
-     * @return Selection of available data sources
-     */
-    SourceSelector routeData();
+    Sensor[] findSensors(SensorType type);
 }

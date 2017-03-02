@@ -25,30 +25,44 @@
 package com.mbientlab.metawear;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.UUID;
 
+import bolts.Task;
+
 /**
- * Controller for communicating with a MetaWear board
+ * Object representing a MetaWear board
  * @author Eric Tsai
  */
 public interface MetaWearBoard {
     /**
-     * Service UUID identifying a MetaWear board.  This uuid can be used to filter non MetaWear devices
-     * from a Bluetooth LE scan.
+     * UUID identifying the MetaWear GATT service and the advertising UUID.  This UUID can be used to remove
+     * non MetaWear devices from am Bluetooth LE scan.
      */
-    UUID METAWEAR_SERVICE_UUID= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
+    UUID METAWEAR_GATT_SERVICE = UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
     /**
-     * Old name for the MetaWear service UUID, replaced in v2.1.0
-     * #deprecated Used {@link #METAWEAR_SERVICE_UUID} instead
+     * UUID identifying the characteristic under the MetaWear GATT service, defined by {@link #METAWEAR_GATT_SERVICE},
+     * that MetaWear uses to communicate with the local device.  Enable notifications on this characteristic.
      */
-    @Deprecated
-    UUID META_WEAR_SERVICE_UUID= METAWEAR_SERVICE_UUID;
+    UUID METAWEAR_NOTIFY_CHAR = UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A");
     /**
-     * Service UUID identifying a MetaWear board in MetaBoot mode
+     * UUID identifying a MetaWear board in MetaBoot mode.  A MetaWear board advertising with this UUID indicates
+     * it is in MetaBoot mode.
      */
-    UUID METABOOT_SERVICE_UUID= new UUID(0x000015301212EFDEL, 0x1523785FEABCD123L);
+    UUID METABOOT_SERVICE = UUID.fromString("00001530-1212-efde-1523-785feabcd123");
 
+    /**
+     * Determines the board model of the currently connected device
+     * @return Board model, null if unable to determine
+     */
+    Model getModel();
+    /**
+     * Same behavior as {@link #getModel()} except the returned value is a friendly name rather than an enum
+     * @return Board model as string
+     */
+    String getModelString();
     /**
      * Retrieves the MAC address of the board
      * @return Board's MAC address
@@ -56,255 +70,141 @@ public interface MetaWearBoard {
     String getMacAddress();
 
     /**
-     * Checks if the board is in MetaBoot mode
-     * @return True if it is in MetaBoot mode
+     * Reads the current RSSI value
+     * @return Task holding the returned RSSI value
+     */
+    Task<Integer> readRssiAsync();
+    /**
+     * Reads the battery level characteristic
+     * @return Task holding the battery level
+     */
+    Task<Byte> readBatteryLevelAsync();
+    /**
+     * Reads supported characteristics from the Device Information service
+     * @return Task holding the device information
+     */
+    Task<DeviceInformation> readDeviceInformationAsync();
+    /**
+     * Downloads the latest firmware release for the board to your local device.  You must be connected to the
+     * board before calling this function.
+     * @return Task holding the file pointing to where the downloaded firmware resides on the local device
+     */
+    Task<File> downloadLatestFirmwareAsync();
+    /**
+     * Checks if there is a newer version of the firmware available for your board.  The firmware check requires
+     * you to be connected to your board and an active internet connection on your local device.
+     * @return Task holding the result of the firmware check, true if a firmware update is available
+     */
+    Task<Boolean> checkForFirmwareUpdateAsync();
+
+    /**
+     * Establishes a Bluetooth Low Energy connection to the MetaWear board
+     * @return Task holding the result of the connect attempt
+     */
+    Task<Void> connectAsync();
+    /**
+     * Establishes a Bluetooth Low Energy connection to the MetaWear board
+     * @param delay    How long to wait (in milliseconds) before attempting to connect
+     * @return Task holding the result of the connect attempt
+     */
+    Task<Void> connectAsync(long delay);
+    /**
+     * Disconnects from the board and cancels pending {@link #connectAsync()} tasks
+     * @return Task holding the result of the disconnect attempt
+     */
+    Task<Void> disconnectAsync();
+
+    /**
+     * Handler for when the API is not expecting a disconnect event
+     * @author Eric Tsai
+     */
+    interface UnexpectedDisconnectHandler {
+        /**
+         * Callback method that is invoked when the Bluetooth connection is unexpectedly dropped
+         * @param status    Status from the connection changed callback
+         */
+        void disconnected(int status);
+    }
+    /**
+     * Set a handler for unexpected disconnects
+     * @param handler    Handler for unexpected disconnects
+     */
+    void onUnexpectedDisconnect(UnexpectedDisconnectHandler handler);
+
+    /**
+     * Gets the connection state
+     * @return True if a btle connection is active, false otherwise
+     */
+    boolean isConnected();
+    /**
+     * Checks if the board is in the MetaBoot (bootloader) mode.  If it is, you will not be able to interact
+     * with the board outside of reading RSSI values and updating firmware.
+     * @return True if the board is in MetaBoot mode, false otherwise
      */
     boolean inMetaBootMode();
 
     /**
-     * Class for handling notifications from the device firmware update operation
-     * @author Eric Tsai
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     */
-    @Deprecated
-    interface DfuProgressHandler {
-        /**
-         * Enumeration of the DFU operation states
-         */
-        enum State {
-            /** Downloading the new firmware from the internet */
-            DOWNLOADING,
-            /** Preparing the board and library for the update */
-            INITIALIZING,
-            /** Starting the update */
-            STARTING,
-            /** Validating the firmware upload */
-            VALIDATING,
-            /** Disconnecting from the board */
-            DISCONNECTING
-        }
-
-        /**
-         * Called when the DFU has progressed to a new state
-         * @param dfuState    New state of the update operation
-         */
-        void reachedCheckpoint(State dfuState);
-
-        /**
-         * Called when upload completion progress has been received.  This method also functions as
-         * an implied "uploading" state.
-         * @param progress    Integer between [0, 100] representing completion percentage
-         */
-        void receivedUploadProgress(int progress);
-    }
-    /**
-     * Updates the firmware on the board to the latest available release.  The update requires an active internet
-     * connection on your Android device and will terminate the Bluetooth connection when completed without calling the
-     * {@link ConnectionStateHandler#disconnect() disconnected()} callback function.  You must be connected to the board
-     * before calling this function, otherwise, it will fail.
-     * @param handler    Handler for processing DFU progress notifications
-     * @return Result of the operation that will be available when the DFU is finished
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     * @see #downloadLatestFirmware()
-     */
-    @Deprecated
-    AsyncOperation<Void> updateFirmware(DfuProgressHandler handler);
-    /**
-     * Updates the firmware on the board with a user specified firmware file.  Executing this function will terminate the Bluetooth
-     * connection without calling the {@link ConnectionStateHandler#disconnect() disconnected()} callback function.  You must be connected
-     * to the board before calling this feature, otherwise, it will fail.
-     * @param firmwareHexPath    Path to the firmware file
-     * @param handler            Handler for processing DFU progress notifications
-     * @return Result of the operation that will be available when the DFU is finished
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     * @see #downloadLatestFirmware()
-     */
-    @Deprecated
-    AsyncOperation<Void> updateFirmware(File firmwareHexPath, DfuProgressHandler handler);
-    /**
-     * Updates the firmware on the board using data from the provided input stream.  Executing this function will terminate the Bluetooth
-     * connection without calling the {@link ConnectionStateHandler#disconnect() disconnected()} callback function.  You must be connected
-     * to the board before calling this feature, otherwise, it will fail.
-     * @param firmwareStream    Path to the firmware file
-     * @param handler            Handler for processing DFU progress notifications
-     * @return Result of the operation that will be available when the DFU is finished
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     * @see #downloadLatestFirmware()
-     */
-    @Deprecated
-    AsyncOperation<Void> updateFirmware(InputStream firmwareStream, DfuProgressHandler handler);
-    /**
-     * Terminates a DFU in progress, resulting in a failure.  Does nothing if no DFU is in progress
-     * @deprecated The API will no longer perform firmware updates in future releases.  Instead, the dfu will be handled with Nordic's
-     * <a href="https://github.com/NordicSemiconductor/Android-DFU-Library">Android DFU library</a>.
-     * @see #downloadLatestFirmware()
-     */
-    @Deprecated
-    void abortFirmwareUpdate();
-
-    /**
-     * Downloads the latest firmware release for the board to your Android device.  You must be connected to the
-     * board before calling this function.
-     * @return Path to where the firmware resides on the Android device, available when the download is completed
-     */
-    AsyncOperation<File> downloadLatestFirmware();
-    /**
-     * Checks if there is a newer version of the firmware available for your board.  If a newer firmware version
-     * exists, the operation will return true.  The firmware check requires an active internet connection on your
-     * Android device.
-     * @return Result of operation that will be available when the firmware check is completed
-     */
-    AsyncOperation<Boolean> checkForFirmwareUpdate();
-
-    /**
-     * Base class for on-board sensors or features supported by the board's firmware
+     * Sensor, peripheral, or firmware feature
      * @author Eric Tsai
      */
     interface Module { }
     /**
-     * Retrieves a pointer to the requested module, if supported by the current board and firmware, and
-     * the board is not in MetaBoot mode.  The API must be connected to the board to use this function.
-     * @param moduleClass    Module class to lookup
-     * @return Reference to the requested module, null if the BLE connection is not active
-     * @throws UnsupportedModuleException if the module is not available on the board, or the board is in
-     * MetaBoot mode
+     * Retrieves a reference to the requested module if supported.  You must connected to the board before
+     * calling this function and the board must not be in MetaBoot mode
+     * @param moduleClass   Module class to lookup
+     * @param <T>           Runtime type the return value is casted as
+     * @return Reference to the requested module, null if the board is not connected, module not supported, or board is in MetaBoot mode
      */
-    <T extends Module> T getModule(Class<T> moduleClass) throws UnsupportedModuleException;
+    <T extends Module> T getModule(Class<T> moduleClass);
+    /**
+     * Retrieves a reference to the requested module if supported, throws a checked exception if the function fails.
+     * You must connected to the board before calling this function and the board must not be in MetaBoot mode
+     * @param moduleClass   ModuleId class to lookup
+     * @param <T>           Runtime type the return value is casted as
+     * @return Reference to the requested module
+     * @throws UnsupportedModuleException If the requested module is not supported or the board is in MetaBoot mode
+     */
+    <T extends Module> T getModuleOrThrow(Class<T> moduleClass) throws UnsupportedModuleException;
 
     /**
-     * Variant of #{@link #getModule(Class)} that does not throw a checked exception.  The API must be
-     * connected to the board to use this function.
-     * @param moduleClass    Module class to lookup
-     * @return Reference to the module class, null if not supported, board is in MetaBoot mode, or
-     * the API is not connected to the board
-     */
-    <T extends Module> T lookupModule(Class<T> moduleClass);
-
-    /**
-     * Wrapper class around the data from the device information service
-     * @author Eric Tsai
-     */
-    interface DeviceInformation {
-        /**
-         * Retrieves the device's manufacturer
-         * @return Manufacturer name
-         */
-        String manufacturer();
-
-        /**
-         * Retrieves the device's model number
-         * @return Module number
-         */
-        String modelNumber();
-
-        /**
-         * Retrieves the device's serial number
-         * @return Serial number
-         */
-        String serialNumber();
-
-        /**
-         * Retrieves the revision of the firmware running on the device
-         * @return Firmware revision
-         */
-        String firmwareRevision();
-
-        /**
-         * Retrieves the revision of the hardware within the device
-         * @return Hardware revision
-         */
-        String hardwareRevision();
-    }
-    /**
-     * Reads supported characteristics from the Device Information service
-     * @return DeviceInformation object that will be available when the read operation completes
-     */
-    AsyncOperation<DeviceInformation> readDeviceInformation();
-    /**
-     * Reads the current RSSI value
-     * @return RSSI value that will be available when the read operation completes
-     */
-    AsyncOperation<Integer> readRssi();
-    /**
-     * Reads the battery level characteristic
-     * @return Battery level that will be available when the read operation completes
-     */
-    AsyncOperation<Byte> readBatteryLevel();
-
-    /**
-     * Class for handling Bluetooth LE connection events
-     * @author Eric Tsai
-     */
-    abstract class ConnectionStateHandler {
-        /**
-         * Called when a connection to the MetaWear board is established and ready to be used
-         */
-        public void connected() { }
-
-        /**
-         * Called when the connection is lost
-         */
-        public void disconnected() { }
-
-        /**
-         * Called if a connection attempt failed
-         * @param status    Status code reported by one of the BluetoothGattCallback methods, -1 if a
-         *                  a connection timeout occurred
-         * @param error     Error thrown by one of the BluetoothGattCallback methods
-         */
-        public void failure(int status, Throwable error) { }
-    }
-    /**
-     * Sets the connection state handler
-     * @param handler    Handler to use for connection events
-     */
-    void setConnectionStateHandler(ConnectionStateHandler handler);
-    /**
-     * Establish a connection to the board and prepare the API to communicate with the board.  If this
-     * is not completed within a timeout interval, the
-     * {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#failure(int, Throwable) failure} callback
-     * function will be called with a TimeoutException
-     */
-    void connect();
-    /**
-     * Close the connection to the board
-     */
-    void disconnect();
-    /**
-     * Retrieves the connection state
-     * @return True if a connection is currently established
-     */
-    boolean isConnected();
-
-    /**
-     * Retrieves a route manager
+     * Retrieves a route
      * @param id    Numerical ID to look up
-     * @return Manager corresponding to the specified ID, null if none can be found
+     * @return Route corresponding to the specified ID, null if none can be found
      */
-    RouteManager getRouteManager(int id);
+    Route lookupRoute(int id);
     /**
-     * Remove all data routes
+     * Retrieves an observer
+     * @param id    Numerical ID to look up
+     * @return Observer corresponding to the specified ID, null if none can be found
      */
-    void removeRoutes();
-
+    Observer lookupObserver(int id);
     /**
-     * Removes all routes and timers from the board.  It does not reset the board so any configuration
-     * changes are preserved
+     * Removes all routes and resources allocated on the board (observers, data processors, timers, and loggers)
      */
     void tearDown();
 
     /**
-     * Serializes the internal state of the class
-     * @return Byte array representing the class' state
+     * Serialize object state and write the state to the local disk
+     * @throws IOException If the internal OutputStream throws an exception
      */
-    byte[] serializeState();
+    void serialize() throws IOException;
     /**
-     * Updates the internal state with the values in the byte array
-     * @param state    New state of the class
+     * Serialize object state and write the state to the provided output stream
+     * @param outs    Output stream to write to
+     * @throws IOException If the provided OutputStream throws an exception
      */
-    void deserializeState(byte[] state);
+    void serialize(OutputStream outs) throws IOException;
+    /**
+     * Restore serialized state from the local disk if available
+     * @throws IOException If the internal InputStream throws an exception
+     * @throws ClassNotFoundException Class of a serialized object cannot be found
+     */
+    void deserialize() throws IOException, ClassNotFoundException;
+    /**
+     * Restore serialized state from the provided input stream
+     * @param ins    Input stream to read from
+     * @throws IOException If the provided InputStream throws an exception
+     * @throws ClassNotFoundException Class of a serialized object cannot be found
+     */
+    void deserialize(InputStream ins) throws IOException, ClassNotFoundException;
 }

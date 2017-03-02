@@ -24,38 +24,39 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.DataToken;
+import com.mbientlab.metawear.builder.RouteComponent.Action;
+import com.mbientlab.metawear.CodeBlock;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
+import bolts.Task;
 
 /**
- * Debug functions for advanced use
+ * Auxiliary functions, for advanced use only
  * @author Eric Tsai
  */
-public interface Debug extends MetaWearBoard.Module {
+public interface Debug extends Module {
     /**
-     * Restart the board
+     * Issues a firmware reset command to the board
+     * @return Task that is completed when connection is lost, or cancelled if the function is called
+     * within the {@link CodeBlock#program()} or {@link Action#execute(DataToken)} methods
      */
-    void resetDevice();
-
+    Task<Void> resetAsync();
     /**
-     * Restart the board in bootloader mode
+     * Commands the board to terminate the BLE link
+     * @return Task that is completed when connection is lost, or cancelled if the function is called
+     * within the {@link CodeBlock#program()} or {@link Action#execute(DataToken)} methods
      */
-    void jumpToBootloader();
-
+    Task<Void> disconnectAsync();
     /**
-     * Restart the board after performing garbage collection.  This method should be
-     * used in lieu of {@link #resetDevice()} if a user wishes to restart the board
-     * after erasing macros or log entries.
-     * @see Logging#clearEntries()
-     * @see Macro#eraseMacros()
+     * Restarts the board in MetaBoot mode.  This function must be called in order to update the firmware.
+     * @return Task that is completed when connection is lost, or cancelled if the function is called
+     * within the {@link CodeBlock#program()} or {@link Action#execute(DataToken)} methods
      */
-    void resetAfterGarbageCollect();
-
+    Task<Void> jumpToBootloaderAsync();
     /**
-     * Have the board terminate the connection, as opposed to {@link MetaWearBoard#disconnect()} where
-     * the mobile device terminates the connection.  On devices running Lollipop or later, this will call
-     * the {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#failure(int, Throwable) ConnectionStateHandler.failure}
-     * function with a status of 19 rather than
-     * {@link com.mbientlab.metawear.MetaWearBoard.ConnectionStateHandler#disconnected() ConnectionStateHandler.disconnected}
+     * Tells the board to reset after performing garbage collection.  Use this function in lieu of
+     * {@link #resetAsync()} to reset the board after erasing macros or log data.
      */
-    void disconnect();
+    void resetAfterGc();
 }

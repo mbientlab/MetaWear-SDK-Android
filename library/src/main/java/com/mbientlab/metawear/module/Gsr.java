@@ -24,11 +24,16 @@
 
 package com.mbientlab.metawear.module;
 
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
+import com.mbientlab.metawear.ForcedDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
 /**
  * Interacts with a GSR (galvanic skin response) sensor
  * @author Eric Tsai
  */
-public interface Gsr extends Conductance {
+public interface Gsr extends Module, Configurable<Gsr.ConfigEditor> {
     /**
      * Voltages that can be applied to the GSR electrodes
      */
@@ -36,42 +41,39 @@ public interface Gsr extends Conductance {
         CV_500MV,
         CV_250MV
     }
-
     /**
      * Gains that can be applied to the GSR circuit
      */
     enum Gain {
-        G_499K,
-        G_1M
+        GSR_499K,
+        GSR_1M
     }
-
     /**
      * Interface for configuring GSR settings
      */
-    interface ConfigEditor {
+    interface ConfigEditor extends ConfigEditorBase {
         /**
          * Sets the constant voltage applied to the electrodes
          * @param cv    New constant voltage value
          * @return Calling object
          */
-        ConfigEditor setConstantVoltage(ConstantVoltage cv);
-
+        ConfigEditor constantVoltage(ConstantVoltage cv);
         /**
          * Sets the gain applied to the circuit
          * @param gain    New gain value
          * @return Calling object
          */
-        ConfigEditor setGain(Gain gain);
-
-        /**
-         * Writes the new settings to the board
-         */
-        void commit();
+        ConfigEditor gain(Gain gain);
     }
 
     /**
-     * Configures GSR settings
-     * @return Config object to edit the settings
+     * Gets a list of available conductance channels
+     * @return List of available conductance channels
      */
-    ConfigEditor configure();
+    ForcedDataProducer[] channels();
+    /**
+     * Initiates automatic calibration.  This should be done before the first conductance read or
+     * if there are changes in temperature
+     */
+    void calibrate();
 }

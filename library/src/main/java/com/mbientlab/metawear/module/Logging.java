@@ -24,87 +24,90 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.AsyncOperation;
-import com.mbientlab.metawear.Message;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.MetaWearBoard.Module;
 
 import java.util.Calendar;
 
+import bolts.Task;
+
 /**
- * Offline logging for sensor data
+ * Firmware feature that saves data to the on-board flash memory
  * @author Eric Tsai
  */
-public interface Logging extends MetaWearBoard.Module {
+public interface Logging extends Module {
     /**
-     * Processes notifications from the data logger
-     * @author Eric Tsai
+     * Handler for processing download updates
      */
-    abstract class DownloadHandler {
+    interface LogDownloadUpdateHandler {
         /**
          * Called when a progress update is received from the board
          * @param nEntriesLeft    Number of entries left to download
          * @param totalEntries    Total number of entries
          */
-        public void onProgressUpdate(int nEntriesLeft, int totalEntries) { }
+        void receivedUpdate(long nEntriesLeft, long totalEntries);
+    }
 
+    /**
+     * Types of errors encountered during a log download
+     * @author Eric Tsai
+     */
+    enum DownloadError {
+        UNKNOWN_LOG_ENTRY,
+        UNHANDLED_LOG_DATA
+    }
+    /**
+     * Handler for processing download errors
+     */
+    interface LogDownloadErrorHandler {
         /**
-         * Called when a log entry has been received but cannot be matched to a route logger
+         * Called when a log entry has been received but cannot be matched to a data logger
+         * @param errorType    Type of error received
          * @param logId        Numerical ID of the log entry
          * @param timestamp    Date and time of when the data was recorded
          * @param data         Byte array representation of the sensor data
          */
-        public void receivedUnknownLogEntry(byte logId, Calendar timestamp, byte[] data) { }
-
-        /**
-         * Called when a log entry has been received but has no
-         * {@link com.mbientlab.metawear.RouteManager.MessageHandler MessageHandler} to process the
-         * received entry
-         * @param logMessage    Log message received from the board
-         */
-        public void receivedUnhandledLogEntry(Message logMessage) { }
+        void receivedError(DownloadError errorType, byte logId, Calendar timestamp, byte[] data);
     }
 
-    /**
-     * Start logging sensor data.  This version of the method will not overwrite older entries if
-     * the log is full
-     */
-    void startLogging();
     /**
      * Start logging sensor data
      * @param overwrite    True if older entries should be overwritten when the logger is full
      */
-    void startLogging(boolean overwrite);
+    void start(boolean overwrite);
     /**
      * Stop logging sensor data
      */
-    void stopLogging();
-
+    void stop();
     /**
-     * Start downloading the recorded sensor data
-     * @param notifyProgress    How often to send progress updates, expressed as a fraction between [0, 1]
-     *                          where 0= no updates, 0.1= 10 updates, 0.25= 4 updates, etc.
-     * @param handler           Handler to use for logger notifications
-     * @return Number of log entries to download, reported asynchronously
+     * Download saved data from the flash memory with periodic progress updates and error handling
+     * @param nUpdates          How many progress updates to send to {@link LogDownloadUpdateHandler#receivedUpdate(long, long)}
+     * @param updateHandler     Handler to accept download notifications
+     * @param errorHandler      Handler to process errors encountered during the download
+     * @return Task that will complete when the download has finished
      */
-    AsyncOperation<Integer> downloadLog(float notifyProgress, DownloadHandler handler);
+    Task<Void> downloadAsync(int nUpdates, LogDownloadUpdateHandler updateHandler, LogDownloadErrorHandler errorHandler);
+    /**
+     * Download saved data from the flash memory with periodic progress updates
+     * @param nUpdates          How many progress updates to send to {@link LogDownloadUpdateHandler#receivedUpdate(long, long)}
+     * @param updateHandler     Handler to accept download notifications
+     * @return Task that will complete when the download has finished
+     */
+    Task<Void> downloadAsync(int nUpdates, LogDownloadUpdateHandler updateHandler);
+    /**
+     * Download saved data from the flash memory with no progress updates
+     * @param errorHandler    Handler to process encountered errors during the download
+     * @return Task that will complete when the download has finished
+     */
+    Task<Void> downloadAsync(LogDownloadErrorHandler errorHandler);
+    /**
+     * Download saved data from the flash memory with no progress updates nor error handling
+     * @return Task that will complete when the download has finished
+     */
+    Task<Void> downloadAsync();
 
     /**
      * Clear all stored logged data from the board.  The erase operation will not be performed until
-     * you disconnect from the board.  If you wish to reset the board after the erase operation,
-     * use the {@link Debug#resetAfterGarbageCollect()} method.
+     * you disconnect from the board.
      */
     void clearEntries();
-
-    /**
-     * Clear a set number of log entries stored on the board.  The erase operation will not be performed until
-     * you disconnect from the board.  If you wish to reset the board after the erase operation,
-     * use the {@link Debug#resetAfterGarbageCollect()} method.
-     */
-    void clearEntries(long nEntries);
-
-    /**
-     * Retrieves the number of log entries that can be written to the board.
-     * @return Number of log entries the board can store
-     */
-    long getLogCapacity();
 }

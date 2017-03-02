@@ -24,56 +24,39 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.AsyncOperation;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
+import bolts.Task;
 
 /**
- * Programs commands onto the board's flash memory
+ * Firmware feature that saves MetaWear commands to the on-board flash memory
  * @author Eric Tsai
  */
-public interface Macro extends MetaWearBoard.Module {
+public interface Macro extends Module {
     /**
-     * Collection of commands to be programmed into the flash memory
-     * @author Eric Tsai
+     * Variant of {@link #startRecord(boolean)} with {@code execOnBoot} set to true
      */
-    abstract class CodeBlock {
-        /**
-         * Retrieves the execute on boot status
-         * @return True if the commands should be executed on boot
-         */
-        public boolean execOnBoot() { return true; }
-
-        /**
-         * MetaWear commands to be programmed
-         */
-        public abstract void commands();
-    }
-
+    void startRecord();
     /**
-     * Executes the commands corresponding to the macro ID
-     * @param macroId    Numerical ID of the macro to execute
-     * @return Status object that notifies the user when the macro has completed executing
+     * Begin macro recording.  Every MetaWear command issued will be recorded to the flash memory.
+     * @param execOnBoot    True if the commands should be executed when the board powers on
      */
-    AsyncOperation<Void> execute(byte macroId);
-
+    void startRecord(boolean execOnBoot);
     /**
-     * Executes the commands corresponding to the macro ID.  This variant will not alert the caller of
-     * when the macro has finished executing
-     * @param macroId    Numerical ID of the macro to execute
+     * Ends macro recording
+     * @return Task containing the id of the recorded task
      */
-    void silentExecute(byte macroId);
+    Task<Byte> endRecordAsync();
 
     /**
-     * Program a code block to the flash memory
-     * @param block    MetaWear commands
-     * @return Numerical ID representing the code block, available when the macro is done writing
+     * Execute the commands corresponding to the macro ID
+     * @param id        Numerical ID of the macro to execute
      */
-    AsyncOperation<Byte> record(CodeBlock block);
-
+    void execute(byte id);
     /**
-     * Removes all macros on the flash memory.  The erase operation will not be performed until
+     * Remove all macros on the flash memory.  The erase operation will not be performed until
      * you disconnect from the board.  If you wish to reset the board after the erase operation,
-     * use the {@link Debug#resetAfterGarbageCollect()} method.
+     * use the {@link Debug#resetAfterGc()} method.
      */
-    void eraseMacros();
+    void eraseAll();
 }

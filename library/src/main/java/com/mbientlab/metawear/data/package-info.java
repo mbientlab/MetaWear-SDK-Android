@@ -22,5 +22,5 @@
  * hello@mbientlab.com.
  */
 
-/** Message types for sensors */
+/** General wrapper classes encapsulating sensor data */
 package com.mbientlab.metawear.data;

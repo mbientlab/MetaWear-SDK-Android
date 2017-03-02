@@ -24,28 +24,21 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.DataSignal;
-import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.ActiveDataProducer;
+import com.mbientlab.metawear.MetaWearBoard.Module;
+
+import bolts.Task;
 
 /**
- * Push button switch
+ * On-board push button switch
  * @author Eric Tsai
  */
-public interface Switch extends MetaWearBoard.Module {
+public interface Switch extends Module {
     /**
-     * Generic selector for switch data
-     * @author Eric Tsai
+     * Get an implementation of the ActiveDataProducer interface for the button state, represented as
+     * a boolean (true = pressed, false = released) or byte (1 = pressed, 0 = released)
+     * @return Object for the switch state
      */
-    interface SourceSelector {
-        /**
-         * Handle data from the switch
-         * @return Object representing switch state
-         */
-        DataSignal fromSensor();
-    }
-    /**
-     * Initiates the creation of a route for switch data
-     * @return Object representing the switch data
-     */
-    SourceSelector routeData();
+    ActiveDataProducer state();
+    Task<Byte> readCurrentStateAsync();
 }
