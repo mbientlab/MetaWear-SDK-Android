@@ -22,19 +22,18 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.datatype;
+package com.mbientlab.metawear.impl.platform;
+
+import java.util.UUID;
 
 /**
- * Created by etsai on 11/13/16.
+ * Characteristics under the Battery GATT service
+ * @author Eric Tsai
  */
-
-public enum SensorOrientation {
-    FACE_UP_PORTRAIT_UPRIGHT,
-    FACE_UP_PORTRAIT_UPSIDE_DOWN,
-    FACE_UP_LANDSCAPE_LEFT,
-    FACE_UP_LANDSCAPE_RIGHT,
-    FACE_DOWN_PORTRAIT_UPRIGHT,
-    FACE_DOWN_PORTRAIT_UPSIDE_DOWN,
-    FACE_DOWN_LANDSCAPE_LEFT,
-    FACE_DOWN_LANDSCAPE_RIGHT
+public class BatteryService {
+    /** Battery level characteristic */
+    public static final BtleGattCharacteristic BATTERY_LEVEL = new BtleGattCharacteristic(
+            UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb"),
+            UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb")
+    );
 }

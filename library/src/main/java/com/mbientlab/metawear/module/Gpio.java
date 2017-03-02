@@ -29,10 +29,14 @@ import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Controls the general purpose i/o pins
+ * General purpose I/O pins for connecting external sensors
  * @author Eric Tsai
  */
 public interface Gpio extends Module {
+    /** Value indicating that the pin is unused for {@link Analog#read(byte, byte, short, byte)} */
+    byte UNUSED_READ_PIN = (byte) 0xff;
+    /** Value indicating that the delay is unused for {@link Analog#read(byte, byte, short, byte)} */
+    byte UNUSED_READ_DELAY = 0;
     /**
      * Pin change types
      * @author Eric Tsai
@@ -57,7 +61,7 @@ public interface Gpio extends Module {
     }
 
     /**
-     * Represents one gpio pin
+     * Represents one GPIO pin
      * @author Eric Tsai
      */
     interface Pin {
@@ -68,41 +72,42 @@ public interface Gpio extends Module {
         boolean isVirtual();
 
         /**
-         * Sets the pin change type to look for
+         * Set the pin change type to look for
          * @param type    New pin change type
          */
         void setChangeType(PinChangeType type);
         /**
-         * Sets the pin's pull mode
+         * Set the pin's pull mode
          * @param mode    New pull mode
          */
         void setPullMode(PullMode mode);
         /**
-         * Clears the pin's output voltage i.e. logical low
+         * Clear the pin's output voltage i.e. logical low
          */
         void clearOutput();
         /**
-         * Sets the pin's output voltage i.e. logical high
+         * Set the pin's output voltage i.e. logical high
          */
         void setOutput();
 
         /**
-         * Gets an object that represents analog adc data
+         * Get an implementation of the Analog interface for ADC data, represented as a short
          * @return Object representing analog adc data
          */
         Analog analogAdc();
         /**
-         * Gets an object that represents analog reference voltage data
+         * Get an implementation of the Analog interface for analog reference voltage data, represented
+         * as a float with units of volts (V).
          * @return Object representing analog reference voltage data
          */
         Analog analogAbsRef();
         /**
-         * Gets an object that represents digital data
+         * Get an implementation of the ForcedDataProducer interface for digital data, represented as a byte
          * @return Object representing digital data
          */
         ForcedDataProducer digital();
         /**
-         * Gets an object that represents digital pin monitoring data data
+         * Get an implementation of the AsyncDataProducer interface for the pin monitoring data, represented as a byte
          * @return Object representing digital pin monitoring data
          */
         AsyncDataProducer monitor();
@@ -115,25 +120,24 @@ public interface Gpio extends Module {
     interface Analog extends ForcedDataProducer {
         /**
          * Variant of the {@link #read()} function that provides finer control of the analog read operation
-         * @param pullup      Pin that will be pulled up before the read, 0xff if unused
-         * @param pulldown    Pin that will be pulled down before the read, 0xff if unused
-         * @param delay       How long to wait before reading from the pin, in microseconds, set to 0 if unused
-         * @param virtual     Pin number the data will identify as.  Object representing virtual pins can be
-         *                    created by calling {@link #createVirtualPin(byte)}
+         * @param pullup      Pin to be pulled up before the read, set to {@link #UNUSED_READ_PIN} if not used
+         * @param pulldown    Pin to be pulled down before the read, set to {@link #UNUSED_READ_PIN} if not used
+         * @param delay       How long to wait before reading from the pin, in microseconds, set to {@link #UNUSED_READ_DELAY} if not used
+         * @param virtual     Pin number the data will identify as, set to {@link #UNUSED_READ_PIN} if not used.  Objects representing virtual
+         *                    pins are created with {@link #getVirtualPin(byte)}
          */
         void read(byte pullup, byte pulldown, short delay, byte virtual);
     }
-
     /**
-     * Returns an object representing the gpio pin
-     * @param pin    Pin to use
-     * @return Object representing the gpio pin
+     * Retrieves a {@link Pin} object representing a physical GPIO pin
+     * @param index    Index to retrieve
+     * @return Object for a physical pin, null if index represents a non-existent pin
      */
-    Pin getPin(byte pin);
+    Pin pin(byte index);
     /**
-     * Creates a virtual pin to manipulate data from the
-     * @param pin    Virtual pin to interact with
-     * @return Object representing the virtual pin
+     * Gets an object representing a virtual pin for data directed to it by the {@link Analog#read(byte, byte, short, byte)} method
+     * @param index    Index the virtual pin is using
+     * @return Virtual pin
      */
-    Pin createVirtualPin(byte pin);
+    Pin getVirtualPin(byte index);
 }

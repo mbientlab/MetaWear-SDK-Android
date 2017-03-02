@@ -28,7 +28,7 @@ import com.mbientlab.metawear.module.Haptic;
 import com.mbientlab.metawear.module.Settings;
 import com.mbientlab.metawear.module.Settings.BatteryState;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -64,8 +64,8 @@ public class TestSettingsRev3 extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x03 });
-        btlePlaform.boardInfo = info;
+        junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x03 });
+        junitPlatform.boardInfo = info;
         connectToBoard();
 
         settings = mwBoard.getModule(Settings.class);
@@ -79,7 +79,7 @@ public class TestSettingsRev3 extends UnitTestBase {
         };
         final Haptic haptic= mwBoard.getModule(Haptic.class);
 
-        settings.onDisconnect(new CodeBlock() {
+        settings.onDisconnectAsync(new CodeBlock() {
             @Override
             public void program() {
                 haptic.startMotor(100f, (short) 3000);
@@ -98,7 +98,7 @@ public class TestSettingsRev3 extends UnitTestBase {
             this.wait();
         }
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -106,17 +106,17 @@ public class TestSettingsRev3 extends UnitTestBase {
         byte[] expected= new byte[] {0x11, (byte) 0xcc};
 
         settings.battery().read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void interpretBatteryData() {
-        BatteryState expected= new BatteryState((byte) 99, (short) 4148);
+        BatteryState expected= new BatteryState((byte) 99,  Float.intBitsToFloat(0x4084bc6a));
         final Capture<BatteryState> actual= new Capture<>();
 
-        settings.battery().addRoute(new RouteBuilder() {
+        settings.battery().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
@@ -138,37 +138,41 @@ public class TestSettingsRev3 extends UnitTestBase {
 
     @Test
     public void interpretComponentBatteryData() {
-        short[] expected = new short[] {99, 4148};
-        final short[] actual= new short[2];
+        final Capture<Float> actualVoltage = new Capture<>();
+        final Capture<Byte> actualCharge = new Capture<>();
 
-        settings.battery().addRoute(new RouteBuilder() {
+        short expectedCharge =  99;
+        float expectedVoltage = Float.intBitsToFloat(0x4084bc6a);
+
+        settings.battery().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.split()
                         .index(0).stream(new Subscriber() {
                             @Override
                             public void apply(Data data, Object... env) {
-                                ((short[]) env[0])[0]= data.value(Short.class);
+                                ((Capture<Byte>) env[0]).set(data.value(Byte.class));
                             }
                         })
                         .index(1).stream(new Subscriber() {
                             @Override
                             public void apply(Data data, Object... env) {
-                                ((short[]) env[0])[1]= data.value(Short.class);
+                                ((Capture<Float>) env[0]).set(data.value(Float.class));
                             }
                         });
             }
         }).continueWith(new Continuation<Route, Void>() {
             @Override
             public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, (Object) actual);
-                task.getResult().setEnvironment(1, (Object) actual);
+                task.getResult().setEnvironment(0, actualCharge);
+                task.getResult().setEnvironment(1, actualVoltage);
                 return null;
             }
         });
         sendMockResponse(new byte[] {0x11, (byte) 0x8c, 0x63, 0x34, 0x10});
 
-        assertArrayEquals(expected, actual);
+        assertEquals(expectedCharge, actualCharge.get().byteValue());
+        assertEquals(expectedVoltage, actualVoltage.get(), 0.001f);
     }
 
     @Test
@@ -176,38 +180,8 @@ public class TestSettingsRev3 extends UnitTestBase {
         assertNull(settings.powerStatus());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void readPowerStatusFail() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
-
-        settings.readPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual.set(task.getError());
-                return null;
-            }
-        });
-
-        throw actual.get();
-    }
-
     @Test
     public void chargeStatusNull() {
         assertNull(settings.chargeStatus());
-    }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void readChargeStatusFail() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
-
-        settings.readChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual.set(task.getError());
-                return null;
-            }
-        });
-
-        throw actual.get();
     }
 }

@@ -26,7 +26,7 @@ package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.impl.MetaWearBoardImpl.RegisterResponseHandler;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.SerialPassthrough;
 
 import java.io.Serializable;
@@ -36,8 +36,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.DATA_PROCESSOR;
-import static com.mbientlab.metawear.impl.ModuleId.SERIAL_PASSTHROUGH;
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.Constant.Module.SERIAL_PASSTHROUGH;
 
 /**
  * Created by etsai on 10/3/16.
@@ -56,7 +56,7 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
             super(SERIAL_PASSTHROUGH, register, id, new DataAttributes(new byte[] {length}, (byte) 1, (byte) 0, false));
         }
 
-        SerialPassthroughData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        SerialPassthroughData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
@@ -68,7 +68,7 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new SerialPassthroughData(input, module, register, id, attributes);
         }
 
@@ -86,31 +86,31 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
             mwPrivate.sendCommand(command);
         }
     }
-    private static class I2cInner implements I2c, Serializable {
+    private static class I2cInner implements I2C, Serializable {
         private static final long serialVersionUID = 8518548885863146365L;
         private final byte id;
-        transient MetaWearBoardPrivate owner;
+        transient MetaWearBoardPrivate mwPrivate;
 
-        I2cInner(byte id, byte length, MetaWearBoardPrivate owner) {
+        I2cInner(byte id, byte length, MetaWearBoardPrivate mwPrivate) {
             this.id= id;
-            this.owner= owner;
+            this.mwPrivate = mwPrivate;
 
-            owner.tagProducer(name(), new SerialPassthroughData(Util.setSilentRead(I2C_RW), id, length));
+            mwPrivate.tagProducer(name(), new SerialPassthroughData(Util.setSilentRead(I2C_RW), id, length));
         }
 
-        void restoreTransientVars(MetaWearBoardPrivate owner) {
-            this.owner= owner;
+        void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
+            this.mwPrivate = mwPrivate;
         }
 
         @Override
         public void read(byte deviceAddr, byte registerAddr) {
-            DataTypeBase i2cProducer= owner.lookupProducer(name());
-            i2cProducer.read(owner, new byte[]{deviceAddr, registerAddr, id, i2cProducer.attributes.length()});
+            DataTypeBase i2cProducer= mwPrivate.lookupProducer(name());
+            i2cProducer.read(mwPrivate, new byte[]{deviceAddr, registerAddr, id, i2cProducer.attributes.length()});
         }
 
         @Override
-        public Task<Route> addRoute(RouteBuilder builder) {
-            return owner.queueRouteBuilder(builder, name());
+        public Task<Route> addRouteAsync(RouteBuilder builder) {
+            return mwPrivate.queueRouteBuilder(builder, name());
         }
 
         @Override
@@ -118,38 +118,38 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
             return String.format(Locale.US, I2C_PRODUCER_FORMAT, id);
         }
     }
-    private static class SpiInner implements Spi, Serializable {
+    private static class SpiInner implements SPI, Serializable {
         private static final long serialVersionUID = -1781850442398737602L;
 
         private final byte id;
-        transient MetaWearBoardPrivate owner;
+        transient MetaWearBoardPrivate mwPrivate;
 
-        SpiInner(byte id, byte length, MetaWearBoardPrivate owner) {
+        SpiInner(byte id, byte length, MetaWearBoardPrivate mwPrivate) {
             this.id= id;
-            this.owner= owner;
+            this.mwPrivate = mwPrivate;
 
-            owner.tagProducer(name(), new SerialPassthroughData(Util.setSilentRead(SPI_RW), id, length));
+            mwPrivate.tagProducer(name(), new SerialPassthroughData(Util.setSilentRead(SPI_RW), id, length));
         }
 
-        void restoreTransientVars(MetaWearBoardPrivate owner) {
-            this.owner= owner;
+        void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
+            this.mwPrivate = mwPrivate;
         }
 
         @Override
         public SpiParameterBuilder<Void> read() {
-            final DataTypeBase spiProducer= owner.lookupProducer(name());
+            final DataTypeBase spiProducer= mwPrivate.lookupProducer(name());
             return new SpiParameterBuilderInner<Void>((byte) ((spiProducer.attributes.length() - 1) | (id << 4))) {
                 @Override
                 public Void commit() {
-                    spiProducer.read(owner, config);
+                    spiProducer.read(mwPrivate, config);
                     return null;
                 }
             };
         }
 
         @Override
-        public Task<Route> addRoute(RouteBuilder builder) {
-            return owner.queueRouteBuilder(builder, name());
+        public Task<Route> addRouteAsync(RouteBuilder builder) {
+            return mwPrivate.queueRouteBuilder(builder, name());
         }
 
         @Override
@@ -231,8 +231,8 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
         }
     }
 
-    private Map<Byte, I2c> i2cDataProducers= new ConcurrentHashMap<>();
-    private Map<Byte, Spi> spiDataProducers = new ConcurrentHashMap<>();
+    private Map<Byte, I2C> i2cDataProducers= new ConcurrentHashMap<>();
+    private Map<Byte, SPI> spiDataProducers = new ConcurrentHashMap<>();
     private transient AsyncTaskManager<byte[]> i2cDataTaskSource, spiDataTaskSources;
 
     SerialPassthroughImpl(MetaWearBoardPrivate mwPrivate) {
@@ -243,11 +243,11 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
     public void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
         super.restoreTransientVars(mwPrivate);
 
-        for(I2c it: i2cDataProducers.values()) {
+        for(I2C it: i2cDataProducers.values()) {
             ((I2cInner) it).restoreTransientVars(mwPrivate);
         }
 
-        for(Spi it: spiDataProducers.values()) {
+        for(SPI it: spiDataProducers.values()) {
             ((SpiInner) it).restoreTransientVars(mwPrivate);
         }
     }
@@ -291,7 +291,7 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
     }
 
     @Override
-    public I2c i2cData(final byte length, final byte id) {
+    public I2C i2c(final byte length, final byte id) {
         if (!i2cDataProducers.containsKey(id)) {
             i2cDataProducers.put(id, new I2cInner(id, length, mwPrivate));
         }
@@ -322,8 +322,8 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
     }
 
     @Override
-    public Spi spiData(final byte length, final byte id) {
-        if (mwPrivate.lookupModuleInfo(ModuleId.SERIAL_PASSTHROUGH).revision < SPI_REVISION) {
+    public SPI spi(final byte length, final byte id) {
+        if (mwPrivate.lookupModuleInfo(Constant.Module.SERIAL_PASSTHROUGH).revision < SPI_REVISION) {
             return null;
         }
 
@@ -336,7 +336,7 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
 
     @Override
     public SpiParameterBuilder<Void> writeSpi() {
-        return mwPrivate.lookupModuleInfo(ModuleId.SERIAL_PASSTHROUGH).revision >= SPI_REVISION ?
+        return mwPrivate.lookupModuleInfo(Constant.Module.SERIAL_PASSTHROUGH).revision >= SPI_REVISION ?
                 new SpiParameterBuilderInner<Void>() {
                     @Override
                     public Void commit() {

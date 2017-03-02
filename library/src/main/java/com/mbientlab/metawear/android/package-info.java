@@ -22,5 +22,8 @@
  * hello@mbientlab.com.
  */
 
-/** Android specific classes implementing the {@link com.mbientlab.metawear.impl.Platform} interface */
+/**
+ * Android implementation of the interfaces required to use the
+ * {@link com.mbientlab.metawear.impl.JseMetaWearBoard JseMetaWearBoard} class
+ */
 package com.mbientlab.metawear.android;

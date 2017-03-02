@@ -25,15 +25,18 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.MetaWearBoard.Module;
+import com.mbientlab.metawear.data.AngularVelocity;
 
 import java.util.HashMap;
 
 /**
- * Controls the gyro features of the BMI160 6-axis IMU
+ * Sensor on the BMI160 IMU measuring angular velocity
  * @author Eric Tsai
  */
-public interface GyroBmi160 extends Module {
+public interface GyroBmi160 extends Module, Configurable<GyroBmi160.ConfigEditor> {
     /**
      * Operating frequency of the gyro
      * @author Eric Tsai
@@ -62,7 +65,6 @@ public interface GyroBmi160 extends Module {
             this.bitmask= (byte) (ordinal() + 6);
         }
     }
-
     /**
      * Supported angular rate measurement range
      * @author Eric Tsai
@@ -98,39 +100,28 @@ public interface GyroBmi160 extends Module {
             return bitMaskToRanges.get(mask);
         }
     }
-
     /**
      * Interface to configure parameters for measuring angular velocity
      * @author Eric Tsai
      */
-    interface ConfigEditor {
+    interface ConfigEditor extends ConfigEditorBase {
         /**
-         * Sets the measurement range
+         * Set the measurement range
          * @param range    New range to use
          * @return Calling object
          */
         ConfigEditor range(Range range);
-
         /**
-         * Sets the output date rate
+         * Set the output date rate
          * @param odr    New output data rate to use
          * @return Calling object
          */
         ConfigEditor odr(OutputDataRate odr);
-
-        /**
-         * Writes the new settings to the board
-         */
-        void commit();
     }
-    /**
-     * Configures the settings for measuring angular rates
-     * @return Editor object to configure various settings
-     */
-    ConfigEditor configure();
 
     /**
-     * Reports measured angular velocity values from the gyro
+     * Reports measured angular velocity values from the gyro.  Combined XYZ data is represented as an
+     * {@link AngularVelocity} object while split data is interpreted as a float.
      * @author Eric Tsai
      */
     interface AngularVelocityDataProducer extends AsyncDataProducer {
@@ -151,8 +142,8 @@ public interface GyroBmi160 extends Module {
         String zAxisName();
     }
     /**
-     * Gets an object to control angular velocity data
-     * @return Object controlling angular velocity data
+     * Get an implementation of the AngularVelocityDataProducer interface
+     * @return AngularVelocityDataProducer object
      */
     AngularVelocityDataProducer angularVelocity();
     /**

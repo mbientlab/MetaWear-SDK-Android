@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -45,7 +45,7 @@ public class TestGpioDigital extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
         connectToBoard();
 
         gpio= mwBoard.getModule(Gpio.class);
@@ -54,17 +54,17 @@ public class TestGpioDigital extends UnitTestBase {
     @Test
     public void setDigitalOut() {
         byte[] expected = new byte[] {0x05, 0x01, 0x00};
-        gpio.getPin((byte) 0).setOutput();
+        gpio.pin((byte) 0).setOutput();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void clearDigitalOut() {
         byte[] expected = new byte[] {0x05, 0x02, 0x01};
-        gpio.getPin((byte) 1).clearOutput();
+        gpio.pin((byte) 1).clearOutput();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -74,20 +74,20 @@ public class TestGpioDigital extends UnitTestBase {
                 {0x05, 0x04, 0x03},
                 {0x05, 0x03, 0x04}
         };
-        gpio.getPin((byte) 2).setPullMode(NO_PULL);
-        gpio.getPin((byte) 3).setPullMode(PULL_DOWN);
-        gpio.getPin((byte) 4).setPullMode(PULL_UP);
+        gpio.pin((byte) 2).setPullMode(NO_PULL);
+        gpio.pin((byte) 3).setPullMode(PULL_DOWN);
+        gpio.pin((byte) 4).setPullMode(PULL_UP);
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
     public void read() {
         byte[] expected= new byte[] {0x05, (byte) 0x88, 0x04};
 
-        gpio.getPin((byte) 4).digital().addRoute(new RouteBuilder() {
+        gpio.pin((byte) 4).digital().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -97,18 +97,18 @@ public class TestGpioDigital extends UnitTestBase {
             }
         });
 
-        gpio.getPin((byte) 4).digital().read();
+        gpio.pin((byte) 4).digital().read();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void readSilent() {
         byte[] expected= new byte[] {0x05, (byte) 0xc8, 0x04};
 
-        gpio.getPin((byte) 4).digital().read();
+        gpio.pin((byte) 4).digital().read();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -116,9 +116,9 @@ public class TestGpioDigital extends UnitTestBase {
         final byte[] actual= new byte[2];
         byte[] expected= new byte[] {1, 0};
 
-        gpio.getPin((byte) 7).digital().addRoute(new RouteBuilder() {
+        gpio.pin((byte) 7).digital().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     private byte i= 0;
 

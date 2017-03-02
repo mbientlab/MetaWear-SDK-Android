@@ -28,6 +28,8 @@ import com.mbientlab.metawear.module.Timer;
 
 import org.junit.Test;
 
+import java.io.IOException;
+
 import bolts.Task;
 
 /**
@@ -36,10 +38,14 @@ import bolts.Task;
 
 public class TestDeserializeTimer extends TestTimer {
     protected Task<Timer.ScheduledTask> setupTimer() {
-        btlePlaform.boardStateSuffix = "timer";
-        mwBoard.deserialize();
+        try {
+            junitPlatform.boardStateSuffix = "timer";
+            mwBoard.deserialize();
 
-        return Task.forResult(mwBoard.getModule(Timer.class).lookupScheduledTask((byte) 0));
+            return Task.forResult(mwBoard.getModule(Timer.class).lookupScheduledTask((byte) 0));
+        } catch (IOException | ClassNotFoundException e) {
+            return Task.forError(e);
+        }
     }
 
     @Test

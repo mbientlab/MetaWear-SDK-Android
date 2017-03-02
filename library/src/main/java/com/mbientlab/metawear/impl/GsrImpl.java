@@ -34,7 +34,7 @@ import java.util.Locale;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.GSR;
+import static com.mbientlab.metawear.impl.Constant.Module.GSR;
 
 /**
  * Created by etsai on 9/21/16.
@@ -49,26 +49,26 @@ class GsrImpl extends ModuleImplBase implements Gsr {
         private static final long serialVersionUID = 5552089355271489517L;
 
         private final byte id;
-        private transient MetaWearBoardPrivate owner;
+        private transient MetaWearBoardPrivate mwPrivate;
 
-        Channel(byte id, MetaWearBoardPrivate owner) {
+        Channel(byte id, MetaWearBoardPrivate mwPrivate) {
             this.id= id;
-            this.owner= owner;
-            owner.tagProducer(name(), new UintData(GSR, Util.setSilentRead(CONDUCTANCE), id, new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, false)));
+            this.mwPrivate = mwPrivate;
+            mwPrivate.tagProducer(name(), new UintData(GSR, Util.setSilentRead(CONDUCTANCE), id, new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, false)));
         }
 
-        void restoreTransientVariables(MetaWearBoardPrivate owner) {
-            this.owner= owner;
+        void restoreTransientVariables(MetaWearBoardPrivate mwPrivate) {
+            this.mwPrivate = mwPrivate;
         }
 
         @Override
         public void read() {
-            owner.lookupProducer(name()).read(owner);
+            mwPrivate.lookupProducer(name()).read(mwPrivate);
         }
 
         @Override
-        public Task<Route> addRoute(RouteBuilder builder) {
-            return owner.queueRouteBuilder(builder, name());
+        public Task<Route> addRouteAsync(RouteBuilder builder) {
+            return mwPrivate.queueRouteBuilder(builder, name());
         }
 
         @Override
@@ -104,13 +104,13 @@ class GsrImpl extends ModuleImplBase implements Gsr {
             private Gain newGain= Gain.GSR_499K;
 
             @Override
-            public ConfigEditor setConstantVoltage(ConstantVoltage cv) {
+            public ConfigEditor constantVoltage(ConstantVoltage cv) {
                 newCv= cv;
                 return this;
             }
 
             @Override
-            public ConfigEditor setGain(Gain gain) {
+            public ConfigEditor gain(Gain gain) {
                 newGain= gain;
                 return this;
             }

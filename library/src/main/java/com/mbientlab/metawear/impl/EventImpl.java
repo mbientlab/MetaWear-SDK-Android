@@ -35,7 +35,7 @@ import java.util.concurrent.TimeoutException;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
-import static com.mbientlab.metawear.impl.ModuleId.EVENT;
+import static com.mbientlab.metawear.impl.Constant.Module.EVENT;
 
 /**
  * Created by etsai on 10/26/16.
@@ -71,7 +71,7 @@ class EventImpl extends ModuleImplBase implements Module {
             }
         };
 
-        mwPrivate.addResponseHandler(new Pair<>(EVENT.id, ENTRY), new MetaWearBoardImpl.RegisterResponseHandler() {
+        mwPrivate.addResponseHandler(new Pair<>(EVENT.id, ENTRY), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(final byte[] response) {
                 eventTimeoutFuture.cancel(false);

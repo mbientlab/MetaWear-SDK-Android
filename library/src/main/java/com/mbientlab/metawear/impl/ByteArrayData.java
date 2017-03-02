@@ -25,6 +25,7 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Data;
+import com.mbientlab.metawear.impl.Constant.Module;
 
 import java.util.Calendar;
 
@@ -34,30 +35,39 @@ import java.util.Calendar;
 class ByteArrayData extends DataTypeBase {
     private static final long serialVersionUID = 4641172956282853649L;
 
-    ByteArrayData(ModuleId module, byte register, byte id, DataAttributes attributes) {
+    ByteArrayData(Module module, byte register, byte id, DataAttributes attributes) {
         super(module, register, id, attributes);
     }
 
-    ByteArrayData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    ByteArrayData(DataTypeBase input, Module module, byte register, DataAttributes attributes) {
+        super(input, module, register, attributes);
+    }
+
+    ByteArrayData(DataTypeBase input, Module module, byte register, byte id, DataAttributes attributes) {
         super(input, module, register, id, attributes);
     }
 
     @Override
-    public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    public DataTypeBase copy(DataTypeBase input, Module module, byte register, byte id, DataAttributes attributes) {
         return new ByteArrayData(input, module, register, id, attributes);
     }
 
     @Override
-    public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-        return input;
+    public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+        return value;
     }
 
     @Override
-    public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+    public Data createMessage(boolean logData, final MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
         return new DataPrivate(timestamp, data) {
             @Override
             public Class<?>[] types() {
                 return new Class<?>[] { byte[].class };
+            }
+
+            @Override
+            public float scale() {
+                return ByteArrayData.this.scale(mwPrivate);
             }
 
             @Override

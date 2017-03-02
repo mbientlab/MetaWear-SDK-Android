@@ -61,7 +61,7 @@ public class TestHaptic extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= info;
+        junitPlatform.boardInfo= info;
         connectToBoard();
 
         haptic= mwBoard.getModule(Haptic.class);
@@ -72,7 +72,7 @@ public class TestHaptic extends UnitTestBase {
         byte[] expected= new byte[] {0x08, 0x01, (byte) 0xf8, (byte) 0x88, 0x13, 0x00};
 
         haptic.startMotor(100f, (short) 5000);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -80,6 +80,6 @@ public class TestHaptic extends UnitTestBase {
         byte[] expected= new byte[] {0x08, 0x01, 0x7f, 0x4c, 0x1d, 0x01};
 
         haptic.startBuzzer((short) 7500);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

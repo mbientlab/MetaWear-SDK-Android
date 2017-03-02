@@ -51,8 +51,8 @@ public class TestSensorFusionControl extends UnitTestBase {
     public static Collection<Object[]> data() {
         String[] functionNames = new String[] {
             "correctedAcceleration",
-            "correctedRotation",
-            "correctedBField",
+            "correctedAngularVelocity",
+            "correctedMagneticField",
             "quaternion",
             "eulerAngles",
             "gravity",
@@ -188,7 +188,7 @@ public class TestSensorFusionControl extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
         connectToBoard();
 
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
@@ -207,6 +207,6 @@ public class TestSensorFusionControl extends UnitTestBase {
         sensorFusion.stop();
         producer.stop();
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 }

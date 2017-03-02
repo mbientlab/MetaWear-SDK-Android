@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
 import org.junit.Before;
@@ -47,7 +47,7 @@ public class TestBmi160StepCounterData extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo = MetaWearBoardInfo.RPRO;
         connectToBoard();
 
         counter = mwBoard.getModule(AccelerometerBmi160.class).stepCounter();
@@ -58,9 +58,9 @@ public class TestBmi160StepCounterData extends UnitTestBase {
         final Capture<Short> actual = new Capture<>();
         short expected= 43;
 
-        counter.addRoute(new RouteBuilder() {
+        counter.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {
@@ -84,9 +84,9 @@ public class TestBmi160StepCounterData extends UnitTestBase {
     public void read() {
         byte[] expected = new byte[] {0x03, (byte) 0x9a};
 
-        counter.addRoute(new RouteBuilder() {
+        counter.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -97,7 +97,7 @@ public class TestBmi160StepCounterData extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -105,6 +105,6 @@ public class TestBmi160StepCounterData extends UnitTestBase {
         byte[] expected = new byte[] {0x03, (byte) 0xda};
         counter.read();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

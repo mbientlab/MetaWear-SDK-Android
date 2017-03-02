@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.Logging;
 
@@ -70,9 +70,9 @@ public class TestGyroYLogData extends TestLogDataBase {
         mwBoard.getModule(GyroBmi160.class).configure()
                 .range(GyroBmi160.Range.FSR_250)
                 .commit();
-        return mwBoard.getModule(GyroBmi160.class).angularVelocity().addRoute(new RouteBuilder() {
+        return mwBoard.getModule(GyroBmi160.class).angularVelocity().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.split().index(1).log(LOG_DATA_HANDLER);
             }
         });
@@ -115,7 +115,7 @@ public class TestGyroYLogData extends TestLogDataBase {
                 this.wait();
             }
 
-            mwBoard.getModule(Logging.class).download()
+            mwBoard.getModule(Logging.class).downloadAsync()
                     .continueWith(new Continuation<Void, Void>() {
                         @Override
                         public Void then(Task<Void> task) throws Exception {

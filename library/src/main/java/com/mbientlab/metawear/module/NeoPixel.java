@@ -27,7 +27,7 @@ package com.mbientlab.metawear.module;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Controls NeoPixel strands connected to the board
+ * A brand of RGB led strips by Adafruit
  * @author Eric Tsai
  */
 public interface NeoPixel extends Module {
@@ -67,9 +67,9 @@ public interface NeoPixel extends Module {
          * @author Eric Tsai
          */
         enum RotationDirection {
-            /** Move pixels towards the board */
+            /** Move LED color patterns towards the board */
             TOWARDS,
-            /** Move pixels away from the board */
+            /** Move LED color patterns away from the board */
             AWAY
         }
 
@@ -88,20 +88,28 @@ public interface NeoPixel extends Module {
          */
         void release();
         /**
-         * Turns off the pixels in the given range
-         * @param start Pixel index to start clearing from
-         * @param end Pixel index to clear to, inclusive
+         * Clears the LEDs in the given range
+         * @param start Led index to start clearing from
+         * @param end   Led index to clear to, exclusive
          */
-        void turnOff(byte start, byte end);
+        void clear(byte start, byte end);
         /**
-         * Rotate the pixels on a strand
+         * Set and LED's rgb values
+         * @param index LED index to set, from [0, nLeds - 1]
+         * @param red Red value, between [0, 255]
+         * @param green Green value, between [0, 255]
+         * @param blue Blue value, between [0, 255]
+         */
+        void setRgb(byte index, byte red, byte green, byte blue);
+        /**
+         * Rotate the LED color patterns on a strand
          * @param direction Rotation direction
          * @param repetitions Number of times to repeat the rotation
          * @param period Amount of time, in milliseconds, between rotations
          */
         void rotate(RotationDirection direction, byte repetitions, short period);
         /**
-         * Rotate the pixels on a strand indefinitely
+         * Rotate the LED color patterns on a strand indefinitely
          * @param direction Rotation direction
          * @param period Amount of time, in milliseconds, between rotations
          */
@@ -112,38 +120,10 @@ public interface NeoPixel extends Module {
         void stopRotation();
 
         /**
-         * Returns all of the Leds initialized for the strand as an array
-         * @return Array of Led objects
-         */
-        Led[] leds();
-
-        /**
-         * Returns the LED at index i
-         * @param i    Index to lookup, between [0, nLEds)
-         * @return LED at index i
-         * @throws ArrayIndexOutOfBoundsException If index is outside the range [0, nLeds)
-         */
-        Led led(int i);
-
-        /**
-         * Returns the number of Leds initialized for the strand
+         * Return the number of Leds initialized for the strand
          * @return Number of initialized LEDs
          */
         int nLeds();
-    }
-
-    /**
-     * RGB led on a NeoPixel strand
-     * @author Eric Tsai
-     */
-    interface Led {
-        /**
-         * Set pixel color
-         * @param red Red value, between [0, 255]
-         * @param green Green value, between [0, 255]
-         * @param blue Blue value, between [0, 255]
-         */
-        void setRgb(byte red, byte green, byte blue);
     }
 
     /**
@@ -152,12 +132,12 @@ public interface NeoPixel extends Module {
      * @param ordering Color ordering format
      * @param speed Operating speed
      * @param gpioPin GPIO pin the strand is connected to
-     * @param length Number of pixels to initialize
+     * @param length Number of LEDs to use
      * @return Object representing the initialized strand
      */
     Strand initializeStrand(byte strand, ColorOrdering ordering, StrandSpeed speed, byte gpioPin, byte length);
     /**
-     * Finds the object corresponding to the strand number
+     * Find the object corresponding to the strand number
      * @param strand    Strand number to look up
      * @return Strand object matching the number, null if no match is found
      */

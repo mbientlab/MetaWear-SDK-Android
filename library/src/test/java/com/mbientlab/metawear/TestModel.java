@@ -22,39 +22,41 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.impl;
+package com.mbientlab.metawear;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.UUID;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
-import bolts.Task;
+import java.util.Collection;
+
+import static org.junit.Assert.assertEquals;
 
 /**
- * Created by etsai on 8/31/16.
+ * Created by etsai on 12/21/16.
  */
-public interface Platform {
-    enum GattCharWriteType {
-        WRITE_WITH_RESPONSE,
-        WRITE_WITHOUT_RESPONSE
+@RunWith(Parameterized.class)
+public class TestModel extends UnitTestBase {
+    @Parameters(name = "board: {0}")
+    public static Collection<Object[]> data() {
+        return UnitTestBase.allBoardsParams();
     }
 
-    void serializeBoardInfo(Serializable boardInfo) throws IOException;
-    Object deserializeBoardInfo() throws IOException, ClassNotFoundException;
+    @Parameter
+    public MetaWearBoardInfo info;
 
-    void serializeBoardState(Serializable persist) throws IOException;
-    Object deserializeBoardState() throws IOException, ClassNotFoundException;
+    @Before
+    public void setup() throws Exception {
+        junitPlatform.boardInfo = info;
+        connectToBoard();
 
-    void writeGattCharacteristic(GattCharWriteType writeType, Pair<UUID, UUID> gattCharr, byte[] value);
-    void readGattCharacteristic(Pair<UUID, UUID> gattCharr);
+    }
 
-    boolean inMetaBoot();
-    Task<Void> disconnect();
-    Task<Void> boardDisconnect();
-    Task<Void> connect();
-    Task<Integer> readRssiTask();
-
-    Task<File> downloadFile(String source, String dest);
-    File findFile(String filename);
+    @Test
+    public void checkModel() {
+        assertEquals(info.model, mwBoard.getModel());
+    }
 }

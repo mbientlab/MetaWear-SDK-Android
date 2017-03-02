@@ -25,10 +25,12 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.ForcedDataProducer;
 
 /**
- * Extension of the {@link AccelerometerBosch} interface that provides finer control of the BMI160 accelerometer features
+ * Extension of the {@link AccelerometerBosch} interface providing finer control of the BMI160 accelerometer features
  * @author Eric Tsai
  */
 public interface AccelerometerBmi160 extends AccelerometerBosch {
@@ -84,19 +86,19 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
      * Accelerometer configuration editor specific to the BMI160 accelerometer
      * @author Eric Tsai
      */
-    interface Bmi160ConfigEditor extends ConfigEditorBase<Bmi160ConfigEditor> {
+    interface ConfigEditor extends Accelerometer.ConfigEditor<ConfigEditor> {
         /**
-         * Sets the output data rate
+         * Set the output data rate
          * @param odr    New output data rate
          * @return Calling object
          */
-        Bmi160ConfigEditor odr(OutputDataRate odr);
+        ConfigEditor odr(OutputDataRate odr);
         /**
-         * Sets the data range
+         * Set the data range
          * @param fsr    New data range
          * @return Calling object
          */
-        Bmi160ConfigEditor range(AccRange fsr);
+        ConfigEditor range(AccRange fsr);
     }
 
     /**
@@ -104,7 +106,7 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
      * @return Editor object specific to the BMI160 accelerometer
      */
     @Override
-    Bmi160ConfigEditor configure();
+    ConfigEditor configure();
 
     /**
      * Operation modes for the step detector
@@ -118,58 +120,47 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
         /** Gives few false positives but eventually more false negatives */
         ROBUST
     }
-
     /**
      * Configuration editor for the step detection algorithm
      * @author Eric Tsai
      */
-    interface StepDetectorConfigEditor {
+    interface StepConfigEditor extends ConfigEditorBase {
         /**
-         * Sets the operational mode of the step detector balancing sensitivity and robustness.
+         * Set the operational mode of the step detector balancing sensitivity and robustness.
          * @param mode    Detector sensitivity
          * @return Calling object
          */
-        StepDetectorConfigEditor mode(StepDetectorMode mode);
+        StepConfigEditor mode(StepDetectorMode mode);
         /**
          * Write the configuration to the sensor
          */
         void commit();
     }
     /**
-     * Interrupt driven step detection where each detected step triggers a data interrupt
+     * Interrupt driven step detection where each detected step triggers a data interrupt.  This data producer
+     * cannot be used in conjunction with the {@link StepCounterDataProducer} interface.
      * @author Eric Tsai
      */
-    interface StepDetectorDataProducer extends AsyncDataProducer {
-        /**
-         * Configure the step detection algorithm
-         * @return Editor object
-         */
-        StepDetectorConfigEditor configure();
-    }
+    interface StepDetectorDataProducer extends AsyncDataProducer, Configurable<StepConfigEditor> { }
     /**
-     * Gets an object to control the step detection algorithm
-     * @return Object controlling the step detection algorithm
+     * Get an implementation of the StepDetectorDataProducer interface
+     * @return StepDetectorDataProducer object
      */
     StepDetectorDataProducer stepDetector();
-
     /**
-     * Accumulates the number of detected steps in a counter that will send it's current value on request
+     * Accumulates the number of detected steps in a counter that will send its current value on request.  This
+     * data producer cannot be used in conjunction with the {@link StepDetectorDataProducer} interface.
      * @author Eric Tsai
      */
-    interface StepCounterDataProducer extends ForcedDataProducer {
+    interface StepCounterDataProducer extends ForcedDataProducer, Configurable<StepConfigEditor> {
         /**
-         * Configure the step detection algorithm
-         * @return Editor object
-         */
-        StepDetectorConfigEditor configure();
-        /**
-         * Resets the internal step counter
+         * Reset the internal step counter
          */
         void reset();
     }
     /**
-     * Gets an object to control the step counter algorithm
-     * @return Object controlling the step counter algorithm
+     * Get an implementation of the StepCounterDataProducer interface
+     * @return StepCounterDataProducer object
      */
     StepCounterDataProducer stepCounter();
 
@@ -206,30 +197,31 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
     }
 
     /**
-     * Extension of the FlatDataProducer specific to the BMA255 accelerometer
+     * Configuration editor specific to BMI160 flat detection
+     * @author Eric Tsai
+     */
+    interface FlatConfigEditor extends AccelerometerBosch.FlatConfigEditor<FlatConfigEditor> {
+        FlatConfigEditor holdTime(FlatHoldTime time);
+    }
+    /**
+     * Extension of the {@link AccelerometerBosch.FlatDataProducer} interface providing
+     * configuration options specific to the BMI160 accelerometer
      * @author Eric Tsai
      */
     interface FlatDataProducer extends AccelerometerBosch.FlatDataProducer {
         /**
-         * Configuration editor specific to BMI160 flat detection
-         * @author Eric Tsai
-         */
-        interface ConfigEditor extends ConfigEditorBase<ConfigEditor> {
-            ConfigEditor holdTime(FlatHoldTime time);
-        }
-        /**
-         * Configures the flat detection algorithm
-         * @return Configuration editor object
+         * Configure the flat detection algorithm
+         * @return BMI160 specific configuration editor object
          */
         @Override
-        ConfigEditor configure();
+        FlatConfigEditor configure();
     }
     /**
-     * Gets an object to control the flat detection algorithm
-     * @return Object controlling flat detection
+     * Get an implementation of the BMI160 specific FlatDataProducer interface
+     * @return FlatDataProducer object
      */
     @Override
-    FlatDataProducer flatDetector();
+    FlatDataProducer flat();
 
     /**
      * Skip times available for significant motion detection
@@ -259,40 +251,29 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
         /** 2s */
         PT_2_S
     }
-
     /**
-     * Extension of the MotionDataProducer specific to the BMI160 accelerometer
+     * Configuration editor for BMI160 significant motion detection
      * @author Eric Tsai
      */
-    interface MotionDataProducer extends AccelerometerBosch.MotionDataProducer {
+    interface SignificantMotionConfigEditor extends ConfigEditorBase {
         /**
-         * Configuration editor specific to BMI160 significant motion detection
-         * @author Eric Tsai
+         * Set the skip time
+         * @param time    Number of seconds to sleep after movement is detected
+         * @return Calling object
          */
-        interface SignificantMotionConfigEditor {
-            /**
-             * Sets the skip time
-             * @param time    Number of seconds to sleep after movement is detected
-             * @return Calling object
-             */
-            SignificantMotionConfigEditor skipTime(SkipTime time);
-            /**
-             * Sets the proof time
-             * @param time    Number of seconds that movement must still be detected after the skip time passed
-             * @return Calling object
-             */
-            SignificantMotionConfigEditor proofTime(ProofTime time);
-            /**
-             * Writes the settings to the sensor
-             */
-            void commit();
-        }
-        SignificantMotionConfigEditor configureSignificantMotion();
+        SignificantMotionConfigEditor skipTime(SkipTime time);
+        /**
+         * Set the proof time
+         * @param time    Number of seconds that movement must still be detected after the skip time passed
+         * @return Calling object
+         */
+        SignificantMotionConfigEditor proofTime(ProofTime time);
     }
     /**
-     * Gets an object to control the motion detection algorithm
-     * @return Object controlling motion detection
+     * Detects when motion occurs due to a change in location.  Examples of this include walking or being in a moving vehicle.
+     * Actions that do not trigger significant motion include standing stationary or movement from vibrational sources such
+     * as a washing machine.
+     * @author Eric Tsai
      */
-    @Override
-    MotionDataProducer motionDetector();
+    interface SignificantMotionDataProducer extends MotionDetection, AsyncDataProducer, Configurable<SignificantMotionConfigEditor> { }
 }

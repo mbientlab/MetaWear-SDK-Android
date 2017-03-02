@@ -25,13 +25,13 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedAcceleration;
 import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedAngularVelocity;
 import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedMagneticField;
-import com.mbientlab.metawear.data.EulerAngle;
+import com.mbientlab.metawear.data.EulerAngles;
 import com.mbientlab.metawear.data.Quaternion;
 
 import org.junit.Before;
@@ -67,14 +67,14 @@ public class TestSensorFusionData extends UnitTestBase {
                 new CorrectedAcceleration(Float.intBitsToFloat(0xc0585000), Float.intBitsToFloat(0x417ffe00), Float.intBitsToFloat(0xc17ffe00), (byte) 0x00)
             },
             {
-                "correctedRotation",
+                "correctedAngularVelocity",
                 new byte[] {0x19, 0x05, 0x7a, 0x56, (byte) 0x91, 0x42, (byte) 0xb4, 0x62, 0x60, (byte) 0xc2, 0x73, 0x34, 0x04, 0x44, 0x00},
                 new CorrectedAngularVelocity(Float.intBitsToFloat(0x4291567a), Float.intBitsToFloat(0xc26062b4), Float.intBitsToFloat(0x44043473), (byte) 0x00)
             },
             {
-                "correctedBField",
+                "correctedMagneticField",
                 new byte[] {0x19, 0x06, 0x00, 0x00, 0x02, 0x42, (byte) 0xcd, (byte) 0xcc, 0x6c, (byte) 0xc1, (byte) 0x9a, (byte) 0x99, (byte) 0xed, 0x41, 0x03},
-                new CorrectedMagneticField(Float.intBitsToFloat(0x42020000), Float.intBitsToFloat(0xc16ccccd), Float.intBitsToFloat(0x41ed999a), (byte) 0x03)
+                new CorrectedMagneticField(Float.intBitsToFloat(0x3808509c), Float.intBitsToFloat(0xb7784d84), Float.intBitsToFloat(0x37f92444), (byte) 0x03)
             },
             {
                 "quaternion",
@@ -84,7 +84,7 @@ public class TestSensorFusionData extends UnitTestBase {
             {
                 "eulerAngles",
                 new byte[] {0x19, 0x08, (byte) 0xb1, (byte) 0xf9, (byte) 0xc5, 0x41, 0x44, (byte) 0xb9, (byte) 0xf1, (byte) 0xc2, 0x1a, 0x2f, 0x04, (byte) 0xc2, (byte) 0xb1, (byte) 0xf9, (byte) 0xc5, 0x41},
-                new EulerAngle(Float.intBitsToFloat(0x41c5f9b1), Float.intBitsToFloat(0xc2f1b944), Float.intBitsToFloat(0xc2042f1a), Float.intBitsToFloat(0x41c5f9b1))
+                new EulerAngles(Float.intBitsToFloat(0x41c5f9b1), Float.intBitsToFloat(0xc2f1b944), Float.intBitsToFloat(0xc2042f1a), Float.intBitsToFloat(0x41c5f9b1))
             },
             {
                 "gravity",
@@ -112,7 +112,7 @@ public class TestSensorFusionData extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MOTION_R;
+        junitPlatform.boardInfo = MOTION_R;
         connectToBoard();
 
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
@@ -124,9 +124,9 @@ public class TestSensorFusionData extends UnitTestBase {
         AsyncDataProducer producer = (AsyncDataProducer) m.invoke(sensorFusion);
         final Capture<Object> actual = new Capture<>();
 
-        producer.addRoute(new RouteBuilder() {
+        producer.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {

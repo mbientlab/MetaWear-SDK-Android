@@ -27,7 +27,7 @@ package com.mbientlab.metawear.module;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Communicates with the haptic driver.
+ * Provides haptic feedback in the form of a vibrational motor or buzzer
  * @author Eric Tsai
  */
 public interface Haptic extends Module {

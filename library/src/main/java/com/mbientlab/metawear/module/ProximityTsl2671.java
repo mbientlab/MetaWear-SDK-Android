@@ -24,14 +24,16 @@
 
 package com.mbientlab.metawear.module;
 
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Controls the TSL2671 proximity sensor adc data
+ * Digital proximity detector for short-distance detection by AMS
  * @author Eric Tsai
  */
-public interface ProximityTsl2671 extends Module {
+public interface ProximityTsl2671 extends Module, Configurable<ProximityTsl2671.ConfigEditor> {
     /**
      * Photodiodes the sensor should use for proximity detection
      * @author Eric Tsai
@@ -58,43 +60,36 @@ public interface ProximityTsl2671 extends Module {
      * Interface for configuring the sensor
      * @author Eric Tsai
      */
-    interface ConfigEditor {
+    interface ConfigEditor extends ConfigEditorBase {
         /**
-         * Sets the integration time
+         * Set the integration time
          * @param time    Period of time, in milliseconds, the internal ADC converts the analog signal into digital counts.  Minimum 2.72ms
          * @return Calling object
          */
         ConfigEditor integrationTime(float time);
         /**
-         * Sets the pulse count.  Sensitivity grows by the square root of the number of pulses
+         * Set the pulse count.  Sensitivity grows by the square root of the number of pulses
          * @param nPulses    Number of pulses to use for detection, between [1, 255]
          * @return Calling object
          */
         ConfigEditor pulseCount(byte nPulses);
         /**
-         * Sets the photodiode for responding to light
+         * Set the photodiode for responding to light
          * @param diode    Photodiode to use
          * @return Calling object
          */
         ConfigEditor receiverDiode(ReceiverDiode diode);
         /**
-         * Sets the led drive current.  For boards powered by the CR2032 battery, it is recommended to use 25mA or less.
+         * Set the led drive current.  For boards powered by the CR2032 battery, it is recommended to use 25mA or less.
          * @param current    Current driving the sensor
          * @return Calling object
          */
         ConfigEditor transmitterDriveCurrent(TransmitterDriveCurrent current);
-        /**
-         * Write the changes to the sensor
-         */
-        void commit();
     }
+
     /**
-     * Configure the proximity detector
-     * @return Editor to configure the settings
-     */
-    ConfigEditor configure();
-    /**
-     * Gets an object to manage the adc data from the proximity sensor
+     * Get an implementation of the ForcedDataProducer interface for proximity ADC values, represented as
+     * an integer.
      * @return Object managing the proximity data
      */
     ForcedDataProducer adc();

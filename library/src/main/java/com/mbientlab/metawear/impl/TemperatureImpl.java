@@ -34,7 +34,7 @@ import java.util.Locale;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.TEMPERATURE;
+import static com.mbientlab.metawear.impl.Constant.Module.TEMPERATURE;
 
 /**
  * Created by etsai on 9/18/16.
@@ -51,17 +51,17 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
             super(TEMPERATURE, Util.setSilentRead(VALUE), id, new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, true));
         }
 
-        TempSFloatData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        TempSFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new TempSFloatData(input, module, register, id, attributes);
         }
 
         @Override
-        protected float scale(MetaWearBoardPrivate owner) {
+        protected float scale(MetaWearBoardPrivate mwPrivate) {
             return 8.f;
         }
     }
@@ -71,23 +71,23 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
 
         private final SensorType type;
         final byte channel;
-        transient MetaWearBoardPrivate owner;
+        transient MetaWearBoardPrivate mwPrivate;
 
-        private SensorImpl(SensorType type, byte channel, MetaWearBoardPrivate owner) {
+        private SensorImpl(SensorType type, byte channel, MetaWearBoardPrivate mwPrivate) {
             this.type = type;
             this.channel= channel;
-            this.owner= owner;
+            this.mwPrivate = mwPrivate;
 
-            owner.tagProducer(name(), new TempSFloatData(channel));
+            mwPrivate.tagProducer(name(), new TempSFloatData(channel));
         }
 
-        void restoreTransientVars(MetaWearBoardPrivate owner) {
-            this.owner= owner;
+        void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
+            this.mwPrivate = mwPrivate;
         }
 
         @Override
-        public Task<Route> addRoute(RouteBuilder builder) {
-            return owner.queueRouteBuilder(builder, name());
+        public Task<Route> addRouteAsync(RouteBuilder builder) {
+            return mwPrivate.queueRouteBuilder(builder, name());
         }
 
         @Override
@@ -97,7 +97,7 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
 
         @Override
         public void read() {
-            owner.lookupProducer(name()).read(owner);
+            mwPrivate.lookupProducer(name()).read(mwPrivate);
         }
 
         @Override
@@ -109,13 +109,13 @@ class TemperatureImpl extends ModuleImplBase implements Temperature {
     private static class ExternalThermistorImpl extends SensorImpl implements ExternalThermistor {
         private static final long serialVersionUID = 4055746069062728410L;
 
-        private ExternalThermistorImpl(byte channel, MetaWearBoardPrivate owner) {
-            super(SensorType.EXT_THERMISTOR, channel, owner);
+        private ExternalThermistorImpl(byte channel, MetaWearBoardPrivate mwPrivate) {
+            super(SensorType.EXT_THERMISTOR, channel, mwPrivate);
         }
 
         @Override
         public void configure(byte dataPin, byte pulldownPin, boolean activeHigh) {
-            owner.sendCommand(new byte[] {TEMPERATURE.id, MODE, channel, dataPin, pulldownPin, (byte) (activeHigh ? 1 : 0)});
+            mwPrivate.sendCommand(new byte[] {TEMPERATURE.id, MODE, channel, dataPin, pulldownPin, (byte) (activeHigh ? 1 : 0)});
         }
     }
 

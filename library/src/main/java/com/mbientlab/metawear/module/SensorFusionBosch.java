@@ -25,20 +25,24 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.AngularVelocity;
+import com.mbientlab.metawear.data.EulerAngles;
 import com.mbientlab.metawear.data.MagneticField;
+import com.mbientlab.metawear.data.Quaternion;
 
 import java.util.Locale;
 
 /**
- * Controls the sensor fusion algorithm running on the MetaMotion boards.  When using sensor fusion,
- * do not configure accelerometer, gyro, and magnetometer with their respective APIs; the sensor fusion
- * module will automatically configure those sensors based on the selected fusion mode.
+ * Algorithm combining accelerometer, gyroscope, and magnetometer data for Bosch sensors.  When using
+ * sensor fusion, do not configure the accelerometer, gyro, and magnetometer with their respective interface;
+ * the algorithm will automatically configure those sensors based on the selected fusion mode.
  * @author Eric Tsai
  */
-public interface SensorFusionBosch extends Module {
+public interface SensorFusionBosch extends Module, Configurable<SensorFusionBosch.ConfigEditor> {
     /**
      * Container class holding corrected acceleration data, in units of g's
      * @author Eric Tsai
@@ -58,6 +62,25 @@ public interface SensorFusionBosch extends Module {
         @Override
         public String toString() {
             return String.format(Locale.US, "{x: %.3fg, y: %.3fg, z: %.3fg, accuracy: %s}", x(), y(), z(), accuracy.toString());
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            if (!super.equals(o)) return false;
+
+            CorrectedAcceleration that = (CorrectedAcceleration) o;
+
+            return accuracy == that.accuracy;
+
+        }
+
+        @Override
+        public int hashCode() {
+            int result = super.hashCode();
+            result = 31 * result + accuracy.hashCode();
+            return result;
         }
     }
     /**
@@ -85,6 +108,25 @@ public interface SensorFusionBosch extends Module {
                     accuracy.toString()
             );
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            if (!super.equals(o)) return false;
+
+            CorrectedAngularVelocity that = (CorrectedAngularVelocity) o;
+
+            return accuracy == that.accuracy;
+
+        }
+
+        @Override
+        public int hashCode() {
+            int result = super.hashCode();
+            result = 31 * result + accuracy.hashCode();
+            return result;
+        }
     }
     /**
      * Container class holding corrected magnetic field strength data, in micro teslas
@@ -104,12 +146,28 @@ public interface SensorFusionBosch extends Module {
 
         @Override
         public String toString() {
-            return String.format(Locale.US, "{x: %.3f%s, y: %.3f%s, z: %.3f%s, accuracy: %s}",
-                    x(), MICRO_TESLA,
-                    y(), MICRO_TESLA,
-                    z(), MICRO_TESLA,
-                    accuracy.toString()
+            return String.format(Locale.US, "{x: %.9fT, y: %.9fT, z: %.9fT, accuracy: %s}",
+                    x(), y(), z(), accuracy.toString()
             );
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            if (!super.equals(o)) return false;
+
+            CorrectedMagneticField that = (CorrectedMagneticField) o;
+
+            return accuracy == that.accuracy;
+
+        }
+
+        @Override
+        public int hashCode() {
+            int result = super.hashCode();
+            result = 31 * result + accuracy.hashCode();
+            return result;
         }
     }
 
@@ -167,7 +225,7 @@ public interface SensorFusionBosch extends Module {
      * Configuration editor for the sensor fusion algorithm
      * @author Eric Tsai
      */
-    interface ConfigEditor {
+    interface ConfigEditor extends ConfigEditorBase {
         /**
          * Sets the sensor fusion mode
          * @param mode    New sensor fusion mode
@@ -186,59 +244,57 @@ public interface SensorFusionBosch extends Module {
          * @return Calling object
          */
         ConfigEditor gyroRange(GyroRange range);
-        /**
-         * Write the changes to the algorithm
-         */
-        void commit();
     }
-    /**
-     * Configures the algorithm
-     * @return Configuration editor object
-     */
-    ConfigEditor configure();
 
     /**
-     * Gets the object to control corrected acceleration data
-     * @return Object controlling corrected acceleration data
+     * Get an implementation of the AsyncDataProducer interface for corrected acceleration data,
+     * represented by the {@link CorrectedAcceleration} class.
+     * @return AsyncDataProducer Object for corrected acceleration data
      */
     AsyncDataProducer correctedAcceleration();
     /**
-     * Gets the object to control corrected rotation data
-     * @return Object controlling corrected rotation data
+     * Get an implementation of the AsyncDataProducer interface for corrected angular velocity data,
+     * represented by the {@link CorrectedAngularVelocity} class.
+     * @return AsyncDataProducer Object for corrected angular velocity data
      */
-    AsyncDataProducer correctedRotation();
+    AsyncDataProducer correctedAngularVelocity();
     /**
-     * Gets the object to control corrected B field data
-     * @return Object controlling corrected B field data
+     * Get an implementation of the AsyncDataProducer interface for corrected magnetic field data,
+     * represented by the {@link CorrectedMagneticField} class.
+     * @return AsyncDataProducer Object for corrected magnetic field data
      */
-    AsyncDataProducer correctedBField();
+    AsyncDataProducer correctedMagneticField();
     /**
-     * Gets the object to control quaternion data
-     * @return Object controlling quaternion data
+     * Get an implementation of the AsyncDataProducer interface for quaternion data,
+     * represented by the {@link Quaternion} class.
+     * @return AsyncDataProducer Object for quaternion data
      */
     AsyncDataProducer quaternion();
     /**
-     * Gets the object to control Euler angles data
-     * @return Object controlling Euler angles data
+     * Get an implementation of the AsyncDataProducer interface for euler angles,
+     * represented by the {@link EulerAngles} class.
+     * @return AsyncDataProducer Object for euler angles
      */
     AsyncDataProducer eulerAngles();
     /**
-     * Gets the object to control gravity data
-     * @return Object controlling gravity data
+     * Get an implementation of the AsyncDataProducer interface for the acceleration from gravity vector,
+     * represented by the {@link Acceleration} class.
+     * @return AsyncDataProducer Object for acceleration from gravity
      */
     AsyncDataProducer gravity();
     /**
-     * Gets the object to control linear acceleration data
-     * @return Object controlling linear acceleration data
+     * Get an implementation of the AsyncDataProducer interface for linear acceleration,
+     * represented by the {@link Acceleration} class.
+     * @return AsyncDataProducer Object for linear acceleration
      */
     AsyncDataProducer linearAcceleration();
 
     /**
-     * Starts the algorithm
+     * Start the algorithm
      */
     void start();
     /**
-     * Stops the algorithm
+     * Stop the algorithm
      */
     void stop();
 }

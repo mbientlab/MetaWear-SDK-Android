@@ -40,7 +40,7 @@ public class TestNeoPixelBase extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = info;
+        junitPlatform.boardInfo = info;
         connectToBoard();
 
         neoPixel= mwBoard.getModule(NeoPixel.class);

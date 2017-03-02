@@ -24,8 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.Timer;
+
 /**
- * Data creator that only produces data when a {@link #read()} command is issued
+ * A data producer that only emits data when a {@link #read()} command is issued.  Using the {@link Timer} module,
+ * a periodic read can be programmed onto the board to avoid having to repeatedly send the command from the local device.
  * @author Eric Tsai
  */
 public interface ForcedDataProducer extends DataProducer {

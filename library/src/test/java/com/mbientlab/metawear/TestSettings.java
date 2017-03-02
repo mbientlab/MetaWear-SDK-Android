@@ -66,8 +66,8 @@ public class TestSettings extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, revision });
-        btlePlaform.boardInfo = info;
+        junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, revision });
+        junitPlatform.boardInfo = info;
         connectToBoard();
 
         settings = mwBoard.getModule(Settings.class);
@@ -77,20 +77,20 @@ public class TestSettings extends UnitTestBase {
     public void setName() {
         byte[] expected= new byte[] {0x11, 0x01, 0x41, 0x6e, 0x74, 0x69, 0x57, 0x61, 0x72, 0x65};
 
-        settings.configure()
+        settings.editBleAdConfig()
                 .deviceName("AntiWare")
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void setTxPower() {
         byte[] expected= new byte[] {0x11, 0x03, (byte) 0xec};
 
-        settings.configure()
+        settings.editBleAdConfig()
                 .txPower((byte) -20)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -100,10 +100,10 @@ public class TestSettings extends UnitTestBase {
                 {0x11, 0x07, 0x69, 0x65, 0x6e, 0x74, 0x6c, 0x61, 0x62, 0x00}
         };
 
-        settings.configure()
+        settings.editBleAdConfig()
                 .scanResponse(new byte[] {0x03, 0x03, (byte) 0xD8, (byte) 0xfe, 0x10, 0x16, (byte) 0xd8, (byte) 0xfe, 0x00, 0x12, 0x00, 0x6d, 0x62, 0x69, 0x65, 0x6e, 0x74, 0x6c, 0x61, 0x62, 0x00})
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -112,17 +112,18 @@ public class TestSettings extends UnitTestBase {
                 new byte[] {0x11, 0x02, (byte) 0x9b, 0x02, (byte) 0xb4} :
                 new byte[] {0x11, 0x02, (byte) 0xa1, 0x01, (byte) 0xb4};
 
-        settings.configure()
-                .adInterval((short) 417, (byte) 180)
+        settings.editBleAdConfig()
+                .interval((short) 417)
+                .timeout((byte) 180)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void startAdvertising() {
         byte[] expected= new byte[] {0x11, 0x5};
 
-        settings.startAdvertisement();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        settings.startBleAdvertising();
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

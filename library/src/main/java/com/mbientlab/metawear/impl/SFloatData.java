@@ -35,24 +35,24 @@ import java.util.Calendar;
 class SFloatData extends DataTypeBase {
     private static final long serialVersionUID = -3269792750880261100L;
 
-    SFloatData(ModuleId module, byte register, byte id, DataAttributes attributes) {
+    SFloatData(Constant.Module module, byte register, byte id, DataAttributes attributes) {
         super(module, register, id, attributes);
     }
 
-    SFloatData(ModuleId module, byte register, DataAttributes attributes) {
+    SFloatData(Constant.Module module, byte register, DataAttributes attributes) {
         super(module, register, attributes);
     }
 
-    SFloatData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    SFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
         super(input, module, register, id, attributes);
     }
 
-    SFloatData(DataTypeBase input, ModuleId module, byte register, DataAttributes attributes) {
+    SFloatData(DataTypeBase input, Constant.Module module, byte register, DataAttributes attributes) {
         super(input, module, register, attributes);
     }
 
     @Override
-    public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
         if (input == null) {
             if (this.input == null) {
                 throw new NullPointerException("SFloatData cannot have null input variable");
@@ -64,31 +64,21 @@ class SFloatData extends DataTypeBase {
     }
 
     @Override
-    public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-        return input.floatValue() * scale(owner);
-    }
-
-    protected float scale(MetaWearBoardPrivate owner) {
-        if (input == null) {
-            throw new NullPointerException("SFloatData cannot have null input variable");
-        }
-
-        if (input instanceof FloatVectorData) {
-            return ((FloatVectorData) input).scale(owner);
-        } else if (input instanceof SFloatData) {
-            return ((SFloatData) input).scale(owner);
-        } else if (input instanceof UFloatData) {
-            return ((UFloatData) input).scale(owner);
-        }
-        throw new ClassCastException("Input does not have a scale function");
+    public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+        return value.floatValue() * scale(mwPrivate);
     }
 
     @Override
-    public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+    public Data createMessage(boolean logData, final MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
         final ByteBuffer buffer = Util.bytesToSIntBuffer(logData, data, attributes);
-        final float scaled= buffer.getInt(0) / scale(owner);
+        final float scaled= buffer.getInt(0) / scale(mwPrivate);
 
         return new DataPrivate(timestamp, data) {
+            @Override
+            public float scale() {
+                return SFloatData.this.scale(mwPrivate);
+            }
+
             @Override
             public Class<?>[] types() {
                 return new Class<?>[] {Float.class};
@@ -96,7 +86,7 @@ class SFloatData extends DataTypeBase {
 
             @Override
             public <T> T value(Class<T> clazz) {
-                if (clazz == Float.class) {
+                if (clazz.equals(Float.class)) {
                     return clazz.cast(scaled);
                 }
                 return super.value(clazz);

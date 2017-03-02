@@ -24,9 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Switch;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -43,7 +43,7 @@ import static org.junit.Assert.assertEquals;
 public class TestSwitch extends UnitTestBase {
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
         connectToBoard();
     }
 
@@ -51,9 +51,9 @@ public class TestSwitch extends UnitTestBase {
     public void subscribe() {
         byte[] expected= new byte[] {0x1, 0x1, 0x1};
 
-        mwBoard.getModule(Switch.class).addRoute(new RouteBuilder() {
+        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -63,16 +63,16 @@ public class TestSwitch extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void unsubscribe() {
         byte[] expected= new byte[] {0x1, 0x1, 0x0};
 
-        mwBoard.getModule(Switch.class).addRoute(new RouteBuilder() {
+        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -83,7 +83,7 @@ public class TestSwitch extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -91,9 +91,9 @@ public class TestSwitch extends UnitTestBase {
         final long expected= 1;
         final long[] actual= new long[1];
 
-        mwBoard.getModule(Switch.class).addRoute(new RouteBuilder() {
+        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
@@ -118,9 +118,9 @@ public class TestSwitch extends UnitTestBase {
         final long expected= 0;
         final long[] actual= new long[1];
 
-        mwBoard.getModule(Switch.class).addRoute(new RouteBuilder() {
+        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
@@ -138,5 +138,39 @@ public class TestSwitch extends UnitTestBase {
 
         sendMockResponse(new byte[] {0x1, 0x1, 0x0});
         assertEquals(expected, actual[0]);
+    }
+
+    @Test
+    public void readCurrentState() {
+        byte[] expected = new byte[] {0x01, (byte) 0x81};
+
+        mwBoard.getModule(Switch.class).readCurrentStateAsync();
+
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    }
+
+    @Test
+    public void readCurrentStateData() {
+        byte[] expected = new byte[] {0x01, 0x00};
+        final byte[] actual = new byte[2];
+
+        mwBoard.getModule(Switch.class).readCurrentStateAsync().continueWith(new Continuation<Byte, Void>() {
+            @Override
+            public Void then(Task<Byte> task) throws Exception {
+                actual[0] = task.getResult();
+                return null;
+            }
+        });
+        mwBoard.getModule(Switch.class).readCurrentStateAsync().continueWith(new Continuation<Byte, Void>() {
+            @Override
+            public Void then(Task<Byte> task) throws Exception {
+                actual[1] = task.getResult();
+                return null;
+            }
+        });
+
+        sendMockResponse(new byte[] {0x01, (byte) 0x81, 0x1});
+        sendMockResponse(new byte[] {0x01, (byte) 0x81, 0x0});
+        assertArrayEquals(expected, actual);
     }
 }

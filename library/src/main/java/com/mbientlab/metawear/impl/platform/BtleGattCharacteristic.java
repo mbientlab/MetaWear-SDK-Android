@@ -22,57 +22,40 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.data;
+package com.mbientlab.metawear.impl.platform;
 
-import java.util.Locale;
+import java.util.UUID;
 
 /**
- * Encapsulates Euler angles, values are in degrees
+ * Bluetooth GATT characteristic
  * @author Eric Tsai
  */
-public class EulerAngle extends FloatVector {
-    private static final String DEGS= "\u00B0";
+public class BtleGattCharacteristic {
+    /** UUID identifying the service the characteristic belongs to */
+    public final UUID serviceUuid;
+    /** UUID identifying the characteristic */
+    public final UUID uuid;
 
-    public EulerAngle(float heading, float pitch, float roll, float yaw) {
-        super(heading, pitch, roll, yaw);
-    }
-
-    /**
-     * Gets the heading angle
-     * @return Heading angel
-     */
-    public float heading() {
-        return vector[0];
-    }
-    /**
-     * Gets the pitch angle
-     * @return Pitch angle
-     */
-    public float pitch() {
-        return vector[1];
-    }
-    /**
-     * Gets the roll angle
-     * @return Roll angle
-     */
-    public float roll() {
-        return vector[2];
-    }
-    /**
-     * Gets the yaw angle
-     * @return Yaw angle
-     */
-    public float yaw() {
-        return vector[3];
+    public BtleGattCharacteristic(UUID serviceUuid, UUID uuid) {
+        this.serviceUuid = serviceUuid;
+        this.uuid = uuid;
     }
 
     @Override
-    public String toString() {
-        return String.format(Locale.US, "{heading %.3f%s, pitch: %.3f%s, roll: %.3f%s, yaw: %.3f%s}",
-                heading(), DEGS,
-                pitch(), DEGS,
-                roll(), DEGS,
-                yaw(), DEGS
-        );
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        BtleGattCharacteristic that = (BtleGattCharacteristic) o;
+
+        return serviceUuid.equals(that.serviceUuid) && uuid.equals(that.uuid);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = serviceUuid.hashCode();
+        result = 31 * result + uuid.hashCode();
+        return result;
     }
 }

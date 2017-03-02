@@ -24,16 +24,14 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.ActiveDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.impl.DataAttributes;
-import com.mbientlab.metawear.impl.MetaWearBoardPrivate;
-import com.mbientlab.metawear.impl.ModuleId;
-import com.mbientlab.metawear.impl.ModuleImplBase;
-import com.mbientlab.metawear.impl.UintData;
 import com.mbientlab.metawear.module.Switch;
 
 import bolts.Task;
+
+import static com.mbientlab.metawear.impl.Constant.Module.SWITCH;
 
 /**
  * Created by etsai on 9/4/16.
@@ -43,29 +41,52 @@ class SwitchImpl extends ModuleImplBase implements Switch {
     private final static byte STATE= 0x1;
     private static final long serialVersionUID = -6054365836900403723L;
 
+    private transient ActiveDataProducer state;
+    private transient AsyncTaskManager<Byte> stateTasks;
+
     SwitchImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
-        this.mwPrivate.tagProducer(PRODUCER, new UintData(ModuleId.SWITCH, STATE, new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
+        this.mwPrivate.tagProducer(PRODUCER, new UintData(SWITCH, STATE, new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
     }
 
     @Override
-    public Task<Route> addRoute(RouteBuilder builder) {
-        return mwPrivate.queueRouteBuilder(builder, PRODUCER);
+    protected void init() {
+        stateTasks = new AsyncTaskManager<>(mwPrivate, "Reading button state timed out");
+        this.mwPrivate.addResponseHandler(new Pair<>(SWITCH.id, Util.setRead(STATE)), new JseMetaWearBoard.RegisterResponseHandler() {
+            @Override
+            public void onResponseReceived(byte[] response) {
+                stateTasks.cancelTimeout();
+                stateTasks.setResult(response[2]);
+            }
+        });
     }
 
     @Override
-    public String name() {
-        return PRODUCER;
+    public ActiveDataProducer state() {
+        if (state == null) {
+            state = new ActiveDataProducer() {
+                @Override
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, PRODUCER);
+                }
+
+                @Override
+                public String name() {
+                    return PRODUCER;
+                }
+            };
+        }
+        return state;
     }
 
     @Override
-    public void start() {
-
-    }
-
-    @Override
-    public void stop() {
-
+    public Task<Byte> readCurrentStateAsync() {
+        return stateTasks.queueTask(250L, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {SWITCH.id, Util.setRead(STATE)});
+            }
+        });
     }
 }

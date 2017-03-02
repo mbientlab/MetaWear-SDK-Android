@@ -31,7 +31,7 @@ import com.mbientlab.metawear.module.BarometerBosch;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.BAROMETER;
+import static com.mbientlab.metawear.impl.Constant.Module.BAROMETER;
 
 /**
  * Created by etsai on 9/20/16.
@@ -50,17 +50,17 @@ abstract class BarometerBoschImpl extends ModuleImplBase implements BarometerBos
             super(BAROMETER, PRESSURE, new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, false));
         }
 
-        BoschPressureUFloatData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        BoschPressureUFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new BoschPressureUFloatData(input, module, register, id, attributes);
         }
 
         @Override
-        protected float scale(MetaWearBoardPrivate owner) {
+        protected float scale(MetaWearBoardPrivate mwPrivate) {
             return 256.f;
         }
     }
@@ -72,12 +72,12 @@ abstract class BarometerBoschImpl extends ModuleImplBase implements BarometerBos
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new BoschPressureUFloatData(input, module, register, id, attributes);
         }
 
         @Override
-        protected float scale(MetaWearBoardPrivate owner) {
+        protected float scale(MetaWearBoardPrivate mwPrivate) {
             return 256.f;
         }
     }
@@ -95,7 +95,7 @@ abstract class BarometerBoschImpl extends ModuleImplBase implements BarometerBos
     public AsyncDataProducer pressure() {
         return new AsyncDataProducer() {
             @Override
-            public Task<Route> addRoute(RouteBuilder builder) {
+            public Task<Route> addRouteAsync(RouteBuilder builder) {
                 return mwPrivate.queueRouteBuilder(builder, PRESSURE_PRODUCER);
             }
 
@@ -120,7 +120,7 @@ abstract class BarometerBoschImpl extends ModuleImplBase implements BarometerBos
     public AsyncDataProducer altitude() {
         return new AsyncDataProducer() {
             @Override
-            public Task<Route> addRoute(RouteBuilder builder) {
+            public Task<Route> addRouteAsync(RouteBuilder builder) {
                 return mwPrivate.queueRouteBuilder(builder, ALTITUDE_PRODUCER);
             }
 

@@ -27,7 +27,7 @@ package com.mbientlab.metawear.module;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Ultra bright rgb LED
+ * Ultra bright RGB light emitting diode
  * @author Eric Tsai
  */
 public interface Led extends Module {
@@ -63,50 +63,50 @@ public interface Led extends Module {
      */
     interface PatternEditor {
         /**
-         * Intensity value of the high state
+         * Set the intensity value of the high state
          * @param intensity LED intensity the high state should be in, between [0 - 31]
          * @return Calling object
          */
         PatternEditor highIntensity(byte intensity);
         /**
-         * Intensity value of the low state
+         * Set the intensity value of the low state
          * @param intensity LED intensity the low state should be in, between [0 - 31]
          * @return Calling object
          */
         PatternEditor lowIntensity(byte intensity);
         /**
-         * How long the transition should take from low to high state, in milliseconds
+         * Set how long the transition should take from low to high state, in milliseconds
          * @param time Transition time (ms) from low to high state
          * @return Calling object
          */
         PatternEditor riseTime(short time);
         /**
-         * How long the pulse stays in the high state
+         * Set how long the pulse stays in the high state
          * @param time Length of time (ms) to spend in the high state
          * @return Calling object
          */
         PatternEditor highTime(short time);
         /**
-         * How long the transition should take from high to low state, in milliseconds
+         * Set how long the transition should take from high to low state, in milliseconds
          * @param time Length of time (ms) from high to low state
          * @return Calling object
          */
         PatternEditor fallTime(short time);
         /**
-         * How long one pulse is
+         * Set the duration of one pulse
          * @param duration Length of one pulse (ms)
          * @return Calling object
          */
         PatternEditor pulseDuration(short duration);
         /**
-         * How long to wait before starting the pattern.  This function is ignored on boards running firmware
+         * Set how long to wait before starting the pattern.  This setting is ignored on boards running firmware
          * older than v1.2.3
          * @param delay    Length of the delay (ms)
          * @return Calling object
          */
         PatternEditor delay(short delay);
         /**
-         * How many times to repeat a pulse pattern
+         * Set how many times to repeat a pulse pattern
          * @param count Number of repetitions, use {@link #PATTERN_REPEAT_INDEFINITELY} to repeat forever
          * @return Calling object
          */
@@ -117,13 +117,13 @@ public interface Led extends Module {
     }
 
     /**
-     * Edits the pattern attributes for the desired color
+     * Edit the pattern attributes for the desired color
      * @param ledColor    Color to configure
      * @return Editor object to configure the pattern attributes
      */
     PatternEditor editPattern(Color ledColor);
     /**
-     * Edits the pattern attributes for the desired color using a preset pattern as the initial attribute parameters
+     * Edit the pattern attributes for the desired color using a preset pattern as the initial attribute parameters
      * @param ledColor    Color to configure
      * @param preset      Pattern preset to use
      * @return Editor object to configure the pattern attributes
@@ -131,20 +131,20 @@ public interface Led extends Module {
     PatternEditor editPattern(Color ledColor, PatternPreset preset);
 
     /**
-     * Plays any programmed patterns and immediately plays patterns programmed later
+     * Play any programmed patterns and immediately plays patterns programmed later
      */
     void autoplay();
 
     /**
-     * Plays any programmed patterns
+     * Play any programmed patterns
      */
     void play();
     /**
-     * Pauses the pattern playback
+     * Pause the pattern playback
      */
     void pause();
     /**
-     * Stops playing LED patterns
+     * Stop playing LED patterns
      * @param clear    True if the patterns should be cleared as well
      */
     void stop(boolean clear);

@@ -24,17 +24,39 @@
 
 package com.mbientlab.metawear.module;
 
+import com.mbientlab.metawear.DataToken;
+import com.mbientlab.metawear.builder.RouteComponent.Action;
+import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 import bolts.Task;
 
 /**
- * Debug functions, for advanced use only
+ * Auxiliary functions, for advanced use only
  * @author Eric Tsai
  */
 public interface Debug extends Module {
-    Task<Void> reset();
-    Task<Void> disconnect();
-    Task<Void> jumpToBootloader();
+    /**
+     * Issues a firmware reset command to the board
+     * @return Task that is completed when connection is lost, or cancelled if the function is called
+     * within the {@link CodeBlock#program()} or {@link Action#execute(DataToken)} methods
+     */
+    Task<Void> resetAsync();
+    /**
+     * Commands the board to terminate the BLE link
+     * @return Task that is completed when connection is lost, or cancelled if the function is called
+     * within the {@link CodeBlock#program()} or {@link Action#execute(DataToken)} methods
+     */
+    Task<Void> disconnectAsync();
+    /**
+     * Restarts the board in MetaBoot mode.  This function must be called in order to update the firmware.
+     * @return Task that is completed when connection is lost, or cancelled if the function is called
+     * within the {@link CodeBlock#program()} or {@link Action#execute(DataToken)} methods
+     */
+    Task<Void> jumpToBootloaderAsync();
+    /**
+     * Tells the board to reset after performing garbage collection.  Use this function in lieu of
+     * {@link #resetAsync()} to reset the board after erasing macros or log data.
+     */
     void resetAfterGc();
 }

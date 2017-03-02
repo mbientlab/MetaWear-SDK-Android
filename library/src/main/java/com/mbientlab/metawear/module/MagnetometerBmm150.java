@@ -25,13 +25,16 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.MetaWearBoard.Module;
+import com.mbientlab.metawear.data.MagneticField;
 
 /**
- * Controls the BMM150 geomagnetic sensor
+ * Bosch sensor measuring magnetic field strength
  * @author Eric Tsai
  */
-public interface MagnetometerBmm150 extends Module {
+public interface MagnetometerBmm150 extends Module, Configurable<MagnetometerBmm150.ConfigEditor> {
     /**
      * Recommended configurations for the magnetometer as outlined in the specs sheet.
      * <table summary="Recommended sensor configurations">
@@ -79,6 +82,12 @@ public interface MagnetometerBmm150 extends Module {
         HIGH_ACCURACY
     }
     /**
+     * Sets the power mode to one of the preset configurations
+     * @param preset    Preset to use
+     */
+    void usePreset(Preset preset);
+
+    /**
      * Supported output data rates for the BMM150 sensor
      * @author Eric Tsai
      */
@@ -100,42 +109,12 @@ public interface MagnetometerBmm150 extends Module {
         /** 30Hz */
         ODR_30_HZ
     }
-
-    interface MagneticFieldDataProducer extends AsyncDataProducer {
-        /**
-         * Get the name for x-axis data
-         * @return X-axis data name
-         */
-        String xAxisName();
-        /**
-         * Get the name for y-axis data
-         * @return Y-axis data name
-         */
-        String yAxisName();
-        /**
-         * Get the name for z-axis data
-         * @return Z-axis data name
-         */
-        String zAxisName();
-    }
-    /**
-     * Gets an object to control B field data
-     * @return Object controlling B field data
-     */
-    MagneticFieldDataProducer magneticField();
-    /**
-     * Variant of B field data that packs multiple data samples into 1 BLE packet to increase the
-     * data throughput.  Only streaming is supported for this data producer.
-     * @return Object representing packed acceleration data
-     */
-    AsyncDataProducer packedMagneticField();
-
     /**
      * Sensor configuration editor, only for advanced users.  It is recommended that one of the {@link Preset}
      * configurations be used.
      * @author Eric Tsai
      */
-    interface ConfigEditor {
+    interface ConfigEditor extends ConfigEditorBase {
         /**
          * Sets the number of repetitions on the XY axis
          * @param reps    nXY repetitions, between [1, 511]
@@ -155,22 +134,39 @@ public interface MagnetometerBmm150 extends Module {
          * @return Calling object
          */
         ConfigEditor outputDataRate(OutputDataRate odr);
-        /**
-         * Write the configuration to the sensor
-         */
-        void commit();
     }
     /**
-     * Configures the sensor
-     * @return Configuration editor object
+     * Reports measured magnetic field strength, in units of Telsa (T) from the magnetometer.  Combined XYZ data
+     * is represented as a {@link MagneticField} object while split data is interpreted as a float.
      */
-    ConfigEditor configure();
-
+    interface MagneticFieldDataProducer extends AsyncDataProducer {
+        /**
+         * Get the name for x-axis data
+         * @return X-axis data name
+         */
+        String xAxisName();
+        /**
+         * Get the name for y-axis data
+         * @return Y-axis data name
+         */
+        String yAxisName();
+        /**
+         * Get the name for z-axis data
+         * @return Z-axis data name
+         */
+        String zAxisName();
+    }
     /**
-     * Sets the power mode to one of the preset configurations
-     * @param preset    Preset to use
+     * Get an implementation of the MagneticFieldDataProducer interface
+     * @return Object controlling B field data
      */
-    void usePreset(Preset preset);
+    MagneticFieldDataProducer magneticField();
+    /**
+     * Variant of B field data that packs multiple data samples into 1 BLE packet to increase the
+     * data throughput.  Only streaming is supported for this data producer.
+     * @return Object representing packed acceleration data
+     */
+    AsyncDataProducer packedMagneticField();
 
     /**
      * Switch the magnetometer into normal mode

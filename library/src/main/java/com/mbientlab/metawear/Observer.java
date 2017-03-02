@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 /**
- * Monitors on-board events and executes a {@link CodeBlock} when its event is fired
+ * Monitors an on-board event and executes the corresponding {@link CodeBlock} when its event is fired
  * @author Eric Tsai
  */
 public interface Observer {

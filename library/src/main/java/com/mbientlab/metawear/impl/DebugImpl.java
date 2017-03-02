@@ -28,7 +28,7 @@ import com.mbientlab.metawear.module.Debug;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.DEBUG;
+import static com.mbientlab.metawear.impl.Constant.Module.DEBUG;
 
 /**
  * Created by etsai on 10/11/16.
@@ -41,22 +41,28 @@ class DebugImpl extends ModuleImplBase implements Debug {
     }
 
     @Override
-    public Task<Void> reset() {
-        Task<Void> task = mwPrivate.boardDisconnect();
+    public Task<Void> resetAsync() {
+        EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
+        Task<Void> task= event.getEventConfig() != null ? Task.<Void>cancelled() : mwPrivate.boardDisconnect();
+
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x1});
         return task;
     }
 
     @Override
-    public Task<Void> disconnect() {
-        Task<Void> task = mwPrivate.boardDisconnect();
+    public Task<Void> disconnectAsync() {
+        EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
+        Task<Void> task= event.getEventConfig() != null ? Task.<Void>cancelled() : mwPrivate.boardDisconnect();
+
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x6});
         return task;
     }
 
     @Override
-    public Task<Void> jumpToBootloader() {
-        Task<Void> task = mwPrivate.boardDisconnect();
+    public Task<Void> jumpToBootloaderAsync() {
+        EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
+        Task<Void> task= event.getEventConfig() != null ? Task.<Void>cancelled() : mwPrivate.boardDisconnect();
+
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x2});
         return task;
     }

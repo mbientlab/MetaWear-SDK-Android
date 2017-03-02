@@ -24,9 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.HumidityBme280;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -47,7 +47,7 @@ public class TestHumidityBme280 extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.ENVIRONMENT;
+        junitPlatform.boardInfo = MetaWearBoardInfo.ENVIRONMENT;
         connectToBoard();
 
         humidity= mwBoard.getModule(HumidityBme280.class);
@@ -57,14 +57,14 @@ public class TestHumidityBme280 extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x16, (byte) 0x81};
 
-        humidity.value().addRoute(new RouteBuilder() {
+        humidity.value().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         });
         humidity.value().read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -72,7 +72,7 @@ public class TestHumidityBme280 extends UnitTestBase {
         byte[] expected= new byte[] {0x16, (byte) 0xc1};
 
         humidity.value().read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -80,9 +80,9 @@ public class TestHumidityBme280 extends UnitTestBase {
         float expected= 63.1943359375f;
         final Capture<Float> actual= new Capture<>();
 
-        humidity.value().addRoute(new RouteBuilder() {
+        humidity.value().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {

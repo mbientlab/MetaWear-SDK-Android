@@ -24,10 +24,10 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.ColorDetectorTcs34725;
-import com.mbientlab.metawear.module.ColorDetectorTcs34725.ColorAdc;
+import com.mbientlab.metawear.builder.RouteComponent;
+import com.mbientlab.metawear.module.ColorTcs34725;
+import com.mbientlab.metawear.module.ColorTcs34725.ColorAdc;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -43,29 +43,29 @@ import static org.junit.Assert.assertEquals;
  * Created by etsai on 10/2/16.
  */
 
-public class TestColorDetectorTcs34725 extends UnitTestBase {
-    private ColorDetectorTcs34725 colorTcs34725;
+public class TestColorTcs34725 extends UnitTestBase {
+    private ColorTcs34725 colorTcs34725;
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.ENVIRONMENT;
+        junitPlatform.boardInfo= MetaWearBoardInfo.ENVIRONMENT;
         connectToBoard();
 
-        colorTcs34725= mwBoard.getModule(ColorDetectorTcs34725.class);
+        colorTcs34725= mwBoard.getModule(ColorTcs34725.class);
     }
 
     @Test
     public void read() {
         byte[] expected= new byte[] {0x17, (byte) 0x81};
 
-        colorTcs34725.adc().addRoute(new RouteBuilder() {
+        colorTcs34725.adc().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         });
         colorTcs34725.adc().read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -73,7 +73,7 @@ public class TestColorDetectorTcs34725 extends UnitTestBase {
         byte[] expected= new byte[] {0x17, (byte) 0xc1};
 
         colorTcs34725.adc().read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -81,9 +81,9 @@ public class TestColorDetectorTcs34725 extends UnitTestBase {
         ColorAdc expected= new ColorAdc(418, 123, 154, 124);
         final Capture<ColorAdc> actual= new Capture<>();
 
-        colorTcs34725.adc().addRoute(new RouteBuilder() {
+        colorTcs34725.adc().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
@@ -108,9 +108,9 @@ public class TestColorDetectorTcs34725 extends UnitTestBase {
         int[] expected = new int[] {418, 123, 154, 124};
         final int[] actual= new int[4];
 
-        colorTcs34725.adc().addRoute(new RouteBuilder() {
+        colorTcs34725.adc().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.split()
                         .index(0).stream(new Subscriber() {
                             @Override

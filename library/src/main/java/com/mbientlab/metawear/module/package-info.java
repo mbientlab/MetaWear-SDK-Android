@@ -22,5 +22,5 @@
  * hello@mbientlab.com.
  */
 
-/** On-board sensor, peripheral, or firmware feature */
+/** Available modules on the Metawear boards */
 package com.mbientlab.metawear.module;

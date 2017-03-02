@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import java.io.IOException;
+
 import bolts.Task;
 
 /**
@@ -32,10 +34,14 @@ import bolts.Task;
 
 public class TestDeserializedGpioAnalog extends TestGpioAnalog {
     protected Task<Route> setupAbsRef() {
-        btlePlaform.boardStateSuffix = "gpio_analog";
-        mwBoard.deserialize();
+        try {
+            junitPlatform.boardStateSuffix = "gpio_analog";
+            mwBoard.deserialize();
 
-        return Task.forResult(mwBoard.lookupRoute(0));
+            return Task.forResult(mwBoard.lookupRoute(0));
+        } catch (IOException | ClassNotFoundException e) {
+            return Task.forError(e);
+        }
     }
 
     protected Task<Route> setupAdc() {

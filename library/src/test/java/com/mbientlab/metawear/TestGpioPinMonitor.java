@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -47,7 +47,7 @@ public class TestGpioPinMonitor extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
         connectToBoard();
 
         gpio= mwBoard.getModule(Gpio.class);
@@ -63,16 +63,16 @@ public class TestGpioPinMonitor extends UnitTestBase {
                 {0x05, 0x09, 0x07, 0x01},
                 {0x05, 0x0b, 0x07, 0x01}
         };
-        gpio.getPin((byte) 5).setChangeType(ANY);
-        gpio.getPin((byte) 5).monitor().start();
+        gpio.pin((byte) 5).setChangeType(ANY);
+        gpio.pin((byte) 5).monitor().start();
 
-        gpio.getPin((byte) 6).setChangeType(FALLING);
-        gpio.getPin((byte) 6).monitor().start();
+        gpio.pin((byte) 6).setChangeType(FALLING);
+        gpio.pin((byte) 6).monitor().start();
 
-        gpio.getPin((byte) 7).setChangeType(RISING);
-        gpio.getPin((byte) 7).monitor().start();
+        gpio.pin((byte) 7).setChangeType(RISING);
+        gpio.pin((byte) 7).monitor().start();
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -80,9 +80,9 @@ public class TestGpioPinMonitor extends UnitTestBase {
         final byte[] actual= new byte[2];
         byte[] expected= new byte[] {1, 0};
 
-        gpio.getPin((byte) 0).monitor().addRoute(new RouteBuilder() {
+        gpio.pin((byte) 0).monitor().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     private byte i= 0;
 
@@ -111,9 +111,9 @@ public class TestGpioPinMonitor extends UnitTestBase {
     public void subscribe() {
         byte[] expected= new byte[] {0x5, 0xa, 0x1};
 
-        gpio.getPin((byte) 1).monitor().addRoute(new RouteBuilder() {
+        gpio.pin((byte) 1).monitor().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -124,16 +124,16 @@ public class TestGpioPinMonitor extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void stop() {
         byte[] expected= new byte[] {0x05, 0x0b, 0x06, 0x00};
 
-        gpio.getPin((byte) 6).monitor().stop();
+        gpio.pin((byte) 6).monitor().stop();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
 }

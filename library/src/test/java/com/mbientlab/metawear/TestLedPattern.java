@@ -119,13 +119,13 @@ public class TestLedPattern extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
 
         expected= new byte[expectedBase.length];
         System.arraycopy(expectedBase, 0, expected, 0, expectedBase.length);
 
         if (delaySupported) {
-            btlePlaform.addCustomModuleInfo(new byte[]{0x02, (byte) 0x80, 0x00, 0x01, 0x03, 0x00});
+            junitPlatform.addCustomModuleInfo(new byte[]{0x02, (byte) 0x80, 0x00, 0x01, 0x03, 0x00});
             expected[15]= (byte) ((delay >> 8) & 0xff);
             expected[14]= (byte) (delay & 0xff);
         }
@@ -139,6 +139,6 @@ public class TestLedPattern extends UnitTestBase {
                 .delay(delay)
                 .repeatCount(repeat)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

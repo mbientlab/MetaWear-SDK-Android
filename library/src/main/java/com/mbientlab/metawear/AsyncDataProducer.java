@@ -25,16 +25,17 @@
 package com.mbientlab.metawear;
 
 /**
- * Interrupt driven data producer
+ * Data producer that emits data when new data is available.  Call {@link #start()} to begin gathering data
+ * and {@link #stop()} to terminate the data measuring.
  * @author Eric Tsai
  */
 public interface AsyncDataProducer extends DataProducer {
     /**
-     * Starts producing data
+     * Starts data creation
      */
     void start();
     /**
-     * Stops producing data
+     * Stops data creation
      */
     void stop();
 }

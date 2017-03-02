@@ -25,13 +25,13 @@
 package com.mbientlab.metawear.builder;
 
 /**
- * Interface for creating a data route
+ * Builder class for creating a data route
  * @author Eric Tsai
  */
 public interface RouteBuilder {
     /**
-     * Called by the API with the RouteElement corresponding to the entry point of the data route
+     * Called by the API with the RouteComponent corresponding to the entry point of the data route
      * @param source    Entry point for the route
      */
-    void configure(RouteElement source);
+    void configure(RouteComponent source);
 }

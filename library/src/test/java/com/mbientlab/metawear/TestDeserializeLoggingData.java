@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import java.io.IOException;
+
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
@@ -34,21 +36,29 @@ import bolts.TaskCompletionSource;
 public class TestDeserializeLoggingData extends TestLoggingData {
     @Override
     protected Task<Route> setupLogDataRoute() {
-        btlePlaform.boardStateSuffix = "log_acc";
-        mwBoard.deserialize();
+        try {
+            junitPlatform.boardStateSuffix = "log_acc";
+            mwBoard.deserialize();
 
-        TaskCompletionSource<Route> deserializeTask= new TaskCompletionSource<>();
-        deserializeTask.setResult(mwBoard.lookupRoute((byte) 0));
-        return deserializeTask.getTask();
+            TaskCompletionSource<Route> deserializeTask= new TaskCompletionSource<>();
+            deserializeTask.setResult(mwBoard.lookupRoute((byte) 0));
+            return deserializeTask.getTask();
+        } catch (IOException | ClassNotFoundException e) {
+            return Task.forError(e);
+        }
     }
 
     @Override
     protected Task<Route> setupLogOffsetRoute() {
-        btlePlaform.boardStateSuffix= "log_offset";
-        mwBoard.deserialize();
-
-        TaskCompletionSource<Route> deserializeTask= new TaskCompletionSource<>();
-        deserializeTask.setResult(mwBoard.lookupRoute((byte) 0));
-        return deserializeTask.getTask();
+        try {
+            junitPlatform.boardStateSuffix= "log_offset";
+            mwBoard.deserialize();
+    
+            TaskCompletionSource<Route> deserializeTask= new TaskCompletionSource<>();
+            deserializeTask.setResult(mwBoard.lookupRoute((byte) 0));
+            return deserializeTask.getTask();
+        } catch (IOException | ClassNotFoundException e) {
+            return Task.forError(e);
+        }
     }
 }

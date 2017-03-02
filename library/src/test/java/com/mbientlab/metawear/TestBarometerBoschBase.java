@@ -41,7 +41,7 @@ public abstract class TestBarometerBoschBase extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= boardInfo;
+        junitPlatform.boardInfo= boardInfo;
         connectToBoard();
 
         baroBosch= mwBoard.getModule(BarometerBosch.class);

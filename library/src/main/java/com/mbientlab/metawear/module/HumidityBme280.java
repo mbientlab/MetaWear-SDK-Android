@@ -28,7 +28,7 @@ import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Controls the BME280 humidity sensor
+ * Sensor on the BME280 environmental sensor measuring relative humidity
  * @author Eric Tsai
  */
 public interface HumidityBme280 extends Module {
@@ -50,8 +50,9 @@ public interface HumidityBme280 extends Module {
     void setOversampling(OversamplingMode mode);
 
     /**
-     * Gets an object to manage the humidity values from the environmental sensor
-     * @return Object managing the humidity values
+     * Get an implementation of the ForcedDataProducer interface for the relative humidity values,
+     * represented as a float.
+     * @return Object representing relative humidity
      */
     ForcedDataProducer value();
 }

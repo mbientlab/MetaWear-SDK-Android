@@ -27,7 +27,7 @@ package com.mbientlab.metawear.impl;
 /**
  * Created by etsai on 8/31/16.
  */
-public class Pair<T, U> {
+class Pair<T, U> {
     public T first;
     public U second;
 

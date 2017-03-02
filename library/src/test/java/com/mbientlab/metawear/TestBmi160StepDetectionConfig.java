@@ -76,7 +76,7 @@ public class TestBmi160StepDetectionConfig extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo = MetaWearBoardInfo.RPRO;
         connectToBoard();
     }
 
@@ -85,7 +85,7 @@ public class TestBmi160StepDetectionConfig extends UnitTestBase {
         mwBoard.getModule(AccelerometerBmi160.class).stepDetector().configure()
                 .mode(mode)
                 .commit();
-        assertArrayEquals(expectedDetector, btlePlaform.getLastCommand());
+        assertArrayEquals(expectedDetector, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -93,6 +93,6 @@ public class TestBmi160StepDetectionConfig extends UnitTestBase {
         mwBoard.getModule(AccelerometerBmi160.class).stepCounter().configure()
                 .mode(mode)
                 .commit();
-        assertArrayEquals(expectedCounter, btlePlaform.getLastCommand());
+        assertArrayEquals(expectedCounter, junitPlatform.getLastCommand());
     }
 }

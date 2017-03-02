@@ -27,7 +27,7 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.module.ColorDetectorTcs34725;
+import com.mbientlab.metawear.module.ColorTcs34725;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -35,17 +35,17 @@ import java.util.Calendar;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.COLOR_DETECTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.COLOR_DETECTOR;
 
 /**
  * Created by etsai on 9/19/16.
  */
-class ColorDetectorTcs34725Impl extends ModuleImplBase implements ColorDetectorTcs34725 {
-    private final static String ADC_PRODUCER= "com.mbientlab.metawear.impl.ColorDetectorTcs34725Impl.ADC_PRODUCER",
-            ADC_CLEAR_PRODUCER= "com.mbientlab.metawear.impl.ColorDetectorTcs34725Impl.ADC_CLEAR_PRODUCER",
-            ADC_RED_PRODUCER= "com.mbientlab.metawear.impl.ColorDetectorTcs34725Impl.ADC_RED_PRODUCER",
-            ADC_GREEN_PRODUCER= "com.mbientlab.metawear.impl.ColorDetectorTcs34725Impl.ADC_GREEN_PRODUCER",
-            ADC_BLUE_PRODUCER= "com.mbientlab.metawear.impl.ColorDetectorTcs34725Impl.ADC_BLUE_PRODUCER";
+class ColorTcs34725Impl extends ModuleImplBase implements ColorTcs34725 {
+    private final static String ADC_PRODUCER= "com.mbientlab.metawear.impl.ColorTcs34725Impl.ADC_PRODUCER",
+            ADC_CLEAR_PRODUCER= "com.mbientlab.metawear.impl.ColorTcs34725Impl.ADC_CLEAR_PRODUCER",
+            ADC_RED_PRODUCER= "com.mbientlab.metawear.impl.ColorTcs34725Impl.ADC_RED_PRODUCER",
+            ADC_GREEN_PRODUCER= "com.mbientlab.metawear.impl.ColorTcs34725Impl.ADC_GREEN_PRODUCER",
+            ADC_BLUE_PRODUCER= "com.mbientlab.metawear.impl.ColorTcs34725Impl.ADC_BLUE_PRODUCER";
     private static final byte ADC = 1, MODE = 2;
     private static final long serialVersionUID = -6867360365437005527L;
 
@@ -59,22 +59,22 @@ class ColorDetectorTcs34725Impl extends ModuleImplBase implements ColorDetectorT
             super(COLOR_DETECTOR, Util.setSilentRead(ADC), new DataAttributes(new byte[] {2, 2, 2, 2}, (byte) 1, (byte) 0, false));
         }
 
-        ColorAdcData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        ColorAdcData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new ColorAdcData(input, module, register, id, attributes);
         }
 
         @Override
-        public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-            return input;
+        public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+            return value;
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             final ColorAdc wrapper= new ColorAdc(
                     buffer.getShort() & 0xffff,
@@ -108,7 +108,7 @@ class ColorDetectorTcs34725Impl extends ModuleImplBase implements ColorDetectorT
 
     private transient ColorAdcDataProducer adcProducer;
 
-    ColorDetectorTcs34725Impl(MetaWearBoardPrivate mwPrivate) {
+    ColorTcs34725Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
         DataTypeBase adcProducer = new ColorAdcData();
@@ -139,8 +139,8 @@ class ColorDetectorTcs34725Impl extends ModuleImplBase implements ColorDetectorT
             }
 
             @Override
-            public ConfigEditor illuminatorLed(boolean enable) {
-                illuminate= (byte) (enable ? 1 : 0);
+            public ConfigEditor enableIlluminatorLed() {
+                illuminate= 1;
                 return this;
             }
 
@@ -181,7 +181,7 @@ class ColorDetectorTcs34725Impl extends ModuleImplBase implements ColorDetectorT
                 }
 
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
                     return mwPrivate.queueRouteBuilder(builder, ADC_PRODUCER);
                 }
 

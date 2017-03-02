@@ -25,16 +25,19 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Generic interface providing high level access for a barometer. If you know specifically which
- * barometer is on your board, use the appropriate Barometer subclass instead.
+ * Absolute barometric pressure sensor by Bosch.  This interface provides general access to a Bosch
+ * barometer. If you know specifically which barometer is on your board, use the appropriate subclass
+ * instead.
  * @author Eric Tsai
  * @see BarometerBme280
  * @see BarometerBmp280
  */
-public interface BarometerBosch extends Module {
+public interface BarometerBosch extends Module, Configurable<BarometerBosch.ConfigEditor<? extends BarometerBosch.ConfigEditor>> {
     /**
      * Supported oversampling modes on a Bosch barometer
      * @author Eric Tsai
@@ -47,7 +50,6 @@ public interface BarometerBosch extends Module {
         HIGH,
         ULTRA_HIGH
     }
-
     /**
      * Available IIR (infinite impulse response) filter coefficient for the Bosch pressure sensors
      * @author Eric Tsai
@@ -59,51 +61,43 @@ public interface BarometerBosch extends Module {
         AVG_8,
         AVG_16
     }
-
     /**
      * Barometer agnostic interface for configuring the sensor
      * @param <T>    Type of barometer config editor
      */
-    interface ConfigEditorBase<T extends ConfigEditorBase> {
+    interface ConfigEditor<T extends ConfigEditor> extends ConfigEditorBase {
         /**
-         * Sets the oversampling mode for pressure sampling
+         * Set the oversampling mode for pressure sampling
          * @param mode    New oversampling mode
          * @return Calling object
          */
         T pressureOversampling(OversamplingMode mode);
 
         /**
-         * Sets the IIR coefficient for pressure sampling
+         * Set the IIR coefficient for pressure sampling
          * @param coeff    New filter coefficient
          * @return Calling object
          */
         T filterCoeff(FilterCoeff coeff);
 
         /**
-         * Sets the standby time.  The closest, valid standby time will be chosen
+         * Set the standby time.  The closest, valid standby time will be chosen
          * depending on the underlying sensor
          * @param time    New standby time
          * @return Calling object
          */
         T standbyTime(float time);
-        /**
-         * Writes the new settings to the barometer
-         */
-        void commit();
     }
-    /**
-     * Configure the barometer
-     * @return Generic editor object
-     */
-    ConfigEditorBase<? extends ConfigEditorBase> configure();
 
     /**
-     * Gets an object to control the pressure data
+     * Get an implementation of the AsyncDataProducer interface for pressure data, represented as a
+     * float in units of Pascals (pa)
      * @return Object controlling pressure data
      */
     AsyncDataProducer pressure();
     /**
-     * Gets an object to control the altitude data
+     * Get an implementation of the AsyncDataProducer interface for altitude data, represented as a
+     * float in units of meters (m)
      * @return Object controlling altitude data
      */
     AsyncDataProducer altitude();

@@ -64,7 +64,7 @@ public class TestMagnetometerBmm150Config extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
         connectToBoard();
 
         mag= mwBoard.getModule(MagnetometerBmm150.class);
@@ -78,6 +78,6 @@ public class TestMagnetometerBmm150Config extends UnitTestBase {
         };
         mag.usePreset(preset);
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 }

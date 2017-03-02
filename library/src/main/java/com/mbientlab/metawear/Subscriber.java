@@ -27,7 +27,7 @@ package com.mbientlab.metawear;
 import java.io.Serializable;
 
 /**
- * Handles data that is sent to the Android device
+ * Handles data that is sent to the local device
  * @author Eric Tsai
  */
 public interface Subscriber extends Serializable {

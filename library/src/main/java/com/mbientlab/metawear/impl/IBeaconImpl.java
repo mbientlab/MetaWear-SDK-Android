@@ -29,12 +29,11 @@ import com.mbientlab.metawear.module.IBeacon;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Locale;
 import java.util.UUID;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.IBEACON;
+import static com.mbientlab.metawear.impl.Constant.Module.IBEACON;
 
 /**
  * Created by etsai on 9/18/16.
@@ -44,83 +43,7 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
         RX = 0x5, TX = 0x6, PERIOD = 0x7;
     private static final long serialVersionUID = 5027360264544753193L;
 
-    private static class ConfigurationBuilder {
-        private UUID uuid;
-        private short major, minor, period;
-        private byte rx, tx;
-
-        ConfigurationBuilder setUuid(UUID uuid) {
-            this.uuid= uuid;
-            return this;
-        }
-
-        ConfigurationBuilder setMajor(short major) {
-            this.major= major;
-            return this;
-        }
-
-        ConfigurationBuilder setMinor(short minor) {
-            this.minor= minor;
-            return this;
-        }
-
-        ConfigurationBuilder setRx(byte rx) {
-            this.rx= rx;
-            return this;
-        }
-
-        ConfigurationBuilder setTx(byte tx) {
-            this.tx= tx;
-            return this;
-        }
-
-        ConfigurationBuilder setPeriod(short period) {
-            this.period= period;
-            return this;
-        }
-
-        Configuration build() {
-            return new Configuration() {
-                @Override
-                public UUID uuid() {
-                    return uuid;
-                }
-
-                @Override
-                public short major() {
-                    return major;
-                }
-
-                @Override
-                public short minor() {
-                    return minor;
-                }
-
-                @Override
-                public byte rxPower() {
-                    return rx;
-                }
-
-                @Override
-                public byte txPower() {
-                    return tx;
-                }
-
-                @Override
-                public short period() {
-                    return period;
-                }
-
-                @Override
-                public String toString() {
-                    return String.format(Locale.US, "{uuid: %s, major: %d, minor: %d, rx: %d, tx: %d, delay: %d}",
-                            uuid(), major(), minor(), rxPower(), txPower(), period());
-                }
-            };
-        }
-    }
-
-    private transient ConfigurationBuilder builder;
+    private transient Configuration readConfig;
     private transient AsyncTaskManager<Configuration> readConfigTasks;
 
     IBeaconImpl(MetaWearBoardPrivate mwPrivate) {
@@ -131,50 +54,51 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
     protected void init() {
         readConfigTasks = new AsyncTaskManager<>(mwPrivate, "Reading IBeacon configuration timed out");
 
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(AD_UUID)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(AD_UUID)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                builder= new ConfigurationBuilder();
-                builder.setUuid(new UUID(ByteBuffer.wrap(response, 10, 8).order(ByteOrder.LITTLE_ENDIAN).getLong(),
-                        ByteBuffer.wrap(response, 2, 8).order(ByteOrder.LITTLE_ENDIAN).getLong()));
+                readConfig = new Configuration();
+                readConfig.uuid = new UUID(ByteBuffer.wrap(response, 10, 8).order(ByteOrder.LITTLE_ENDIAN).getLong(),
+                        ByteBuffer.wrap(response, 2, 8).order(ByteOrder.LITTLE_ENDIAN).getLong());
                 IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MAJOR)});
             }
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MAJOR)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MAJOR)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                builder.setMajor(ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
+                readConfig.major = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MINOR)});
             }
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MINOR)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MINOR)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                builder.setMinor(ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
+                readConfig.minor = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
                 IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(RX)});
             }
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(RX)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(RX)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                builder.setRx(response[2]);
+                readConfig.rxPower = response[2];
                 IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(TX)});
             }
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(TX)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(TX)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                builder.setTx(response[2]);
+                readConfig.txPower = response[2];
                 IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(PERIOD)});
             }
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(PERIOD)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(PERIOD)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
                 readConfigTasks.cancelTimeout();
 
-                builder.setPeriod(ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
-                readConfigTasks.setResult(builder.build());
+                readConfig.period = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+                readConfigTasks.setResult(readConfig);
+                readConfig = null;
             }
         });
     }
@@ -188,49 +112,49 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
             private DataToken majorToken = null, newMinorDataToken = null;
 
             @Override
-            public ConfigEditor setUUID(UUID adUuid) {
+            public ConfigEditor uuid(UUID adUuid) {
                 newUuid = adUuid;
                 return this;
             }
 
             @Override
-            public ConfigEditor setMajor(short major) {
+            public ConfigEditor major(short major) {
                 newMajor = major;
                 return this;
             }
 
             @Override
-            public ConfigEditor setMajor(DataToken major) {
+            public ConfigEditor major(DataToken major) {
                 majorToken = major;
                 return this;
             }
 
             @Override
-            public ConfigEditor setMinor(short minor) {
+            public ConfigEditor minor(short minor) {
                 newMinor = minor;
                 return this;
             }
 
             @Override
-            public ConfigEditor setMinor(DataToken minor) {
+            public ConfigEditor minor(DataToken minor) {
                 newMinorDataToken = minor;
                 return this;
             }
 
             @Override
-            public ConfigEditor setRxPower(byte power) {
+            public ConfigEditor rxPower(byte power) {
                 newRxPower = power;
                 return this;
             }
 
             @Override
-            public ConfigEditor setTxPower(byte power) {
+            public ConfigEditor txPower(byte power) {
                 newTxPower = power;
                 return this;
             }
 
             @Override
-            public ConfigEditor setAdPeriod(short period) {
+            public ConfigEditor period(short period) {
                 newPeriod = period;
                 return this;
             }
@@ -295,7 +219,7 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
     }
 
     @Override
-    public Task<Configuration> readConfiguration() {
+    public Task<Configuration> readConfigAsync() {
         return readConfigTasks.queueTask(1500L, new Runnable() {
             @Override
             public void run() {

@@ -27,12 +27,10 @@ package com.mbientlab.metawear.data;
 import java.util.Locale;
 
 /**
- * Encapsulates magnetic field strength data, values are in micro teslas
+ * Encapsulates magnetic field strength data, values are in micro tesla
  * @author Eric Tsai
  */
 public class MagneticField extends FloatVector {
-    public static final String MICRO_TESLA = "\u00B5T";
-
     public MagneticField(float x, float y, float z) {
         super(x, y, z);
     }
@@ -61,10 +59,6 @@ public class MagneticField extends FloatVector {
 
     @Override
     public String toString() {
-        return String.format(Locale.US, "{x: %.3f%s, y: %.3f%s, z: %.3f%s}",
-                x(), MICRO_TESLA,
-                y(), MICRO_TESLA,
-                z(), MICRO_TESLA
-        );
+        return String.format(Locale.US, "{x: %.9fT, y: %.9fT, z: %.9fT}", x(), y(), z());
     }
 }

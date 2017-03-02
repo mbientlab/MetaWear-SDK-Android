@@ -26,14 +26,14 @@ package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.IllegalRouteOperationException;
 import com.mbientlab.metawear.Subscriber;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.RouteMulticast;
 import com.mbientlab.metawear.builder.RouteSplit;
 import com.mbientlab.metawear.builder.filter.*;
 import com.mbientlab.metawear.builder.function.*;
 import com.mbientlab.metawear.builder.predicate.PulseOutput;
 import com.mbientlab.metawear.impl.DataProcessorImpl.*;
-import com.mbientlab.metawear.impl.ColorDetectorTcs34725Impl.ColorAdcData;
+import com.mbientlab.metawear.impl.ColorTcs34725Impl.ColorAdcData;
 import com.mbientlab.metawear.module.DataProcessor;
 
 import java.nio.ByteBuffer;
@@ -46,13 +46,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Stack;
 
-import static com.mbientlab.metawear.impl.ModuleId.DATA_PROCESSOR;
-import static com.mbientlab.metawear.impl.ModuleId.SENSOR_FUSION;
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
 
 /**
  * Created by etsai on 9/4/16.
  */
-class RouteElementImpl implements RouteElement {
+class RouteComponentImpl implements RouteComponent {
     private static final Version MULTI_CHANNEL_MATH= new Version("1.1.0"), MULTI_COMPARISON_MIN_FIRMWARE= new Version("1.2.3");
 
     private enum BranchElement {
@@ -67,9 +67,9 @@ class RouteElementImpl implements RouteElement {
         public final LinkedList<Processor> dataProcessors;
         public final Version firmware;
         public final MetaWearBoardPrivate mwPrivate;
-        public final Stack<RouteElementImpl> stashedSignals= new Stack<>();
+        public final Stack<RouteComponentImpl> stashedSignals= new Stack<>();
         public final Stack<BranchElement> elements;
-        public final Stack<Pair<RouteElementImpl, DataTypeBase[]>> splits;
+        public final Stack<Pair<RouteComponentImpl, DataTypeBase[]>> splits;
         public final Map<String, Processor> taggedProcessors = new LinkedHashMap<>();
 
         public Cache(Version firmware, MetaWearBoardPrivate mwPrivate) {
@@ -87,11 +87,11 @@ class RouteElementImpl implements RouteElement {
     public final DataTypeBase source;
     public Cache persistantData= null;
 
-    RouteElementImpl(DataTypeBase source) {
+    RouteComponentImpl(DataTypeBase source) {
         this.source= source;
     }
 
-    RouteElementImpl(DataTypeBase source, RouteElementImpl original) {
+    RouteComponentImpl(DataTypeBase source, RouteComponentImpl original) {
         this.source= source;
         this.persistantData= original.persistantData;
     }
@@ -108,7 +108,7 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement to() {
+    public RouteComponent to() {
         try {
             return persistantData.stashedSignals.peek();
         } catch (EmptyStackException e) {
@@ -128,16 +128,16 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement index(int i) {
+    public RouteComponent index(int i) {
         try {
-            return new RouteElementImpl(persistantData.splits.peek().second[i], this);
+            return new RouteComponentImpl(persistantData.splits.peek().second[i], this);
         } catch (ArrayIndexOutOfBoundsException e) {
             throw new IllegalRouteOperationException("Index on split data out of bounds", e);
         }
     }
 
     @Override
-    public RouteElement end() {
+    public RouteComponent end() {
         try {
             switch (persistantData.elements.pop()) {
                 case MULTICAST:
@@ -155,7 +155,7 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement name(String name) {
+    public RouteComponent name(String name) {
         if (persistantData.taggedProcessors.containsKey(name)) {
             throw new IllegalRouteOperationException(String.format("Duplicate processor key \'%s\' found", name));
         }
@@ -165,8 +165,9 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement stream(Subscriber subscriber) {
+    public RouteComponent stream(Subscriber subscriber) {
         if (source.attributes.length() > 0) {
+            source.markLive();
             persistantData.subscribedProducers.add(new Tuple3<>(source, subscriber, false));
             return this;
         }
@@ -174,7 +175,7 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement log(Subscriber subscriber) {
+    public RouteComponent log(Subscriber subscriber) {
         if (source.attributes.length() > 0) {
             persistantData.subscribedProducers.add(new Tuple3<>(source, subscriber, true));
             return this;
@@ -183,13 +184,13 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement react(Action action) {
+    public RouteComponent react(Action action) {
         persistantData.reactions.add(new Pair<>(source, action));
         return this;
     }
 
     @Override
-    public RouteElement buffer() {
+    public RouteComponent buffer() {
         if (source.attributes.length() <= 0) {
             throw new IllegalRouteOperationException("Cannot apply \'buffer\' filter to null data");
         }
@@ -203,30 +204,52 @@ class RouteElementImpl implements RouteElement {
     private static class CounterEditorInner extends EditorImplBase implements DataProcessor.CounterEditor {
         private static final long serialVersionUID = 4873789798519714460L;
 
-        CounterEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        CounterEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
         public void reset() {
-            owner.sendCommand(new byte[]{DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2],
+            mwPrivate.sendCommand(new byte[]{DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2],
                     0x00, 0x00, 0x00, 0x00});
+        }
+
+        @Override
+        public void set(int value) {
+            ByteBuffer buffer = ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN)
+                    .put(DATA_PROCESSOR.id)
+                    .put(DataProcessorImpl.STATE)
+                    .put(source.eventConfig[2])
+                    .putInt(value);
+            mwPrivate.sendCommand(buffer.array());
         }
     }
     private static class AccumulatorEditorInner extends EditorImplBase implements DataProcessor.AccumulatorEditor {
         private static final long serialVersionUID = -5044680524938752249L;
 
-        AccumulatorEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        AccumulatorEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
         public void reset() {
-            owner.sendCommand(new byte[] {DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2],
+            mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2],
                     0x00, 0x00, 0x00, 0x00});
         }
+
+        @Override
+        public void set(Number value) {
+            Number scaledValue = source.convertToFirmwareUnits(mwPrivate, value);
+            ByteBuffer buffer = ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN)
+                    .put(DATA_PROCESSOR.id)
+                    .put(DataProcessorImpl.STATE)
+                    .put(source.eventConfig[2])
+                    .putInt(scaledValue.intValue());
+
+            mwPrivate.sendCommand(buffer.array());
+        }
     }
-    private RouteElementImpl createReducer(boolean counter) {
+    private RouteComponentImpl createReducer(boolean counter) {
         if (!counter) {
             if (source.attributes.length() <= 0) {
                 throw new IllegalRouteOperationException("Cannot accumulate null data");
@@ -254,35 +277,35 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement count() {
+    public RouteComponent count() {
         return createReducer(true);
     }
 
     @Override
-    public RouteElement accumulate() {
+    public RouteComponent accumulate() {
         return createReducer(false);
     }
 
     private static class AverageEditorInner extends EditorImplBase implements DataProcessor.AverageEditor {
         private static final long serialVersionUID = 998301829125848762L;
 
-        AverageEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        AverageEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
         public void modify(byte samples) {
             config[2]= samples;
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
 
         @Override
         public void reset() {
-            owner.sendCommand(new byte[] {DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2]});
+            mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2]});
         }
     }
     @Override
-    public RouteElement average(byte samples) {
+    public RouteComponent average(byte samples) {
         if (source.attributes.length() <= 0) {
             throw new IllegalRouteOperationException("Cannot average null data");
         }
@@ -301,7 +324,7 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement delay(byte samples) {
+    public RouteComponent delay(byte samples) {
         if (source.attributes.length() <= 0) {
             throw new IllegalRouteOperationException("Cannot delay null data");
         }
@@ -315,7 +338,7 @@ class RouteElementImpl implements RouteElement {
         return postCreate(null, new NullEditor(config, processor, persistantData.mwPrivate));
     }
 
-    private RouteElementImpl createCombiner(DataTypeBase source, byte mode) {
+    private RouteComponentImpl createCombiner(DataTypeBase source, byte mode) {
         if (source.attributes.length() <= 0) {
             throw new IllegalRouteOperationException(String.format(Locale.US, "Cannot apply \'%s\' to null data", mode == 0 ? "rms" : "rss"));
         } else if (source.eventConfig[0] == SENSOR_FUSION.id) {
@@ -363,7 +386,7 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement map(Function1 fn) {
+    public RouteComponent map(Function1 fn) {
         switch(fn) {
             case ABS_VALUE:
                 return applyMath(MathOp.ABS_VALUE, 0);
@@ -384,11 +407,11 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement map(Function2 fn, String ... dataNames) {
-        RouteElement next= map(fn, 0);
+    public RouteComponent map(Function2 fn, String ... dataNames) {
+        RouteComponent next= map(fn, 0);
         if (next != null) {
             for (String key : dataNames) {
-                persistantData.feedback.add(new Pair<>(key, new Tuple3<>(((RouteElementImpl) next).source, 4,
+                persistantData.feedback.add(new Pair<>(key, new Tuple3<>(((RouteComponentImpl) next).source, 4,
                         persistantData.dataProcessors.peekLast().editor.config)));
             }
         }
@@ -396,7 +419,7 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement map(Function2 fn, Number rhs) {
+    public RouteComponent map(Function2 fn, Number rhs) {
         switch(fn) {
             case ADD:
                 return applyMath(MathOp.ADD, rhs);
@@ -433,8 +456,8 @@ class RouteElementImpl implements RouteElement {
     private static class MapEditorInner extends EditorImplBase implements DataProcessor.MapEditor {
         private static final long serialVersionUID = 8475942086629415224L;
 
-        MapEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        MapEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
@@ -445,7 +468,7 @@ class RouteElementImpl implements RouteElement {
                 case ADD:
                 case MODULUS:
                 case SUBTRACT:
-                    scaledRhs= source.convertToFirmwareUnits(owner, rhs);
+                    scaledRhs= source.convertToFirmwareUnits(mwPrivate, rhs);
                     break;
                 case SQRT:
                 case ABS_VALUE:
@@ -457,10 +480,10 @@ class RouteElementImpl implements RouteElement {
 
             byte[] newRhs= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(scaledRhs.intValue()).array();
             System.arraycopy(newRhs, 0, config, 3, newRhs.length);
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
-    private RouteElement applyMath(MathOp op, Number rhs) {
+    private RouteComponent applyMath(MathOp op, Number rhs) {
         boolean multiChnlMath= persistantData.firmware.compareTo(MULTI_CHANNEL_MATH) >= 0;
 
         if (!multiChnlMath && source.attributes.length() > 4) {
@@ -480,31 +503,17 @@ class RouteElementImpl implements RouteElement {
         switch(op) {
             case ADD: {
                 DataAttributes newAttrs= source.attributes.dataProcessorCopySize((byte) 4);
-                if (rhs.floatValue() < 0) {
-                    processor = createUnsignedToSigned(newAttrs);
-                } else {
-                    processor = source.dataProcessorCopy(source, newAttrs);
-                }
+                processor = rhs.floatValue() < 0 ? createUnsignedToSigned(newAttrs) : source.dataProcessorCopy(source, newAttrs);
                 break;
             }
             case MULTIPLY: {
                 DataAttributes newAttrs= source.attributes.dataProcessorCopySize(Math.abs(rhs.floatValue()) < 1 ? source.attributes.sizes[0] : 4);
-
-                if (rhs.floatValue() < 0) {
-                    processor = createUnsignedToSigned(newAttrs);
-                } else {
-                    processor = source.dataProcessorCopy(source, newAttrs);
-                }
+                processor = rhs.floatValue() < 0 ? createUnsignedToSigned(newAttrs) : source.dataProcessorCopy(source, newAttrs);
                 break;
             }
             case DIVIDE: {
                 DataAttributes newAttrs = source.attributes.dataProcessorCopySize(Math.abs(rhs.floatValue()) < 1 ? 4 : source.attributes.sizes[0]);
-
-                if (rhs.floatValue() < 0) {
-                    processor= createUnsignedToSigned(newAttrs);
-                } else {
-                    processor = source.dataProcessorCopy(source, newAttrs);
-                }
+                processor = rhs.floatValue() < 0 ? createUnsignedToSigned(newAttrs) : source.dataProcessorCopy(source, newAttrs);
                 break;
             }
             case MODULUS: {
@@ -512,47 +521,38 @@ class RouteElementImpl implements RouteElement {
                 break;
             }
             case EXPONENT: {
-                DataAttributes newAttrs = source.attributes.dataProcessorCopySize((byte) 4);
-                processor = source.dataProcessorCopy(source, newAttrs);
+                processor = new ByteArrayData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
+                        source.attributes.dataProcessorCopySize((byte) 4));
                 break;
             }
             case LEFT_SHIFT: {
-                byte newChannelSize = (byte) (source.attributes.sizes[0] + (rhs.intValue() / 8));
-                if (newChannelSize > 4) {
-                    newChannelSize = 4;
-                }
-
-                processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopySize(newChannelSize));
+                processor = new ByteArrayData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
+                        source.attributes.dataProcessorCopySize((byte) Math.min(source.attributes.sizes[0] + (rhs.intValue() / 8), 4)));
                 break;
             }
             case RIGHT_SHIFT: {
-                byte newChannelSize = (byte) (source.attributes.sizes[0] - (rhs.intValue() / 8));
-                if (newChannelSize <= 0) {
-                    newChannelSize = 1;
-                }
-
-                processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopySize(newChannelSize));
+                processor = new ByteArrayData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
+                        source.attributes.dataProcessorCopySize((byte) Math.max(source.attributes.sizes[0] - (rhs.intValue() / 8), 1)));
                 break;
             }
             case SUBTRACT: {
                 processor= createUnsignedToSigned(source.attributes.dataProcessorCopySigned(true));
                 break;
             }
-            case SQRT:
+            case SQRT: {
+                processor = new ByteArrayData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, source.attributes.dataProcessorCopySigned(false));
+                break;
+            }
             case ABS_VALUE: {
                 DataAttributes copy= source.attributes.dataProcessorCopySigned(false);
-
-                if (source instanceof SFloatData) {
-                    processor= new UFloatData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, copy);
-                } else if (source instanceof IntData) {
-                    processor= new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, copy);
-                } else {
-                    processor= source.dataProcessorCopy(source, copy);
-                }
+                processor = (source instanceof SFloatData) ? new UFloatData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, copy) :
+                        (source instanceof IntData) ? new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, copy) : source.dataProcessorCopy(source, copy);
                 break;
             }
             case CONSTANT:
-                processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
+                DataAttributes attributes = new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, source.attributes.signed);
+                processor = source.attributes.signed ? new IntData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes) :
+                        new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes);
                 break;
             default:
                 processor= null;
@@ -577,7 +577,7 @@ class RouteElementImpl implements RouteElement {
         ByteBuffer buffer= ByteBuffer.allocate(multiChnlMath ? 8 : 7)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .put((byte) 0x9)
-                .put((byte) ((processor.attributes.length() - 1) & 0x3 | ((source.attributes.sizes[0] - 1) << 2) | (source.attributes.signed ? 0x10 : 0)))
+                .put((byte) ((processor.attributes.sizes[0] - 1) & 0x3 | ((source.attributes.sizes[0] - 1) << 2) | (source.attributes.signed ? 0x10 : 0)))
                 .put((byte) (op.ordinal() + 1))
                 .putInt(scaledRhs.intValue());
         if (multiChnlMath) {
@@ -590,8 +590,8 @@ class RouteElementImpl implements RouteElement {
     private static class TimeEditorInner extends EditorImplBase implements DataProcessor.TimeEditor {
         private static final long serialVersionUID = -3775715195615375018L;
 
-        TimeEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        TimeEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
@@ -599,11 +599,11 @@ class RouteElementImpl implements RouteElement {
             byte[] newPeriod= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(period).array();
             System.arraycopy(newPeriod, 0, config, 2, newPeriod.length);
 
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
     @Override
-    public RouteElement limit(int period) {
+    public RouteComponent limit(int period) {
         if (source.attributes.length() <= 0) {
             throw new IllegalRouteOperationException("Cannot limit frequency of null data");
         }
@@ -623,15 +623,15 @@ class RouteElementImpl implements RouteElement {
     private static class PassthroughEditorInner extends EditorImplBase implements DataProcessor.PassthroughEditor {
         private static final long serialVersionUID = 3157873682587128118L;
 
-        PassthroughEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        PassthroughEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
         public void set(short value) {
             byte[] newValue= ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(value).array();
 
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.STATE, source.eventConfig[2], newValue);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.STATE, source.eventConfig[2], newValue);
         }
 
         @Override
@@ -640,11 +640,11 @@ class RouteElementImpl implements RouteElement {
             System.arraycopy(newValue, 0, config, 2, newValue.length);
             config[1]= (byte) (type.ordinal() & 0x7);
 
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
     @Override
-    public RouteElement limit(Passthrough type, short value) {
+    public RouteComponent limit(Passthrough type, short value) {
         if (source.attributes.length() <= 0) {
             throw new IllegalRouteOperationException("Cannot limit null data");
         }
@@ -662,23 +662,23 @@ class RouteElementImpl implements RouteElement {
     private static class PulseEditorInner extends EditorImplBase implements DataProcessor.PulseEditor {
         private static final long serialVersionUID = -274897612921984101L;
 
-        PulseEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        PulseEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
         public void modify(Number threshold, short samples) {
             byte[] newConfig= ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN)
-                    .putInt(source.convertToFirmwareUnits(owner, threshold).intValue())
+                    .putInt(source.convertToFirmwareUnits(mwPrivate, threshold).intValue())
                     .putShort(samples)
                     .array();
             System.arraycopy(newConfig, 0, config, 4, newConfig.length);
 
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
     @Override
-    public RouteElement find(PulseOutput type, Number threshold, short samples) {
+    public RouteComponent find(PulseOutput output, Number threshold, short samples) {
         if (source.attributes.length() > 4) {
             throw new IllegalRouteOperationException("Cannot find pulses for data longer than 4 bytes");
         }
@@ -693,7 +693,7 @@ class RouteElementImpl implements RouteElement {
 
         final DataTypeBase processor;
 
-        switch(type) {
+        switch(output) {
             case WIDTH:
                 processor= new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
                         new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false));
@@ -717,7 +717,7 @@ class RouteElementImpl implements RouteElement {
                 .put((byte) 0xb)
                 .put((byte) (source.attributes.length() - 1))
                 .put((byte) 0)
-                .put((byte) type.ordinal())
+                .put((byte) output.ordinal())
                 .putInt(source.convertToFirmwareUnits(persistantData.mwPrivate, threshold).intValue())
                 .putShort(samples)
                 .array();
@@ -726,24 +726,24 @@ class RouteElementImpl implements RouteElement {
     }
 
     @Override
-    public RouteElement filter(Comparison op, String ... dataNames) {
+    public RouteComponent filter(Comparison op, String ... dataNames) {
         return filter(op, ComparisonOutput.ABSOLUTE, dataNames);
     }
 
     @Override
-    public RouteElement filter(Comparison op, Number ... references) {
+    public RouteComponent filter(Comparison op, Number ... references) {
         return filter(op, ComparisonOutput.ABSOLUTE, references);
     }
 
     @Override
-    public RouteElement filter(Comparison op, ComparisonOutput type, String ... dataNames) {
-        RouteElement next= filter(op, type, 0);
+    public RouteComponent filter(Comparison op, ComparisonOutput output, String ... dataNames) {
+        RouteComponent next= filter(op, output, 0);
         if (next != null) {
             for (String key : dataNames) {
                 persistantData.feedback.add(new Pair<>(
                         key,
                         new Tuple3<>(
-                                ((RouteElementImpl) next).source,
+                                ((RouteComponentImpl) next).source,
                                 persistantData.firmware.compareTo(MULTI_COMPARISON_MIN_FIRMWARE) < 0 ? 5 : 3,
                                 persistantData.dataProcessors.peekLast().editor.config
                         )
@@ -757,8 +757,8 @@ class RouteElementImpl implements RouteElement {
     private static class SingleValueComparatorEditor extends EditorImplBase implements DataProcessor.ComparatorEditor {
         private static final long serialVersionUID = -8891137550284171832L;
 
-        SingleValueComparatorEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        SingleValueComparatorEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
@@ -766,45 +766,45 @@ class RouteElementImpl implements RouteElement {
             byte[] newConfig= ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN)
                     .put((byte) op.ordinal())
                     .put((byte) 0)
-                    .putInt(source.convertToFirmwareUnits(owner, references[0]).intValue())
+                    .putInt(source.convertToFirmwareUnits(mwPrivate, references[0]).intValue())
                     .array();
             System.arraycopy(newConfig, 0, config, 2, newConfig.length);
 
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
     private static class MultiValueComparatorEditor extends EditorImplBase implements DataProcessor.ComparatorEditor {
         private static final long serialVersionUID = 893378903150606106L;
 
-        static void fillReferences(DataTypeBase source, MetaWearBoardPrivate owner, ByteBuffer buffer, byte length, Number... references) {
+        static void fillReferences(DataTypeBase source, MetaWearBoardPrivate mwPrivate, ByteBuffer buffer, byte length, Number... references) {
             switch(length) {
                 case 1:
                     for(Number it: references) {
-                        buffer.put(source.convertToFirmwareUnits(owner, it).byteValue());
+                        buffer.put(source.convertToFirmwareUnits(mwPrivate, it).byteValue());
                     }
                     break;
                 case 2:
                     for(Number it: references) {
-                        buffer.putShort(source.convertToFirmwareUnits(owner, it).shortValue());
+                        buffer.putShort(source.convertToFirmwareUnits(mwPrivate, it).shortValue());
                     }
                     break;
                 case 4:
                     for(Number it: references) {
-                        buffer.putInt(source.convertToFirmwareUnits(owner, it).intValue());
+                        buffer.putInt(source.convertToFirmwareUnits(mwPrivate, it).intValue());
                     }
                     break;
             }
         }
 
 
-        MultiValueComparatorEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        MultiValueComparatorEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
         public void modify(Comparison op, Number... references) {
             ByteBuffer buffer= ByteBuffer.allocate(references.length * source.attributes.length()).order(ByteOrder.LITTLE_ENDIAN);
-            fillReferences(source, owner, buffer, source.attributes.length(), references);
+            fillReferences(source, mwPrivate, buffer, source.attributes.length(), references);
             byte[] newRef= buffer.array();
 
             byte[] newConfig= new byte[2 + references.length * source.attributes.length()];
@@ -814,11 +814,11 @@ class RouteElementImpl implements RouteElement {
             System.arraycopy(newRef, 0, newConfig, 2, newRef.length);
             config= newConfig;
 
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
     @Override
-    public RouteElement filter(Comparison op, ComparisonOutput type, Number... references) {
+    public RouteComponent filter(Comparison op, ComparisonOutput output, Number... references) {
         if (source.attributes.length() > 4) {
             throw new IllegalRouteOperationException("Cannot compare data longer than 4 bytes");
         }
@@ -852,7 +852,7 @@ class RouteElementImpl implements RouteElement {
         boolean signed= source.attributes.signed || anySigned;
 
         final DataTypeBase processor;
-        if (type == ComparisonOutput.PASS_FAIL || type == ComparisonOutput.ZONE) {
+        if (output == ComparisonOutput.PASS_FAIL || output == ComparisonOutput.ZONE) {
             DataAttributes newAttrs= new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false);
             processor= new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, newAttrs);
         }  else {
@@ -861,7 +861,7 @@ class RouteElementImpl implements RouteElement {
 
         ByteBuffer buffer= ByteBuffer.allocate(2 + references.length * source.attributes.length()).order(ByteOrder.LITTLE_ENDIAN)
                 .put((byte) 0x6)
-                .put((byte) ((signed ? 1 : 0) | ((source.attributes.length() - 1) << 1) | (op.ordinal() << 3) | (type.ordinal() << 6)));
+                .put((byte) ((signed ? 1 : 0) | ((source.attributes.length() - 1) << 1) | (op.ordinal() << 3) | (output.ordinal() << 6)));
         MultiValueComparatorEditor.fillReferences(processor, persistantData.mwPrivate, buffer, source.attributes.length(), references);
 
         return postCreate(null, new MultiValueComparatorEditor(buffer.array(), processor, persistantData.mwPrivate));
@@ -870,28 +870,28 @@ class RouteElementImpl implements RouteElement {
     private static class ThresholdEditorInner extends EditorImplBase implements DataProcessor.ThresholdEditor {
         private static final long serialVersionUID = 7819456776691980008L;
 
-        ThresholdEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        ThresholdEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
         public void modify(Number threshold, Number hysteresis) {
             byte[] newConfig= ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN)
-                    .putInt(source.convertToFirmwareUnits(owner, threshold).intValue())
-                    .putShort(source.convertToFirmwareUnits(owner, hysteresis).shortValue())
+                    .putInt(source.convertToFirmwareUnits(mwPrivate, threshold).intValue())
+                    .putShort(source.convertToFirmwareUnits(mwPrivate, hysteresis).shortValue())
                     .array();
             System.arraycopy(newConfig, 0, config, 2, newConfig.length);
 
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
     @Override
-    public RouteElement filter(ThresholdOutput output, Number threshold) {
+    public RouteComponent filter(ThresholdOutput output, Number threshold) {
         return filter(output, threshold, 0);
     }
 
     @Override
-    public RouteElement filter(ThresholdOutput output, Number threshold, Number hysteresis) {
+    public RouteComponent filter(ThresholdOutput output, Number threshold, Number hysteresis) {
         if (source.attributes.length() > 4) {
             throw new IllegalRouteOperationException("Cannot use threshold filter on data longer than 4 bytes");
         }
@@ -932,20 +932,20 @@ class RouteElementImpl implements RouteElement {
     private static class DifferentialEditorInner extends EditorImplBase implements DataProcessor.DifferentialEditor {
         private static final long serialVersionUID = -1856057294039232525L;
 
-        DifferentialEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        DifferentialEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
 
         @Override
-        public void modify(Number difference) {
-            byte[] newDiff= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(source.convertToFirmwareUnits(owner, difference).intValue()).array();
+        public void modify(Number distance) {
+            byte[] newDiff= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(source.convertToFirmwareUnits(mwPrivate, distance).intValue()).array();
             System.arraycopy(newDiff, 0, config, 2, newDiff.length);
 
-            owner.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
+            mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
     @Override
-    public RouteElement filter(DifferentialOutput output, Number difference) {
+    public RouteComponent filter(DifferentialOutput output, Number distance) {
         if (source.attributes.length() > 4) {
             throw new IllegalRouteOperationException("Cannot use differential filter for data longer than 4 bytes");
         }
@@ -975,7 +975,7 @@ class RouteElementImpl implements RouteElement {
                 break;
         }
 
-        Number firmwareUnits = source.convertToFirmwareUnits(persistantData.mwPrivate, difference);
+        Number firmwareUnits = source.convertToFirmwareUnits(persistantData.mwPrivate, distance);
         byte[] config= ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN)
                 .put((byte) 0xc)
                 .put((byte) (((source.attributes.length() - 1) & 0x3) | (source.attributes.signed ? 0x4 : 0) | (output.ordinal() << 3)))
@@ -985,9 +985,9 @@ class RouteElementImpl implements RouteElement {
         return postCreate(null, new DifferentialEditorInner(config, processor, persistantData.mwPrivate));
     }
 
-    private RouteElementImpl postCreate(DataTypeBase state, EditorImplBase editor) {
+    private RouteComponentImpl postCreate(DataTypeBase state, EditorImplBase editor) {
         persistantData.dataProcessors.add(new Processor(state, editor));
-        return new RouteElementImpl(editor.source, this);
+        return new RouteComponentImpl(editor.source, this);
     }
 }
 

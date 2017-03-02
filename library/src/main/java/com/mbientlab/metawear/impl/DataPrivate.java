@@ -52,6 +52,11 @@ abstract class DataPrivate implements Data {
     }
 
     @Override
+    public float scale() {
+        return 1.f;
+    }
+
+    @Override
     public byte[] bytes() {
         return dataBytes;
     }

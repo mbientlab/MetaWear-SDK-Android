@@ -31,8 +31,8 @@ import java.util.Arrays;
 /**
  * Created by etsai on 9/4/16.
  */
-class Util {
-    static int closestIndex(float[] values, float key) {
+public class Util {
+    public static int closestIndex(float[] values, float key) {
         float smallest= Math.abs(values[0] - key);
         int place= 0;
 
@@ -47,7 +47,7 @@ class Util {
         return place;
     }
 
-    static String arrayToHexString(byte[] value) {
+    public static String arrayToHexString(byte[] value) {
         if (value.length == 0) {
             return "[]";
         }

@@ -29,13 +29,12 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 import bolts.Task;
 
 /**
- * Controls the macro functionality
+ * Firmware feature that saves MetaWear commands to the on-board flash memory
  * @author Eric Tsai
  */
 public interface Macro extends Module {
     /**
-     * Begin macro recording.  Every MetaWear command issued will be recorded to the flash memory and
-     * will execute when the board powers on.
+     * Variant of {@link #startRecord(boolean)} with {@code execOnBoot} set to true
      */
     void startRecord();
     /**
@@ -47,15 +46,15 @@ public interface Macro extends Module {
      * Ends macro recording
      * @return Task containing the id of the recorded task
      */
-    Task<Byte> endRecord();
+    Task<Byte> endRecordAsync();
 
     /**
-     * Executes the commands corresponding to the macro ID
+     * Execute the commands corresponding to the macro ID
      * @param id        Numerical ID of the macro to execute
      */
     void execute(byte id);
     /**
-     * Removes all macros on the flash memory.  The erase operation will not be performed until
+     * Remove all macros on the flash memory.  The erase operation will not be performed until
      * you disconnect from the board.  If you wish to reset the board after the erase operation,
      * use the {@link Debug#resetAfterGc()} method.
      */

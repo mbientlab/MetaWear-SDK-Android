@@ -63,7 +63,7 @@ public class TestTemperatureMwrPro extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= info;
+        junitPlatform.boardInfo= info;
         connectToBoard();
 
         temp= mwBoard.getModule(Temperature.class);
@@ -75,7 +75,7 @@ public class TestTemperatureMwrPro extends UnitTestBase {
         ((ExternalThermistor) temp.findSensors(Temperature.SensorType.EXT_THERMISTOR)[0])
                 .configure((byte) 0, (byte) 1, false);
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test

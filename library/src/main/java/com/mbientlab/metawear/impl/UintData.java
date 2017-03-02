@@ -35,34 +35,34 @@ import java.util.Calendar;
 class UintData extends DataTypeBase {
     private static final long serialVersionUID = -7137342633916883852L;
 
-    UintData(ModuleId module, byte register, byte id, DataAttributes attributes) {
+    UintData(Constant.Module module, byte register, byte id, DataAttributes attributes) {
         super(module, register, id, attributes);
     }
 
-    UintData(ModuleId module, byte register, DataAttributes attributes) {
+    UintData(Constant.Module module, byte register, DataAttributes attributes) {
         super(module, register, attributes);
     }
 
-    UintData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    UintData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
         super(input, module, register, id, attributes);
     }
 
-    UintData(DataTypeBase input, ModuleId module, byte register, DataAttributes attributes) {
+    UintData(DataTypeBase input, Constant.Module module, byte register, DataAttributes attributes) {
         super(input, module, register, attributes);
     }
 
     @Override
-    public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
         return new UintData(input, module, register, id, attributes);
     }
 
     @Override
-    public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-        return input;
+    public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+        return value;
     }
 
     @Override
-    public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+    public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
         final ByteBuffer buffer = Util.bytesToUIntBuffer(logData, data, attributes);
 
         return new DataPrivate(timestamp, data) {

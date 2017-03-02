@@ -36,7 +36,6 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.Collection;
 
-import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
 
@@ -60,8 +59,8 @@ public class TestSettingsRev2 extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x02 });
-        btlePlaform.boardInfo = info;
+        junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x02 });
+        junitPlatform.boardInfo = info;
         connectToBoard();
 
         settings = mwBoard.getModule(Settings.class);
@@ -78,7 +77,7 @@ public class TestSettingsRev2 extends UnitTestBase {
 
         final Led led= mwBoard.getModule(Led.class);
 
-        settings.onDisconnect(new CodeBlock() {
+        settings.onDisconnectAsync(new CodeBlock() {
             @Override
             public void program() {
                 led.editPattern(Led.Color.BLUE)
@@ -103,7 +102,7 @@ public class TestSettingsRev2 extends UnitTestBase {
             this.wait();
         }
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -116,38 +115,8 @@ public class TestSettingsRev2 extends UnitTestBase {
         assertNull(settings.powerStatus());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void readPowerStatusFail() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
-
-        settings.readPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual.set(task.getError());
-                return null;
-            }
-        });
-
-        throw actual.get();
-    }
-
     @Test
     public void chargeStatusNull() {
         assertNull(settings.chargeStatus());
-    }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void readChargeStatusFail() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
-
-        settings.readChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual.set(task.getError());
-                return null;
-            }
-        });
-
-        throw actual.get();
     }
 }

@@ -27,16 +27,11 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.impl.DataAttributes;
-import com.mbientlab.metawear.impl.MetaWearBoardPrivate;
-import com.mbientlab.metawear.impl.ModuleImplBase;
-import com.mbientlab.metawear.impl.UintData;
-import com.mbientlab.metawear.impl.Util;
 import com.mbientlab.metawear.module.ProximityTsl2671;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.PROXIMITY;
+import static com.mbientlab.metawear.impl.Constant.Module.PROXIMITY;
 
 /**
  * Created by etsai on 9/19/16.
@@ -104,7 +99,7 @@ class ProximityTsl2671Impl extends ModuleImplBase implements ProximityTsl2671 {
                 }
 
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
                     return mwPrivate.queueRouteBuilder(builder, PRODUCER);
                 }
 

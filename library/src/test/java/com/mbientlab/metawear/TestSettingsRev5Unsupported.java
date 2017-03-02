@@ -58,8 +58,8 @@ public class TestSettingsRev5Unsupported extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x05, 0x00});
-        btlePlaform.boardInfo = info;
+        junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x05, 0x00});
+        junitPlatform.boardInfo = info;
         connectToBoard();
 
         settings = mwBoard.getModule(Settings.class);
@@ -70,38 +70,38 @@ public class TestSettingsRev5Unsupported extends UnitTestBase {
         assertNull(settings.powerStatus());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void readPowerStatusFail() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
-
-        settings.readPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual.set(task.getError());
-                return null;
-            }
-        });
-
-        throw actual.get();
-    }
-
     @Test
     public void chargeStatusNull() {
         assertNull(settings.chargeStatus());
     }
 
     @Test(expected = UnsupportedOperationException.class)
-    public void readChargeStatusFail() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
+    public void readPowerStatusError() throws Exception {
+        final Capture<Exception> result = new Capture<>();
 
-        settings.readChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
+        settings.readCurrentPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
             @Override
             public Void then(Task<Byte> task) throws Exception {
-                actual.set(task.getError());
+                result.set(task.getError());
                 return null;
             }
         });
 
-        throw actual.get();
+        throw result.get();
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void readChargeStatusError() throws Exception {
+        final Capture<Exception> result = new Capture<>();
+
+        settings.readCurrentChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
+            @Override
+            public Void then(Task<Byte> task) throws Exception {
+                result.set(task.getError());
+                return null;
+            }
+        });
+
+        throw result.get();
     }
 }

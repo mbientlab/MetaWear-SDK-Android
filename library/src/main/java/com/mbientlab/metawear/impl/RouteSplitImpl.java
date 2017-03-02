@@ -25,23 +25,23 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.IllegalRouteOperationException;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.RouteSplit;
 
 /**
  * Created by etsai on 9/22/16.
  */
 class RouteSplitImpl implements RouteSplit {
-    private final RouteElementImpl caller;
+    private final RouteComponentImpl caller;
 
-    RouteSplitImpl(RouteElementImpl caller) {
+    RouteSplitImpl(RouteComponentImpl caller) {
         this.caller= caller;
     }
 
     @Override
-    public RouteElement index(int i) {
+    public RouteComponent index(int i) {
         try {
-            return new RouteElementImpl(caller.persistantData.splits.peek().second[i], caller);
+            return new RouteComponentImpl(caller.persistantData.splits.peek().second[i], caller);
         } catch (ArrayIndexOutOfBoundsException e) {
             throw new IllegalRouteOperationException("Index on split data out of bounds", e);
         }

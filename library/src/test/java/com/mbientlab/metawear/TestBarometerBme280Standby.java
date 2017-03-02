@@ -71,7 +71,7 @@ public class TestBarometerBme280Standby extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.ENVIRONMENT;
+        junitPlatform.boardInfo= MetaWearBoardInfo.ENVIRONMENT;
         connectToBoard();
 
         baroBme280 = mwBoard.getModule(BarometerBme280.class);
@@ -83,7 +83,7 @@ public class TestBarometerBme280Standby extends UnitTestBase {
         baroBme280.configure()
                 .standbyTime(standby)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -91,7 +91,7 @@ public class TestBarometerBme280Standby extends UnitTestBase {
         baroBme280.configure()
                 .standbyTime(standbyLiteral)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -103,6 +103,6 @@ public class TestBarometerBme280Standby extends UnitTestBase {
                 .pressureOversampling(BarometerBosch.OversamplingMode.HIGH)
                 .filterCoeff(BarometerBosch.FilterCoeff.AVG_16)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

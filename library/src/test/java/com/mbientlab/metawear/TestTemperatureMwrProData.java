@@ -27,7 +27,7 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Temperature.Sensor;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -74,7 +74,7 @@ public class TestTemperatureMwrProData extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= info;
+        junitPlatform.boardInfo= info;
         connectToBoard();
 
         currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx];
@@ -84,15 +84,15 @@ public class TestTemperatureMwrProData extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x4, (byte) 0x81, (byte) sourceIdx};
 
-        currentSrc.addRoute(new RouteBuilder() {
+        currentSrc.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         });
         currentSrc.read();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -101,7 +101,7 @@ public class TestTemperatureMwrProData extends UnitTestBase {
 
         currentSrc.read();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     private static final byte[][] RESPONSES = new byte[][] {
@@ -116,9 +116,9 @@ public class TestTemperatureMwrProData extends UnitTestBase {
     public void interpretData() {
         final Capture<Float> actual= new Capture<>();
 
-        currentSrc.addRoute(new RouteBuilder() {
+        currentSrc.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {

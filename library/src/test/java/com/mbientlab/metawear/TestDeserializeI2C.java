@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import java.io.IOException;
+
 import bolts.Task;
 
 /**
@@ -33,9 +35,14 @@ import bolts.Task;
 public class TestDeserializeI2C extends TestI2C {
     @Override
     protected Task<Route> setupI2cRoute() {
-        btlePlaform.boardStateSuffix = "i2c_stream";
-        mwBoard.deserialize();
+        junitPlatform.boardStateSuffix = "i2c_stream";
+        try {
+            mwBoard.deserialize();
+            return Task.forResult(mwBoard.lookupRoute(0));
+        } catch (IOException | ClassNotFoundException e) {
+            return Task.forError(e);
+        }
 
-        return Task.forResult(mwBoard.lookupRoute(0));
+
     }
 }

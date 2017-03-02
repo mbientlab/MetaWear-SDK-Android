@@ -30,14 +30,14 @@ import java.util.Arrays;
  * Generic container holding a vector of float values
  * @author Eric Tsai
  */
-public abstract class FloatVector {
-    protected final float[] vector;
+abstract class FloatVector {
+    final float[] vector;
 
-    protected FloatVector(float x0, float x1, float x2) {
+    FloatVector(float x0, float x1, float x2) {
         this.vector = new float[] {x0, x1, x2};
     }
 
-    protected FloatVector(float x0, float x1, float x2, float x3) {
+    FloatVector(float x0, float x1, float x2, float x3) {
         this.vector = new float[] {x0, x1, x2, x3};
     }
 

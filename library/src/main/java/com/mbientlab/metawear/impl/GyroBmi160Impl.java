@@ -37,7 +37,7 @@ import java.util.Calendar;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.GYRO;
+import static com.mbientlab.metawear.impl.Constant.Module.GYRO;
 
 /**
  * Created by etsai on 9/20/16.
@@ -62,12 +62,12 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
             super(GYRO, register, new DataAttributes(new byte[] {2, 2, 2}, copies, (byte) 0, true));
         }
 
-        BoschGyrCartesianFloatData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        BoschGyrCartesianFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new BoschGyrCartesianFloatData(input, module, register, id, attributes);
         }
 
@@ -77,27 +77,34 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
         }
 
         @Override
-        protected float scale(MetaWearBoardPrivate owner) {
-            return ((GyroBmi160Impl) owner.getModules().get(GyroBmi160.class)).getGyrDataScale();
+        protected float scale(MetaWearBoardPrivate mwPrivate) {
+            return ((GyroBmi160Impl) mwPrivate.getModules().get(GyroBmi160.class)).getGyrDataScale();
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
-            float scale= scale(owner);
+            final float scale= scale(mwPrivate);
             final AngularVelocity value= new AngularVelocity(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
 
             return new DataPrivate(timestamp, data) {
                 @Override
+                public float scale() {
+                    return scale;
+                }
+
+                @Override
                 public Class<?>[] types() {
-                    return new Class<?>[] {AngularVelocity.class};
+                    return new Class<?>[] {AngularVelocity.class, float[].class};
                 }
 
                 @Override
                 public <T> T value(Class<T> clazz) {
-                    if (clazz == AngularVelocity.class) {
+                    if (clazz.equals(AngularVelocity.class)) {
                         return clazz.cast(value);
+                    } else if (clazz.equals(float[].class)) {
+                        return clazz.cast(new float[] {value.x(), value.y(), value.z()});
                     }
                     return super.value(clazz);
                 }
@@ -111,17 +118,17 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
             super(GYRO, DATA, new DataAttributes(new byte[] {2}, (byte) 1, offset, true));
         }
 
-        BoschGyrSFloatData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        BoschGyrSFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        protected float scale(MetaWearBoardPrivate owner) {
-            return ((GyroBmi160Impl) owner.getModules().get(GyroBmi160.class)).getGyrDataScale();
+        protected float scale(MetaWearBoardPrivate mwPrivate) {
+            return ((GyroBmi160Impl) mwPrivate.getModules().get(GyroBmi160.class)).getGyrDataScale();
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new BoschGyrSFloatData(input, module, register, id, attributes);
         }
     }
@@ -200,7 +207,7 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
                 }
 
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
                     return mwPrivate.queueRouteBuilder(builder, ROT_PRODUCER);
                 }
 
@@ -228,7 +235,7 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
         if (packedRotationalSpeed == null) {
             packedRotationalSpeed = new AsyncDataProducer() {
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
                     return mwPrivate.queueRouteBuilder(builder, ROT_PACKED_PRODUCER);
                 }
 

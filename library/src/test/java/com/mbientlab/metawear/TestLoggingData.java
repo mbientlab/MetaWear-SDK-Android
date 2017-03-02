@@ -28,7 +28,7 @@ import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.json.JSONException;
 import org.junit.Test;
@@ -66,9 +66,9 @@ public class TestLoggingData extends TestLogDataBase {
         mwBoard.getModule(Accelerometer.class).configure()
                 .range(8f)
                 .commit();
-        return mwBoard.getModule(Accelerometer.class).acceleration().addRoute(new RouteBuilder() {
+        return mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.log(LOG_DATA_HANDLER);
             }
         });
@@ -97,11 +97,11 @@ public class TestLoggingData extends TestLogDataBase {
 
             /*
             // For TestDeserializeLoggingData
-            btlePlaform.boardStateSuffix = "log_acc";
+            junitPlatform.boardStateSuffix = "log_acc";
             mwBoard.serialize();
             */
 
-            mwBoard.getModule(Logging.class).download()
+            mwBoard.getModule(Logging.class).downloadAsync()
                     .continueWith(new Continuation<Void, Void>() {
                         @Override
                         public Void then(Task<Void> task) throws Exception {
@@ -135,9 +135,9 @@ public class TestLoggingData extends TestLogDataBase {
 
     protected Task<Route> setupLogOffsetRoute() {
         shouldWait.set(true);
-        return mwBoard.getModule(Accelerometer.class).acceleration().addRoute(new RouteBuilder() {
+        return mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.log(LOG_TIME_OFFSET_HANDLER);
             }
         });
@@ -166,11 +166,11 @@ public class TestLoggingData extends TestLogDataBase {
 
             /*
             // For TestDeserializeLoggingData
-            btlePlaform.boardStateSuffix = "log_offset";
+            junitPlatform.boardStateSuffix = "log_offset";
             mwBoard.serialize();
             */
 
-            mwBoard.getModule(Logging.class).download()
+            mwBoard.getModule(Logging.class).downloadAsync()
                     .continueWith(new Continuation<Void, Void>() {
                         @Override
                         public Void then(Task<Void> task) throws Exception {

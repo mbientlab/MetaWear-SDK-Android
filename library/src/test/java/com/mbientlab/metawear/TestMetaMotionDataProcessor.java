@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.data.Quaternion;
 
@@ -46,7 +46,7 @@ import static org.junit.Assert.assertEquals;
 public class TestMetaMotionDataProcessor extends UnitTestBase {
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.MOTION_R;
+        junitPlatform.boardInfo= MetaWearBoardInfo.MOTION_R;
         connectToBoard();
     }
 
@@ -60,9 +60,9 @@ public class TestMetaMotionDataProcessor extends UnitTestBase {
                 {0x0b, 0x02, 0x09, 0x03, 0x00, 0x6c}
         };
 
-        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRoute(new RouteBuilder() {
+        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.limit(20).log(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -78,7 +78,7 @@ public class TestMetaMotionDataProcessor extends UnitTestBase {
         synchronized (this) {
             this.wait();
 
-            assertArrayEquals(expected, btlePlaform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 
@@ -88,9 +88,9 @@ public class TestMetaMotionDataProcessor extends UnitTestBase {
                 Float.intBitsToFloat(0x3c756866), Float.intBitsToFloat(0x00000000));
         final Capture<Quaternion> actual = new Capture<>();
 
-        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRoute(new RouteBuilder() {
+        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.limit(20).log(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {

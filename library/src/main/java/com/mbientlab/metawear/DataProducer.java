@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.ComparisonOutput;
 import com.mbientlab.metawear.builder.function.Function2;
@@ -33,21 +33,21 @@ import com.mbientlab.metawear.builder.function.Function2;
 import bolts.Task;
 
 /**
- * A component connected to the board that creates data
+ * A component that creates data, such as firmware features (battery level reporting) or sensors
  * @author Eric Tsai
  */
 public interface DataProducer {
     /**
      * Adds a route to direct where the data will go
      * @param builder   Builder object to construct the route
-     * @return Created route
+     * @return Task holding the created route if successful
      */
-    Task<Route> addRoute(RouteBuilder builder);
+    Task<Route> addRouteAsync(RouteBuilder builder);
     /**
      * Unique name identifying the data for feedback loops
-     * @return DataToken name
-     * @see RouteElement#filter(Comparison, ComparisonOutput, String...)
-     * @see RouteElement#map(Function2, String...)
+     * @return Data name
+     * @see RouteComponent#filter(Comparison, ComparisonOutput, String...)
+     * @see RouteComponent#map(Function2, String...)
      */
     String name();
 }

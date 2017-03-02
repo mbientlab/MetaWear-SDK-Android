@@ -62,7 +62,7 @@ public class TestNeoPixelStrand extends TestNeoPixelBase {
         byte[] expected= new byte[] {0x06, 0x05, 0x02, 0x01, 0x4b, (byte) 0xE8, 0x03};
 
         strand.rotate(RotationDirection.AWAY, (byte) 75, (short) 1000);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -70,7 +70,7 @@ public class TestNeoPixelStrand extends TestNeoPixelBase {
         byte[] expected= new byte[] {0x06, 0x05, 0x02, 0x00, (byte) 0xff, (byte) 0xfa, 0x00};
 
         strand.rotate(RotationDirection.TOWARDS, (short) 250);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -78,23 +78,23 @@ public class TestNeoPixelStrand extends TestNeoPixelBase {
         byte[] expected= new byte[] {0x06, 0x05, 0x02, 0x00, 0x00, 0x00, 0x00};
 
         strand.stopRotation();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void turnOff() {
         byte[] expected= new byte[] {0x06, 0x03, 0x02, 0x0a, 0x2d};
 
-        strand.turnOff((byte) 10, (byte) 45);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        strand.clear((byte) 10, (byte) 45);
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void setColor() {
         byte[] expected= new byte[] {0x06, 0x04, 0x02, 0x18, (byte) 0xd5, 0x55, 0x6b};
 
-        strand.led(24).setRgb((byte) 213, (byte) 85, (byte) 107);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        strand.setRgb((byte) 24, (byte) 213, (byte) 85, (byte) 107);
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -102,7 +102,7 @@ public class TestNeoPixelStrand extends TestNeoPixelBase {
         byte[] expected= new byte[] {0x06, 0x02, 0x02, 0x01};
 
         strand.hold();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -110,6 +110,6 @@ public class TestNeoPixelStrand extends TestNeoPixelBase {
         byte[] expected= new byte[] {0x06, 0x02, 0x02, 0x00};
 
         strand.release();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

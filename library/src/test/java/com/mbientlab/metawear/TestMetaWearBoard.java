@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.impl.BtleCharacteristics;
-import com.mbientlab.metawear.impl.Pair;
+import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.SensorFusionBosch;
+import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
+import com.mbientlab.metawear.impl.platform.DeviceInformationService;
 
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
@@ -58,11 +58,11 @@ public class TestMetaWearBoard extends UnitTestBase {
                 {(byte) 0xfe, (byte) 0x80}, {0x0b, (byte) 0x84}
         };
 
-        btlePlaform.firmware= "1.1.3";
-        btlePlaform.delayModuleInfoResponse= true;
+        junitPlatform.firmware= "1.1.3";
+        junitPlatform.delayModuleInfoResponse= true;
 
         connectToBoard();
-        assertArrayEquals(expected, btlePlaform.getConnectCommands());
+        assertArrayEquals(expected, junitPlatform.getConnectCommands());
     }
 
     @Test
@@ -71,18 +71,18 @@ public class TestMetaWearBoard extends UnitTestBase {
                 {0x0b, (byte) 0x84}
         };
 
-        btlePlaform.deserializeModuleInfo= true;
-        btlePlaform.delayModuleInfoResponse= true;
+        junitPlatform.deserializeModuleInfo= true;
+        junitPlatform.delayModuleInfoResponse= true;
 
         connectToBoard();
-        assertArrayEquals(expected, btlePlaform.getConnectCommands());
+        assertArrayEquals(expected, junitPlatform.getConnectCommands());
     }
 
     @Test(expected = TimeoutException.class)
     public void serviceDiscoveryTimeout() throws Exception {
         final Capture<Exception> actual = new Capture<>();
 
-        btlePlaform.addCustomModuleInfo(new byte[] { 0xf, (byte) 0xff});
+        junitPlatform.addCustomModuleInfo(new byte[] { 0xf, (byte) 0xff});
         mwBoard.connectAsync()
                 .continueWith(new Continuation<Void, Void>() {
                     @Override
@@ -106,7 +106,7 @@ public class TestMetaWearBoard extends UnitTestBase {
     public void serviceDiscoveryTimeoutConn() throws InterruptedException {
         int expected = 1;
 
-        btlePlaform.addCustomModuleInfo(new byte[] { 0xf, (byte) 0xff});
+        junitPlatform.addCustomModuleInfo(new byte[] { 0xf, (byte) 0xff});
         mwBoard.connectAsync()
                 .continueWith(new Continuation<Void, Void>() {
                     @Override
@@ -120,35 +120,36 @@ public class TestMetaWearBoard extends UnitTestBase {
 
         synchronized (this) {
             this.wait();
-            assertEquals(expected, btlePlaform.nDisconnects);
+            assertEquals(expected, junitPlatform.nDisconnects);
         }
     }
 
     @Test
     public void metabootServiceDiscovery() throws Exception {
-        btlePlaform.enableMetaBootState = true;
+        junitPlatform.enableMetaBootState = true;
         connectToBoard();
 
         byte[][] expected= new byte[][] {};
-        assertArrayEquals(expected, btlePlaform.getConnectCommands());
+        assertArrayEquals(expected, junitPlatform.getConnectCommands());
     }
 
     @Test
     public void metabootReadGattChar() throws Exception {
-        List<Pair<UUID, UUID>> expected = new ArrayList<>();
-        expected.add(BtleCharacteristics.DEV_INFO_FIRMWARE_VERSION);
-        expected.add(BtleCharacteristics.DEV_INFO_MODEL_NUMBER);
-        expected.add(BtleCharacteristics.DEV_INFO_HARDWARE_REVISION);
+        BtleGattCharacteristic[] expected = new BtleGattCharacteristic[] {
+                DeviceInformationService.FIRMWARE_REVISION,
+                DeviceInformationService.MODEL_NUMBER,
+                DeviceInformationService.HARDWARE_REVISION
+        };
 
-        btlePlaform.enableMetaBootState = true;
+        junitPlatform.enableMetaBootState = true;
         connectToBoard();
 
-       assertEquals(expected, btlePlaform.getGattCharReadHistory());
+       assertArrayEquals(expected, junitPlatform.getGattCharReadHistory());
     }
 
     @Test(expected = UnsupportedModuleException.class)
     public void metabootGetModule() throws Exception {
-        btlePlaform.enableMetaBootState = true;
+        junitPlatform.enableMetaBootState = true;
         connectToBoard();
 
         mwBoard.getModuleOrThrow(Accelerometer.class);
@@ -182,7 +183,7 @@ public class TestMetaWearBoard extends UnitTestBase {
         final Capture<Exception> actual = new Capture<>();
 
         connectToBoard();
-        btlePlaform.delayReadDevInfo = true;
+        junitPlatform.delayReadDevInfo = true;
         mwBoard.readDeviceInformationAsync().continueWith(new Continuation<DeviceInformation, Void>() {
             @Override
             public Void then(Task<DeviceInformation> task) throws Exception {
@@ -198,6 +199,90 @@ public class TestMetaWearBoard extends UnitTestBase {
         synchronized (this) {
             this.wait();
             throw actual.get();
+        }
+    }
+
+    @Test
+    public void routeChaining() throws Exception {
+        byte[][] expected = new byte[][] {
+                {0x09, 0x02, 0x19, 0x08, (byte) 0xff, (byte) 0b11100000, 8, 0b00010111, 20, 0, 0, 0},
+                {0x09, 0x03, 0x01},
+                {0x09, 0x07, 0x00, 0x01},
+                {0x03, 0x1c, 0x01}
+        };
+
+        junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        connectToBoard();
+
+        mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(new RouteBuilder() {
+            @Override
+            public void configure(RouteComponent source) {
+                source.limit(20).stream(null);
+            }
+        });
+        mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(new RouteBuilder() {
+            @Override
+            public void configure(RouteComponent source) {
+                source.stream(null);
+            }
+        }).continueWith(new Continuation<Route, Void>() {
+            @Override
+            public Void then(Task<Route> task) throws Exception {
+                synchronized (TestMetaWearBoard.this) {
+                    TestMetaWearBoard.this.notifyAll();
+                }
+                return null;
+            }
+        });
+
+        synchronized (this) {
+            wait();
+
+            assertArrayEquals(expected, junitPlatform.getCommands());
+        }
+    }
+
+    @Test
+    public void routeChainingTask() throws Exception {
+        byte[][] expected = new byte[][] {
+                {9, 2, 0x19, 0x08, (byte) 0xff, (byte) 0b11100000, 8, 0b00010111, 20, 0, 0, 0},
+                {0x09, 0x03, 0x01},
+                {0x09, 0x07, 0x00, 0x01},
+                {0x03, 0x1c, 0x01}
+        };
+
+        junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        connectToBoard();
+
+        mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(new RouteBuilder() {
+            @Override
+            public void configure(RouteComponent source) {
+                source.limit(20).stream(null);
+            }
+        }).continueWithTask(new Continuation<Route, Task<Route>>() {
+            @Override
+            public Task<Route> then(Task<Route> task) throws Exception {
+                return mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(new RouteBuilder() {
+                    @Override
+                    public void configure(RouteComponent source) {
+                        source.stream(null);
+                    }
+                });
+            }
+        }).continueWith(new Continuation<Route, Void>() {
+            @Override
+            public Void then(Task<Route> task) throws Exception {
+                synchronized (TestMetaWearBoard.this) {
+                    TestMetaWearBoard.this.notifyAll();
+                }
+                return null;
+            }
+        });
+
+        synchronized (this) {
+            wait();
+
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 }

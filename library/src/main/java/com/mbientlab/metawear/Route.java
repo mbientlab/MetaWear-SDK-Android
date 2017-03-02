@@ -25,12 +25,12 @@
 package com.mbientlab.metawear;
 
 /**
- * Defines how data flows from the sensor to an endpoint
+ * Defines how data flows from a data producer to an endpoint
  * @author Eric Tsai
  */
 public interface Route {
     /**
-     *  Sets the environment values  passed into the {@link Subscriber#apply(Data, Object...) apply} function
+     * Sets the environment values  passed into the {@link Subscriber#apply(Data, Object...) apply} function
      * @param pos   Numerical position of the subscriber, starting from 0
      * @param env   Environment values to use with the subscriber
      * @return True if operation succeeded, false otherwise
@@ -43,11 +43,18 @@ public interface Route {
      */
     boolean unsubscribe(int pos);
     /**
+     * Reactivates the stream the subscriber is listening to.  If the subscriber
+     * originally listened to log data, the function only updates the subscriber.
+     * @param pos   Numerical position of the subscriber to interact with, starting at 0
+     * @return True if operation succeeded, false otherwise
+     */
+    boolean resubscribe(int pos);
+    /**
      * Reactivates the stream the subscriber is listening to and updates the data subscriber.  If the subscriber
      * originally listened to log data, the function only updates the subscriber.
      * @param pos   Numerical position of the subscriber to interact with, starting at 0
      * @param subscriber    New subscriber to handle the received data
-     * @return True if operation succeeded, false othterwise
+     * @return True if operation succeeded, false otherwise
      */
     boolean resubscribe(int pos, Subscriber subscriber);
 

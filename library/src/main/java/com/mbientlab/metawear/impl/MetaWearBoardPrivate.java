@@ -27,10 +27,9 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.DataToken;
 import com.mbientlab.metawear.Observer;
-import com.mbientlab.metawear.MetaWearBoard.Module;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.impl.MetaWearBoardImpl.RegisterResponseHandler;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.Timer;
 
 import java.util.Map;
@@ -45,17 +44,16 @@ interface MetaWearBoardPrivate {
     Task<Void> boardDisconnect();
     void sendCommand(byte[] command);
     void sendCommand(byte[] command, int dest, DataToken input);
-    void sendCommand(ModuleId module, byte register, byte ... parameters);
-    void sendCommand(ModuleId module, byte register, byte id, byte ... parameters);
+    void sendCommand(Constant.Module module, byte register, byte ... parameters);
+    void sendCommand(Constant.Module module, byte register, byte id, byte ... parameters);
 
     void tagProducer(String name, DataTypeBase producer);
     DataTypeBase lookupProducer(String name);
     boolean hasProducer(String name);
     void removeProducerTag(String name);
-    boolean creatingRoutes();
 
-    ModuleInfo lookupModuleInfo(ModuleId id);
-    Map<Class<? extends Module>, Module> getModules();
+    ModuleInfo lookupModuleInfo(Constant.Module id);
+    Map<Class<? extends com.mbientlab.metawear.MetaWearBoard.Module>, com.mbientlab.metawear.MetaWearBoard.Module> getModules();
     void addDataIdHeader(Pair<Byte, Byte> key);
     void addDataHandler(Tuple3<Byte, Byte, Byte> key, RegisterResponseHandler handler);
     void addResponseHandler(Pair<Byte, Byte> key, RegisterResponseHandler handler);
@@ -70,4 +68,6 @@ interface MetaWearBoardPrivate {
     Task<Route> queueRouteBuilder(RouteBuilder builder, String producerTag);
     Task<Timer.ScheduledTask> queueTaskManager(CodeBlock mwCode, byte[] timerConfig);
     Task<Observer> queueEvent(DataTypeBase owner, CodeBlock codeBlock);
+
+    void logWarn(String message);
 }

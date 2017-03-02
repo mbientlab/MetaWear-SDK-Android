@@ -24,8 +24,9 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.ColorDetectorTcs34725;
-import com.mbientlab.metawear.module.ColorDetectorTcs34725.Gain;
+import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.builder.RouteComponent;
+import com.mbientlab.metawear.module.AccelerometerBosch;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -37,57 +38,85 @@ import org.junit.runners.Parameterized.Parameters;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import bolts.Capture;
+
+import static com.mbientlab.metawear.MetaWearBoardInfo.ENVIRONMENT;
+import static com.mbientlab.metawear.MetaWearBoardInfo.RPRO;
 import static org.junit.Assert.assertArrayEquals;
 
 /**
- * Created by etsai on 10/2/16.
+ * Created by etsai on 12/18/16.
  */
 @RunWith(Parameterized.class)
-public class TestColorDetectorTsc34725Config extends UnitTestBase {
-    private final float[] INTEGRATION_TIMES= new float[] {4.8f, 612f};
-    private final byte[] INTEGRATION_BITMASKS= new byte[] {(byte) 0xfe, 0x1};
-
-    @Parameters(name = "gain: {0}")
-    public static Collection<Object[]> data() {
+public class TestAccelerometerBoschFlat extends UnitTestBase {
+    @Parameters(name = "board: {0}")
+    public static Collection<Object[]> boardsParams() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(Gain g: Gain.values()) {
-            for(int i= 0; i < 2; i++) {
-                parameters.add(new Object[] { g, i, true });
-                parameters.add(new Object[] { g, i, false });
-            }
+        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {ENVIRONMENT, RPRO}) {
+            parameters.add(new Object[] {info});
         }
 
         return parameters;
     }
 
+    private AccelerometerBosch boschAcc;
+
     @Parameter
-    public Gain gain;
-
-    @Parameter(value = 1)
-    public int integrationIdx;
-
-    @Parameter(value = 2)
-    public boolean illuminator;
-
-    private ColorDetectorTcs34725 colorTcs34725;
+    public MetaWearBoardInfo info;
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.ENVIRONMENT;
+        junitPlatform.boardInfo = info;
         connectToBoard();
 
-        colorTcs34725= mwBoard.getModule(ColorDetectorTcs34725.class);
+        boschAcc = mwBoard.getModule(AccelerometerBosch.class);
     }
 
     @Test
-    public void configure() {
-        byte[] expected= new byte[] {0x17, 0x02, INTEGRATION_BITMASKS[integrationIdx], (byte) gain.ordinal(), (byte) (illuminator ? 0x1 : 0x0)};
+    public void start() {
+        byte[] expected = new byte[] {0x03, 0x12, 0x01, 0x00};
 
-        colorTcs34725.configure()
-                .gain(gain)
-                .integrationTime(INTEGRATION_TIMES[integrationIdx])
-                .illuminatorLed(illuminator)
-                .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        boschAcc.flat().start();
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    }
+
+    @Test
+    public void stop() {
+        byte[] expected = new byte[] {0x03, 0x12, 0x00, 0x01};
+
+        boschAcc.flat().stop();
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    }
+
+    @Test
+    public void handleResponse() {
+        final boolean[] expected = new boolean[] {
+                true, false
+        };
+        final byte[][] responses = new byte[][] {
+                {0x03, 0x14, 0x03},
+                {0x03, 0x14, 0x01}
+        };
+        final Capture<boolean[]> actual = new Capture<>();
+
+        actual.set(new boolean[2]);
+        boschAcc.flat().addRouteAsync(new RouteBuilder() {
+            @Override
+            public void configure(RouteComponent source) {
+                source.stream(new Subscriber() {
+                    int i = 0;
+                    @Override
+                    public void apply(Data data, Object... env) {
+                        actual.get()[i] = data.value(Boolean.class);
+                        i++;
+                    }
+                });
+            }
+        });
+        for(byte[] it: responses) {
+            sendMockResponse(it);
+        }
+
+        assertArrayEquals(expected, actual.get());
     }
 }

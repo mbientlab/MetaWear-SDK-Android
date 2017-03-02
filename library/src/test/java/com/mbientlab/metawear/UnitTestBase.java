@@ -25,12 +25,11 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.JunitPlatform.MwBridge;
-import com.mbientlab.metawear.impl.MetaWearBoardImpl;
-import com.mbientlab.metawear.impl.Pair;
+import com.mbientlab.metawear.impl.JseMetaWearBoard;
+import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.UUID;
 
 import bolts.Capture;
 import bolts.Continuation;
@@ -44,15 +43,15 @@ import static com.mbientlab.metawear.MetaWearBoardInfo.*;
 public abstract class UnitTestBase implements MwBridge {
     public static Collection<Object[]> allBoardsParams() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R}) {
+        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {C, CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R, TRACKER}) {
             parameters.add(new Object[] {info});
         }
 
         return parameters;
     }
 
-    protected final JunitPlatform btlePlaform= new JunitPlatform(this);
-    protected final MetaWearBoard mwBoard= new MetaWearBoardImpl(btlePlaform, "CB:B7:49:BF:27:33");
+    protected final JunitPlatform junitPlatform = new JunitPlatform(this);
+    protected final MetaWearBoard mwBoard= new JseMetaWearBoard(junitPlatform, junitPlatform, "CB:B7:49:BF:27:33");
 
     protected void connectToBoard() throws Exception {
         final Capture<Exception> result = new Capture<>();
@@ -82,16 +81,16 @@ public abstract class UnitTestBase implements MwBridge {
 
     @Override
     public void disconnected() {
-        ((MetaWearBoardImpl) mwBoard).disconnected();
+        junitPlatform.btleCallback.onDisconnect();
     }
 
     @Override
     public void sendMockResponse(byte[] response) {
-        ((MetaWearBoardImpl) mwBoard).handleNotifyCharResponse(response);
+        junitPlatform.btleCallback.onMwNotifyCharChanged(response);
     }
 
     @Override
-    public void sendMockGattCharReadValue(Pair<UUID, UUID> gattChar, byte[] value) {
-        ((MetaWearBoardImpl) mwBoard).handleReadGattCharResponse(gattChar, value);
+    public void sendMockGattCharReadValue(BtleGattCharacteristic gattChar, byte[] value) {
+        junitPlatform.btleCallback.onCharRead(gattChar, value);
     }
 }

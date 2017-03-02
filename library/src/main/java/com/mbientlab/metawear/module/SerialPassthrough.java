@@ -30,7 +30,7 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 import bolts.Task;
 
 /**
- * Interacts with the serial buses on the board
+ * Bridge for serial communication to connected sensors
  * @author Eric Tsai
  */
 public interface SerialPassthrough extends Module {
@@ -38,7 +38,7 @@ public interface SerialPassthrough extends Module {
      * Data received from the I2C bus
      * @author Eric Tsai
      */
-    interface I2c extends DataProducer {
+    interface I2C extends DataProducer {
         /**
          * Read data via the I2C bus
          * @param deviceAddr      Device to read from
@@ -137,7 +137,7 @@ public interface SerialPassthrough extends Module {
      * Data received from the SPI bus
      * @author Eric Tsai
      */
-    interface Spi extends DataProducer {
+    interface SPI extends DataProducer {
         /**
          * Reads data from a device through the SPI bus
          * @return Builder to set additional parameters
@@ -146,14 +146,14 @@ public interface SerialPassthrough extends Module {
     }
 
     /**
-     * Gets an object representing the I2C data corresponding to the id.  If the id value cannot be matched
+     * Get an object representing the I2C data corresponding to the id.  If the id value cannot be matched
      * with an existing object, the API will create a new object using the {@code length} parameter otherwise
      * the existing object will be returned
      * @param length    Expected length of the data
      * @param id        Value between [0, 254]
-     * @return I2c object representing I2C data
+     * @return I2C object representing I2C data
      */
-    I2c i2cData(byte length, byte id);
+    I2C i2c(byte length, byte id);
     /**
      * Write data to a sensor via the I2C bus.
      * @param deviceAddr Device to write to
@@ -162,7 +162,7 @@ public interface SerialPassthrough extends Module {
      */
     void writeI2c(byte deviceAddr, byte registerAddr, byte[] data);
     /**
-     * Read data from a sensor via the I2C bus.  Unlike {@link I2c#read(byte, byte)}, this function provides
+     * Read data from a sensor via the I2C bus.  Unlike {@link I2C#read(byte, byte)}, this function provides
      * a direct way to access I2C data as opposed to creating a data route.
      * @param deviceAddr      Address of the slave device
      * @param registerAddr    Register on the slave device to access
@@ -172,14 +172,14 @@ public interface SerialPassthrough extends Module {
     Task<byte[]> readI2cAsync(byte deviceAddr, byte registerAddr, byte length);
 
     /**
-     * Gets an object representing the SPI data corresponding to the id.  If the id value cannot be matched
+     * Get an object representing the SPI data corresponding to the id.  If the id value cannot be matched
      * with an existing object, the API will create a new object using the {@code length} parameter otherwise
      * the existing object will be returned
      * @param length    Expected length of the data
      * @param id        Value between [0, 14]
-     * @return I2c object representing SPI data, null if the SPI bus is not accessible with the current firmware
+     * @return SPI object representing SPI data, null if the SPI bus is not accessible with the current firmware
      */
-    Spi spiData(byte length, byte id);
+    SPI spi(byte length, byte id);
     /**
      * Write data to a sensor via the SPI bus.  The data to be written to the board is set with the
      * {@link SpiParameterBuilder#data(byte[])} method
@@ -187,7 +187,7 @@ public interface SerialPassthrough extends Module {
      */
     SpiParameterBuilder<Void> writeSpi();
     /**
-     * Read data from a sensor via the SPI bus.  Unlike {@link Spi#read()}, this function provides a direct
+     * Read data from a sensor via the SPI bus.  Unlike {@link SPI#read()}, this function provides a direct
      * way to access SPI data as opposed to creating a data route.  If the SPI bus is not accessible with
      * the current firmware, the operation will fail with an {@link UnsupportedOperationException}.
      * @param length    How many bytes to read

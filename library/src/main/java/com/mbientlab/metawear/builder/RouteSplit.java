@@ -25,7 +25,7 @@
 package com.mbientlab.metawear.builder;
 
 /**
- * RouteElement for enforcing that users call {@link #index(int)} immediately after splitting data
+ * RouteComponent for enforcing that users call {@link #index(int)} immediately after splitting data
  * @author Eric Tsai
  */
 public interface RouteSplit {
@@ -34,5 +34,5 @@ public interface RouteSplit {
      * @param i    Position in the split values array to return
      * @return Object representing the component value
      */
-    RouteElement index(int i);
+    RouteComponent index(int i);
 }

@@ -28,7 +28,7 @@ import com.mbientlab.metawear.module.NeoPixel;
 
 import java.util.HashMap;
 
-import static com.mbientlab.metawear.impl.ModuleId.NEO_PIXEL;
+import static com.mbientlab.metawear.impl.Constant.Module.NEO_PIXEL;
 
 /**
  * Created by etsai on 9/18/16.
@@ -62,20 +62,7 @@ class NeoPixelImpl extends ModuleImplBase implements NeoPixel {
         return null;
     }
 
-    private Strand createStrandObj(final byte strand, byte length) {
-        final Led[] leds= new Led[length];
-        for(byte i= 0; i < length; i++) {
-            final byte pixel= i;
-
-            leds[i]= new Led() {
-                @Override
-                public void setRgb(byte red, byte green, byte blue) {
-                    mwPrivate.sendCommand(new byte[] {NEO_PIXEL.id, SET_COLOR, strand, pixel, red, green, blue});
-                }
-            };
-        }
-
-
+    private Strand createStrandObj(final byte strand, final byte length) {
         return new Strand() {
             @Override
             public void free() {
@@ -94,8 +81,13 @@ class NeoPixelImpl extends ModuleImplBase implements NeoPixel {
             }
 
             @Override
-            public void turnOff(byte start, byte end) {
+            public void clear(byte start, byte end) {
                 mwPrivate.sendCommand(new byte[] {NEO_PIXEL.id, CLEAR, strand, start, end});
+            }
+
+            @Override
+            public void setRgb(byte index, byte red, byte green, byte blue) {
+                mwPrivate.sendCommand(new byte[] {NEO_PIXEL.id, SET_COLOR, strand, index, red, green, blue});
             }
 
             @Override
@@ -115,18 +107,8 @@ class NeoPixelImpl extends ModuleImplBase implements NeoPixel {
             }
 
             @Override
-            public Led[] leds() {
-                return leds;
-            }
-
-            @Override
-            public Led led(int i) {
-                return leds[i];
-            }
-
-            @Override
             public int nLeds() {
-                return leds.length;
+                return length;
             }
         };
     }

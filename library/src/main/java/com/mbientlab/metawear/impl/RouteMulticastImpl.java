@@ -24,21 +24,21 @@
 
 package com.mbientlab.metawear.impl;
 
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.RouteMulticast;
 
 /**
  * Created by etsai on 9/22/16.
  */
 class RouteMulticastImpl implements RouteMulticast {
-    private final RouteElementImpl caller;
+    private final RouteComponentImpl caller;
 
-    RouteMulticastImpl(RouteElementImpl caller) {
+    RouteMulticastImpl(RouteComponentImpl caller) {
         this.caller= caller;
     }
 
     @Override
-    public RouteElement to() {
+    public RouteComponent to() {
         return caller.persistantData.stashedSignals.peek();
     }
 }

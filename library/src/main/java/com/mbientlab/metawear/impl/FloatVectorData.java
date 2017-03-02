@@ -30,18 +30,16 @@ package com.mbientlab.metawear.impl;
 abstract class FloatVectorData extends DataTypeBase {
     private static final long serialVersionUID = -1464860783728940565L;
 
-    FloatVectorData(ModuleId module, byte register, DataAttributes attributes) {
+    FloatVectorData(Constant.Module module, byte register, DataAttributes attributes) {
         super(module, register, attributes);
     }
 
-    FloatVectorData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    FloatVectorData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
         super(input, module, register, id, attributes);
     }
 
     @Override
-    public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-        return input.floatValue() * scale(owner);
+    public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+        return value.floatValue() * scale(mwPrivate);
     }
-
-    protected abstract float scale(MetaWearBoardPrivate owner);
 }

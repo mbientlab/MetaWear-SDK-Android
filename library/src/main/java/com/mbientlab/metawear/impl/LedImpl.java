@@ -26,7 +26,7 @@ package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.module.Led;
 
-import static com.mbientlab.metawear.impl.ModuleId.LED;
+import static com.mbientlab.metawear.impl.Constant.Module.LED;
 
 /**
  * Created by etsai on 8/31/16.
@@ -89,7 +89,7 @@ class LedImpl extends ModuleImplBase implements Led {
 
             @Override
             public PatternEditor delay(short delay) {
-                if (mwPrivate.lookupModuleInfo(ModuleId.LED).revision >= REVISION_LED_DELAYED) {
+                if (mwPrivate.lookupModuleInfo(Constant.Module.LED).revision >= REVISION_LED_DELAYED) {
                     command[15]= (byte)((delay >> 8) & 0xff);
                     command[14]= (byte)(delay & 0xff);
                 } else {

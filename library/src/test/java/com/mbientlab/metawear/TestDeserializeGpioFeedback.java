@@ -36,8 +36,8 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestDeserializeGpioFeedback extends UnitTestBase {
     @Before
     public void setup() throws Exception {
-        btlePlaform.firmware= "1.1.3";
-        btlePlaform.boardStateSuffix = "gpio_feedback";
+        junitPlatform.firmware= "1.1.3";
+        junitPlatform.boardStateSuffix = "gpio_feedback";
         mwBoard.deserialize();
 
         connectToBoard();
@@ -65,7 +65,7 @@ public class TestDeserializeGpioFeedback extends UnitTestBase {
 
         mwBoard.lookupRoute(0).remove();
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -86,6 +86,6 @@ public class TestDeserializeGpioFeedback extends UnitTestBase {
 
         mwBoard.tearDown();
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 }

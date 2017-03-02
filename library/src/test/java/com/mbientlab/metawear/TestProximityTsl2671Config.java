@@ -77,7 +77,7 @@ public class TestProximityTsl2671Config extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.DETECTOR;
+        junitPlatform.boardInfo = MetaWearBoardInfo.DETECTOR;
         connectToBoard();
 
         proximity= mwBoard.getModule(ProximityTsl2671.class);
@@ -94,6 +94,6 @@ public class TestProximityTsl2671Config extends UnitTestBase {
                 .receiverDiode(diode)
                 .transmitterDriveCurrent(current)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

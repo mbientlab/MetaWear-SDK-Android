@@ -24,7 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
-import com.mbientlab.metawear.impl.MetaWearBoardImpl.RegisterResponseHandler;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.Macro;
 
 import java.util.LinkedList;
@@ -33,7 +33,7 @@ import java.util.Queue;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
-import static com.mbientlab.metawear.impl.ModuleId.MACRO;
+import static com.mbientlab.metawear.impl.Constant.Module.MACRO;
 
 /**
  * Created by etsai on 11/30/16.
@@ -79,7 +79,7 @@ class MacroImpl extends ModuleImplBase implements Macro {
     }
 
     @Override
-    public Task<Byte> endRecord() {
+    public Task<Byte> endRecordAsync() {
         isRecording = false;
         mwPrivate.scheduleTask(new Runnable() {
             @Override
@@ -118,7 +118,7 @@ class MacroImpl extends ModuleImplBase implements Macro {
     }
 
     private byte[][] convertToMacroCommand(byte[] command) {
-        if (command.length >= Constant.MW_COMMAND_LENGTH) {
+        if (command.length >= Constant.COMMAND_LENGTH) {
             byte[][] macroCmds = new byte[2][];
 
             final byte PARTIAL_LENGTH= 2;

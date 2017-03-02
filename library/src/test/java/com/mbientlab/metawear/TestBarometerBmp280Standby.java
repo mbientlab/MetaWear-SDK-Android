@@ -81,7 +81,7 @@ public class TestBarometerBmp280Standby extends UnitTestBase {
         baroBmp280.configure()
                 .standbyTime(standby)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -91,7 +91,7 @@ public class TestBarometerBmp280Standby extends UnitTestBase {
         baroBmp280.configure()
                 .standbyTime(standbyLiteral)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -103,6 +103,6 @@ public class TestBarometerBmp280Standby extends UnitTestBase {
                 .pressureOversampling(BarometerBosch.OversamplingMode.HIGH)
                 .filterCoeff(BarometerBosch.FilterCoeff.AVG_16)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

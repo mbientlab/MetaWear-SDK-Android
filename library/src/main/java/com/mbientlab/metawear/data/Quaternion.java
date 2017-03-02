@@ -27,7 +27,7 @@ package com.mbientlab.metawear.data;
 import java.util.Locale;
 
 /**
- * Encapsulates a quaternion in the form q = w + xi + yj + zk
+ * Encapsulates a quaternion in the form q = w + x<b>i</b> + y<b>j</b> + z<b>k</b>
  * @author Eric Tsai
  */
 public class Quaternion extends FloatVector {

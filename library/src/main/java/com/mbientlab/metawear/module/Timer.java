@@ -30,7 +30,7 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 import bolts.Task;
 
 /**
- * Controls the on-board timer
+ * On-board scheduler for executing MetaWear commands in the future
  * @author Eric Tsai
  */
 public interface Timer extends Module {
@@ -53,7 +53,7 @@ public interface Timer extends Module {
          */
         boolean isActive();
         /**
-         * Gets the numerical id of this task
+         * Get the numerical id of this task
          * @return Task ID
          */
         byte id();
@@ -64,16 +64,16 @@ public interface Timer extends Module {
     }
 
     /**
-     * Schedules a task to be indefinitely executed on-board at fixed intervals
+     * Schedule a task to be indefinitely executed on-board at fixed intervals
      * @param period    How often to execute the task, in milliseconds
      * @param delay     True if first execution should be delayed by one {@code delay}
      * @param mwCode    MetaWear commands composing the task
      * @return Task holding the result of the scheduled request
      * @see ScheduledTask
      */
-    Task<ScheduledTask> schedule(int period, boolean delay, CodeBlock mwCode);
+    Task<ScheduledTask> scheduleAsync(int period, boolean delay, CodeBlock mwCode);
     /**
-     * Schedules a task to be executed on-board at fixed intervals for a specific number of repetitions
+     * Schedule a task to be executed on-board at fixed intervals for a specific number of repetitions
      * @param period         How often to execute the task, in milliseconds
      * @param repetitions    How many times to execute the task
      * @param delay          True if first execution should be delayed by one {@code delay}
@@ -81,9 +81,9 @@ public interface Timer extends Module {
      * @return Task holding the result of the scheduled task
      * @see ScheduledTask
      */
-    Task<ScheduledTask> schedule(int period, short repetitions, boolean delay, CodeBlock mwCode);
+    Task<ScheduledTask> scheduleAsync(int period, short repetitions, boolean delay, CodeBlock mwCode);
     /**
-     * Finds the {@link ScheduledTask} object corresponding to the given id
+     * Find the {@link ScheduledTask} object corresponding to the given id
      * @param id    Task id to lookup
      * @return Schedule task matching the id, null if no matches
      */

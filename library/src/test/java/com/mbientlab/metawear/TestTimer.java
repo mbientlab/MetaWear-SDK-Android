@@ -48,19 +48,19 @@ public class TestTimer extends UnitTestBase {
 
     protected Task<ScheduledTask> setupTimer() {
         wait = true;
-        return mwBoard.getModule(Timer.class).schedule(3141, (short) 59, true, new CodeBlock() {
+        return mwBoard.getModule(Timer.class).scheduleAsync(3141, (short) 59, true, new CodeBlock() {
             @Override
             public void program() {
-                mwBoard.getModule(Gpio.class).getPin((byte) 0).analogAbsRef().read();
-                mwBoard.getModule(Gpio.class).getPin((byte) 0).analogAdc().read();
+                mwBoard.getModule(Gpio.class).pin((byte) 0).analogAbsRef().read();
+                mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().read();
             }
         });
     }
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.RPRO;
-        btlePlaform.addCustomModuleInfo(new byte[] {0x05, (byte) 0x80, 0x00, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
+        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.addCustomModuleInfo(new byte[] {0x05, (byte) 0x80, 0x00, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
         connectToBoard();
 
         setupTimer().continueWith(new Continuation<ScheduledTask, Void>() {
@@ -82,7 +82,7 @@ public class TestTimer extends UnitTestBase {
 
             /*
             // For TestDeserializeTimer
-            btlePlaform.boardStateSuffix = "timer";
+            junitPlatform.boardStateSuffix = "timer";
             mwBoard.serialize();
             */
         }
@@ -98,7 +98,7 @@ public class TestTimer extends UnitTestBase {
                 {0x0a, 0x03, 0x00, (byte) 0xff, (byte) 0xff, 0x00, (byte) 0xff}
         };
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -106,7 +106,7 @@ public class TestTimer extends UnitTestBase {
         byte[] expected= new byte[] {0x0c, 0x03, 0x0};
 
         manager.start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -114,7 +114,7 @@ public class TestTimer extends UnitTestBase {
         byte[] expected= new byte[] {0x0c, 0x04, 0x0};
 
         manager.stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -126,15 +126,15 @@ public class TestTimer extends UnitTestBase {
         };
 
         manager.remove();
-        assertArrayEquals(expected, btlePlaform.getLastCommands(3));
+        assertArrayEquals(expected, junitPlatform.getLastCommands(3));
     }
 
     @Test(expected = TimeoutException.class)
     public void timeout() throws Exception {
         final Capture<Exception> actual= new Capture<>();
 
-        btlePlaform.maxTimers= 0;
-        mwBoard.getModule(Timer.class).schedule(26535, false, new CodeBlock() {
+        junitPlatform.maxTimers= 0;
+        mwBoard.getModule(Timer.class).scheduleAsync(26535, false, new CodeBlock() {
             @Override
             public void program() {
 

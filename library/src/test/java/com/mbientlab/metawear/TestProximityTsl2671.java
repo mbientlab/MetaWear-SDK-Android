@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.ProximityTsl2671;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -47,7 +47,7 @@ public class TestProximityTsl2671 extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.DETECTOR;
+        junitPlatform.boardInfo = MetaWearBoardInfo.DETECTOR;
         connectToBoard();
 
         proximity= mwBoard.getModule(ProximityTsl2671.class);
@@ -57,14 +57,14 @@ public class TestProximityTsl2671 extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x18, (byte) 0x81};
 
-        proximity.adc().addRoute(new RouteBuilder() {
+        proximity.adc().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         });
         proximity.adc().read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -72,7 +72,7 @@ public class TestProximityTsl2671 extends UnitTestBase {
         byte[] expected= new byte[] {0x18, (byte) 0xc1};
 
         proximity.adc().read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -80,9 +80,9 @@ public class TestProximityTsl2671 extends UnitTestBase {
         short expected= 1522;
         final Capture<Short> actual= new Capture<>();
 
-        proximity.adc().addRoute(new RouteBuilder() {
+        proximity.adc().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {

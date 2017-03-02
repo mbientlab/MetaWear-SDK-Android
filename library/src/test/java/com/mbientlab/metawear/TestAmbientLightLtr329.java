@@ -24,13 +24,20 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AmbientLightLtr329;
 import com.mbientlab.metawear.module.AmbientLightLtr329.*;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import bolts.Capture;
+import bolts.Continuation;
+import bolts.Task;
+
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 10/2/16.
@@ -44,6 +51,22 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
         connectToBoard();
 
         alsLtr329= mwBoard.getModule(AmbientLightLtr329.class);
+    }
+
+    @Test
+    public void start() {
+        byte[] expected = new byte[] {0x14, 0x01, 0x01};
+
+        alsLtr329.illuminance().start();
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    }
+
+    @Test
+    public void stop() {
+        byte[] expected = new byte[] {0x14, 0x01, 0x00};
+
+        alsLtr329.illuminance().stop();
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -63,7 +86,7 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
                     .commit();
         }
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -85,7 +108,7 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
                     .commit();
         }
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -105,7 +128,7 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
                     .commit();
         }
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -118,6 +141,33 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
                 .measurementRate(MeasurementRate.LTR329_RATE_50MS)
                 .commit();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    }
+
+    @Test
+    public void handleData() {
+        float expected = 11571.949f;
+        final Capture<Float> actual = new Capture<>();
+
+        alsLtr329.illuminance().addRouteAsync(new RouteBuilder() {
+            @Override
+            public void configure(RouteComponent source) {
+                source.stream(new Subscriber() {
+                    @Override
+                    public void apply(Data data, Object... env) {
+                        actual.set(data.value(Float.class));
+                    }
+                });
+            }
+        }).continueWith(new Continuation<Route, Void>() {
+            @Override
+            public Void then(Task<Route> task) throws Exception {
+                alsLtr329.illuminance().start();
+                return null;
+            }
+        });
+        sendMockResponse(new byte[] {0x14, 0x03, (byte) 0xed, (byte) 0x92, (byte) 0xb0, 0x00});
+
+        assertEquals(expected, actual.get(), 0.001f);
     }
 }

@@ -73,6 +73,6 @@ public class TestBarometerBoschConfig extends TestBarometerBoschBase {
                 .filterCoeff(filter)
                 .pressureOversampling(oversampling)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

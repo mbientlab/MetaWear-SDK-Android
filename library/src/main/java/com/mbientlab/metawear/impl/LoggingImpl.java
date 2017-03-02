@@ -24,9 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
-import android.util.Log;
-
-import com.mbientlab.metawear.impl.MetaWearBoardImpl.RegisterResponseHandler;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.Logging;
 
 import java.io.Serializable;
@@ -38,6 +36,7 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ScheduledFuture;
@@ -47,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
-import static com.mbientlab.metawear.impl.ModuleId.LOGGING;
+import static com.mbientlab.metawear.impl.Constant.Module.LOGGING;
 
 /**
  * Created by etsai on 9/4/16.
@@ -92,9 +91,9 @@ class LoggingImpl extends ModuleImplBase implements Logging {
             logEntries.put(id, new LinkedList<byte[]>());
         }
 
-        public void remove(MetaWearBoardPrivate owner) {
+        public void remove(MetaWearBoardPrivate mwPrivate) {
             for(byte id: logEntries.keySet()) {
-                owner.sendCommand(new byte[]{ModuleId.LOGGING.id, LoggingImpl.REMOVE, id});
+                mwPrivate.sendCommand(new byte[]{Constant.Module.LOGGING.id, LoggingImpl.REMOVE, id});
             }
         }
 
@@ -104,12 +103,13 @@ class LoggingImpl extends ModuleImplBase implements Logging {
             }
         }
 
-        void handleLogMessage(final MetaWearBoardPrivate owner, byte logId, final Calendar timestamp, byte[] data, Logging.LogDownloadErrorHandler handler) {
+        void handleLogMessage(final MetaWearBoardPrivate mwPrivate, byte logId, final Calendar timestamp, byte[] data, Logging.LogDownloadErrorHandler handler) {
             if (subscriber == null) {
                 if (handler != null) {
                     handler.receivedError(Logging.DownloadError.UNHANDLED_LOG_DATA, logId, timestamp, data);
                 } else {
-                    Log.e("MetaWear", "No subscriber available for the log data");
+                    mwPrivate.logWarn(String.format(Locale.US, "No subscriber to handle log data: {logId: %d, time: %d, data: %s}",
+                            logId, timestamp.getTimeInMillis(), Util.arrayToHexString(data)));
                 }
 
                 return;
@@ -140,7 +140,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                     offset+= entries.get(i).length;
                 }
 
-                call(source.createMessage(true, owner, merged, timestamp));
+                call(source.createMessage(true, mwPrivate, merged, timestamp));
             }
         }
 
@@ -185,8 +185,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     @Override
     public void disconnected() {
         if (downloadTask.get() != null) {
-            TaskCompletionSource<Void> taskSource = downloadTask.getAndSet(null);
-            taskSource.setError(new RuntimeException("Lost connection while downloading log data"));
+            downloadTask.getAndSet(null).setError(new RuntimeException("Lost connection while downloading log data"));
         }
     }
 
@@ -258,8 +257,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
 
                 if (nEntriesLeft == 0) {
                     lastTimestamp.clear();
-                    TaskCompletionSource<Void> taskSource = downloadTask.getAndSet(null);
-                    taskSource.setResult(null);
+                    downloadTask.getAndSet(null).setResult(null);
                 } else if (updateHandler != null) {
                     updateHandler.receivedUpdate(nEntriesLeft, nLogEntries);
                 }
@@ -291,15 +289,17 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                 nLogEntries= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong();
 
                 if (nLogEntries == 0) {
-                    TaskCompletionSource<Void> taskSource = downloadTask.getAndSet(null);
-                    taskSource.setResult(null);
+                    downloadTask.getAndSet(null).setResult(null);
                 } else {
+                    if (updateHandler != null) {
+                        updateHandler.receivedUpdate(nLogEntries, nLogEntries);
+                    }
+
                     long nEntriesNotify = nUpdates == 0 ? 0 : (long) (nLogEntries * (1.0 / nUpdates));
 
                     ///< In little endian, [A, B, 0, 0] is equal to [A, B]
                     ByteBuffer readoutCommand = ByteBuffer.allocate(payloadSize + 4).order(ByteOrder.LITTLE_ENDIAN)
                             .put(response, 2, payloadSize).putInt((int) nEntriesNotify);
-
                     mwPrivate.sendCommand(LOGGING, READOUT, readoutCommand.array());
                 }
             }
@@ -327,7 +327,11 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     }
 
     @Override
-    public Task<Void> download(int nUpdates, LogDownloadUpdateHandler updateHandler, LogDownloadErrorHandler errorHandler) {
+    public Task<Void> downloadAsync(int nUpdates, LogDownloadUpdateHandler updateHandler, LogDownloadErrorHandler errorHandler) {
+        if (downloadTask.get() != null) {
+            return downloadTask.get().getTask();
+        }
+
         this.nUpdates = nUpdates;
         this.updateHandler= updateHandler;
         this.errorHandler= errorHandler;
@@ -336,7 +340,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
             mwPrivate.sendCommand(new byte[] {LOGGING.id, READOUT_PAGE_COMPLETED, 1});
         }
         mwPrivate.sendCommand(new byte[] {LOGGING.id, READOUT_NOTIFY, 1});
-        mwPrivate.sendCommand(new byte[] {LOGGING.id, READOUT_PROGRESS, (byte) (updateHandler != null ? 1 : 0)});
+        mwPrivate.sendCommand(new byte[] {LOGGING.id, READOUT_PROGRESS, 1});
         mwPrivate.sendCommand(new byte[] {LOGGING.id, Util.setRead(LENGTH)});
 
         TaskCompletionSource<Void> taskSource = new TaskCompletionSource<>();
@@ -345,18 +349,18 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     }
 
     @Override
-    public Task<Void> download(int nUpdates, LogDownloadUpdateHandler updateHandler) {
-        return download(nUpdates, updateHandler, null);
+    public Task<Void> downloadAsync(int nUpdates, LogDownloadUpdateHandler updateHandler) {
+        return downloadAsync(nUpdates, updateHandler, null);
     }
 
     @Override
-    public Task<Void> download(LogDownloadErrorHandler errorHandler) {
-        return download(0, null, errorHandler);
+    public Task<Void> downloadAsync(LogDownloadErrorHandler errorHandler) {
+        return downloadAsync(0, null, errorHandler);
     }
 
     @Override
-    public Task<Void> download() {
-        return download(0, null, null);
+    public Task<Void> downloadAsync() {
+        return downloadAsync(0, null, null);
     }
 
     @Override
@@ -369,7 +373,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
 
     Task<Void> queryTime() {
         queryTimeTask = new TaskCompletionSource<>();
-        mwPrivate.sendCommand(new byte[] { ModuleId.LOGGING.id, Util.setRead(LoggingImpl.TIME) });
+        mwPrivate.sendCommand(new byte[] { Constant.Module.LOGGING.id, Util.setRead(LoggingImpl.TIME) });
         return queryTimeTask.getTask();
     }
 

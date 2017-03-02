@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
 import org.junit.Before;
@@ -47,7 +47,7 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo = MetaWearBoardInfo.RPRO;
         connectToBoard();
 
         detector = mwBoard.getModule(AccelerometerBmi160.class).stepDetector();
@@ -57,23 +57,23 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
     public void subscribe() {
         byte[] expected = new byte[] {0x3, 0x19, 0x1};
 
-        detector.addRoute(new RouteBuilder() {
+        detector.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void unsubscribe() {
         byte[] expected = new byte[] {0x3, 0x19, 0x0};
 
-        detector.addRoute(new RouteBuilder() {
+        detector.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -84,7 +84,7 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -92,7 +92,7 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
         byte[] expected= new byte[] {0x03, 0x17, 0x01, 0x00};
         detector.start();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -100,7 +100,7 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
         byte[] expected= new byte[] {0x03, 0x17, 0x00, 0x01};
         detector.stop();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -108,9 +108,9 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
         final Capture<Byte> actual = new Capture<>();
         byte expected = 1;
 
-        detector.addRoute(new RouteBuilder() {
+        detector.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {

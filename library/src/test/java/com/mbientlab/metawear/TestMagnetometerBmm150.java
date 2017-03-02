@@ -24,9 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 import com.mbientlab.metawear.data.MagneticField;
 
 import org.junit.Before;
@@ -66,7 +66,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= boardInfo;
+        junitPlatform.boardInfo= boardInfo;
         connectToBoard();
 
         mag= mwBoard.getModule(MagnetometerBmm150.class);
@@ -77,7 +77,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         byte[] expected= new byte[] {0x15, 0x02, 0x01, 0x00};
 
         mag.magneticField().start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -85,7 +85,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         byte[] expected= new byte[] {0x15, 0x02, 0x00, 0x01};
 
         mag.magneticField().stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -93,7 +93,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         byte[] expected= new byte[] {0x15, 0x01, 0x01};
 
         mag.start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -101,28 +101,28 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         byte[] expected= new byte[] {0x15, 0x01, 0x00};
 
         mag.stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void bFieldSubscribe() {
         byte[] expected= new byte[] {0x15, 0x05, 0x01};
-        mag.magneticField().addRoute(new RouteBuilder() {
+        mag.magneticField().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void bFieldUnsubscribe() {
         byte[] expected= new byte[] {0x15, 0x05, 0x00};
-        mag.magneticField().addRoute(new RouteBuilder() {
+        mag.magneticField().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -133,17 +133,17 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void bFieldData() {
-        MagneticField expected= new MagneticField(Float.intBitsToFloat(0xc37b2000), Float.intBitsToFloat(0x43253000), Float.intBitsToFloat(0x428ea000));
+        MagneticField expected= new MagneticField(Float.intBitsToFloat(0xb983a96d), Float.intBitsToFloat(0x392d362f), Float.intBitsToFloat(0x38958d9b));
         final Capture<MagneticField> actual= new Capture<>();
 
-        mag.magneticField().addRoute(new RouteBuilder() {
+        mag.magneticField().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
@@ -168,9 +168,9 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         float[] expected = new float[] {-251.1250f, 165.1875f, 71.3125f};
         final float[] actual= new float[3];
 
-        mag.magneticField().addRoute(new RouteBuilder() {
+        mag.magneticField().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.split()
                         .index(0).stream(new Subscriber() {
                             @Override

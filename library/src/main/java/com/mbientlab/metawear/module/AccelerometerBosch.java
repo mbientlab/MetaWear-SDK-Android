@@ -25,13 +25,17 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
-import com.mbientlab.metawear.data.CartesianAxis;
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
+import com.mbientlab.metawear.data.Sign;
+import com.mbientlab.metawear.data.SensorOrientation;
+import com.mbientlab.metawear.data.TapType;
 
 import java.util.HashMap;
 
 /**
- * Generic class providing high level access for a Bosch accelerometer.  If you know specifically which
- * accelerometer is on your board, use the appropriate Accelerometer subclass instead.
+ * Extension of the {@link Accelerometer} providing general access to a Bosch accelerometer.  If you know specifically which
+ * Bosch accelerometer is on your board, use the appropriate subclass instead.
  * @author Eric Tsai
  * @see AccelerometerBma255
  * @see AccelerometerBmi160
@@ -94,85 +98,127 @@ public interface AccelerometerBosch extends Accelerometer {
         LOW_ASYMMETRICAL
     }
     /**
-     * On-board algorithm that detects changes in the sensor's orientation
+     * Configuration editor for the orientation detection algorithm
      * @author Eric Tsai
      */
-    interface OrientationDataProducer extends AsyncDataProducer {
+    interface OrientationConfigEditor extends ConfigEditorBase {
         /**
-         * Configuration editor for the orientation detection algorithm
-         * @author Eric Tsai
+         * Set the hysteresis offset for portrait/landscape detection
+         * @param hysteresis    New offset angle, in degrees
+         * @return Calling object
          */
-        interface ConfigEditor {
-            /**
-             * Sets the hysteresis offset for portrait/landscape detection
-             * @param hysteresis    New offset angle, in degrees
-             * @return Calling object
-             */
-            ConfigEditor hysteresis(float hysteresis);
-            /**
-             * Sets the orientation calculation mode
-             * @param mode    New calculation mode
-             * @return Calling object
-             */
-            ConfigEditor mode(OrientationMode mode);
-            /**
-             * writes the new settings to the sensor
-             */
-            void commit();
-        }
+        OrientationConfigEditor hysteresis(float hysteresis);
         /**
-         * Configure the orientation detection algorithm
-         * @return Configuration editor object
+         * Set the orientation calculation mode
+         * @param mode    New calculation mode
+         * @return Calling object
          */
-        ConfigEditor configure();
+        OrientationConfigEditor mode(OrientationMode mode);
     }
     /**
-     * Gets an object to control the orientation detection algorithm
-     * @return Object controlling the orientation detection algorithm
-     */
-    OrientationDataProducer orientationDetector();
-
-    /**
-     * On-board algorithm that detects when the senor is laying flat or not
+     * On-board algorithm that detects changes in the sensor's orientation.  Data is represented as
+     * a {@link SensorOrientation} object.
      * @author Eric Tsai
      */
-    interface FlatDataProducer extends AsyncDataProducer {
+    interface OrientationDataProducer extends AsyncDataProducer, Configurable<OrientationConfigEditor> { }
+    /**
+     * Get an implementation of the OrientationDataProducer interface
+     * @return OrientationDataProducer object
+     */
+    OrientationDataProducer orientation();
+
+    /**
+     * Accelerometer agnostic interface for configuring flat detection algorithm
+     * @param <T>    Type of flat detection config editor
+     * @author Eric Tsai
+     */
+    interface FlatConfigEditor<T extends FlatConfigEditor> extends ConfigEditorBase {
         /**
-         * Accelerometer agnostic interface for configuring flat detection algorithm
-         * @param <T>    Type of flat detection config editor
-         * @author Eric Tsai
+         * Set the delay for which the flat value must remain stable for a flat interrupt.  The closest,
+         * valid delay will be chosen depending on underlying sensor
+         * @param time    Delay time for a stable value
+         * @return Calling object
          */
-        interface ConfigEditorBase<T extends ConfigEditorBase> {
-            /**
-             * Sets the delay for which the flat value must remain stable for a flat interrupt.  The closest,
-             * valid delay will be chosen depending on underlying sensor
-             * @param time    Delay time for a stable value
-             * @return Calling object
-             */
-            T holdTime(float time);
-            /**
-             * Sets the threshold defining a flat position
-             * @param angle    Threshold angle, between [0, 44.8] degrees
-             * @return Calling object
-             */
-            T flatTheta(float angle);
-            /**
-             * Writes the new settings to the board
-             */
-            void commit();
-        }
+        T holdTime(float time);
         /**
-         * Configure the flat detection algorithm
-         * @return Generic editor object
+         * Set the threshold defining a flat position
+         * @param angle    Threshold angle, between [0, 44.8] degrees
+         * @return Calling object
          */
-        ConfigEditorBase<? extends ConfigEditorBase> configure();
+        T flatTheta(float angle);
     }
     /**
-     * Gets an object to control the flat detection algorithm
-     * @return Object controlling the flat detection algorithm
+     * On-board algorithm that detects whether the senor is laying flat or not
+     * @author Eric Tsai
      */
-    FlatDataProducer flatDetector();
+    interface FlatDataProducer extends AsyncDataProducer, Configurable<FlatConfigEditor<? extends FlatConfigEditor>> { }
+    /**
+     * Get an implementation of the FlatDataProducer interface
+     * @return FlatDataProducer object
+     */
+    FlatDataProducer flat();
 
+    /**
+     * Wrapper class encapsulating the data from a low/high g interrupt
+     * @author Eric Tsai
+     */
+    class LowHighResponse {
+        /** True if the interrupt from from low-g motion */
+        public boolean isLow;
+        /**
+         * True if the interrupt from from high-g motion.  If it is not high-g motion, there is no
+         * need to check the high-g variables
+         */
+        public boolean isHigh;
+        /** True if the x-axis triggered high-g interrupt */
+        public boolean highGx;
+        /** True if the y-axis triggered high-g interrupt */
+        public boolean highGy;
+        /** True if the z-axis triggered high-g interrupt */
+        public boolean highGz;
+        /** Direction of the high-g motion interrupt */
+        public Sign highSign;
+
+        public LowHighResponse(boolean isHigh, boolean isLow, boolean highGx, boolean highGy, boolean highGz, Sign highSign) {
+            this.isHigh = isHigh;
+            this.isLow = isLow;
+            this.highGx = highGx;
+            this.highGy = highGy;
+            this.highGz = highGz;
+            this.highSign = highSign;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            // Generated by IntelliJ
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            LowHighResponse that = (LowHighResponse) o;
+
+            return isHigh == that.isHigh && isLow == that.isLow &&
+                    highGx == that.highGx && highGy == that.highGy && highGz == that.highGz && highSign == that.highSign;
+
+        }
+
+        @Override
+        public int hashCode() {
+            // Generated by IntelliJ
+            int result = (isHigh ? 1 : 0);
+            result = 31 * result + (isLow ? 1 : 0);
+            result = 31 * result + (highGx ? 1 : 0);
+            result = 31 * result + (highGy ? 1 : 0);
+            result = 31 * result + (highGz ? 1 : 0);
+            result = 31 * result + highSign.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("{low: %s, high: %s, high_x: %s, high_y: %s, high_z: %s, high_direction: %s}",
+                    isLow, isLow, highGx, highGy, highGz, highSign.toString());
+        }
+    }
     /**
      * Interrupt modes for low-g detection
      * @author Eric Tsai
@@ -184,244 +230,255 @@ public interface AccelerometerBosch extends Accelerometer {
         SUM
     }
     /**
-     * Direction of motion for high-g interrupts
+     * Interface for configuring low/high g detection
      * @author Eric Tsai
      */
-    enum Sign {
-        POSITIVE,
-        NEGATIVE
-    }
-    /**
-     * Wrapper class encapsulating the data from a low/high g interrupt
-     */
-    interface LowHighResponse {
+    interface LowHighConfigEditor extends ConfigEditorBase {
         /**
-         * Checks if the interrupt from from high-g motion.  If it is not high-g motion, there is no
-         * need to call {@link #highG(CartesianAxis)}.
-         * @return True if high-g motion
+         * Enable low g detection on all 3 axes
+         * @return Calling object
          */
-        boolean isHigh();
+        LowHighConfigEditor enableLowG();
         /**
-         * Checks if the interrupt from from low-g motion
-         * @return True if low-g motion
+         * Enable high g detection on the x-axis
+         * @return Calling object
          */
-        boolean isLow();
+        LowHighConfigEditor enableHighGx();
         /**
-         * Check if the specific axis triggered high-g interrupt
-         * @param axis    Axis to check
-         * @return True if axis triggered high-g interrupt
+         * Enable high g detection on the y-axis
+         * @return Calling object
          */
-        boolean highG(CartesianAxis axis);
+        LowHighConfigEditor enableHighGy();
         /**
-         * Get the direction of the interrupt
-         * @return Direction of the high-g motion interrupt
+         * Enable high g detection on the z-axis
+         * @return Calling object
          */
-        Sign highSign();
+        LowHighConfigEditor enableHighGz();
+        /**
+         * Set the minimum amount of time the acceleration must stay below (ths + hys) for an interrupt
+         * @param duration    Duration between [2.5, 640] milliseconds
+         * @return Calling object
+         */
+        LowHighConfigEditor lowDuration(int duration);
+        /**
+         * Set the threshold that triggers a low-g interrupt
+         * @param threshold    Low-g interrupt threshold, between [0.00391, 2.0] g
+         * @return Calling object
+         */
+        LowHighConfigEditor lowThreshold(float threshold);
+        /**
+         * Set the hysteresis level for low-g interrupt
+         * @param hysteresis    Low-g interrupt hysteresis, between [0, 0.375]g
+         * @return Calling object
+         */
+        LowHighConfigEditor lowHysteresis(float hysteresis);
+        /**
+         * Set mode for low-g detection
+         * @param mode    Low-g detection mode
+         * @return Calling object
+         */
+        LowHighConfigEditor lowGMode(LowGMode mode);
+        /**
+         * Set the minimum amount of time the acceleration sign does not change for an interrupt
+         * @param duration    Duration between [2.5, 640] milliseconds
+         * @return Calling object
+         */
+        LowHighConfigEditor highDuration(int duration);
+        /**
+         * Set the threshold for clearing high-g interrupt
+         * @param threshold    High-g clear interrupt threshold
+         * @return Calling object
+         */
+        LowHighConfigEditor highThreshold(float threshold);
+        /**
+         * Set the hysteresis level for clearing the high-g interrupt
+         * @param hysteresis    Hysteresis for clearing high-g interrupt
+         * @return Calling object
+         */
+        LowHighConfigEditor highHysteresis(float hysteresis);
     }
     /**
      * On-board algorithm that detects when low (i.e. free fall) or high g acceleration is measured
      * @author Eric Tsai
      */
-    interface LowHighDataProducer extends AsyncDataProducer {
-        /**
-         * Interface for configuring low/high g detection
-         * @author Eric Tsai
-         */
-        interface ConfigEditor {
-            /**
-             * Enable low g detection on all 3 axes
-             * @return Calling object
-             */
-            ConfigEditor enableLowG();
-            /**
-             * Enable high g detection on the x-axis
-             * @return Calling object
-             */
-            ConfigEditor enableHighGx();
-            /**
-             * Enable high g detection on the y-axis
-             * @return Calling object
-             */
-            ConfigEditor enableHighGy();
-            /**
-             * Enable high g detection on the z-axis
-             * @return Calling object
-             */
-            ConfigEditor enableHighGz();
-
-            /**
-             * Sets the minimum amount of time the acceleration must stay below (ths + hys) for an interrupt
-             * @param duration    Duration between [2.5, 640] milliseconds
-             * @return Calling object
-             */
-            ConfigEditor lowDuration(int duration);
-            /**
-             * Sets the threshold that triggers a low-g interrupt
-             * @param threshold    Low-g interrupt threshold, between [0.00391, 2.0] g
-             * @return Calling object
-             */
-            ConfigEditor lowThreshold(float threshold);
-            /**
-             * Sets the hysteresis level for low-g interrupt
-             * @param hysteresis    Low-g interrupt hysteresis, between [0, 0.375]g
-             * @return Calling object
-             */
-            ConfigEditor lowHysteresis(float hysteresis);
-            /**
-             * Sets mode for low-g detection
-             * @param mode    Low-g detection mode
-             * @return Calling object
-             */
-            ConfigEditor lowGMode(LowGMode mode);
-            /**
-             * Sets the minimum amount of time the acceleration sign does not change for an interrupt
-             * @param duration    Duration between [2.5, 640] milliseconds
-             * @return Calling object
-             */
-            ConfigEditor highDuration(int duration);
-            /**
-             * Sets the threshold for clearing high-g interrupt
-             * @param threshold    High-g clear interrupt threshold
-             * @return Calling object
-             */
-            ConfigEditor highThreshold(float threshold);
-            /**
-             * Sets the hysteresis level for clearing the high-g interrupt
-             * @param hysteresis    Hysteresis for clearing high-g interrupt
-             * @return Calling object
-             */
-            ConfigEditor highHysteresis(float hysteresis);
-            /**
-             * Writes the new settings to the board
-             */
-            void commit();
-        }
-        /**
-         * Configure the low/high g detection algorithm
-         * @return Configuration editor object
-         */
-        ConfigEditor configure();
-    }
+    interface LowHighDataProducer extends AsyncDataProducer, Configurable<LowHighConfigEditor> { }
     /**
-     * Gets an object to control the low/high g detection algorithm
-     * @return Object controlling the low/high g detection algorithm
+     * Get an implementation of the LowHighDataProducer interface
+     * @return LowHighDataProducer object
      */
-    LowHighDataProducer lowHighDetector();
+    LowHighDataProducer lowHigh();
 
     /**
-     * Wrapper class encapsulating responses from motion detection.  Only any motion detection has
-     * responses
+     * Motion detection algorithms on Bosch sensors.  Only one type of motion detection can be active at a time.
      * @author Eric Tsai
      */
-    interface MotionResponse {
-        /**
-         * Slope sign of the triggering signal
-         * @return Positive or negative
-         */
-        Sign anyMotionSign();
-        /**
-         * Checks if any motion was detected on that axis
-         * @param axis    Axis to check
-         * @return True if the axis triggered the any motion interrupt
-         */
-        boolean anyMotionDetected(CartesianAxis axis);
-    }
+    interface MotionDetection {}
     /**
-     * On-board algorithm that detects different types of motion
+     * Get an implementation of the MotionDetection interface.
+     * @param motionClass    Type of motion detection to use
+     * @param <T>            Runtime type the returned value is casted as
+     * @return MotionDetection object, null if the motion detection type is not supported
+     */
+    <T extends MotionDetection> T motion(Class<T> motionClass);
+
+    /**
+     * Configuration editor for no-motion detection
      * @author Eric Tsai
      */
-    interface MotionDataProducer extends AsyncDataProducer {
+    interface NoMotionConfigEditor extends ConfigEditorBase {
         /**
-         * Configuration editor for no-motion detection
-         * @author Eric Tsai
-         */
-        interface NoMotionConfigEditor {
-            /**
-             * Sets the duration
-             * @param duration    Time, in milliseconds, for which no slope data points exceed the threshold
-             * @return Calling object
-             */
-            NoMotionConfigEditor duration(int duration);
-
-            /**
-             * Sets the tap threshold.  This value is shared with slow motion detection.
-             * @param threshold    Threshold, in Gs, for which no slope data points must exceed
-             * @return Calling object
-             */
-            NoMotionConfigEditor threshold(float threshold);
-            /**
-             * Writes the settings to the board
-             */
-            void commit();
-        }
-        /**
-         * Configure the no-motion detection algorithm
+         * Set the duration
+         * @param duration    Time, in milliseconds, for which no slope data points exceed the threshold
          * @return Calling object
          */
-        NoMotionConfigEditor configureNoMotion();
-
+        NoMotionConfigEditor duration(int duration);
         /**
-         * Configuration editor for no-motion detection
-         * @author Eric Tsai
-         */
-        interface AnyMotionConfigEditor {
-            /**
-             * Sets the duration
-             * @param duration    Number of consecutive slope data points that are above the threshold
-             * @return Calling object
-             */
-            AnyMotionConfigEditor duration(int duration);
-            /**
-             * Sets the threshold that the slope data points must be above
-             * @param threshold    Any motion threshold, in Gs
-             * @return Calling object
-             */
-            AnyMotionConfigEditor threshold(float threshold);
-            /**
-             * Writes the settings to the board
-             */
-            void commit();
-        }
-        /**
-         * Configure the any-motion detection algorithm
+         * Set the tap threshold.  This value is shared with slow motion detection.
+         * @param threshold    Threshold, in Gs, for which no slope data points must exceed
          * @return Calling object
          */
-        AnyMotionConfigEditor configureAnyMotion();
-
-        /**
-         * Configuration editor for slow-motion detection
-         * @author Eric Tsai
-         */
-        interface SlowMotionConfigEditor {
-            /**
-             * Sets the count
-             * @param count    Number of consecutive slope data points that must be above the threshold
-             * @return Calling object
-             */
-            SlowMotionConfigEditor count(byte count);
-            /**
-             * Sets the tap threshold.  This value is shared with no motion detection
-             * @param threshold    Threshold, in Gs, for which no slope data points must exceed
-             * @return Calling object
-             */
-            SlowMotionConfigEditor threshold(float threshold);
-            /**
-             * Writes the settings to the board
-             */
-            void commit();
-        }
-        /**
-         * Configure the slow-motion detection algorithm
-         * @return Calling object
-         */
-        SlowMotionConfigEditor configureSlowMotion();
+        NoMotionConfigEditor threshold(float threshold);
     }
     /**
-     * Gets an object to control the motion detection algorithm
-     * @return Object controlling the motion detection algorithm
+     * Detects when the slope of acceleration data is below a threshold for a period of time.
+     * @author Eric Tsai
      */
-    MotionDataProducer motionDetector();
+    interface NoMotionDataProducer extends MotionDetection, AsyncDataProducer, Configurable<NoMotionConfigEditor> { }
+    /**
+     * Wrapper class encapsulating interrupts from any motion detection
+     * @author Eric Tsai
+     */
+    class AnyMotion {
+        /** Slope sign of the triggering motion */
+        public Sign sign;
+        /** True if x-axis triggered the motion interrupt */
+        public boolean xAxisActive;
+        /** True if y-axis triggered the motion interrupt */
+        public boolean yAxisActive;
+        /** True if z-axis triggered the motion interrupt */
+        public boolean zAxisActive;
 
+        public AnyMotion(Sign sign, boolean xAxisActive, boolean yAxisActive, boolean zAxisActive) {
+            this.sign = sign;
+            this.xAxisActive = xAxisActive;
+            this.yAxisActive = yAxisActive;
+            this.zAxisActive = zAxisActive;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            AnyMotion that = (AnyMotion) o;
+
+            return xAxisActive == that.xAxisActive && yAxisActive == that.yAxisActive &&
+                    zAxisActive == that.zAxisActive && sign == that.sign;
+
+        }
+
+        @Override
+        public int hashCode() {
+            int result = sign.hashCode();
+            result = 31 * result + (xAxisActive ? 1 : 0);
+            result = 31 * result + (yAxisActive ? 1 : 0);
+            result = 31 * result + (zAxisActive ? 1 : 0);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("{direction: %s, x-axis active: %s, y-axis active: %s, z-axis active: %s}",
+                    sign, xAxisActive, yAxisActive, zAxisActive);
+        }
+    }
+    /**
+     * Configuration editor for any-motion detection
+     * @author Eric Tsai
+     */
+    interface AnyMotionConfigEditor extends ConfigEditorBase {
+        /**
+         * Set the number of consecutive slope data points that must be above the threshold for an interrupt to occur
+         * @param count    Number of consecutive slope data points
+         * @return Calling object
+         */
+        AnyMotionConfigEditor count(int count);
+        /**
+         * Set the threshold that the slope data points must be above
+         * @param threshold    Any motion threshold, in g's
+         * @return Calling object
+         */
+        AnyMotionConfigEditor threshold(float threshold);
+    }
+    /**
+     * Detects when a number of consecutive slope data points is above a threshold.
+     * @author Eric Tsai
+     */
+    interface AnyMotionDataProducer extends MotionDetection, AsyncDataProducer, Configurable<AnyMotionConfigEditor> { }
+    /**
+     * Configuration editor for slow-motion detection
+     * @author Eric Tsai
+     */
+    interface SlowMotionConfigEditor extends ConfigEditorBase {
+        /**
+         * Set the number of consecutive slope data points that must be above the threshold for an interrupt to occur
+         * @param count    Number of consecutive slope data points
+         * @return Calling object
+         */
+        SlowMotionConfigEditor count(byte count);
+        /**
+         * Set the tap threshold.  This value is shared with no motion detection
+         * @param threshold    Threshold, in Gs, for which no slope data points must exceed
+         * @return Calling object
+         */
+        SlowMotionConfigEditor threshold(float threshold);
+    }
+    /**
+     * Similar to any motion detection except no information is stored regarding what triggered the interrupt.
+     * @author Eric Tsai
+     */
+    interface SlowMotionDataProducer extends MotionDetection, AsyncDataProducer, Configurable<SlowMotionConfigEditor> { }
+
+    /**
+     * Wrapper class encapsulating responses from tap detection
+     * @author Eric Tsai
+     */
+    class Tap {
+        /** Tap type of the response */
+        public TapType type;
+        /** Sign of the triggering signal */
+        public Sign sign;
+
+        public Tap(TapType type, Sign sign) {
+            this.type = type;
+            this.sign = sign;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            // Generated by IntelliJ
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Tap that = (Tap) o;
+
+            return type == that.type && sign == that.sign;
+
+        }
+
+        @Override
+        public int hashCode() {
+            // Generated by IntelliJ
+            int result = type.hashCode();
+            result = 31 * result + sign.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("{type: %s, direction: %s}", type, sign);
+        }
+    }
     /**
      * Available quiet times for double tap detection
      * @author Eric Tsai
@@ -432,7 +489,6 @@ public interface AccelerometerBosch extends Accelerometer {
         /** 20ms */
         TQT_20_MS
     }
-
     /**
      * Available shock times for tap detection
      * @author Eric Tsai
@@ -443,7 +499,6 @@ public interface AccelerometerBosch extends Accelerometer {
         /** 75ms */
         TST_75_MS
     }
-
     /**
      * Available windows for double tap detection
      * @author Eric Tsai
@@ -466,86 +521,54 @@ public interface AccelerometerBosch extends Accelerometer {
         /** 700ms */
         DTW_700_MS
     }
-
     /**
-     * Tap types to detect on the BMI160 chip
+     * Configuration editor for the tap detection algorithm
      * @author Eric Tsai
      */
-    enum TapType {
-        SINGLE,
-        DOUBLE
-    }
-
-    /**
-     * Wrapper class encapsulating responses from tap detection
-     * @author Eric Tsai
-     */
-    interface TapResponse {
+    interface TapConfigEditor extends ConfigEditorBase {
         /**
-         * Get tap type of the response
-         * @return Single or double tap
+         * Enable double tap detection
+         * @return Calling object
          */
-        TapType type();
+        TapConfigEditor enableDoubleTap();
         /**
-         * Sign of the triggering signal
-         * @return Positive or negative
+         * Enable single tap detection
+         * @return Calling object
          */
-        Sign sign();
+        TapConfigEditor enableSingleTap();
+        /**
+         * Set the time that must pass before a second tap can occur
+         * @param time    New quiet time
+         * @return Calling object
+         */
+        TapConfigEditor quietTime(TapQuietTime time);
+        /**
+         * Set the time to lock the data in the status register
+         * @param time    New shock time
+         * @return Calling object
+         */
+        TapConfigEditor shockTime(TapShockTime time);
+        /**
+         * Set the length of time for a second shock to occur for a double tap
+         * @param window    New double tap window
+         * @return Calling object
+         */
+        TapConfigEditor doubleTapWindow(DoubleTapWindow window);
+        /**
+         * Set the threshold that the acceleration difference must exceed for a tap, in g's
+         * @param threshold    New tap threshold
+         * @return Calling object
+         */
+        TapConfigEditor threshold(float threshold);
     }
     /**
      * On-board algorithm that detects taps
      * @author Eric Tsai
      */
-    interface TapDataProducer extends AsyncDataProducer {
-        /**
-         * Configuration editor for the tap detection algorithm
-         * @author Eric Tsai
-         */
-        interface ConfigEditor {
-            /**
-             * Sets the time that must pass before a second tap can occur
-             * @param time    New quiet time
-             * @return Calling object
-             */
-            ConfigEditor quietTime(TapQuietTime time);
-            /**
-             * Sets the time to lock the data in the status register
-             * @param time    New shock time
-             * @return Calling object
-             */
-            ConfigEditor shockTime(TapShockTime time);
-            /**
-             * Sets the length of time for a second shock to occur for a double tap
-             * @param window    New double tap window
-             * @return Calling object
-             */
-            ConfigEditor doubleTapWindow(DoubleTapWindow window);
-            /**
-             * Sets the threshold that the acceleration difference must exceed for a tap, in g's
-             * @param threshold    New tap threshold
-             * @return Calling object
-             */
-            ConfigEditor threshold(float threshold);
-            /**
-             * Sets which tap types to detect
-             * @param types    Tap types to detect
-             * @return Calling object
-             */
-            ConfigEditor type(TapType ... types);
-            /**
-             * Writes the configuration to the sensor
-             */
-            void commit();
-        }
-        /**
-         * Configure the tap detection algorithm
-         * @return Configuration editor object
-         */
-        ConfigEditor configure();
-    }
+    interface TapDataProducer extends AsyncDataProducer, Configurable<TapConfigEditor> { }
     /**
-     * Gets an object to control the tap detection algorithm
-     * @return Object controlling the tap detection algorithm
+     * Get an implementation of the TapDataProducer interface
+     * @return TapDataProducer object
      */
-    TapDataProducer tapDetector();
+    TapDataProducer tap();
 }

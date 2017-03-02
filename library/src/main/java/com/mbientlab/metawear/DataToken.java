@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 /**
- * Dummy class representing a sample of sensor data.  This class is only used for programming
+ * Dummy class representing a sample of sensor data within the context of programming
  * advanced reactions in a data route.
  * @author Eric Tsai
  */

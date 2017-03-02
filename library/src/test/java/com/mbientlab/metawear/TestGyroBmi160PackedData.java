@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.data.AngularVelocity;
 
@@ -65,9 +65,9 @@ public class TestGyroBmi160PackedData extends UnitTestBase {
         connectToBoard();
 
         gyroBmi160= mwBoard.getModule(GyroBmi160.class);
-        gyroBmi160.packedAngularVelocity().addRoute(new RouteBuilder() {
+        gyroBmi160.packedAngularVelocity().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {
@@ -105,14 +105,14 @@ public class TestGyroBmi160PackedData extends UnitTestBase {
     @Test
     public void subscribe() {
         byte[] expected = new byte[] {0x13, 0x07, 0x01};
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void unsubscribe() {
         byte[] expected = new byte[] {0x13, 0x07, 0x00};
         mwBoard.lookupRoute(0).unsubscribe(0);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -120,7 +120,7 @@ public class TestGyroBmi160PackedData extends UnitTestBase {
         byte[] expected = new byte[] {0x13, 0x02, 0x00, 0x01};
 
         gyroBmi160.packedAngularVelocity().stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -128,6 +128,6 @@ public class TestGyroBmi160PackedData extends UnitTestBase {
         byte[] expected = new byte[] {0x13, 0x02, 0x01, 0x00};
 
         gyroBmi160.packedAngularVelocity().start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

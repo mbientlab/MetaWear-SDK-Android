@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.ThresholdOutput;
 import com.mbientlab.metawear.builder.function.Function1;
@@ -50,8 +50,8 @@ public class TestMacro extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.firmware = "1.2.3";
-        btlePlaform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.firmware = "1.2.3";
+        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
         connectToBoard();
 
         macro = mwBoard.getModule(Macro.class);
@@ -76,7 +76,7 @@ public class TestMacro extends UnitTestBase {
                 .highIntensity((byte) 16).lowIntensity((byte) 16)
                 .commit();
         led.play();
-        macro.endRecord().continueWith(new Continuation<Byte, Void>() {
+        macro.endRecordAsync().continueWith(new Continuation<Byte, Void>() {
             @Override
             public Void then(Task<Byte> task) throws Exception {
                 synchronized (TestMacro.this) {
@@ -89,7 +89,7 @@ public class TestMacro extends UnitTestBase {
         synchronized (this) {
             this.wait();
 
-            assertArrayEquals(expected, btlePlaform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 
@@ -129,9 +129,9 @@ public class TestMacro extends UnitTestBase {
         accelerometer.configure()
                 .range(16f)
                 .commit();
-        accelerometer.acceleration().addRoute(new RouteBuilder() {
+        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.map(Function1.RSS).average((byte) 16).filter(ThresholdOutput.BINARY, 0.3f)
                         .multicast()
                         .to().filter(Comparison.EQ, -1).stream(null)
@@ -143,7 +143,7 @@ public class TestMacro extends UnitTestBase {
             public Task<Byte> then(Task<Route> task) throws Exception {
                 accelerometer.acceleration().start();
                 accelerometer.start();
-                return macro.endRecord();
+                return macro.endRecordAsync();
             }
         }).continueWith(new Continuation<Byte, Void>() {
             @Override
@@ -158,7 +158,7 @@ public class TestMacro extends UnitTestBase {
         synchronized (this) {
             this.wait();
 
-            assertArrayEquals(expected, btlePlaform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 
@@ -193,7 +193,7 @@ public class TestMacro extends UnitTestBase {
         RouteCreator.createLedController(mwBoard).continueWithTask(new Continuation<Route, Task<Byte>>() {
             @Override
             public Task<Byte> then(Task<Route> task) throws Exception {
-                return macro.endRecord();
+                return macro.endRecordAsync();
             }
         }).continueWith(new Continuation<Byte, Void>() {
             @Override
@@ -208,7 +208,7 @@ public class TestMacro extends UnitTestBase {
         synchronized (this) {
             this.wait();
 
-            assertArrayEquals(expected, btlePlaform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 }

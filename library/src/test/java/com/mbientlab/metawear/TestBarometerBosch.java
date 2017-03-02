@@ -53,7 +53,7 @@ public class TestBarometerBosch extends TestBarometerBoschBase {
         byte[] expected= new byte[] {0x12, 0x04, 0x01, 0x00};
 
         baroBosch.start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -62,7 +62,7 @@ public class TestBarometerBosch extends TestBarometerBoschBase {
 
         baroBosch.altitude().start();
         baroBosch.start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -70,6 +70,6 @@ public class TestBarometerBosch extends TestBarometerBoschBase {
         byte[] expected= new byte[] {0x12, 0x04, 0x00, 0x00};
 
         baroBosch.stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

@@ -27,7 +27,7 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -47,7 +47,7 @@ public class TestLogging extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
         connectToBoard();
 
         logging= mwBoard.getModule(Logging.class);
@@ -61,7 +61,7 @@ public class TestLogging extends UnitTestBase {
         };
 
         logging.start(true);
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -72,7 +72,7 @@ public class TestLogging extends UnitTestBase {
         };
 
         logging.start(false);
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -80,7 +80,7 @@ public class TestLogging extends UnitTestBase {
         byte[] expected= new byte[] {0x0b, 0x01, 0x00};
 
         logging.stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -88,7 +88,7 @@ public class TestLogging extends UnitTestBase {
         byte[] expected= new byte[] {0x0b, 0x09, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff};
 
         logging.clearEntries();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -100,9 +100,9 @@ public class TestLogging extends UnitTestBase {
                 {0x0b, 0x03, 0x01}
         };
 
-        mwBoard.getModule(Accelerometer.class).acceleration().addRoute(new RouteBuilder() {
+        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.log(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -119,7 +119,7 @@ public class TestLogging extends UnitTestBase {
 
         synchronized (this) {
             this.wait();
-            assertArrayEquals(expected, btlePlaform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 
@@ -127,10 +127,10 @@ public class TestLogging extends UnitTestBase {
     public void timeoutHandler() throws Exception {
         final Exception[] actual= new Exception[1];
 
-        btlePlaform.maxLoggers= 0;
-        mwBoard.getModule(Accelerometer.class).acceleration().addRoute(new RouteBuilder() {
+        junitPlatform.maxLoggers= 0;
+        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.log(null);
             }
         }).continueWith(new Continuation<Route, Void>() {

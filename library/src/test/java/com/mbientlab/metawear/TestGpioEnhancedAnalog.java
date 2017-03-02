@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -38,6 +38,7 @@ import org.junit.runners.Parameterized.Parameters;
 import java.util.Arrays;
 import java.util.Collection;
 
+import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
 
@@ -69,8 +70,8 @@ public class TestGpioEnhancedAnalog extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.RPRO;
-        btlePlaform.addCustomModuleInfo(new byte[] {0x05, (byte) 0x80, 0x00, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
+        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.addCustomModuleInfo(new byte[] {0x05, (byte) 0x80, 0x00, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
         connectToBoard();
 
         gpio= mwBoard.getModule(Gpio.class);
@@ -81,60 +82,72 @@ public class TestGpioEnhancedAnalog extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x05, (byte) (0xc0 | mask), pin, (byte) 0xff, (byte) 0xff, 0x00, (byte) 0xff};
 
-        (absRef ? gpio.getPin(pin).analogAbsRef() : gpio.getPin(pin).analogAdc()).read((byte) 0xff, (byte) 0xff, (short) 0, (byte) 0xff);
+        (absRef ? gpio.pin(pin).analogAbsRef() : gpio.pin(pin).analogAdc()).read((byte) 0xff, (byte) 0xff, (short) 0, (byte) 0xff);
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void readEnhanced() {
         byte[] expected= new byte[] {0x05, (byte) (0x80 | mask), pin, 0x01, 0x02, 0x02, 0x15};
 
-        (absRef ? gpio.getPin(pin).analogAbsRef() : gpio.getPin(pin).analogAdc()).addRoute(new RouteBuilder() {
+        (absRef ? gpio.pin(pin).analogAbsRef() : gpio.pin(pin).analogAdc()).addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
             @Override
             public Void then(Task<Route> task) throws Exception {
-                (absRef ? gpio.getPin(pin).analogAbsRef() : gpio.getPin(pin).analogAdc()).read((byte) 1, (byte) 2, (short) 10, (byte) 0x15);
+                (absRef ? gpio.pin(pin).analogAbsRef() : gpio.pin(pin).analogAdc()).read((byte) 1, (byte) 2, (short) 10, (byte) 0x15);
                 return null;
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
-    public void handlePinVirtualData() {
-        final short[] actual= new short[1];
+    public void handleVirtualPinData() {
+        final Capture<Float> actualAbsRef = new Capture<>();
+        final Capture<Short> actualAdc = new Capture<>();
         byte[][] responses= new byte[][] {
                 {0x05, (byte) 0x86, 0x15, (byte) 0xd8, 0x02},
                 {0x05, (byte) 0x87, 0x15, (byte) 0xda, 0x00}
         };
-        short[] expected= new short[] {728, 218};
 
-        (absRef ? gpio.createVirtualPin((byte) 0x15).analogAbsRef() : gpio.createVirtualPin((byte) 0x15).analogAdc()).addRoute(new RouteBuilder() {
+        float expectedAbsRef = 0.728f;
+        short expectedAdc = 218;
+
+        (absRef ? gpio.getVirtualPin((byte) 0x15).analogAbsRef() : gpio.getVirtualPin((byte) 0x15).analogAdc()).addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
-                        ((short[]) env[0])[0]= data.value(Short.class);
+                        if (absRef) {
+                            ((Capture<Float>) env[0]).set(data.value(Float.class));
+                        } else {
+                            ((Capture<Short>) env[0]).set(data.value(Short.class));
+                        }
                     }
                 });
             }
         }).continueWith(new Continuation<Route, Object>() {
             @Override
             public Object then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
+                task.getResult().setEnvironment(0, absRef ? actualAbsRef : actualAdc);
                 return null;
             }
         });
 
         sendMockResponse(responses[absRef ? 0 : 1]);
 
-        assertEquals(expected[absRef ? 0 : 1], actual[0]);
+        if (absRef) {
+            assertEquals(expectedAbsRef, actualAbsRef.get(), 0.001f);
+        } else {
+            assertEquals(expectedAdc, actualAdc.get().shortValue());
+        }
     }
+
 }

@@ -30,7 +30,7 @@ import com.mbientlab.metawear.Data;
 import java.io.Serializable;
 import java.util.Calendar;
 
-import static com.mbientlab.metawear.impl.ModuleId.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 
 /**
  * Created by etsai on 9/4/16.
@@ -44,22 +44,22 @@ abstract class DataTypeBase implements Serializable, DataToken {
     public final DataTypeBase input;
     public final DataTypeBase[] split;
 
-    DataTypeBase(ModuleId module, byte register, byte id, DataAttributes attributes) {
+    DataTypeBase(Constant.Module module, byte register, byte id, DataAttributes attributes) {
         this(null, module, register, id, attributes);
     }
 
-    DataTypeBase(ModuleId module, byte register, DataAttributes attributes) {
+    DataTypeBase(Constant.Module module, byte register, DataAttributes attributes) {
         this(null, module, register, attributes);
     }
 
-    DataTypeBase(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    DataTypeBase(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
         this.eventConfig = new byte[] {module.id, register, id};
         this.attributes= attributes;
         this.input= input;
         this.split = createSplits();
     }
 
-    DataTypeBase(DataTypeBase input, ModuleId module, byte register, DataAttributes attributes) {
+    DataTypeBase(DataTypeBase input, Constant.Module module, byte register, DataAttributes attributes) {
         this(input, module, register, NO_DATA_ID, attributes);
     }
 
@@ -74,6 +74,7 @@ abstract class DataTypeBase implements Serializable, DataToken {
             mwPrivate.sendCommand(eventConfig);
         }
     }
+
     public void read(MetaWearBoardPrivate mwPrivate, byte[] parameters) {
         byte[] command= new byte[eventConfig.length + parameters.length];
         System.arraycopy(eventConfig, 0, command, 0, eventConfig.length);
@@ -82,7 +83,22 @@ abstract class DataTypeBase implements Serializable, DataToken {
         mwPrivate.sendCommand(command);
     }
 
-    public abstract DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes);
+    public void markSilent() {
+        if ((eventConfig[1] & 0x80) == 0x80) {
+            eventConfig[1] |= 0x40;
+        }
+    }
+
+    public void markLive() {
+        if ((eventConfig[1] & 0x80) == 0x80) {
+            eventConfig[1] &= ~0x40;
+        }
+    }
+
+    protected float scale(MetaWearBoardPrivate mwPrivate) {
+        return (input == null) ? 1.f : input.scale(mwPrivate);
+    }
+    public abstract DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes);
     public DataTypeBase dataProcessorCopy(DataTypeBase input, DataAttributes attributes) {
         return copy(input, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, NO_DATA_ID, attributes);
     }
@@ -90,10 +106,10 @@ abstract class DataTypeBase implements Serializable, DataToken {
         return copy(input, DATA_PROCESSOR, Util.setSilentRead(DataProcessorImpl.STATE), NO_DATA_ID, attributes);
     }
 
-    public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-        return input;
+    public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+        return value;
     }
-    public abstract Data createMessage(boolean logData, MetaWearBoardPrivate board, byte[] data, Calendar timestamp);
+    public abstract Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp);
 
     protected DataTypeBase[] createSplits() {
         return null;

@@ -24,14 +24,14 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteElement.Action;
+import com.mbientlab.metawear.builder.RouteComponent;
+import com.mbientlab.metawear.builder.RouteComponent.Action;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.Passthrough;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
 
@@ -44,9 +44,9 @@ import bolts.Task;
 class RouteCreator {
     static Task<Route> createGpioFeedback(MetaWearBoard board) {
         final DataProcessor dataprocessor= board.getModule(DataProcessor.class);
-        return board.getModule(Gpio.class).getPin((byte) 0).analogAbsRef().addRoute(new RouteBuilder() {
+        return board.getModule(Gpio.class).pin((byte) 0).analogAbsRef().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.multicast()
                         .to()
                             .limit(Passthrough.COUNT, (short) 0).name("adc").react(new Action() {
@@ -100,12 +100,12 @@ class RouteCreator {
 
     static Task<Route> createLedController(MetaWearBoard board) {
         final Led led= board.getModule(Led.class);
-        return board.getModule(Switch.class).addRoute(new RouteBuilder() {
+        return board.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.count().map(Function2.MODULUS, 2)
                         .multicast()
-                        .to().filter(Comparison.EQ, 1).react(new RouteElement.Action() {
+                        .to().filter(Comparison.EQ, 1).react(new RouteComponent.Action() {
                     @Override
                     public void execute(DataToken token) {
                                 led.editPattern(Led.Color.BLUE)
@@ -117,7 +117,7 @@ class RouteCreator {
                                 led.play();
                             }
                         })
-                        .to().filter(Comparison.EQ, 0).react(new RouteElement.Action() {
+                        .to().filter(Comparison.EQ, 0).react(new RouteComponent.Action() {
                     @Override
                     public void execute(DataToken token) {
                                 led.stop(true);

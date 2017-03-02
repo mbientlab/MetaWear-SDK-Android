@@ -24,13 +24,13 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -73,7 +73,7 @@ public class TestAccelerometer extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= boardInfo;
+        junitPlatform.boardInfo= boardInfo;
         connectToBoard();
 
         accelerometer = mwBoard.getModule(Accelerometer.class);
@@ -100,7 +100,7 @@ public class TestAccelerometer extends UnitTestBase {
                     .commit();
         }
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -149,7 +149,7 @@ public class TestAccelerometer extends UnitTestBase {
                     .commit();
         }
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -180,9 +180,9 @@ public class TestAccelerometer extends UnitTestBase {
     @Test
     public void subscribeAccStream() {
         byte[] expected = new byte[] {0x03, 0x04, 0x01};
-        accelerometer.acceleration().addRoute(new RouteBuilder() {
+        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.multicast()
                         .to().stream(null)
                         .to().split()
@@ -197,15 +197,15 @@ public class TestAccelerometer extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void unsubscribeAccStream() {
         byte[] expected = new byte[] {0x03, 0x04, 0x00};
-        accelerometer.acceleration().addRoute(new RouteBuilder() {
+        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.multicast()
                         .to().stream(null)
                         .to().split()
@@ -224,7 +224,7 @@ public class TestAccelerometer extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -238,7 +238,7 @@ public class TestAccelerometer extends UnitTestBase {
         }
         accelerometer.acceleration().start();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -252,7 +252,7 @@ public class TestAccelerometer extends UnitTestBase {
         }
         accelerometer.acceleration().stop();
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -282,9 +282,9 @@ public class TestAccelerometer extends UnitTestBase {
             response= new byte[] {0x03, 0x04, 0x56, (byte) 0xfa, 0x05, (byte) 0xf6, 0x18, 0x03};
         }
 
-        accelerometer.acceleration().addRoute(new RouteBuilder() {
+        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
@@ -331,9 +331,9 @@ public class TestAccelerometer extends UnitTestBase {
             response= new byte[] {0x03, 0x04, 0x56, (byte) 0xfa, 0x05, (byte) 0xf6, 0x18, 0x03};
         }
 
-        accelerometer.acceleration().addRoute(new RouteBuilder() {
+        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.split()
                         .index(0).stream(new Subscriber() {
                             @Override
@@ -408,9 +408,9 @@ public class TestAccelerometer extends UnitTestBase {
         }
 
         final ArrayList<Acceleration> received = new ArrayList<>();
-        accelerometer.packedAcceleration().addRoute(new RouteBuilder() {
+        accelerometer.packedAcceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {

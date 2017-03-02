@@ -25,6 +25,9 @@
 package com.mbientlab.metawear;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.UUID;
 
 import bolts.Task;
@@ -35,35 +38,37 @@ import bolts.Task;
  */
 public interface MetaWearBoard {
     /**
-     * Service UUID identifying a MetaWear board.  This uuid can be used to filter non MetaWear devices
-     * from a Bluetooth LE scan.
+     * UUID identifying the MetaWear GATT service and the advertising UUID.  This UUID can be used to remove
+     * non MetaWear devices from am Bluetooth LE scan.
      */
-    UUID METAWEAR_SERVICE_UUID= UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
+    UUID METAWEAR_GATT_SERVICE = UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
     /**
-     * Service UUID identifying a MetaWear board in MetaBoot mode
+     * UUID identifying the characteristic under the MetaWear GATT service, defined by {@link #METAWEAR_GATT_SERVICE},
+     * that MetaWear uses to communicate with the local device.  Enable notifications on this characteristic.
      */
-    UUID METABOOT_SERVICE_UUID= UUID.fromString("00001530-1212-efde-1523-785feabcd123");
-
-    /** On-board sensor, peripheral, or firmware feature */
-    interface Module { }
+    UUID METAWEAR_NOTIFY_CHAR = UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A");
+    /**
+     * UUID identifying a MetaWear board in MetaBoot mode.  A MetaWear board advertising with this UUID indicates
+     * it is in MetaBoot mode.
+     */
+    UUID METABOOT_SERVICE = UUID.fromString("00001530-1212-efde-1523-785feabcd123");
 
     /**
-     * Handler for when the Bluetooth connection is unexpectedly dropped
-     * @author Eric Tsai
+     * Determines the board model of the currently connected device
+     * @return Board model, null if unable to determine
      */
-    interface UnexpectedDisconnectHandler {
-        /**
-         * Callback method that is invoked when the Bluetooth connection is unexpectedly dropped
-         * @param status    Status from the connection changed callback
-         */
-        void disconnected(int status);
-    }
-
+    Model getModel();
+    /**
+     * Same behavior as {@link #getModel()} except the returned value is a friendly name rather than an enum
+     * @return Board model as string
+     */
+    String getModelString();
     /**
      * Retrieves the MAC address of the board
      * @return Board's MAC address
      */
     String getMacAddress();
+
     /**
      * Reads the current RSSI value
      * @return Task holding the returned RSSI value
@@ -80,14 +85,14 @@ public interface MetaWearBoard {
      */
     Task<DeviceInformation> readDeviceInformationAsync();
     /**
-     * Downloads the latest firmware release for the board to your Android device.  You must be connected to the
+     * Downloads the latest firmware release for the board to your local device.  You must be connected to the
      * board before calling this function.
-     * @return Task holding the file pointing to where the downloaded firmware resides on the Android device
+     * @return Task holding the file pointing to where the downloaded firmware resides on the local device
      */
     Task<File> downloadLatestFirmwareAsync();
     /**
      * Checks if there is a newer version of the firmware available for your board.  The firmware check requires
-     * you to be connected to your board and an active internet connection on your Android device.
+     * you to be connected to your board and an active internet connection on your local device.
      * @return Task holding the result of the firmware check, true if a firmware update is available
      */
     Task<Boolean> checkForFirmwareUpdateAsync();
@@ -104,10 +109,22 @@ public interface MetaWearBoard {
      */
     Task<Void> connectAsync(long delay);
     /**
-     * Disconnects from the board
+     * Disconnects from the board and cancels pending {@link #connectAsync()} tasks
      * @return Task holding the result of the disconnect attempt
      */
     Task<Void> disconnectAsync();
+
+    /**
+     * Handler for when the API is not expecting a disconnect event
+     * @author Eric Tsai
+     */
+    interface UnexpectedDisconnectHandler {
+        /**
+         * Callback method that is invoked when the Bluetooth connection is unexpectedly dropped
+         * @param status    Status from the connection changed callback
+         */
+        void disconnected(int status);
+    }
     /**
      * Set a handler for unexpected disconnects
      * @param handler    Handler for unexpected disconnects
@@ -124,8 +141,13 @@ public interface MetaWearBoard {
      * with the board outside of reading RSSI values and updating firmware.
      * @return True if the board is in MetaBoot mode, false otherwise
      */
-    boolean inMetaBoot();
+    boolean inMetaBootMode();
 
+    /**
+     * Sensor, peripheral, or firmware feature
+     * @author Eric Tsai
+     */
+    interface Module { }
     /**
      * Retrieves a reference to the requested module if supported.  You must connected to the board before
      * calling this function and the board must not be in MetaBoot mode
@@ -157,16 +179,32 @@ public interface MetaWearBoard {
      */
     Observer lookupObserver(int id);
     /**
-     * Removes all allocated resources on the board i.e. routes, observers, data processors, timers, etc.
+     * Removes all routes and resources allocated on the board (observers, data processors, timers, and loggers)
      */
     void tearDown();
 
     /**
-     * Serialize object state and write the state to disk
+     * Serialize object state and write the state to the local disk
+     * @throws IOException If the internal OutputStream throws an exception
      */
-    void serialize();
+    void serialize() throws IOException;
     /**
-     * Restore serialized state from disk if available
+     * Serialize object state and write the state to the provided output stream
+     * @param outs    Output stream to write to
+     * @throws IOException If the provided OutputStream throws an exception
      */
-    void deserialize();
+    void serialize(OutputStream outs) throws IOException;
+    /**
+     * Restore serialized state from the local disk if available
+     * @throws IOException If the internal InputStream throws an exception
+     * @throws ClassNotFoundException Class of a serialized object cannot be found
+     */
+    void deserialize() throws IOException, ClassNotFoundException;
+    /**
+     * Restore serialized state from the provided input stream
+     * @param ins    Input stream to read from
+     * @throws IOException If the provided InputStream throws an exception
+     * @throws ClassNotFoundException Class of a serialized object cannot be found
+     */
+    void deserialize(InputStream ins) throws IOException, ClassNotFoundException;
 }

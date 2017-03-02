@@ -63,7 +63,7 @@ public class TestHumidityBme280Config extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.ENVIRONMENT;
+        junitPlatform.boardInfo = MetaWearBoardInfo.ENVIRONMENT;
         connectToBoard();
 
         humidity= mwBoard.getModule(HumidityBme280.class);
@@ -74,6 +74,6 @@ public class TestHumidityBme280Config extends UnitTestBase {
         byte[] expected= new byte[] {0x16, 0x2, OVERSAMPLING_BITMASKS[oversampling.ordinal()]};
 
         humidity.setOversampling(oversampling);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

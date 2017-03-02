@@ -39,7 +39,7 @@ import java.util.concurrent.TimeoutException;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
-import static com.mbientlab.metawear.impl.ModuleId.TIMER;
+import static com.mbientlab.metawear.impl.Constant.Module.TIMER;
 
 /**
  * Created by etsai on 9/17/16.
@@ -145,7 +145,7 @@ class TimerImpl extends ModuleImplBase implements Timer {
             }
         };
 
-        this.mwPrivate.addResponseHandler(new Pair<>(TIMER.id, TIMER_ENTRY), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(TIMER.id, TIMER_ENTRY), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
                 timeoutFuture.cancel(false);
@@ -162,7 +162,7 @@ class TimerImpl extends ModuleImplBase implements Timer {
         }
         activeTasks.clear();
 
-        for(byte i= 0; i < mwPrivate.lookupModuleInfo(ModuleId.TIMER).extra[0]; i++) {
+        for(byte i = 0; i < mwPrivate.lookupModuleInfo(Constant.Module.TIMER).extra[0]; i++) {
             mwPrivate.sendCommand(new byte[] {TIMER.id, REMOVE, i});
         }
     }
@@ -176,12 +176,12 @@ class TimerImpl extends ModuleImplBase implements Timer {
     }
 
     @Override
-    public Task<ScheduledTask> schedule(int period, boolean delay, CodeBlock mwCode) {
-        return schedule(period, (short) -1, delay, mwCode);
+    public Task<ScheduledTask> scheduleAsync(int period, boolean delay, CodeBlock mwCode) {
+        return scheduleAsync(period, (short) -1, delay, mwCode);
     }
 
     @Override
-    public Task<ScheduledTask> schedule(int period, short repetitions, boolean delay, CodeBlock mwCode) {
+    public Task<ScheduledTask> scheduleAsync(int period, short repetitions, boolean delay, CodeBlock mwCode) {
         byte[] config= ByteBuffer.allocate(7).order(ByteOrder.LITTLE_ENDIAN)
                 .putInt(period)
                 .putShort(repetitions)

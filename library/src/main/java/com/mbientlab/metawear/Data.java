@@ -27,7 +27,7 @@ package com.mbientlab.metawear;
 import java.util.Calendar;
 
 /**
- * Wrapper class encapsulating one sample of sensor data
+ * A sample of sensor data
  * @author Eric Tsai
  */
 public interface Data {
@@ -37,14 +37,20 @@ public interface Data {
      */
     Calendar timestamp();
     /**
-     * String representation of the timestamp in the format <i>YYYY-MM-DDTHH:MM:SS.LLL</i>.  The timezone
-     * of the string will be the Android device's current timezone.
+     * String representation of the timestamp in the format <code>YYYY-MM-DDTHH:MM:SS.LLL</code>.  The timezone
+     * of the string will be the local device's current timezone.
      * @return Formatted string representing the timestamp
      */
     String formattedTimestamp();
     /**
-     * Raw bytes the Data object is encapsulating
-     * @return Bytes received from the MetaWear
+     * LSB to units ratio.  Only used if developer is manually type casting the returned byte array from
+     * the {@link #bytes()} method
+     * @return Value corresponding to 1 unit
+     */
+    float scale();
+    /**
+     * Raw byte representation of the data value
+     * @return Byte array of the value
      */
     byte[] bytes();
     /**

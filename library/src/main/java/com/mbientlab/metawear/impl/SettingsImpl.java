@@ -24,7 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
-import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ActiveDataProducer;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Observer;
@@ -36,12 +36,10 @@ import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
-import java.util.Locale;
 
 import bolts.Task;
-import bolts.TaskCompletionSource;
 
-import static com.mbientlab.metawear.impl.ModuleId.SETTINGS;
+import static com.mbientlab.metawear.impl.Constant.Module.SETTINGS;
 
 /**
  * Created by etsai on 9/20/16.
@@ -65,73 +63,6 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         POWER_STATUS = 0x11,
         CHARGE_STATUS = 0x12;
 
-    private static class AdvertisementConfigBuilder {
-        private String deviceName;
-        private int interval;
-        private short timeout;
-        private byte txPower;
-        private byte[] scanResponse;
-
-        AdvertisementConfigBuilder setDeviceName(String name) {
-            this.deviceName= name;
-            return this;
-        }
-
-        AdvertisementConfigBuilder setInterval(int interval) {
-            this.interval= interval;
-            return this;
-        }
-
-        AdvertisementConfigBuilder setTimeout(short timeout) {
-            this.timeout= timeout;
-            return this;
-        }
-
-        AdvertisementConfigBuilder setTxPower(byte power) {
-            this.txPower= power;
-            return this;
-        }
-
-        AdvertisementConfigBuilder setScanResponse(byte[] response) {
-            this.scanResponse= response;
-            return this;
-        }
-
-        AdvertisementConfig build() {
-            return new Settings.AdvertisementConfig() {
-                @Override
-                public String deviceName() {
-                    return deviceName;
-                }
-
-                @Override
-                public int interval() {
-                    return interval;
-                }
-
-                @Override
-                public short timeout() {
-                    return (short) (timeout & 0xff);
-                }
-
-                @Override
-                public byte txPower() {
-                    return txPower;
-                }
-
-                @Override
-                public byte[] scanResponse() {
-                    return scanResponse;
-                }
-
-                @Override
-                public String toString() {
-                    return String.format(Locale.US, "{Device Name: %s, Adv Interval: %d, Adv Timeout: %d, Tx Power: %d, Scan Response: %s}",
-                            deviceName(), interval(), timeout(), txPower(), Util.arrayToHexString(scanResponse));
-                }
-            };
-        }
-    }
     private static class BatteryStateData extends DataTypeBase {
         private static final long serialVersionUID = -1080271339658673808L;
 
@@ -139,23 +70,23 @@ class SettingsImpl extends ModuleImplBase implements Settings {
             super(SETTINGS, Util.setSilentRead(BATTERY_STATE), new DataAttributes(new byte[] {1, 2}, (byte) 1, (byte) 0, false));
         }
 
-        BatteryStateData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        BatteryStateData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new BatteryStateData(input, module, register, id, attributes);
         }
 
         @Override
-        public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-            return input;
+        public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+            return value;
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
-            final short voltage= ByteBuffer.wrap(data, 1, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
+            final float voltage= ByteBuffer.wrap(data, 1, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() / 1000f;
             final BatteryState state= new BatteryState(data[0], voltage);
 
             return new DataPrivate(timestamp, data) {
@@ -178,15 +109,17 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         public DataTypeBase[] createSplits() {
             return new DataTypeBase[] {
                     new UintData(SETTINGS, eventConfig[1], eventConfig[2], new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)),
-                    new UintData(SETTINGS, eventConfig[1], eventConfig[2], new DataAttributes(new byte[] {2}, (byte) 1, (byte) 1, false))
+                    new MilliUnitsUFloatData(SETTINGS, eventConfig[1], eventConfig[2], new DataAttributes(new byte[] {2}, (byte) 1, (byte) 1, false))
             };
         }
     }
 
     private DataTypeBase disconnectDummyProducer;
-    private transient AdvertisementConfigBuilder adConfigBuilder;
-    private transient AsyncTaskManager<ConnectionParameters> connParamsTasks;
-    private transient AsyncTaskManager<AdvertisementConfig> adConfigTasks;
+
+    private transient ActiveDataProducer powerStatus, chargeStatus;
+    private transient BleAdvertisementConfig bleAdConfig;
+    private transient AsyncTaskManager<BleConnectionParameters> connParamsTasks;
+    private transient AsyncTaskManager<BleAdvertisementConfig> adConfigTasks;
     private transient AsyncTaskManager<Byte> powerStatusTasks, chargeStatusTasks;
 
     SettingsImpl(MetaWearBoardPrivate mwPrivate) {
@@ -209,90 +142,71 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         powerStatusTasks = new AsyncTaskManager<>(mwPrivate, "Reading power status timed out");
         chargeStatusTasks = new AsyncTaskManager<>(mwPrivate, "Reading charge status timed out");
 
-        this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(DEVICE_NAME)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(DEVICE_NAME)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
                 byte[] respBody= new byte[response.length - 2];
                 System.arraycopy(response, 2, respBody, 0, respBody.length);
 
-                adConfigBuilder= new AdvertisementConfigBuilder();
+                bleAdConfig = new BleAdvertisementConfig();
                 try {
-                    adConfigBuilder.setDeviceName(new String(respBody, "US-ASCII"));
+                    bleAdConfig.deviceName = new String(respBody, "US-ASCII");
                 } catch (UnsupportedEncodingException e) {
-                    adConfigBuilder.setDeviceName(new String(respBody));
+                    bleAdConfig.deviceName = new String(respBody);
                 }
                 SettingsImpl.this.mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(AD_INTERVAL)});
             }
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(TX_POWER)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(TX_POWER)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                adConfigBuilder.setTxPower(response[2]);
+                bleAdConfig.txPower = response[2];
                 SettingsImpl.this.mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(SCAN_RESPONSE)});
             }
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(SCAN_RESPONSE)), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(SCAN_RESPONSE)), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
                 adConfigTasks.cancelTimeout();
-                adConfigTasks.setResult(adConfigBuilder.build());
+
+                bleAdConfig.scanResponse = new byte[response.length - 2];
+                System.arraycopy(response, 2, bleAdConfig.scanResponse, 0, bleAdConfig.scanResponse.length);
+                adConfigTasks.setResult(bleAdConfig);
             }
         });
 
         if (mwPrivate.lookupModuleInfo(SETTINGS).revision >= CONN_PARAMS_REVISION) {
-            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(AD_INTERVAL)), new MetaWearBoardImpl.RegisterResponseHandler() {
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(AD_INTERVAL)), new JseMetaWearBoard.RegisterResponseHandler() {
                 @Override
                 public void onResponseReceived(byte[] response) {
                     int intervalBytes= ((response[2] & 0xff) | (response[3] << 8)) & 0xffff;
 
-                    adConfigBuilder.setInterval((int) (intervalBytes * AD_INTERVAL_STEP));
-                    adConfigBuilder.setTimeout(response[4]);
+                    bleAdConfig.interval = (int) (intervalBytes * AD_INTERVAL_STEP);
+                    bleAdConfig.timeout = response[4];
 
                     SettingsImpl.this.mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(TX_POWER)});
                 }
             });
 
-            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(CONNECTION_PARAMS)), new MetaWearBoardImpl.RegisterResponseHandler() {
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(CONNECTION_PARAMS)), new JseMetaWearBoard.RegisterResponseHandler() {
                 @Override
                 public void onResponseReceived(byte[] response) {
                     connParamsTasks.cancelTimeout();
 
                     final ByteBuffer buffer = ByteBuffer.wrap(response).order(ByteOrder.LITTLE_ENDIAN);
-                    connParamsTasks.setResult(new Settings.ConnectionParameters() {
-                        @Override
-                        public float minConnectionInterval() {
-                            return buffer.getShort(2) * SettingsImpl.CONN_INTERVAL_STEP;
-                        }
-
-                        @Override
-                        public float maxConnectionInterval() {
-                            return buffer.getShort(4) * SettingsImpl.CONN_INTERVAL_STEP;
-                        }
-
-                        @Override
-                        public short slaveLatency() {
-                            return buffer.getShort(6);
-                        }
-
-                        @Override
-                        public short supervisorTimeout() {
-                            return (short) (buffer.getShort(8) * SettingsImpl.SUPERVISOR_TIMEOUT_STEP);
-                        }
-
-                        @Override
-                        public String toString() {
-                            return String.format(Locale.US, "{min conn interval: %.2f, max conn interval: %.2f, slave latency: %d, supervisor timeout: %d}",
-                                    minConnectionInterval(), maxConnectionInterval(), slaveLatency(), supervisorTimeout());
-                        }
-                    });
+                    connParamsTasks.setResult(new BleConnectionParameters(
+                            buffer.getShort(2) * SettingsImpl.CONN_INTERVAL_STEP,
+                            buffer.getShort(4) * SettingsImpl.CONN_INTERVAL_STEP,
+                            buffer.getShort(6),
+                            (short) (buffer.getShort(8) * SettingsImpl.SUPERVISOR_TIMEOUT_STEP)));
                 }
             });
         } else {
-            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(AD_INTERVAL)), new MetaWearBoardImpl.RegisterResponseHandler() {
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(AD_INTERVAL)), new JseMetaWearBoard.RegisterResponseHandler() {
                 @Override
                 public void onResponseReceived(byte[] response) {
-                    adConfigBuilder.setInterval((((response[2] & 0xff) | (response[3] << 8)) & 0xffff));
-                    adConfigBuilder.setTimeout(response[4]);
+                    bleAdConfig.interval = (((response[2] & 0xff) | (response[3] << 8)) & 0xffff);
+                    bleAdConfig.timeout  = response[4];
 
                     SettingsImpl.this.mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(TX_POWER)});
                 }
@@ -300,14 +214,14 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         }
 
         if (mwPrivate.lookupModuleInfo(SETTINGS).revision >= CHARGE_STATUS_REVISION) {
-            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(POWER_STATUS)), new MetaWearBoardImpl.RegisterResponseHandler() {
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(POWER_STATUS)), new JseMetaWearBoard.RegisterResponseHandler() {
                 @Override
                 public void onResponseReceived(byte[] response) {
                     powerStatusTasks.cancelTimeout();
                     powerStatusTasks.setResult(response[2]);
                 }
             });
-            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(CHARGE_STATUS)), new MetaWearBoardImpl.RegisterResponseHandler() {
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(CHARGE_STATUS)), new JseMetaWearBoard.RegisterResponseHandler() {
                 @Override
                 public void onResponseReceived(byte[] response) {
                     chargeStatusTasks.cancelTimeout();
@@ -318,90 +232,44 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     }
 
     @Override
-    public ConnectionParametersEditor configureConnectionParameters() {
-        return new ConnectionParametersEditor() {
-            private Short minConnInterval= 6, maxConnInterval= 0x320, slaveLatency= 0, supervisorTimeout= 0x258;
-
-            @Override
-            public ConnectionParametersEditor minConnectionInterval(float interval) {
-                minConnInterval= (short) (interval / CONN_INTERVAL_STEP);
-                return this;
-            }
-
-            @Override
-            public ConnectionParametersEditor maxConnectionInterval(float interval) {
-                maxConnInterval= (short) (interval / CONN_INTERVAL_STEP);
-                return this;
-            }
-
-            @Override
-            public ConnectionParametersEditor slaveLatency(short latency) {
-                slaveLatency= latency;
-                return this;
-            }
-
-            @Override
-            public ConnectionParametersEditor supervisorTimeout(short timeout) {
-                supervisorTimeout= (short) (timeout / SUPERVISOR_TIMEOUT_STEP);
-                return this;
-            }
-
-            @Override
-            public void commit() {
-                ByteBuffer buffer= ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
-
-                buffer.putShort(minConnInterval).putShort(maxConnInterval).putShort(slaveLatency).putShort(supervisorTimeout);
-                mwPrivate.sendCommand(SETTINGS, CONNECTION_PARAMS, buffer.array());
-            }
-        };
+    public void startBleAdvertising() {
+        mwPrivate.sendCommand(new byte[] {SETTINGS.id, START_ADVERTISING});
     }
 
     @Override
-    public Task<ConnectionParameters> readConnectionParameters() {
-        TaskCompletionSource<ConnectionParameters> taskSource= new TaskCompletionSource<>();
-        if (mwPrivate.lookupModuleInfo(SETTINGS).revision < CONN_PARAMS_REVISION) {
-            taskSource.setError(new UnsupportedOperationException("Connection parameters not supported on this firmware"));
-        } else {
-            return connParamsTasks.queueTask(250L, new Runnable() {
-                @Override
-                public void run() {
-                    mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CONNECTION_PARAMS)});
-                }
-            });
-        }
-
-        return taskSource.getTask();
-    }
-
-    @Override
-    public AdvertisementConfigEditor configure() {
-        return new AdvertisementConfigEditor() {
+    public BleAdvertisementConfigEditor editBleAdConfig() {
+        return new BleAdvertisementConfigEditor() {
             private String newAdvName= null;
             private Short newAdvInterval= null;
             private Byte newAdvTimeout= null, newAdvTxPower= null;
             private byte[] newAdvResponse= null;
 
             @Override
-            public AdvertisementConfigEditor deviceName(String name) {
+            public BleAdvertisementConfigEditor deviceName(String name) {
                 newAdvName = name;
                 return this;
             }
 
             @Override
-            public AdvertisementConfigEditor adInterval(short interval, byte timeout) {
+            public BleAdvertisementConfigEditor interval(short interval) {
                 newAdvInterval= interval;
+                return this;
+            }
+
+            @Override
+            public BleAdvertisementConfigEditor timeout(byte timeout) {
                 newAdvTimeout = timeout;
                 return this;
             }
 
             @Override
-            public AdvertisementConfigEditor txPower(byte power) {
+            public BleAdvertisementConfigEditor txPower(byte power) {
                 newAdvTxPower = power;
                 return this;
             }
 
             @Override
-            public AdvertisementConfigEditor scanResponse(byte[] response) {
+            public BleAdvertisementConfigEditor scanResponse(byte[] response) {
                 newAdvResponse = response;
                 return this;
             }
@@ -429,7 +297,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                 }
 
                 if (newAdvResponse != null) {
-                    if (newAdvResponse.length >= Constant.MW_COMMAND_LENGTH) {
+                    if (newAdvResponse.length >= Constant.COMMAND_LENGTH) {
                         byte[] first = new byte[13], second = new byte[newAdvResponse.length - 13];
                         System.arraycopy(newAdvResponse, 0, first, 0, first.length);
                         System.arraycopy(newAdvResponse, first.length, second, 0, second.length);
@@ -445,7 +313,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     }
 
     @Override
-    public Task<AdvertisementConfig> readAdConfig() {
+    public Task<BleAdvertisementConfig> readBleAdConfigAsync() {
         return adConfigTasks.queueTask(1800L, new Runnable() {
             @Override
             public void run() {
@@ -455,8 +323,56 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     }
 
     @Override
-    public void startAdvertisement() {
-        mwPrivate.sendCommand(new byte[] {SETTINGS.id, START_ADVERTISING});
+    public BleConnectionParametersEditor editBleConnParams() {
+        if (mwPrivate.lookupModuleInfo(SETTINGS).revision < CONN_PARAMS_REVISION) {
+            return null;
+        }
+
+        return new BleConnectionParametersEditor() {
+            private Short minConnInterval= 6, maxConnInterval= 0x320, slaveLatency= 0, supervisorTimeout= 0x258;
+
+            @Override
+            public BleConnectionParametersEditor minConnectionInterval(float interval) {
+                minConnInterval= (short) (interval / CONN_INTERVAL_STEP);
+                return this;
+            }
+
+            @Override
+            public BleConnectionParametersEditor maxConnectionInterval(float interval) {
+                maxConnInterval= (short) (interval / CONN_INTERVAL_STEP);
+                return this;
+            }
+
+            @Override
+            public BleConnectionParametersEditor slaveLatency(short latency) {
+                slaveLatency= latency;
+                return this;
+            }
+
+            @Override
+            public BleConnectionParametersEditor supervisorTimeout(short timeout) {
+                supervisorTimeout= (short) (timeout / SUPERVISOR_TIMEOUT_STEP);
+                return this;
+            }
+
+            @Override
+            public void commit() {
+                ByteBuffer buffer= ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+
+                buffer.putShort(minConnInterval).putShort(maxConnInterval).putShort(slaveLatency).putShort(supervisorTimeout);
+                mwPrivate.sendCommand(SETTINGS, CONNECTION_PARAMS, buffer.array());
+            }
+        };
+    }
+
+    @Override
+    public Task<BleConnectionParameters> readBleConnParamsAsync() {
+        return connParamsTasks.queueTask(250L, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CONNECTION_PARAMS)});
+            }
+        });
     }
 
     @Override
@@ -474,7 +390,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                 }
 
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
                     return mwPrivate.queueRouteBuilder(builder, BATTERY_PRODUCER);
                 }
 
@@ -493,57 +409,29 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     }
 
     @Override
-    public AsyncDataProducer powerStatus() {
+    public ActiveDataProducer powerStatus() {
         ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
         if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x1) == 0x1)) {
-            return new AsyncDataProducer() {
-                @Override
-                public void start() { }
+            if (powerStatus == null) {
+                powerStatus = new ActiveDataProducer() {
+                    @Override
+                    public Task<Route> addRouteAsync(RouteBuilder builder) {
+                        return mwPrivate.queueRouteBuilder(builder, POWER_STATUS_PRODUCER);
+                    }
 
-                @Override
-                public void stop() { }
-
-                @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
-                    return mwPrivate.queueRouteBuilder(builder, POWER_STATUS_PRODUCER);
-                }
-
-                @Override
-                public String name() {
-                    return POWER_STATUS_PRODUCER;
-                }
-            };
+                    @Override
+                    public String name() {
+                        return POWER_STATUS_PRODUCER;
+                    }
+                };
+            }
+            return powerStatus;
         }
         return null;
     }
 
     @Override
-    public AsyncDataProducer chargeStatus() {
-        ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
-        if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x2) == 0x2)) {
-            return new AsyncDataProducer() {
-                @Override
-                public void start() { }
-
-                @Override
-                public void stop() { }
-
-                @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
-                    return mwPrivate.queueRouteBuilder(builder, CHARGE_STATUS_PRODUCER);
-                }
-
-                @Override
-                public String name() {
-                    return CHARGE_STATUS_PRODUCER;
-                }
-            };
-        }
-        return null;
-    }
-
-    @Override
-    public Task<Byte> readPowerStatusAsync() {
+    public Task<Byte> readCurrentPowerStatusAsync() {
         ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
         if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x1) == 0x1)) {
             return powerStatusTasks.queueTask(250L, new Runnable() {
@@ -552,13 +440,34 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                     mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(POWER_STATUS)});
                 }
             });
-
         }
-        return Task.forError(new UnsupportedOperationException("Power status not supported on this board / firmware"));
+        return Task.forError(new UnsupportedOperationException("Reading power status not supported on this board / firmware"));
     }
 
     @Override
-    public Task<Byte> readChargeStatusAsync() {
+    public ActiveDataProducer chargeStatus() {
+        ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
+        if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x2) == 0x2)) {
+            if (chargeStatus == null) {
+                chargeStatus = new ActiveDataProducer() {
+                    @Override
+                    public Task<Route> addRouteAsync(RouteBuilder builder) {
+                        return mwPrivate.queueRouteBuilder(builder, CHARGE_STATUS_PRODUCER);
+                    }
+
+                    @Override
+                    public String name() {
+                        return CHARGE_STATUS_PRODUCER;
+                    }
+                };
+            }
+            return chargeStatus;
+        }
+        return null;
+    }
+
+    @Override
+    public Task<Byte> readCurrentChargeStatusAsync() {
         ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
         if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x2) == 0x2)) {
             return chargeStatusTasks.queueTask(250L, new Runnable() {
@@ -568,12 +477,11 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                 }
             });
         }
-
-        return Task.forError(new UnsupportedOperationException("Charge status not supported on this board / firmware"));
+        return Task.forError(new UnsupportedOperationException("Reading charge status not supported on this board / firmware"));
     }
 
     @Override
-    public Task<Observer> onDisconnect(CodeBlock codeBlock) {
+    public Task<Observer> onDisconnectAsync(CodeBlock codeBlock) {
         if (mwPrivate.lookupModuleInfo(SETTINGS).revision < DISCONNECTED_EVENT_REVISION) {
             return Task.forError(new UnsupportedOperationException("Responding to disconnect events on-board is not supported on this firmware"));
         }

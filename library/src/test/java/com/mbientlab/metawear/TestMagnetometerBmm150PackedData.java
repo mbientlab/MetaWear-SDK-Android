@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.data.MagneticField;
 
@@ -62,13 +62,13 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= boardInfo;
+        junitPlatform.boardInfo= boardInfo;
         connectToBoard();
 
         mag= mwBoard.getModule(MagnetometerBmm150.class);
-        mag.packedMagneticField().addRoute(new RouteBuilder() {
+        mag.packedMagneticField().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object... env) {
@@ -84,9 +84,9 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
         byte[] response= new byte[] {0x15, 0x09, (byte) 0xb6, 0x0c, 0x72, (byte) 0xf7, (byte) 0x89, (byte) 0xee, (byte) 0xb6,
                 0x0b, 0x5a, (byte) 0xf8, 0x32, (byte) 0xee, (byte) 0xe6, 0x0a, (byte) 0xa2, (byte) 0xf7, 0x25, (byte) 0xef};
         MagneticField[] expected = new MagneticField[] {
-                new MagneticField(Float.intBitsToFloat(0x434b6000), Float.intBitsToFloat(0xc308e000), Float.intBitsToFloat(0xc38bb800)),
-                new MagneticField(Float.intBitsToFloat(0x433b6000), Float.intBitsToFloat(0xc2f4c000), Float.intBitsToFloat(0xc38e7000)),
-                new MagneticField(Float.intBitsToFloat(0x432e6000), Float.intBitsToFloat(0xc305e000), Float.intBitsToFloat(0xc386d800))
+                new MagneticField(Float.intBitsToFloat(0x39554110), Float.intBitsToFloat(0xb90f861a), Float.intBitsToFloat(0xb9928177)),
+                new MagneticField(Float.intBitsToFloat(0x39447a18), Float.intBitsToFloat(0xb90051ca), Float.intBitsToFloat(0xb9955b46)),
+                new MagneticField(Float.intBitsToFloat(0x3936d86f), Float.intBitsToFloat(0xb90c60cc), Float.intBitsToFloat(0xb98d64d8))
         };
 
         final ArrayList<MagneticField> received = new ArrayList<>();
@@ -102,14 +102,14 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
     @Test
     public void subscribe() {
         byte[] expected = new byte[] {0x15, 0x09, 0x01};
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void unsubscribe() {
         byte[] expected = new byte[] {0x15, 0x09, 0x00};
         mwBoard.lookupRoute(0).unsubscribe(0);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -117,7 +117,7 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
         byte[] expected= new byte[] {0x15, 0x02, 0x01, 0x00};
 
         mag.packedMagneticField().start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -125,6 +125,6 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
         byte[] expected= new byte[] {0x15, 0x02, 0x00, 0x01};
 
         mag.packedMagneticField().stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

@@ -31,11 +31,10 @@ import java.util.Calendar;
 import bolts.Task;
 
 /**
- * Controls the on-board logger
+ * Firmware feature that saves data to the on-board flash memory
  * @author Eric Tsai
  */
 public interface Logging extends Module {
-
     /**
      * Handler for processing download updates
      */
@@ -81,30 +80,30 @@ public interface Logging extends Module {
     void stop();
     /**
      * Download saved data from the flash memory with periodic progress updates and error handling
-     * @param nUpdates          How many progress updates to send
+     * @param nUpdates          How many progress updates to send to {@link LogDownloadUpdateHandler#receivedUpdate(long, long)}
      * @param updateHandler     Handler to accept download notifications
-     * @param errorHandler      Handler to process encountered errors during the download
-     * @return Object holding the result of the task
+     * @param errorHandler      Handler to process errors encountered during the download
+     * @return Task that will complete when the download has finished
      */
-    Task<Void> download(int nUpdates, LogDownloadUpdateHandler updateHandler, LogDownloadErrorHandler errorHandler);
+    Task<Void> downloadAsync(int nUpdates, LogDownloadUpdateHandler updateHandler, LogDownloadErrorHandler errorHandler);
     /**
      * Download saved data from the flash memory with periodic progress updates
-     * @param nUpdates          How many progress updates to send
+     * @param nUpdates          How many progress updates to send to {@link LogDownloadUpdateHandler#receivedUpdate(long, long)}
      * @param updateHandler     Handler to accept download notifications
-     * @return Object holding the result of the task
+     * @return Task that will complete when the download has finished
      */
-    Task<Void> download(int nUpdates, LogDownloadUpdateHandler updateHandler);
+    Task<Void> downloadAsync(int nUpdates, LogDownloadUpdateHandler updateHandler);
     /**
      * Download saved data from the flash memory with no progress updates
      * @param errorHandler    Handler to process encountered errors during the download
-     * @return Object holding the result of the task
+     * @return Task that will complete when the download has finished
      */
-    Task<Void> download(LogDownloadErrorHandler errorHandler);
+    Task<Void> downloadAsync(LogDownloadErrorHandler errorHandler);
     /**
      * Download saved data from the flash memory with no progress updates nor error handling
-     * @return Object holding the result of the task
+     * @return Task that will complete when the download has finished
      */
-    Task<Void> download();
+    Task<Void> downloadAsync();
 
     /**
      * Clear all stored logged data from the board.  The erase operation will not be performed until

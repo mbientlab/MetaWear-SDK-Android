@@ -31,7 +31,7 @@ import com.mbientlab.metawear.module.HumidityBme280;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.HUMIDITY;
+import static com.mbientlab.metawear.impl.Constant.Module.HUMIDITY;
 
 /**
  * Created by etsai on 9/19/16.
@@ -48,17 +48,17 @@ class HumidityBme280Impl extends ModuleImplBase implements HumidityBme280 {
             super(HUMIDITY, Util.setSilentRead(VALUE), new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, false));
         }
 
-        HumidityBme280SFloatData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        HumidityBme280SFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new HumidityBme280SFloatData(input, module, register, id, attributes);
         }
 
         @Override
-        protected float scale(MetaWearBoardPrivate owner) {
+        protected float scale(MetaWearBoardPrivate mwPrivate) {
             return 1024.f;
         }
     }
@@ -86,7 +86,7 @@ class HumidityBme280Impl extends ModuleImplBase implements HumidityBme280 {
                 }
 
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
                     return mwPrivate.queueRouteBuilder(builder, PRODUCER);
                 }
 

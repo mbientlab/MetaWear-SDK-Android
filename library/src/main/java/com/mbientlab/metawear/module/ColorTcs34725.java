@@ -24,16 +24,18 @@
 
 package com.mbientlab.metawear.module;
 
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 import java.util.Locale;
 
 /**
- * Controls the TCS34725 color detector adc data
+ * Color light-to-digital converter by TAOS that can sense red, green, blue, and clear light
  * @author Eric Tsai
  */
-public interface ColorDetectorTcs34725 extends Module {
+public interface ColorTcs34725 extends Module, Configurable<ColorTcs34725.ConfigEditor> {
     /**
      * Analog gain scales
      * @author Eric Tsai
@@ -44,41 +46,29 @@ public interface ColorDetectorTcs34725 extends Module {
         TCS34725_16X,
         TCS34725_60X
     }
-
     /**
-     * Interface for configuring the color detector
+     * Configurable parameters for the color detector
      * @author Eric Tsai
      */
-    interface ConfigEditor {
+    interface ConfigEditor extends ConfigEditorBase {
         /**
-         * Set the integration time.  This impacts both resolution and sensitivity of the adc values.
+         * Set the integration time, which impacts both the resolution and sensitivity of the adc values.
          * @param time    Between [2.4, 614.4] milliseconds
          * @return Calling object
          */
         ConfigEditor integrationTime(float time);
         /**
-         * Sets the analog gain
+         * Set the analog gain
          * @param gain    Gain scale
          * @return Calling object
          */
         ConfigEditor gain(Gain gain);
         /**
-         * Enable or disable the illuminator LED
-         * @param enable    True if it should be used
+         * Enable the illuminator LED
          * @return Calling object
          */
-        ConfigEditor illuminatorLed(boolean enable);
-        /**
-         * Write the changes to the board
-         */
-        void commit();
+        ConfigEditor enableIlluminatorLed();
     }
-    /**
-     * Configure the color detector
-     *
-     * @return Editor object to configure the detector
-     */
-    ConfigEditor configure();
 
     /**
      * Wrapper class encapsulating adc data from the sensor
@@ -151,7 +141,7 @@ public interface ColorDetectorTcs34725 extends Module {
         String blueName();
     }
     /**
-     * Gets an object to manage the adc data from the color detector
+     * Get an implementation of the ColorAdcDataProducer interface, represented by the {@link ColorAdc} class
      * @return Object managing the adc data
      */
     ColorAdcDataProducer adc();

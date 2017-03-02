@@ -24,12 +24,21 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ActiveDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
+import bolts.Task;
+
 /**
- * Controls the on-board push button switch
+ * On-board push button switch
  * @author Eric Tsai
  */
-public interface Switch extends Module, AsyncDataProducer {
+public interface Switch extends Module {
+    /**
+     * Get an implementation of the ActiveDataProducer interface for the button state, represented as
+     * a boolean (true = pressed, false = released) or byte (1 = pressed, 0 = released)
+     * @return Object for the switch state
+     */
+    ActiveDataProducer state();
+    Task<Byte> readCurrentStateAsync();
 }

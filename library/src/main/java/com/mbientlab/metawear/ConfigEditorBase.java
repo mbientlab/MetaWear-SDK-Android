@@ -22,21 +22,15 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.impl;
-
-import java.util.UUID;
+package com.mbientlab.metawear;
 
 /**
- * Created by etsai on 9/5/16.
+ * Base class for configuration editor classes.
+ * @author Eric Tsai
  */
-public class BtleCharacteristics {
-    private static final UUID DEVICE_INFO_SERVICE= UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb"),
-            BATTERY_SERVICE= UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb");
-
-    public static final Pair<UUID, UUID> DEV_INFO_FIRMWARE_VERSION= new Pair<>(DEVICE_INFO_SERVICE, UUID.fromString("00002a26-0000-1000-8000-00805f9b34fb")),
-            DEV_INFO_MODEL_NUMBER= new Pair<>(DEVICE_INFO_SERVICE, UUID.fromString("00002a24-0000-1000-8000-00805f9b34fb")),
-            DEV_INFO_HARDWARE_REVISION= new Pair<>(DEVICE_INFO_SERVICE, UUID.fromString("00002a27-0000-1000-8000-00805f9b34fb")),
-            DEV_INFO_MANUFACTURER_NAME= new Pair<>(DEVICE_INFO_SERVICE, UUID.fromString("00002a29-0000-1000-8000-00805f9b34fb")),
-            DEV_INFO_SERIAL_NUMBER= new Pair<>(DEVICE_INFO_SERVICE, UUID.fromString("00002a25-0000-1000-8000-00805f9b34fb"));
-    static final Pair<UUID, UUID> BATTERY_LEVEL= new Pair<>(BATTERY_SERVICE, UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb"));
+public interface ConfigEditorBase {
+    /**
+     * Write the configuration to the board
+     */
+    void commit();
 }

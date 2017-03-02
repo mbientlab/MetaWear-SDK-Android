@@ -24,11 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -48,12 +48,12 @@ public class TestActivityMonitor extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
         connectToBoard();
 
-        mwBoard.getModule(Accelerometer.class).acceleration().addRoute(new RouteBuilder() {
+        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.map(Function1.RMS)
                         .accumulate()
                         .multicast()
@@ -70,9 +70,9 @@ public class TestActivityMonitor extends UnitTestBase {
             @Override
             public Task<Route> then(Task<Route> task) throws Exception {
                 activityRoute = task.getResult();
-                return mwBoard.getModule(DataProcessor.class).state("rms_accum").addRoute(new RouteBuilder() {
+                return mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(new RouteBuilder() {
                     @Override
-                    public void configure(RouteElement source) {
+                    public void configure(RouteComponent source) {
                         source.stream(new Subscriber() {
                             @Override
                             public void apply(Data data, Object ... env) {
@@ -110,7 +110,7 @@ public class TestActivityMonitor extends UnitTestBase {
                 {0x09, 0x07, 0x02, 0x01}
         };
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -130,7 +130,7 @@ public class TestActivityMonitor extends UnitTestBase {
 
         bufferStateRoute.unsubscribe(0);
         mwBoard.getModule(DataProcessor.class).state("rms_accum").read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -138,7 +138,7 @@ public class TestActivityMonitor extends UnitTestBase {
         byte[] expected= new byte[] {0x9, (byte) 0x84, 3};
 
         mwBoard.getModule(DataProcessor.class).state("rms_accum").read();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test

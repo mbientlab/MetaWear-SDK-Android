@@ -25,15 +25,22 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.data.CartesianAxis;
+import com.mbientlab.metawear.data.Sign;
+import com.mbientlab.metawear.data.TapType;
+
+import java.util.Arrays;
+import java.util.Locale;
 
 /**
- * Extension of the {@link Accelerometer} interface that provides finer control of the MMA8452Q accelerometer
+ * Extension of the {@link Accelerometer} interface providing finer control of the MMA8452Q accelerometer
  * @author Eric Tsai
  */
 public interface AccelerometerMma8452q extends Accelerometer {
     /**
-     * Supported data rates on the MMA8452Q accelerometer
+     * Available data rates for the MMA8452Q accelerometer
      * @author Eric Tsai
      */
     enum OutputDataRate {
@@ -70,9 +77,8 @@ public interface AccelerometerMma8452q extends Accelerometer {
             return freqs;
         }
     }
-
     /**
-     * Available data ranges
+     * Available data ranges for the MMA8452Q accelerometer
      * @author Eric Tsai
      */
     enum FullScaleRange {
@@ -99,255 +105,18 @@ public interface AccelerometerMma8452q extends Accelerometer {
             return ranges;
         }
     }
-
     /**
-     * Axis information for the detection callback functions
+     * Available oversampling modes on the MMA8452Q sensor
      * @author Eric Tsai
      */
-    enum Polarity {
-        /** Movement is in the positive polarity */
-        POSITIVE,
-        /** Movement is in the negative polarity */
-        NEGATIVE,
+    enum Oversampling {
+        NORMAL,
+        LOW_NOISE_LOW_POWER,
+        HIGH_RES,
+        LOW_POWER
     }
     /**
-     * Accelerometer configuration editor specific to the MMA8452Q accelerometer
-     * @author Eric Tsai
-     */
-    interface Mma8452qConfigEditor extends ConfigEditorBase<Mma8452qConfigEditor> {
-        /**
-         * Sets the output data rate
-         * @param odr    New output data rate
-         * @return Calling object
-         */
-        Mma8452qConfigEditor odr(OutputDataRate odr);
-        /**
-         * Sets the data range
-         * @param fsr    New data range
-         * @return Calling object
-         */
-        Mma8452qConfigEditor range(FullScaleRange fsr);
-    }
-    /**
-     * Configure the MMA8452Q accelerometer
-     * @return Editor object specific to the MMA8452Q accelerometer
-     */
-    @Override
-    Mma8452qConfigEditor configure();
-    /**
-     * On-board algorithm that detects changes in the sensor's orientation
-     * @author Eric Tsai
-     */
-    interface OrientationDataProducer extends AsyncDataProducer {
-        /**
-         * Configuration editor for the orientation detection algorithm
-         * @author Eric Tsai
-         */
-        interface ConfigEditor {
-            /**
-             * Sets the time for which the sensor's orientation must remain in the new position before a position
-             * change is triggered.  This is used to filter out false positives from shaky hands or other small vibrations
-             * @param delay    How long the sensor must remain in the new position, in milliseconds
-             * @return Calling object
-             */
-            ConfigEditor delay(int delay);
-            /**
-             * Write the changes to the accelerometer
-             */
-            void commit();
-        }
-        /**
-         * Configure the orientation detection algorithm
-         * @return Configuration editor object
-         */
-        ConfigEditor configure();
-    }
-    /**
-     * Gets an object to control the orientation detection algorithm
-     * @return Object controlling the orientation detection algorithm
-     */
-    OrientationDataProducer orientationDetection();
-
-    /**
-     * Base class for configuring the built-in classification algorithms
-     * @param <T>    Type of classification config editor
-     * @author Eric Tsai
-     */
-    interface ClassificationConfigEditor<T extends ClassificationConfigEditor> {
-        /**
-         * Sets the threshold
-         * @param threshold    Threshold, in G's
-         * @return Calling object
-         */
-        T threshold(float threshold);
-        /**
-         * Sets the duration for which a condition must be met to trigger a data event
-         * @param duration    Duration for the condition to be met
-         * @return Calling object
-         */
-        T duration(int duration);
-        /**
-         * Write the new settings to the accelerometer
-         */
-        void commit();
-    }
-
-    /**
-     * Wrapper class encapsulating shake data
-     * @author Eric Tsai
-     */
-    interface Shake {
-        boolean exceedsThreshold(CartesianAxis axis);
-        Polarity polarity(CartesianAxis axis);
-    }
-    /**
-     * On-board algorithm that detects when the sensor is shaken
-     * @author Eric Tsai
-     */
-    interface ShakeDataProducer extends AsyncDataProducer {
-        /**
-         * Configuration editor for the shake detection algorithm
-         * @author Eric Tsai
-         */
-        interface ConfigEditor extends ClassificationConfigEditor<ConfigEditor> {
-            /**
-             * Sets the axis to detect shaking motion
-             * @param axis    Axis to detect shaking
-             * @return Calling object
-             */
-            ConfigEditor axis(CartesianAxis axis);
-        }
-        /**
-         * Configure the shake detection algorithm
-         * @return Configuration editor object
-         */
-        ConfigEditor configure();
-    }
-    /**
-     * Gets an object to control the shake detection algorithm
-     * @return Object controlling the shake detection algorithm
-     */
-    ShakeDataProducer shakeDetection();
-
-    /**
-     * Detectable tap types
-     * @author Eric Tsai
-     */
-    enum TapType {
-        SINGLE,
-        DOUBLE
-    }
-
-    /**
-     * Wrapper class encapsulating tap data
-     * @author Eric Tsai
-     */
-    interface Tap {
-        boolean active(CartesianAxis axis);
-        Polarity polarity(CartesianAxis axis);
-        TapType type();
-    }
-    /**
-     * On-board algorithm that detects taps
-     * @author Eric Tsai
-     */
-    interface TapDataProducer extends AsyncDataProducer {
-        /**
-         * Configuration editor for the tap detection algorithm
-         * @author Eric Tsai
-         */
-        interface ConfigEditor extends ClassificationConfigEditor<ConfigEditor> {
-            /**
-             * Set the wait time between the end of the 1st shock and when the 2nd shock can be detected
-             * @param latency    New latency time, in milliseconds
-             * @return Calling object
-             */
-            ConfigEditor latency(int latency);
-            /**
-             * Set the time in which a second shock must begin after the latency expires
-             * @param window    New window time, in milliseconds
-             * @return Calling object
-             */
-            ConfigEditor window(int window);
-            /**
-             * Set how the tap detection should processes the data
-             * @param enable        True to enable low pass filtering
-             * @return Calling object
-             */
-            ConfigEditor lowPassFilter(boolean enable);
-            /**
-             * Sets the axis to detect tapping on
-             * @param axis    Axis to detect tapping
-             * @return Calling object
-             */
-            ConfigEditor axis(CartesianAxis axis);
-            /**
-             * Sets which tap types to detect
-             * @param types    Tap types to detect
-             * @return Calling object
-             */
-            ConfigEditor type(TapType ... types);
-        }
-        /**
-         * Configure the tap detection algorithm
-         * @return Configuration editor object
-         */
-        ConfigEditor configure();
-    }
-    /**
-     * Gets an object to control the tap detection algorithm
-     * @return Object controlling the tap detection algorithm
-     */
-    TapDataProducer tapDetection();
-
-    /**
-     * Detectable movement types on the sensor
-     * @author Eric Tsai
-     */
-    enum MovementType {
-        FREE_FALL,
-        MOTION
-    }
-    /**
-     * Wrapper interface encapsulating movement data
-     * @author Eric Tsai
-     */
-    interface Movement {
-        boolean crossedThreshold(CartesianAxis axis);
-        Polarity polarity(CartesianAxis axis);
-    }
-    /**
-     * On-board algorithm that detects sensor movement
-     * @author Eric Tsai
-     */
-    interface MovementDataProducer extends AsyncDataProducer {
-        /**
-         * Configuration editor for the movement detection algorithm
-         * @author Eric Tsai
-         */
-        interface ConfigEditor extends ClassificationConfigEditor<ConfigEditor> {
-            /**
-             * Sets the axes to be detected for movement
-             * @param axes    Axes to detect movement
-             * @return Calling object
-             */
-            ConfigEditor axes(CartesianAxis ... axes);
-        }
-        /**
-         * Configure the movement detection algorithm
-         * @param type    Type of movement the algorithm should detect
-         * @return Configuration editor object
-         */
-        ConfigEditor configure(MovementType type);
-    }
-    /**
-     * Gets an object to control the movement detection algorithm
-     * @return Object controlling the movement detection algorithm
-     */
-    MovementDataProducer movementDetection();
-
-    /**
-     * Enumeration of sleep mode data rates
+     * Available data rates when the sensor is in sleep mode
      * @author Eric Tsai
      */
     enum SleepModeRate {
@@ -360,69 +129,351 @@ public interface AccelerometerMma8452q extends Accelerometer {
         /** 1.56Hz */
         SMR_1_56_HZ
     }
-
     /**
-     * Enumeration of the available power modes on the accelerometer
+     * Accelerometer configuration editor specific to the MMA8452Q accelerometer
      * @author Eric Tsai
      */
-    enum PowerMode {
-        NORMAL,
-        LOW_NOISE_LOW_POWER,
-        HIGH_RES,
-        LOW_POWER
-    }
-
-    /**
-     * Accelerometer feature where the sensor transitions between different sampling rates depending on
-     * the frequency of interrupts
-     * @author Eric Tsai
-     */
-    interface AutoSleep {
+    interface ConfigEditor extends Accelerometer.ConfigEditor<ConfigEditor> {
         /**
-         * Configuration editor for the auto sleep mode
-         * @author Eric Tsai
+         * Sets the output data rate
+         * @param odr    How frequently data is measured
+         * @return Calling object
          */
-        interface ConfigEditor {
-            /**
-             * Sets the operating frequency in sleep mode
-             * @param rate    New sleep mode data rate
-             * @return Calling object
-             */
-            ConfigEditor dataRate(SleepModeRate rate);
-            /**
-             * Sets how long to idle in active mode before switching to sleep mode
-             * @param timeout    New timeout value, in milliseconds
-             * @return Calling object
-             */
-            ConfigEditor timeout(int timeout);
-            /**
-             * Sets the power mode while in sleep mode
-             * @param powerMode    New power mode to use
-             * @return Calling object
-             */
-            ConfigEditor powerMode(PowerMode powerMode);
-            /**
-             * Write the changes
-             */
-            void commit();
+        ConfigEditor odr(OutputDataRate odr);
+        /**
+         * Sets the data range
+         * @param fsr    Range of the measured acceleration
+         * @return Calling object
+         */
+        ConfigEditor range(FullScaleRange fsr);
+        /**
+         * Enables use of the high pass filter when measuring acceleration, closest valid frequency will be used.
+         * This setting only affects the acceleration data from the {@link AccelerationDataProducer} interface.
+         * @param cutoff    HPF cutoff frequency for removing the offset and slower changing acceleration data, between
+         *                  [0.031Hz, 16Hz]
+         * @return Calling object
+         */
+        ConfigEditor enableHighPassFilter(float cutoff);
+        /**
+         * Enables low pass filter for the tap detection algorithm
+         * @return Calling Object
+         */
+        ConfigEditor enableTapLowPassFilter();
+        /**
+         * Sets the oversampling mode when the sensor is active
+         * @param osMode    New oversampling mode
+         * @return Calling object
+         */
+        ConfigEditor oversampling(Oversampling osMode);
+        /**
+         * Variant of {@link #enableAutoSleep()} that lets users configure the auto sleep settings to their use-case
+         * @param rate       Output data rate when in sleep mode
+         * @param timeout    How long to idle in active mode before switching to sleep mode, in milliseconds
+         * @param osMode     Oversampling mode to use when in sleep mode
+         * @return Calling object
+         */
+        ConfigEditor enableAutoSleep(SleepModeRate rate, int timeout, Oversampling osMode);
+        /**
+         * Enables the autosleep feature where the sensor transitions between different sampling rates depending on
+         * the frequency of interrupts
+         * @return Calling object
+         */
+        ConfigEditor enableAutoSleep();
+    }
+    /**
+     * Configure the MMA8452Q accelerometer
+     * @return Editor object specific to the MMA8452Q accelerometer
+     */
+    @Override
+    ConfigEditor configure();
+
+    /**
+     * Configuration editor for the orientation detection algorithm
+     * @author Eric Tsai
+     */
+    interface OrientationConfigEditor extends ConfigEditorBase {
+        /**
+         * Sets the time for which the sensor's orientation must remain in the new position before a position
+         * change is triggered.  This is used to filter out false positives from shaky hands or other small vibrations
+         * @param delay    How long the sensor must remain in the new position, in milliseconds
+         * @return Calling object
+         */
+        OrientationConfigEditor delay(int delay);
+    }
+    /**
+     * On-board algorithm that detects changes in the sensor's orientation
+     * @author Eric Tsai
+     */
+    interface OrientationDataProducer extends AsyncDataProducer, Configurable<OrientationConfigEditor> { }
+    /**
+     * Get an implementation of the OrientationDataProducer interface
+     * @return OrientationDataProducer object
+     */
+    OrientationDataProducer orientation();
+
+    /**
+     * Wrapper class encapsulating free fall, motion, and shake interrupts from the MMA8452Q
+     * @author Eric Tsai
+     */
+    class Movement {
+        private final boolean[] thresholds;
+        private final Sign[] polarities;
+
+        /**
+         * Create a Movement object
+         * @param thresholds    Threshold information for XYZ axis in that order
+         * @param polarities    Directional information for XYZ axes in that order
+         */
+        public Movement(boolean[] thresholds, Sign[] polarities) {
+            this.thresholds = thresholds;
+            this.polarities = polarities;
+        }
+
+        /**
+         * Check if acceleration is greater than the threshold on that axis
+         * @param axis    Axis to lookup
+         * @return True if it is greater, false otherwise
+         */
+        public Boolean exceedsThreshold(CartesianAxis axis) {
+            return thresholds[axis.ordinal()];
         }
         /**
-         * Configure auto sleep mode
-         * @return Configuration editor object
+         * Check the polarity (directional) information of the axis
+         * @param axis    Axis to lookup
+         * @return {@link Sign#POSITIVE} if event was positive g, {@link Sign#NEGATIVE} if negative g
          */
-        ConfigEditor configure();
-        /**
-         * Enable auto sleep mode.  Change will not be written to the sensor until {@link Mma8452qConfigEditor#commit()} is called
-         */
-        void enable();
-        /**
-         * Disable auto sleep mode.  Change will not be written to the sensor until {@link Mma8452qConfigEditor#commit()} is called
-         */
-        void disable();
+        public Sign polarity(CartesianAxis axis) {
+            return polarities[axis.ordinal()];
+        }
+
+        @Override
+        public String toString() {
+            return String.format(Locale.US, "{xExceedsThs: %s, xPolarity: %s, yExceedsThs: %s, yPolarity: %s, zExceedsThs: %s, zPolarity: %s}",
+                    exceedsThreshold(CartesianAxis.X), polarity(CartesianAxis.X),
+                    exceedsThreshold(CartesianAxis.Y), polarity(CartesianAxis.Y),
+                    exceedsThreshold(CartesianAxis.Z), polarity(CartesianAxis.Z));
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            // Generated by IntelliJ
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Movement movement = (Movement) o;
+
+            return Arrays.equals(thresholds, movement.thresholds) && Arrays.equals(polarities, movement.polarities);
+
+        }
+
+        @Override
+        public int hashCode() {
+            // Generated by IntelliJ
+            int result = Arrays.hashCode(thresholds);
+            result = 31 * result + Arrays.hashCode(polarities);
+            return result;
+        }
     }
     /**
-     * Gets an object to control the auto sleep feature
-     * @return Object controlling the auto sleep feature
+     * Configuration editor for the shake detection algorithm
+     * @author Eric Tsai
      */
-    AutoSleep autosleep();
+    interface ShakeConfigEditor extends ConfigEditorBase {
+        /**
+         * Set the axis to detect shaking motion
+         * @param axis    Axis to detect shaking
+         * @return Calling object
+         */
+        ShakeConfigEditor axis(CartesianAxis axis);
+        /**
+         * Set the threshold that the high-pass filtered acceleration must exceed to trigger an interrupt
+         * @param threshold    Threshold limit, in g's
+         * @return Calling object
+         */
+        ShakeConfigEditor threshold(float threshold);
+        /**
+         * Set the minimum amount of time that continuous high-pass filtered acceleration exceeds the threshold
+         * @param duration    Duration for the condition to be met, in ms
+         * @return Calling object
+         */
+        ShakeConfigEditor duration(int duration);
+    }
+    /**
+     * On-board algorithm that detects when the sensor is shaken
+     * @author Eric Tsai
+     */
+    interface ShakeDataProducer extends AsyncDataProducer, Configurable<ShakeConfigEditor> { }
+    /**
+     * Get an implementation of the ShakeDataProducer interface
+     * @return ShakeDataProducer object
+     */
+    ShakeDataProducer shake();
+
+    /**
+     * Wrapper class encapsulating tap data from the MMA8452Q accelerometer
+     * @author Eric Tsai
+     */
+    class Tap {
+        private final boolean[] active;
+        private final Sign[] polarities;
+        /** Type of tap detected */
+        public final TapType type;
+
+        /**
+         * Creates a Tap object
+         * @param active        Interrupt information for XYZ axes in that order
+         * @param polarities    Directional information for XYZ axes in that order
+         * @param type          Type of tap detected
+         */
+        public Tap(boolean[] active, Sign[] polarities, TapType type) {
+            this.active = active;
+            this.polarities = polarities;
+            this.type = type;
+        }
+
+        /**
+         * Check if the axis triggered the tap interrupt
+         * @param axis    Axis to lookup
+         * @return True if axis triggered the interrupt, false otherwise
+         */
+        public Boolean active(CartesianAxis axis) {
+            return active[axis.ordinal()];
+        }
+        /**
+         * Check the polarity (directional) information of the axis
+         * @param axis    Axis to lookup
+         * @return {@link Sign#POSITIVE} if event was positive g, {@link Sign#NEGATIVE} if negative g
+         */
+        public Sign polarity(CartesianAxis axis) {
+            return polarities[axis.ordinal()];
+        }
+
+        @Override
+        public String toString() {
+            return String.format(Locale.US, "{type: %s, xActive: %s, xPolarity: %s, yActive: %s, yPolarity: %s, zActive: %s, zPolarity: %s}",
+                    type, active(CartesianAxis.X), polarity(CartesianAxis.X),
+                    active(CartesianAxis.Y), polarity(CartesianAxis.Y),
+                    active(CartesianAxis.Z), polarity(CartesianAxis.Z));
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            // Generated by IntelliJ
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Tap tap = (Tap) o;
+
+            return Arrays.equals(active, tap.active) && Arrays.equals(polarities, tap.polarities) && type == tap.type;
+
+        }
+
+        @Override
+        public int hashCode() {
+            // Generated by IntelliJ
+            int result = Arrays.hashCode(active);
+            result = 31 * result + Arrays.hashCode(polarities);
+            result = 31 * result + type.hashCode();
+            return result;
+        }
+    }
+    /**
+     * Configuration editor for the tap detection algorithm
+     * @author Eric Tsai
+     */
+    interface TapConfigEditor extends ConfigEditorBase {
+        /**
+         * Enable double tap detection
+         * @return Calling object
+         */
+        TapConfigEditor enableDoubleTap();
+        /**
+         * Enable single tap detection
+         * @return Calling object
+         */
+        TapConfigEditor enableSingleTap();
+        /**
+         * Set the wait time between the end of the 1st shock and when the 2nd shock can be detected
+         * @param latency    New latency time, in milliseconds
+         * @return Calling object
+         */
+        TapConfigEditor latency(int latency);
+        /**
+         * Set the time in which a second shock must begin after the latency expires
+         * @param window    New window time, in milliseconds
+         * @return Calling object
+         */
+        TapConfigEditor window(int window);
+        /**
+         * Set the axis to detect tapping on
+         * @param axis    Axis to detect tapping
+         * @return Calling object
+         */
+        TapConfigEditor axis(CartesianAxis axis);
+        /**
+         * Set the threshold that begins the tap detection procedure
+         * @param threshold    Threshold limit, in units of g
+         * @return Calling object
+         */
+        TapConfigEditor threshold(float threshold);
+        /**
+         * Set the max time interval between the measured acceleration exceeding the threshold then falling
+         * below the threshold.
+         * @param interval    Pulse time interval, in ms
+         * @return Calling object
+         */
+        TapConfigEditor interval(int interval);
+    }
+    /**
+     * On-board algorithm that detects taps
+     * @author Eric Tsai
+     */
+    interface TapDataProducer extends AsyncDataProducer, Configurable<TapConfigEditor> { }
+    /**
+     * Get an implementation of the TapDataProducer interface
+     * @return TapDataProducer object
+     */
+    TapDataProducer tap();
+
+    /**
+     * Configuration editor for the movement detection algorithm
+     * @author Eric Tsai
+     */
+    interface MovementConfigEditor extends ConfigEditorBase {
+        /**
+         * Set the axes to be detected for movement
+         * @param axes    Axes to detect movement
+         * @return Calling object
+         */
+        MovementConfigEditor axes(CartesianAxis ... axes);
+        /**
+         * Set the threshold for movement detection
+         * @param threshold    Threshold limit, in units of g
+         * @return Calling object
+         */
+        MovementConfigEditor threshold(float threshold);
+        /**
+         * Set the minimum amount of time that continuous measured acceleration matches the threshold condition
+         * @param duration    Duration for the condition to be met, in ms
+         * @return Calling object
+         */
+        MovementConfigEditor duration(int duration);
+    }
+    /**
+     * On-board algorithm that detects sensor movement.  The movement algorithm can detect either
+     * free fall (measured acceleration less than threshold) or general motion (measured acceleration greater
+     * than threshold) but not both simultaneously
+     * @author Eric Tsai
+     */
+    interface MovementDataProducer extends AsyncDataProducer, Configurable<MovementConfigEditor> { }
+    /**
+     * Get an implementation of the MovementDataProducer interface for free fall detection
+     * @return MovementDataProducer object for free fall detection
+     */
+    MovementDataProducer freeFall();
+    /**
+     * Get an implementation of the MovementDataProducer interface for motion detection
+     * @return MovementDataProducer object for motion detection
+     */
+    MovementDataProducer motion();
 }

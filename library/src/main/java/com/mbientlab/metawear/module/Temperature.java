@@ -28,7 +28,7 @@ import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Controls the on-board temperature sensors
+ * Accesses the temperature sensors
  * @author Eric Tsai
  */
 public interface Temperature extends Module {
@@ -38,13 +38,13 @@ public interface Temperature extends Module {
      * @author Eric Tsai
      */
     enum SensorType {
-        /** Data provided by the nRF SOC */
+        /** Temperature measured by the nRF SOC */
         NRF_SOC,
-        /** Data provided by an externally connected thermistor */
+        /** Temperature measured by an externally connected thermistor */
         EXT_THERMISTOR,
-        /** Data provided by either the BMP280 or BME280 sensor */
+        /** Temperature measured by either the BMP280 or BME280 sensor */
         BOSCH_ENV,
-        /** Data provided by an on-board thermistor */
+        /** Temperature measured by an on-board thermistor */
         PRESET_THERMISTOR
     }
     /**
@@ -53,7 +53,7 @@ public interface Temperature extends Module {
      */
     interface Sensor extends ForcedDataProducer {
         /**
-         * Gets the type of temperature sensor measuring the data
+         * Get the type of temperature sensor measuring the data
          * @return Sensor type
          */
         SensorType type();
@@ -73,12 +73,12 @@ public interface Temperature extends Module {
     }
 
     /**
-     * Gets an array of available temperature sensors
+     * Get an array of available temperature sensors
      * @return Temperature sensors array
      */
     Sensor[] sensors();
     /**
-     * Finds all temperature sensors whose {@link Sensor#type()} function matches the {@code type} parameter
+     * Find all temperature sensors whose {@link Sensor#type()} function matches the {@code type} parameter
      * @param type    Sensor type to look for
      * @return Array of sensors matching the sensor type, null if no matches found
      */

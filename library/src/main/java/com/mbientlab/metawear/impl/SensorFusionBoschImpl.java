@@ -29,7 +29,7 @@ import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.data.Acceleration;
-import com.mbientlab.metawear.data.EulerAngle;
+import com.mbientlab.metawear.data.EulerAngles;
 import com.mbientlab.metawear.data.Quaternion;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBosch;
@@ -43,7 +43,7 @@ import java.util.Calendar;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.SENSOR_FUSION;
+import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
 
 /**
  * Created by etsai on 11/12/16.
@@ -69,37 +69,39 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             super(SENSOR_FUSION, EULER_ANGLES, new DataAttributes(new byte[] {4, 4, 4, 4}, (byte) 1, (byte) 0, true));
         }
 
-        EulerAngleData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        EulerAngleData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new EulerAngleData(input, module, register, id, attributes);
         }
 
         @Override
-        public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-            return input;
+        public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+            return value;
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate board, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             final float[] values = new float[] {buffer.getFloat(), buffer.getFloat(), buffer.getFloat(), buffer.getFloat()};
 
             return new DataPrivate(timestamp, data) {
                 @Override
                 public <T> T value(Class<T> clazz) {
-                    if (clazz.equals(EulerAngle.class)) {
-                        return clazz.cast(new EulerAngle(values[0], values[1], values[2], values[3]));
+                    if (clazz.equals(EulerAngles.class)) {
+                        return clazz.cast(new EulerAngles(values[0], values[1], values[2], values[3]));
+                    } else if (clazz.equals(float[].class)) {
+                        return clazz.cast(values);
                     }
                     return super.value(clazz);
                 }
 
                 @Override
                 public Class<?>[] types() {
-                    return new Class<?>[] {EulerAngle.class};
+                    return new Class<?>[] {EulerAngles.class, float[].class};
                 }
             };
         }
@@ -111,22 +113,22 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             super(SENSOR_FUSION, QUATERNION, new DataAttributes(new byte[] {4, 4, 4, 4}, (byte) 1, (byte) 0, true));
         }
 
-        QuaternionData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        QuaternionData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new QuaternionData(input, module, register, id, attributes);
         }
 
         @Override
-        public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-            return input;
+        public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+            return value;
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate board, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             final float[] values = new float[] {buffer.getFloat(), buffer.getFloat(), buffer.getFloat(), buffer.getFloat()};
 
@@ -135,13 +137,15 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(Quaternion.class)) {
                         return clazz.cast(new Quaternion(values[0], values[1], values[2], values[3]));
+                    } else if (clazz.equals(float[].class)) {
+                        return clazz.cast(values);
                     }
                     return super.value(clazz);
                 }
 
                 @Override
                 public Class<?>[] types() {
-                    return new Class<?>[] {Quaternion.class};
+                    return new Class<?>[] {Quaternion.class, float[].class};
                 }
             };
         }
@@ -154,22 +158,22 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             super(SENSOR_FUSION, register, new DataAttributes(new byte[] {4, 4, 4}, (byte) 1, (byte) 0, true));
         }
 
-        AccelerationData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        AccelerationData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new AccelerationData(input, module, register, id, attributes);
         }
 
         @Override
-        public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-            return input;
+        public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+            return value;
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate board, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             final float[] values = new float[] {buffer.getFloat() / MSS_TO_G, buffer.getFloat() / MSS_TO_G, buffer.getFloat() / MSS_TO_G};
 
@@ -178,13 +182,15 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(Acceleration.class)) {
                         return clazz.cast(new Acceleration(values[0], values[1], values[2]));
+                    } else if (clazz.equals(float[].class)) {
+                        return clazz.cast(values);
                     }
                     return super.value(clazz);
                 }
 
                 @Override
                 public Class<?>[] types() {
-                    return new Class<?>[] {Acceleration.class};
+                    return new Class<?>[] {Acceleration.class, float[].class};
                 }
             };
         }
@@ -196,13 +202,13 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             super(SENSOR_FUSION, register, new DataAttributes(new byte[] {4, 4, 4, 1}, (byte) 1, (byte) 0, true));
         }
 
-        CorrectedSensorData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        CorrectedSensorData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-            return input;
+        public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
+            return value;
         }
     }
     private static class CorrectedAccelerationData extends CorrectedSensorData {
@@ -212,17 +218,17 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             super(CORRECTED_ACC);
         }
 
-        CorrectedAccelerationData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        CorrectedAccelerationData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new CorrectedAccelerationData(input, module, register, id, attributes);
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate board, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             final CorrectedAcceleration value = new CorrectedAcceleration(buffer.getFloat() / 1000f, buffer.getFloat() / 1000f, buffer.getFloat() / 1000f, buffer.get());
 
@@ -249,17 +255,17 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             super(CORRECTED_ROT);
         }
 
-        CorrectedAngularVelocityData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        CorrectedAngularVelocityData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new CorrectedAngularVelocityData(input, module, register, id, attributes);
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate board, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             final CorrectedAngularVelocity value = new CorrectedAngularVelocity(buffer.getFloat(), buffer.getFloat(), buffer.getFloat(), buffer.get());
 
@@ -286,19 +292,19 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             super(CORRECTED_MAG);
         }
 
-        CorrectedMagneticFieldData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        CorrectedMagneticFieldData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
         @Override
-        public DataTypeBase copy(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+        public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             return new CorrectedMagneticFieldData(input, module, register, id, attributes);
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate board, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-            final CorrectedMagneticField value = new CorrectedMagneticField(buffer.getFloat(), buffer.getFloat(), buffer.getFloat(), buffer.get());
+            final CorrectedMagneticField value = new CorrectedMagneticField(buffer.getFloat() / 1000000f, buffer.getFloat() / 1000000f, buffer.getFloat() / 1000000f, buffer.get());
 
             return new DataPrivate(timestamp, data) {
                 @Override
@@ -327,7 +333,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
         }
 
         @Override
-        public Task<Route> addRoute(RouteBuilder builder) {
+        public Task<Route> addRouteAsync(RouteBuilder builder) {
             return mwPrivate.queueRouteBuilder(builder, producerTag);
         }
 
@@ -453,12 +459,12 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     }
 
     @Override
-    public AsyncDataProducer correctedRotation() {
+    public AsyncDataProducer correctedAngularVelocity() {
         return new SensorFusionAsyncDataProducer(CORRECTED_ROT_PRODUCER, (byte) 0x02);
     }
 
     @Override
-    public AsyncDataProducer correctedBField() {
+    public AsyncDataProducer correctedMagneticField() {
         return new SensorFusionAsyncDataProducer(CORRECTED_MAG_PRODUCER, (byte) 0x04);
     }
 

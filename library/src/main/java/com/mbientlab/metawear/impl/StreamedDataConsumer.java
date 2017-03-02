@@ -25,11 +25,11 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Subscriber;
-import com.mbientlab.metawear.impl.MetaWearBoardImpl.RegisterResponseHandler;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 
 import java.util.Calendar;
 
-import static com.mbientlab.metawear.impl.ModuleId.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 
 /**
  * Created by etsai on 10/27/16.
@@ -45,8 +45,9 @@ class StreamedDataConsumer extends DeviceDataConsumer {
     }
 
     public void enableStream(final MetaWearBoardPrivate mwPrivate) {
+        addDataHandler(mwPrivate);
+
         if ((source.eventConfig[1] & 0x80) == 0x0) {
-            addDataHandler(mwPrivate);
             if (source.eventConfig[2] == DataTypeBase.NO_DATA_ID) {
                 if (mwPrivate.numDataHandlers(source.eventConfigAsTuple()) == 1) {
                     mwPrivate.sendCommand(new byte[]{source.eventConfig[0], source.eventConfig[1], 0x1});
@@ -60,8 +61,7 @@ class StreamedDataConsumer extends DeviceDataConsumer {
                 }
             }
         } else {
-            source.eventConfig[1] &= (~0x40);
-            addDataHandler(mwPrivate);
+            source.markLive();
         }
     }
 
@@ -79,7 +79,9 @@ class StreamedDataConsumer extends DeviceDataConsumer {
                 }
             }
         } else {
-            source.eventConfig[1]|= 0x40;
+            if (mwPrivate.numDataHandlers(source.eventConfigAsTuple()) == 1) {
+                source.markSilent();
+            }
         }
 
         mwPrivate.removeDataHandler(source.eventConfigAsTuple(), dataResponseHandler);

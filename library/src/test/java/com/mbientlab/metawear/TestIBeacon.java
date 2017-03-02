@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.Switch;
 
@@ -60,7 +60,7 @@ public class TestIBeacon extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= info;
+        junitPlatform.boardInfo= info;
         connectToBoard();
 
         ibeacon= mwBoard.getModule(IBeacon.class);
@@ -76,14 +76,14 @@ public class TestIBeacon extends UnitTestBase {
         };
 
         Switch mwSwitch= mwBoard.getModule(Switch.class);
-        mwSwitch.addRoute(new RouteBuilder() {
+        mwSwitch.state().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
-                source.count().react(new RouteElement.Action() {
+            public void configure(RouteComponent source) {
+                source.count().react(new RouteComponent.Action() {
                     @Override
                     public void execute(DataToken token) {
                         ibeacon.configure()
-                                .setMajor(token)
+                                .major(token)
                                 .commit();
                     }
                 });
@@ -102,7 +102,7 @@ public class TestIBeacon extends UnitTestBase {
         synchronized (this) {
             this.wait();
 
-            assertArrayEquals(expected, btlePlaform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 }

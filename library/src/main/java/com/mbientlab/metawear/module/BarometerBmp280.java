@@ -25,7 +25,8 @@
 package com.mbientlab.metawear.module;
 
 /**
- * Extension of the {@link BarometerBosch} interface that provides finer control of the BMP280 barometer
+ * Extension of the {@link BarometerBosch} interface providing finer control over the barometer on
+ * the BMP280 pressure sensor
  * @author Eric Tsai
  */
 public interface BarometerBmp280 extends BarometerBosch {
@@ -75,9 +76,9 @@ public interface BarometerBmp280 extends BarometerBosch {
      * Barometer configuration editor specific to the BMP280 barometer
      * @author Eric Tsai
      */
-    interface ConfigEditor extends BarometerBosch.ConfigEditorBase<ConfigEditor> {
+    interface ConfigEditor extends BarometerBosch.ConfigEditor<ConfigEditor> {
         /**
-         * Sets the standby time
+         * Set the standby time
          * @param time    New standby time
          * @return Calling object
          */

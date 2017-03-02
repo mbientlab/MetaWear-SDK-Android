@@ -25,9 +25,8 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.SerialPassthrough;
-import com.mbientlab.metawear.module.SerialPassthrough.I2c;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -52,14 +51,14 @@ public class TestI2C extends UnitTestBase {
         }
     };
 
-    private I2c i2c;
+    private SerialPassthrough.I2C i2c;
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.R;
+        junitPlatform.boardInfo= MetaWearBoardInfo.R;
         connectToBoard();
 
-        i2c = mwBoard.getModule(SerialPassthrough.class).i2cData((byte) 1, (byte) 0xa);
+        i2c = mwBoard.getModule(SerialPassthrough.class).i2c((byte) 1, (byte) 0xa);
     }
 
     @Test
@@ -67,13 +66,13 @@ public class TestI2C extends UnitTestBase {
         byte[] expected= new byte[] {0x0d, (byte) 0xc1, 0x1c, 0x0d, 0x0a, 0x01};
 
         i2c.read((byte) 0x1c, (byte) 0xd);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     protected Task<Route> setupI2cRoute() {
-        return i2c.addRoute(new RouteBuilder() {
+        return i2c.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(DATA_HANDLER);
             }
         });
@@ -95,7 +94,7 @@ public class TestI2C extends UnitTestBase {
 
         /*
         // For TestDeserializedI2C
-        btlePlaform.boardStateSuffix = "i2c_stream";
+        junitPlatform.boardStateSuffix = "i2c_stream";
         mwBoard.serialize();
         */
 
@@ -107,7 +106,7 @@ public class TestI2C extends UnitTestBase {
         byte[] expected= new byte[] {0x0d, (byte) 0x81, 0x1c, 0x0d, (byte) 0xff, 0x01};
 
         mwBoard.getModule(SerialPassthrough.class).readI2cAsync((byte) 0x1c, (byte) 0x0d, (byte) 1);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test

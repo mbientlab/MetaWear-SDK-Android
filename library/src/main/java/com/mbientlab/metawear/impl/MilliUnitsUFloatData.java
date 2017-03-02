@@ -24,54 +24,33 @@
 
 package com.mbientlab.metawear.impl;
 
-import com.mbientlab.metawear.Data;
-import com.mbientlab.metawear.datatype.CartesianFloat;
-
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.Calendar;
+import com.mbientlab.metawear.impl.Constant.Module;
 
 /**
- * Created by etsai on 9/4/16.
+ * Created by etsai on 2/28/17.
  */
-abstract class CartesianFloatData extends DataTypeBase {
-    private static final long serialVersionUID = -1464860783728940565L;
+class MilliUnitsUFloatData extends UFloatData {
+    private static final long serialVersionUID = -5121465630232191643L;
 
-    CartesianFloatData(ModuleId module, byte register, DataAttributes attributes) {
-        super(module, register, attributes);
+    MilliUnitsUFloatData(Module module, byte register, byte id, DataAttributes attributes) {
+        super(module, register, id, attributes);
     }
 
-    CartesianFloatData(DataTypeBase input, ModuleId module, byte register, byte id, DataAttributes attributes) {
+    MilliUnitsUFloatData(DataTypeBase input, Module module, byte register, byte id, DataAttributes attributes) {
         super(input, module, register, id, attributes);
     }
 
-    @Override
-    public Number convertToFirmwareUnits(MetaWearBoardPrivate owner, Number input) {
-        return input.floatValue() * scale(owner);
+    MilliUnitsUFloatData(Module module, byte register, DataAttributes attributes) {
+        super(module, register, attributes);
     }
 
-    protected abstract float scale(MetaWearBoardPrivate owner);
+    @Override
+    protected float scale(MetaWearBoardPrivate mwPrivate) {
+        return 1000.f;
+    }
 
     @Override
-    public Data createMessage(boolean logData, MetaWearBoardPrivate owner, final byte[] data, final Calendar timestamp) {
-        ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-        short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
-        float scale= scale(owner);
-        final CartesianFloat value= new CartesianFloat(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
-
-        return new DataPrivate(timestamp, data) {
-            @Override
-            public Class<?>[] types() {
-                return new Class<?>[] {CartesianFloat.class};
-            }
-
-            @Override
-            public <T> T value(Class<T> clazz) {
-                if (clazz == CartesianFloat.class) {
-                    return clazz.cast(value);
-                }
-                return super.value(clazz);
-            }
-        };
+    public DataTypeBase copy(DataTypeBase input, Module module, byte register, byte id, DataAttributes attributes) {
+        return new MilliUnitsUFloatData(input, module, register, id, attributes);
     }
 }

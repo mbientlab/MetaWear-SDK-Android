@@ -30,6 +30,8 @@ import com.mbientlab.metawear.module.DataProcessor;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
+
 import static org.junit.Assert.assertArrayEquals;
 
 /**
@@ -39,21 +41,21 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestDeserializeMultiComparator extends UnitTestBase {
     @Before
     public void setup() throws Exception {
-        btlePlaform.firmware = "1.2.3";
+        junitPlatform.firmware = "1.2.3";
         connectToBoard();
 
 
         /*
         // For editReference test
-        mwBoard.getModule(Gpio.class).createVirtualPin((byte) 0x15).analogAdc().addRoute(new RouteBuilder() {
+        mwBoard.getModule(Gpio.class).getVirtualPin((byte) 0x15).analogAdc().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.filter(Comparison.GTE, ComparisonOutput.ABSOLUTE, 1024, 512, 256, 128).name("multi_comp");
             }
         }).continueWith(new Continuation<Route, Void>() {
             @Override
             public Void then(Task<Route> task) throws Exception {
-                btlePlaform.boardStateSuffix = "multi_comparator";
+                junitPlatform.boardStateSuffix = "multi_comparator";
                 mwBoard.serialize();
 
                 synchronized (TestDeserializeMultiComparator.this) {
@@ -70,15 +72,15 @@ public class TestDeserializeMultiComparator extends UnitTestBase {
     }
 
     @Test
-    public void editReferences() {
+    public void editReferences() throws IOException, ClassNotFoundException {
         byte[] expected = new byte[] {0x09, 0x05, 0x00, 0x06, 0x12, (byte) 0x80, 0x00, 0x00, 0x01};
 
-        btlePlaform.boardStateSuffix = "multi_comparator";
+        junitPlatform.boardStateSuffix = "multi_comparator";
         mwBoard.deserialize();
 
         mwBoard.getModule(DataProcessor.class).edit("multi_comp", DataProcessor.ComparatorEditor.class)
                 .modify(Comparison.LT, 128, 256);
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

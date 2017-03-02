@@ -25,7 +25,7 @@
 package com.mbientlab.metawear.data;
 
 /**
- * Enumeration of orientations
+ * Enumeration of sensor orientations
  * @author Eric Tsai
  */
 public enum SensorOrientation {

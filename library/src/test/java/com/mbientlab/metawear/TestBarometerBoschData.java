@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -72,9 +72,9 @@ public class TestBarometerBoschData extends TestBarometerBoschBase {
         super.setup();
 
         AsyncDataProducer producer = dataType == PRESSURE ? baroBosch.pressure() : baroBosch.altitude();
-        producer.addRoute(new RouteBuilder() {
+        producer.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
@@ -96,7 +96,7 @@ public class TestBarometerBoschData extends TestBarometerBoschBase {
     public void subscribe() {
         byte[] expected= new byte[] {0x12, dataType, 0x1};
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -104,7 +104,7 @@ public class TestBarometerBoschData extends TestBarometerBoschBase {
         byte[] expected= new byte[] {0x12, dataType, 0x0};
 
         dataRoute.unsubscribe(0);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test

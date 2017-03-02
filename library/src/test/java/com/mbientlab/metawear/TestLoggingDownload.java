@@ -47,7 +47,7 @@ public class TestLoggingDownload extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
         connectToBoard();
 
         logging= mwBoard.getModule(Logging.class);
@@ -58,18 +58,20 @@ public class TestLoggingDownload extends UnitTestBase {
         byte[] expected= new byte[] {0x0b, 0x0e};
 
         sendMockResponse(new byte[] {0xb, 0xd});
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
     
     @Test
     public void readoutProgress() {
-        long expected[]= new long[]{
+        long expected[]= new long[] {
+                0x019e,
                 0x0271, 0x0251, 0x0231, 0x0211, 0x01f1,
                 0x01d1, 0x01b1, 0x0191, 0x0171, 0x0151,
                 0x0131, 0x0111, 0x00f1, 0x00d1, 0x00b1,
-                0x0091, 0x0071, 0x0051, 0x0031, 0x0011, 0x0000
+                0x0091, 0x0071, 0x0051, 0x0031, 0x0011,
+                0x0000
         };
-        final long actual[]= new long[21];
+        final long actual[]= new long[22];
 
         byte[][] progress_responses= new byte[][]{
                 {0x0b, 0x08, 0x71, 0x02, 0x00, 0x00},
@@ -95,7 +97,7 @@ public class TestLoggingDownload extends UnitTestBase {
                 {0x0b, 0x08, 0x00, 0x00, 0x00, 0x00}
         };
 
-        logging.download(20, new Logging.LogDownloadUpdateHandler() {
+        logging.downloadAsync(20, new Logging.LogDownloadUpdateHandler() {
             private int i;
             @Override
             public void receivedUpdate(long nEntriesLeft, long totalEntries) {
@@ -121,19 +123,19 @@ public class TestLoggingDownload extends UnitTestBase {
                 {0x0b, 0x06, (byte) 0x9e, (byte) 0x01, (byte) 0x00, (byte) 0x00, 0x14, 0x00, 0x00, 0x00}
         };
 
-        logging.download(20, new Logging.LogDownloadUpdateHandler() {
+        logging.downloadAsync(20, new Logging.LogDownloadUpdateHandler() {
             @Override
             public void receivedUpdate(long nEntriesLeft, long totalEntries) {
 
             }
         });
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test(expected = RuntimeException.class)
     public void downloadInterrupted() throws Exception {
         final Capture<Exception> actual = new Capture<>();
-        logging.download().continueWith(new Continuation<Void, Void>() {
+        logging.downloadAsync().continueWith(new Continuation<Void, Void>() {
             @Override
             public Void then(Task<Void> task) throws Exception {
                 actual.set(task.getError());
@@ -145,7 +147,7 @@ public class TestLoggingDownload extends UnitTestBase {
             }
         });
 
-        btlePlaform.scheduleTask(new Runnable() {
+        junitPlatform.scheduleTask(new Runnable() {
             @Override
             public void run() {
                 mwBoard.disconnectAsync();
@@ -163,7 +165,7 @@ public class TestLoggingDownload extends UnitTestBase {
         Object[] expected= new Object[] {Logging.DownloadError.UNKNOWN_LOG_ENTRY, (byte) 0x1, (short) 0x016c};
         final Object[] actual= new Object[3];
 
-        logging.download(new Logging.LogDownloadErrorHandler() {
+        logging.downloadAsync(new Logging.LogDownloadErrorHandler() {
             @Override
             public void receivedError(Logging.DownloadError errorType, byte logId, Calendar timestamp, byte[] data) {
                 actual[0]= errorType;

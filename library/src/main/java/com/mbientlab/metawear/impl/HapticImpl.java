@@ -29,7 +29,7 @@ import com.mbientlab.metawear.module.Haptic;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-import static com.mbientlab.metawear.impl.ModuleId.HAPTIC;
+import static com.mbientlab.metawear.impl.Constant.Module.HAPTIC;
 
 /**
  * Created by etsai on 9/18/16.

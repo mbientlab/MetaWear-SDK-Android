@@ -25,13 +25,15 @@
 package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.ConfigEditorBase;
+import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 /**
- * Controls the LTR329 ambient light sensor
+ * Lite-On sensor converting light intensity to a digital signal
  * @author Eric Tsai
  */
-public interface AmbientLightLtr329 extends Module {
+public interface AmbientLightLtr329 extends Module, Configurable<AmbientLightLtr329.ConfigEditor> {
     /**
      * Controls the range and resolution of illuminance values
      * @author Eric Tsai
@@ -92,46 +94,34 @@ public interface AmbientLightLtr329 extends Module {
     }
 
     /**
-     * Interface for configuring the LTR329 light sensor.  Default settings will be used for parameters
-     * that are not configured upon commit.
+     * Interface for configuring the LTR329 light sensor
      * @author Eric Tsai
      */
-    interface ConfigEditor {
+    interface ConfigEditor extends ConfigEditorBase {
         /**
-         * Sets the gain setting
+         * Set the gain setting
          * @param sensorGain    New gain setting to use
          * @return Calling object
          */
         ConfigEditor gain(Gain sensorGain);
-
         /**
-         * Sets the integration time
+         * Set the integration time
          * @param time    New integration time to use
          * @return Calling object
          */
         ConfigEditor integrationTime(IntegrationTime time);
-
         /**
-         * Sets the measurement rate
+         * Set the measurement rate
          * @param rate    New measurement rate to use, chosen rate must be greater than or equal to the
          *                integration time
          * @return Calling object
          */
         ConfigEditor measurementRate(MeasurementRate rate);
-
-        /**
-         * Writes the new settings to the board
-         */
-        void commit();
     }
     /**
-     * Configures the sensor
-     * @return Editor object to set various parameters
-     */
-    ConfigEditor configure();
-    /**
-     * Gets an object to manage the illuminance data from the environmental sensor
-     * @return Object managing the illuminance data
+     * Get an implementation of the AsyncDataProducer interface for illuminance data, represented as
+     * a float with units of lux (lx).
+     * @return Object for illuminance data
      */
     AsyncDataProducer illuminance();
 }

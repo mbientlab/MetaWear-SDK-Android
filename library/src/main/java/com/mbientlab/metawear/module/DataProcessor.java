@@ -26,7 +26,7 @@ package com.mbientlab.metawear.module;
 
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.ComparisonOutput;
 import com.mbientlab.metawear.builder.filter.DifferentialOutput;
@@ -36,33 +36,35 @@ import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.builder.predicate.PulseOutput;
 
 /**
- * Provides access to data processors that are editable and readable internal states
+ * Firmware feature that manipulates data on-board
  * @author Eric Tsai
  */
 public interface DataProcessor extends Module {
     /**
-     * Edits a data processor created in a route
-     * @param name              Processor name to look up, set by {@link RouteElement#name(String)}
-     * @param processorClass    Processor class the
+     * Edits a data processor
+     * @param name              Processor name to look up, set by {@link RouteComponent#name(String)}
+     * @param editorClass       Editor class to modify the processor with
      * @param <T>               Runtime type the return value is casted as
      * @return Editor object to modify the processor
      */
-    <T extends Editor> T edit(String name, Class<T> processorClass);
+    <T extends Editor> T edit(String name, Class<T> editorClass);
     /**
-     * Gets an object that represents the state of a processor
-     * @param name    Processor name to look up, set by {@link RouteElement#name(String)}
+     * Gets a ForcedDataProducer for the processor's internal state
+     * @param name    Processor name to look up, set by {@link RouteComponent#name(String)}
      * @return Object representing the processor state, null if the processor does not have a readable state
      */
     ForcedDataProducer state(String name);
 
-    /** Common base class for all data processor editors */
+    /**
+     * Common base class for all data processor editors
+     * @author Eric Tsai
+     */
     interface Editor { }
-
     /**
      * Edits a fixed value comparator filter
      * @author Eric Tsai
-     * @see RouteElement#filter(Comparison, Number...)
-     * @see RouteElement#filter(Comparison, ComparisonOutput, Number...)
+     * @see RouteComponent#filter(Comparison, Number...)
+     * @see RouteComponent#filter(Comparison, ComparisonOutput, Number...)
      */
     interface ComparatorEditor extends Editor {
         /**
@@ -76,8 +78,8 @@ public interface DataProcessor extends Module {
     /**
      * Edits a threshold filter
      * @author Eric Tsai
-     * @see RouteElement#filter(ThresholdOutput, Number)
-     * @see RouteElement#filter(ThresholdOutput, Number, Number)
+     * @see RouteComponent#filter(ThresholdOutput, Number)
+     * @see RouteComponent#filter(ThresholdOutput, Number, Number)
      */
     interface ThresholdEditor extends Editor {
         /**
@@ -90,19 +92,19 @@ public interface DataProcessor extends Module {
     /**
      * Edits a differential filter
      * @author Eric Tsai
-     * @see RouteElement#filter(DifferentialOutput, Number)
+     * @see RouteComponent#filter(DifferentialOutput, Number)
      */
     interface DifferentialEditor extends Editor {
         /**
          * Modifies the minimum distance from the reference value
-         * @param difference    New difference value
+         * @param distance    New minimum distance value
          */
-        void modify(Number difference);
+        void modify(Number distance);
     }
     /**
      * Edits an average processor
      * @author Eric Tsai
-     * @see RouteElement#average(byte)
+     * @see RouteComponent#average(byte)
      */
     interface AverageEditor extends Editor {
         /**
@@ -118,7 +120,7 @@ public interface DataProcessor extends Module {
     /**
      * Edits a data processor created with the fixed value map construct
      * @author Eric Tsai
-     * @see RouteElement#map(Function2, Number)
+     * @see RouteComponent#map(Function2, Number)
      */
     interface MapEditor extends Editor {
         /**
@@ -130,29 +132,39 @@ public interface DataProcessor extends Module {
     /**
      * Edits an accumulator
      * @author Eric Tsai
-     * @see RouteElement#accumulate()
+     * @see RouteComponent#accumulate()
      */
     interface AccumulatorEditor extends Editor {
         /**
          * Reset the running sum
          */
         void reset();
+        /**
+         * Overwrite the accumulated sum with a new value
+         * @param value    New accumulated sum
+         */
+        void set(Number value);
     }
     /**
      * Edits a counter
      * @author Eric Tsai
-     * @see RouteElement#accumulate()
+     * @see RouteComponent#accumulate()
      */
     interface CounterEditor extends Editor {
         /**
          * Reset the internal counter
          */
         void reset();
+        /**
+         * Overwrite the internal counter with a new value
+         * @param value    New count value
+         */
+        void set(int value);
     }
     /**
      * Edits a time limiter
      * @author Eric Tsai
-     * @see RouteElement#limit(int)
+     * @see RouteComponent#limit(int)
      */
     interface TimeEditor extends Editor {
         /**
@@ -164,11 +176,11 @@ public interface DataProcessor extends Module {
     /**
      * Edits a passthrough limiter
      * @author Eric Tsai
-     * @see RouteElement#limit(Passthrough, short)
+     * @see RouteComponent#limit(Passthrough, short)
      */
     interface PassthroughEditor extends Editor {
         /**
-         * Sets the internal value
+         * Set the internal value
          * @param value    New internal value
          */
         void set(short value);
@@ -182,7 +194,7 @@ public interface DataProcessor extends Module {
     /**
      * Edits a pulse finder
      * @author Eric Tsai
-     * @see RouteElement#find(PulseOutput, Number, short)
+     * @see RouteComponent#find(PulseOutput, Number, short)
      */
     interface PulseEditor extends Editor {
         /**

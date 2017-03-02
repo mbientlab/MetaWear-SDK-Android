@@ -50,7 +50,7 @@ public class TestNeoPixelInit extends TestNeoPixelBase {
         byte[] expected= new byte[] {0x06, 0x01, 0x01, 0x03, 0x00, 0x1e};
 
         neoPixel.initializeStrand((byte) 1, NeoPixel.ColorOrdering.MW_WS2811_GBR, NeoPixel.StrandSpeed.SLOW, (byte) 0, (byte) 30);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -58,7 +58,7 @@ public class TestNeoPixelInit extends TestNeoPixelBase {
         byte[] expected= new byte[] {0x06, 0x01, 0x02, 0x05, 0x01, 0x3c};
 
         neoPixel.initializeStrand((byte) 2, NeoPixel.ColorOrdering.MW_WS2811_RBG, NeoPixel.StrandSpeed.FAST, (byte) 1, (byte) 60);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -67,6 +67,6 @@ public class TestNeoPixelInit extends TestNeoPixelBase {
 
         NeoPixel.Strand strand= neoPixel.initializeStrand((byte) 2, NeoPixel.ColorOrdering.MW_WS2811_RBG, NeoPixel.StrandSpeed.FAST, (byte) 1, (byte) 60);
         strand.free();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

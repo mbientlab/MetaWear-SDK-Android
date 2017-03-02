@@ -24,9 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.SerialPassthrough;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 import com.mbientlab.metawear.module.SerialPassthrough.SpiParameterBuilder;
 
 import org.junit.Before;
@@ -56,15 +56,15 @@ public class TestSPI extends UnitTestBase {
                 .useNativePins();
     }
 
-    private SerialPassthrough.Spi spi;
+    private SerialPassthrough.SPI spi;
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.addCustomModuleInfo(new byte[] { 0x0d, (byte) 0x80, 0x00, 0x01 });
-        btlePlaform.boardInfo= MetaWearBoardInfo.RG;
+        junitPlatform.addCustomModuleInfo(new byte[] { 0x0d, (byte) 0x80, 0x00, 0x01 });
+        junitPlatform.boardInfo= MetaWearBoardInfo.RG;
         connectToBoard();
 
-        spi = mwBoard.getModule(SerialPassthrough.class).spiData((byte) 5, (byte) 0xe);
+        spi = mwBoard.getModule(SerialPassthrough.class).spi((byte) 5, (byte) 0xe);
     }
 
     @Test
@@ -72,7 +72,7 @@ public class TestSPI extends UnitTestBase {
         byte[] expected= new byte[] {0x0d, (byte) 0xc2, 0x0a, 0x00, 0x0b, 0x07, 0x76, (byte) 0xe4, (byte) 0xda};
 
         setParameters(spi.read()).commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     private static final Subscriber DATA_HANDLER= new Subscriber() {
@@ -83,9 +83,9 @@ public class TestSPI extends UnitTestBase {
     };
 
     protected Task<Route> setupSpiStream() {
-        return spi.addRoute(new RouteBuilder() {
+        return spi.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(DATA_HANDLER);
             }
         });
@@ -107,7 +107,7 @@ public class TestSPI extends UnitTestBase {
 
         /*
         // For TestDeserializeSPI
-        btlePlaform.boardStateSuffix = "spi_stream";
+        junitPlatform.boardStateSuffix = "spi_stream";
         mwBoard.serialize();
         */
 
@@ -119,7 +119,7 @@ public class TestSPI extends UnitTestBase {
         byte[] expected= new byte[] {0x0d, (byte) 0x82, 0x0a, 0x00, 0x0b, 0x07, 0x76, (byte) 0xf4, (byte) 0xda};
 
         setParameters(mwBoard.getModule(SerialPassthrough.class).readSpiAsync((byte) 5)).commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test

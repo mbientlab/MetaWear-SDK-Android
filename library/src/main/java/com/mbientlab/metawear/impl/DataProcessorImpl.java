@@ -41,7 +41,7 @@ import java.util.concurrent.TimeoutException;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
-import static com.mbientlab.metawear.impl.ModuleId.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 
 /**
  * Created by etsai on 9/5/16.
@@ -55,24 +55,24 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
 
         public byte[] config;
         public final DataTypeBase source;
-        protected transient MetaWearBoardPrivate owner;
+        protected transient MetaWearBoardPrivate mwPrivate;
 
-        EditorImplBase(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
+        EditorImplBase(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
             this.config= config;
             this.source= source;
 
-            restoreTransientVars(owner);
+            restoreTransientVars(mwPrivate);
         }
 
-        void restoreTransientVars(MetaWearBoardPrivate owner) {
-            this.owner = owner;
+        void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
+            this.mwPrivate = mwPrivate;
         }
     }
     static class NullEditor extends EditorImplBase {
         private static final long serialVersionUID = -6221412334731005999L;
 
-        NullEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate owner) {
-            super(config, source, owner);
+        NullEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
         }
     }
 
@@ -130,7 +130,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             }
         };
 
-        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, ADD), new MetaWearBoardImpl.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, ADD), new JseMetaWearBoard.RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
                 timeoutFuture.cancel(false);
@@ -187,8 +187,8 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     }
 
     @Override
-    public <T extends Editor> T edit(String name, Class<T> processorClass) {
-        return processorClass.cast(activeProcessors.get(nameToIdMapping.get(name)).editor);
+    public <T extends Editor> T edit(String name, Class<T> editorClass) {
+        return editorClass.cast(activeProcessors.get(nameToIdMapping.get(name)).editor);
     }
 
     @Override
@@ -199,7 +199,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             if (state != null) {
                 ForcedDataProducer stateProducer = new ForcedDataProducer() {
                     @Override
-                    public Task<Route> addRoute(RouteBuilder builder) {
+                    public Task<Route> addRouteAsync(RouteBuilder builder) {
                         return mwPrivate.queueRouteBuilder(builder, name());
                     }
 

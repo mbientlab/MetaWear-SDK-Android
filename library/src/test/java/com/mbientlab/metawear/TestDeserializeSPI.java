@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import java.io.IOException;
+
 import bolts.Task;
 
 /**
@@ -33,9 +35,13 @@ import bolts.Task;
 public class TestDeserializeSPI extends TestSPI {
     @Override
     protected Task<Route> setupSpiStream() {
-        btlePlaform.boardStateSuffix = "spi_stream";
-        mwBoard.deserialize();
+        try {
+            junitPlatform.boardStateSuffix = "spi_stream";
+            mwBoard.deserialize();
 
-        return Task.forResult(mwBoard.lookupRoute(0));
+            return Task.forResult(mwBoard.lookupRoute(0));
+        } catch (IOException | ClassNotFoundException e) {
+            return Task.forError(e);
+        }
     }
 }

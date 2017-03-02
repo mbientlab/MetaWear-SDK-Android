@@ -22,14 +22,17 @@
  * hello@mbientlab.com.
  */
 
-package com.mbientlab.metawear.datatype;
+package com.mbientlab.metawear;
 
 /**
- * Created by etsai on 11/13/16.
+ * Attribute indicating the object can be configured
+ * @param <T>    Type that modifies this object's configuration
+ * @author Eric Tsai
  */
-
-public enum CartesianAxis {
-    X,
-    Y,
-    Z
+public interface Configurable<T extends ConfigEditorBase> {
+    /**
+     * Configure the object
+     * @return Config editor object
+     */
+    T configure();
 }

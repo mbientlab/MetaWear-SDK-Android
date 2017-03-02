@@ -40,7 +40,7 @@ public class TestMacroControl extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
         connectToBoard();
 
         macro = mwBoard.getModule(Macro.class);
@@ -51,7 +51,7 @@ public class TestMacroControl extends UnitTestBase {
         byte[] expected = new byte[] {0x0f, 0x08};
 
         macro.eraseAll();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -59,6 +59,6 @@ public class TestMacroControl extends UnitTestBase {
         byte[] expected = new byte[] {0x0f, 0x05, 0x00};
 
         macro.execute((byte) 0);
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

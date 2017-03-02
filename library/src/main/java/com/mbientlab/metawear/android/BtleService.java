@@ -41,19 +41,16 @@ import android.util.Base64;
 import android.util.Log;
 
 import com.mbientlab.metawear.MetaWearBoard;
-import com.mbientlab.metawear.impl.MetaWearBoardImpl;
-import com.mbientlab.metawear.impl.Pair;
-import com.mbientlab.metawear.impl.Platform;
+import com.mbientlab.metawear.impl.JseMetaWearBoard;
+import com.mbientlab.metawear.impl.platform.BtleGatt;
+import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
+import com.mbientlab.metawear.impl.platform.IO;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -80,24 +77,23 @@ import bolts.TaskCompletionSource;
  * Created by etsai on 10/9/16.
  */
 public class BtleService extends Service {
-    private static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"),
-            METAWEAR_NOTIFY= UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A");
-    private static String FIRMWARE_DIR_NAME = "firmware";
+    private static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+    private static String DOWNLOAD_DIR_NAME = "download";
 
     private final BluetoothGattCallback btleGattCallback= new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(final BluetoothGatt gatt, final int status, int newState) {
-            final BoardState state= mwBoardStates.get(gatt.getDevice());
+            final AndroidPlatform platform= btleDevices.get(gatt.getDevice());
 
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
                     if (status != 0) {
-                        state.closeGatt();
-                        if (state.connectTask.get() != null) {
+                        platform.closeGatt();
+                        if (platform.connectTask.get() != null) {
                             taskFutures.add(backgroundThreadPool.submit(new Runnable() {
                                 @Override
                                 public void run() {
-                                    state.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
+                                    platform.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
                                 }
                             }));
                         }
@@ -106,21 +102,21 @@ public class BtleService extends Service {
                     }
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
-                    state.closeGatt();
+                    platform.closeGatt();
 
                     final BluetoothDevice device= gatt.getDevice();
                     taskFutures.add(backgroundThreadPool.submit(new Runnable() {
                         @Override
                         public void run() {
-                            if (state.connectTask.get() != null && status != 0) {
-                                state.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
-                            } else if (state.disconnectTask.get() == null) {
-                                mwBoards.get(device).handleUnexpectedDisconnect(status);
+                            if (platform.connectTask.get() != null && status != 0) {
+                                platform.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
+                                btleDevices.get(device).gattCallback.onDisconnect();
+                            } else if (platform.disconnectTask.get() == null) {
+                                btleDevices.get(device).gattCallback.onUnexpectedDisconnect(status);
                             } else {
-                                state.disconnectTask.getAndSet(null).setResult(null);
+                                platform.disconnectTask.getAndSet(null).setResult(null);
+                                btleDevices.get(device).gattCallback.onDisconnect();
                             }
-
-                            mwBoards.get(device).disconnected();
                         }
                     }));
                     break;
@@ -129,44 +125,46 @@ public class BtleService extends Service {
 
         @Override
         public void onServicesDiscovered(final BluetoothGatt gatt, final int status) {
-            final BoardState state= mwBoardStates.get(gatt.getDevice());
+            final AndroidPlatform platform= btleDevices.get(gatt.getDevice());
 
             if (status != 0) {
-                state.closeGatt();
-                if (state.connectTask.get() != null) {
+                platform.closeGatt();
+                if (platform.connectTask.get() != null) {
                     taskFutures.add(backgroundThreadPool.submit(new Runnable() {
                         @Override
                         public void run() {
-                            state.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero service discovery status (%s)", status)));
+                            platform.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero service discovery status (%s)", status)));
                         }
                     }));
                 }
             } else {
-                state.nDescriptors= 0;
-                for (BluetoothGattService service : gatt.getServices()) {
-                    if (service.getUuid().equals(MetaWearBoard.METABOOT_SERVICE_UUID)) {
-                        state.inMetaBoot= true;
-                    }
-                    for (final BluetoothGattCharacteristic characteristic : service.getCharacteristics()) {
-                        int charProps = characteristic.getProperties();
-                        if ((charProps & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
-                            state.nDescriptors++;
-
-                            gattScheduler.queueAction(new Callable<Boolean>() {
-                                @Override
-                                public Boolean call() {
-                                    gatt.setCharacteristicNotification(characteristic, true);
-
-                                    gattScheduler.setExpectedGattKey(GattActionKey.DESCRIPTOR_WRITE);
-                                    BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CHARACTERISTIC_CONFIG);
-                                    descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                                    gatt.writeDescriptor(descriptor);
-
-                                    return true;
-                                }
-                            });
+                final BluetoothGattService service = gatt.getService(MetaWearBoard.METAWEAR_GATT_SERVICE);
+                if (service == null) {
+                    platform.closeGatt();
+                    taskFutures.add(backgroundThreadPool.submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            platform.setConnectTaskError(new RuntimeException("MetaWear GATT service does not exist: " + MetaWearBoard.METAWEAR_GATT_SERVICE.toString()));
                         }
-                    }
+                    }));
+                } else {
+                    platform.nDescriptors= 1;
+
+                    gattScheduler.queueAction(new Callable<Boolean>() {
+                        @Override
+                        public Boolean call() {
+                            BluetoothGattCharacteristic characteristic = service.getCharacteristic(MetaWearBoard.METAWEAR_NOTIFY_CHAR);
+                            gatt.setCharacteristicNotification(characteristic, true);
+
+                            gattScheduler.setExpectedGattKey(GattActionKey.DESCRIPTOR_WRITE);
+                            BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CHARACTERISTIC_CONFIG);
+                            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                            gatt.writeDescriptor(descriptor);
+
+                            return true;
+                        }
+                    });
+
                 }
             }
 
@@ -178,7 +176,10 @@ public class BtleService extends Service {
             gattScheduler.updateExecActionsState();
             gattScheduler.executeNext(GattActionKey.CHAR_READ);
 
-            mwBoards.get(gatt.getDevice()).handleReadGattCharResponse(new Pair<>(characteristic.getService().getUuid(), characteristic.getUuid()), characteristic.getValue());
+            btleDevices.get(gatt.getDevice()).gattCallback.onCharRead(
+                    new BtleGattCharacteristic(characteristic.getService().getUuid(), characteristic.getUuid()),
+                    characteristic.getValue()
+            );
         }
 
         @Override
@@ -189,38 +190,36 @@ public class BtleService extends Service {
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            if (characteristic.getUuid().equals(METAWEAR_NOTIFY)) {
-                mwBoards.get(gatt.getDevice()).handleNotifyCharResponse(characteristic.getValue());
-            }
+            btleDevices.get(gatt.getDevice()).gattCallback.onMwNotifyCharChanged(characteristic.getValue());
         }
 
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, final int status) {
             gattScheduler.updateExecActionsState();
 
-            final BoardState state= mwBoardStates.get(gatt.getDevice());
+            final AndroidPlatform platform= btleDevices.get(gatt.getDevice());
             if (status != 0) {
-                state.closeGatt();
+                platform.closeGatt();
 
                 gattScheduler.executeNext(GattActionKey.DESCRIPTOR_WRITE);
-                if (state.connectTask.get() != null) {
+                if (platform.connectTask.get() != null) {
                     taskFutures.add(backgroundThreadPool.submit(new Runnable() {
                         @Override
                         public void run() {
-                            state.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero descriptor writing status (%s)", status)));
+                            platform.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero descriptor writing status (%s)", status)));
                         }
                     }));
                 }
             } else {
                 gattScheduler.executeNext(GattActionKey.DESCRIPTOR_WRITE);
-                state.nDescriptors--;
-                if (state.nDescriptors == 0) {
-                    state.connectFuture.getAndSet(null).cancel(false);
+                platform.nDescriptors--;
+                if (platform.nDescriptors == 0) {
+                    platform.connectFuture.getAndSet(null).cancel(false);
                     taskFutures.add(backgroundThreadPool.submit(new Runnable() {
                         @Override
                         public void run() {
-                            if (state.connectTask.get() != null) {
-                                state.connectTask.getAndSet(null).setResult(null);
+                            if (platform.connectTask.get() != null) {
+                                platform.connectTask.getAndSet(null).setResult(null);
                             }
                         }
                     }));
@@ -234,14 +233,14 @@ public class BtleService extends Service {
             gattScheduler.updateExecActionsState();
             gattScheduler.executeNext(GattActionKey.RSSI_READ);
 
-            final BoardState state= mwBoardStates.get(gatt.getDevice());
+            final AndroidPlatform platform= btleDevices.get(gatt.getDevice());
             taskFutures.add(backgroundThreadPool.submit(new Runnable() {
                 @Override
                 public void run() {
                     if (status != 0) {
-                        state.rssiTask.setError(new RuntimeException(String.format(Locale.US, "Non-zero read rssi status (%s)", status)));
+                        platform.rssiTask.getAndSet(null).setError(new RuntimeException(String.format(Locale.US, "Non-zero read RSSI status (%s)", status)));
                     } else {
-                        state.rssiTask.setResult(rssi);
+                        platform.rssiTask.getAndSet(null).setResult(rssi);
                     }
                 }
             }));
@@ -310,38 +309,43 @@ public class BtleService extends Service {
         }
     }
 
-    private static class BoardState {
+    private class AndroidPlatform implements IO, BtleGatt {
         int nDescriptors;
-        boolean inMetaBoot;
         final AtomicReference<TaskCompletionSource<Void>> connectTask = new AtomicReference<>(),
                 disconnectTask = new AtomicReference<>();
-        TaskCompletionSource<Integer> rssiTask;
-        BluetoothGatt btGatt;
+        final AtomicReference<TaskCompletionSource<Integer>> rssiTask = new AtomicReference<>();
+        BluetoothGatt androidBtGatt;
         final AtomicReference<ScheduledFuture<?>> connectFuture = new AtomicReference<>();
         final Runnable connectTimeout = new Runnable() {
             @Override
             public void run() {
                 connectFuture.getAndSet(null).cancel(false);
-                if (btGatt != null) {
-                    btGatt.close();
-                }
+                closeGatt();
                 if (connectTask.get() != null) {
-                    connectTask.getAndSet(null)
-                            .setError(new TimeoutException("Timed out establishing Bluetooth Connection"));
+                    connectTask.getAndSet(null).setError(new TimeoutException("Timed out establishing Bluetooth Connection"));
                 }
             }
         };
 
+        private final BluetoothDevice btDevice;
+        private final MetaWearBoard board;
+
+        BtleGatt.Callback gattCallback;
+
+        AndroidPlatform(BluetoothDevice btDevice) {
+            this.btDevice = btDevice;
+            board = new JseMetaWearBoard(this, this, btDevice.getAddress());
+        }
+
         void closeGatt() {
-            inMetaBoot = false;
-            if (btGatt != null) {
+            if (androidBtGatt != null) {
                 try {
-                    btGatt.getClass().getMethod("refresh").invoke(btGatt);
+                    androidBtGatt.getClass().getMethod("refresh").invoke(androidBtGatt);
                 } catch (final Exception e) {
                     Log.e("MetaWear", "Error refreshing gatt cache", e);
                 } finally {
-                    btGatt.close();
-                    btGatt= null;
+                    androidBtGatt.close();
+                    androidBtGatt = null;
                 }
             }
         }
@@ -349,6 +353,193 @@ public class BtleService extends Service {
         void setConnectTaskError(Exception e) {
             connectFuture.getAndSet(null).cancel(false);
             connectTask.getAndSet(null).setError(e);
+        }
+
+        @Override
+        public void localSave(String key, byte[] data) {
+            SharedPreferences.Editor editor= BtleService.this.getSharedPreferences(btDevice.getAddress(), MODE_PRIVATE).edit();
+            editor.putString(key, new String(Base64.encode(data, Base64.DEFAULT)));
+            editor.apply();
+        }
+
+        @Override
+        public InputStream localRetrieve(String key) {
+            SharedPreferences prefs= BtleService.this.getSharedPreferences(btDevice.getAddress(), MODE_PRIVATE);
+            return prefs.contains(key) ?
+                    new ByteArrayInputStream(Base64.decode(prefs.getString(key, "").getBytes(), Base64.DEFAULT)) :
+                    null;
+        }
+
+        @Override
+        public Task<File> downloadFileAsync(final String srcUrl, final String dest) {
+            final TaskCompletionSource<File> downloadTask = new TaskCompletionSource<>();
+
+            new AsyncTask<String, Void, Void>() {
+                @Override
+                protected Void doInBackground(String... params) {
+                    HttpURLConnection urlConn = null;
+
+                    try {
+                        URL fileUrl = new URL(srcUrl);
+                        urlConn = (HttpURLConnection) fileUrl.openConnection();
+                        InputStream ins = urlConn.getInputStream();
+
+                        File firmwareDir = new File(getFilesDir(), DOWNLOAD_DIR_NAME);
+                        if (!firmwareDir.exists()) {
+                            firmwareDir.mkdir();
+                        }
+
+                        File location = new File(firmwareDir, dest);
+                        FileOutputStream fos = new FileOutputStream(location);
+
+                        byte data[] = new byte[1024];
+                        int count;
+                        while ((count = ins.read(data)) != -1) {
+                            fos.write(data, 0, count);
+                        }
+                        fos.close();
+
+                        downloadTask.setResult(location);
+                    } catch (MalformedURLException e) {
+                        downloadTask.setError(e);
+                    } catch (IOException e) {
+                        downloadTask.setError(e);
+                    } finally {
+                        if (urlConn != null) {
+                            urlConn.disconnect();
+                        }
+                    }
+
+                    return null;
+                }
+            }.execute(dest);
+            return downloadTask.getTask();
+        }
+
+        @Override
+        public File findDownloadedFile(String filename) {
+            File downloadFolder = new File(getFilesDir(), DOWNLOAD_DIR_NAME);
+            return new File(downloadFolder, filename);
+        }
+
+        @Override
+        public void logWarn(String tag, String message) {
+            Log.w(tag, message);
+        }
+
+        @Override
+        public void logWarn(String tag, String message, Throwable tr) {
+            Log.w(tag, message, tr);
+        }
+
+        @Override
+        public void registerCallback(Callback callback) {
+            gattCallback = callback;
+        }
+
+        @Override
+        public void writeCharacteristic(final BtleGattCharacteristic gattChar, final BtleGatt.GattCharWriteType writeType, final byte[] value) {
+            gattScheduler.queueAction(new Callable<Boolean>() {
+                @Override
+                public Boolean call() throws Exception {
+                    gattScheduler.setExpectedGattKey(GattActionKey.CHAR_WRITE);
+
+                    BluetoothGattService service = androidBtGatt.getService(gattChar.serviceUuid);
+                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(gattChar.uuid);
+                    characteristic.setWriteType(writeType == BtleGatt.GattCharWriteType.WRITE_WITHOUT_RESPONSE ?
+                            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
+                            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    );
+                    characteristic.setValue(value);
+
+                    androidBtGatt.writeCharacteristic(characteristic);
+
+                    return true;
+                }
+            });
+            gattScheduler.executeNext(GattActionKey.NONE);
+        }
+
+        @Override
+        public void readCharacteristic(final BtleGattCharacteristic gattChar) {
+            gattScheduler.queueAction(new Callable<Boolean>() {
+                @Override
+                public Boolean call() {
+                    gattScheduler.setExpectedGattKey(GattActionKey.CHAR_READ);
+                    BluetoothGattService service = androidBtGatt.getService(gattChar.serviceUuid);
+                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(gattChar.uuid);
+
+                    androidBtGatt.readCharacteristic(characteristic);
+                    return true;
+                }
+            });
+            gattScheduler.executeNext(GattActionKey.NONE);
+        }
+
+        @Override
+        public boolean serviceExists(UUID serviceUuid) {
+            return androidBtGatt.getService(MetaWearBoard.METABOOT_SERVICE) != null;
+        }
+
+        @Override
+        public Task<Void> disconnectAsync() {
+            Task<Void> task = boardDisconnectAsync();
+            androidBtGatt.disconnect();
+            return task;
+        }
+
+        @Override
+        public Task<Void> boardDisconnectAsync() {
+            if (connectTask.get() != null) {
+                taskFutures.add(backgroundThreadPool.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        connectFuture.getAndSet(null).cancel(false);
+                        connectTask.getAndSet(null).setCancelled();
+                    }
+                }));
+            }
+
+            if (disconnectTask.get() == null) {
+                disconnectTask.set(new TaskCompletionSource<Void>());
+            }
+
+            return disconnectTask.get().getTask();
+        }
+
+        @Override
+        public Task<Void> connectAsync() {
+            if (connectTask.get() == null) {
+                connectTask.set(new TaskCompletionSource<Void>());
+                androidBtGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback);
+
+                if (connectFuture.get()!= null) {
+                    connectFuture.getAndSet(null).cancel(false);
+                }
+                connectFuture.set(taskScheduler.schedule(connectTimeout, 7500L, TimeUnit.MILLISECONDS));
+            }
+
+            return connectTask.get().getTask();
+        }
+
+        @Override
+        public Task<Integer> readRssiAsync() {
+            if (androidBtGatt != null) {
+                if (rssiTask.get() == null) {
+                    rssiTask.set(new TaskCompletionSource<Integer>());
+                    gattScheduler.queueAction(new Callable<Boolean>() {
+                        @Override
+                        public Boolean call() {
+                            gattScheduler.setExpectedGattKey(GattActionKey.RSSI_READ);
+                            androidBtGatt.readRemoteRssi();
+                            return true;
+                        }
+                    });
+                    gattScheduler.executeNext(GattActionKey.NONE);
+                }
+                return rssiTask.get().getTask();
+            }
+            return Task.forError(new RuntimeException("No active BLE connection"));
         }
     }
 
@@ -380,257 +571,45 @@ public class BtleService extends Service {
 
     private final IBinder mBinder= new LocalBinder();
     private final GattActionScheduler gattScheduler= new GattActionScheduler();
-    private final Map<BluetoothDevice, MetaWearBoardImpl> mwBoards= new HashMap<>();
-    private final Map<BluetoothDevice, BoardState> mwBoardStates= new HashMap<>();
+    private final Map<BluetoothDevice, AndroidPlatform> btleDevices = new HashMap<>();
 
     /**
      * Provides methods for interacting with the service
      * @author Eric Tsai
      */
     public class LocalBinder extends Binder {
-        static final String MODULE_INFO= "com.mbientlab.metawear.android.BtleService.LocalBinder.MODULE_INFO",
-                BOARD_STATE= "com.mbientlab.metawear.android.BtleService.LocalBinder.BOARD_STATE";
         /**
          * Instantiates a MetaWearBoard class
-         * @param btDevice    BluetoothDevice object corresponding to the target MetaWear board
+         * @param device    BluetoothDevice object corresponding to the target MetaWear board
          * @return MetaWearBoard object
          */
-        public MetaWearBoard getMetaWearBoard(final BluetoothDevice btDevice) {
-            if (!mwBoards.containsKey(btDevice)) {
-                final BoardState state= new BoardState();
-                mwBoardStates.put(btDevice, state);
-                mwBoards.put(btDevice, new MetaWearBoardImpl(new Platform() {
-                    void serializeObjects(String key, Serializable ... objects) throws IOException {
-                        ByteArrayOutputStream buffer= new ByteArrayOutputStream(1024);
-                        ObjectOutputStream oos= new ObjectOutputStream(buffer);
-
-                        for(Serializable s : objects) {
-                            oos.writeObject(s);
-                        }
-                        oos.close();
-
-                        SharedPreferences.Editor editor= BtleService.this.getSharedPreferences(btDevice.getAddress(), MODE_PRIVATE).edit();
-                        editor.putString(key, new String(Base64.encode(buffer.toByteArray(), Base64.DEFAULT)));
-                        editor.apply();
-                    }
-
-                    ObjectInputStream getObjectInputStream(String key) throws IOException {
-                        SharedPreferences prefs= BtleService.this.getSharedPreferences(btDevice.getAddress(), MODE_PRIVATE);
-                        String infoState= prefs.getString(key, "");
-
-                        if (!infoState.isEmpty()) {
-                            ByteArrayInputStream buffer= new ByteArrayInputStream(Base64.decode(infoState.getBytes(), Base64.DEFAULT));
-                            return new ObjectInputStream(buffer);
-                        }
-                        return null;
-                    }
-
-                    @Override
-                    public void serializeBoardInfo(Serializable boardInfo) throws IOException {
-                        serializeObjects(MODULE_INFO, boardInfo);
-                    }
-
-                    @Override
-                    public Object deserializeBoardInfo() throws IOException, ClassNotFoundException {
-                        ObjectInputStream ois = getObjectInputStream(MODULE_INFO);
-                        if (ois != null) {
-                            return ois.readObject();
-                        }
-                        return null;
-                    }
-
-                    @Override
-                    public void serializeBoardState(Serializable persist) throws IOException {
-                        serializeObjects(BOARD_STATE, persist);
-                    }
-
-                    @Override
-                    public Object deserializeBoardState() throws IOException, ClassNotFoundException {
-                        ObjectInputStream ois= getObjectInputStream(BOARD_STATE);
-                        if (ois != null) {
-                            return ois.readObject();
-                        }
-                        return null;
-                    }
-
-                    @Override
-                    public void writeGattCharacteristic(final GattCharWriteType writeType, final Pair<UUID, UUID> gattCharr, final byte[] value) {
-                        gattScheduler.queueAction(new Callable<Boolean>() {
-                            @Override
-                            public Boolean call() throws Exception {
-                                gattScheduler.setExpectedGattKey(GattActionKey.CHAR_WRITE);
-
-                                BluetoothGattService service = state.btGatt.getService(gattCharr.first);
-                                BluetoothGattCharacteristic characteristic = service.getCharacteristic(gattCharr.second);
-                                characteristic.setWriteType(writeType == GattCharWriteType.WRITE_WITHOUT_RESPONSE ?
-                                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
-                                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                                );
-                                characteristic.setValue(value);
-
-                                state.btGatt.writeCharacteristic(characteristic);
-
-                                return true;
-                            }
-                        });
-                        gattScheduler.executeNext(GattActionKey.NONE);
-                    }
-
-                    @Override
-                    public void readGattCharacteristic(final Pair<UUID, UUID> gattCharr) {
-                        gattScheduler.queueAction(new Callable<Boolean>() {
-                            @Override
-                            public Boolean call() {
-                                gattScheduler.setExpectedGattKey(GattActionKey.CHAR_READ);
-                                BluetoothGattService service = state.btGatt.getService(gattCharr.first);
-                                BluetoothGattCharacteristic characteristic = service.getCharacteristic(gattCharr.second);
-
-                                state.btGatt.readCharacteristic(characteristic);
-                                return true;
-                            }
-                        });
-                        gattScheduler.executeNext(GattActionKey.NONE);
-                    }
-
-                    @Override
-                    public boolean inMetaBoot() {
-                        return state.inMetaBoot;
-                    }
-
-                    @Override
-                    public Task<Void> disconnect() {
-                        Task<Void> task = boardDisconnect();
-                        state.btGatt.disconnect();
-                        return task;
-                    }
-
-                    @Override
-                    public Task<Void> boardDisconnect() {
-                        if (state.connectTask.get() != null) {
-                            taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                                @Override
-                                public void run() {
-                                    state.connectFuture.getAndSet(null).cancel(false);
-                                    state.connectTask.getAndSet(null).setCancelled();
-                                }
-                            }));
-                        }
-
-                        if (state.disconnectTask.get() == null) {
-                            state.disconnectTask.set(new TaskCompletionSource<Void>());
-                        }
-
-                        return state.disconnectTask.get().getTask();
-                    }
-
-                    @Override
-                    public Task<Void> connect() {
-                        if (state.connectTask.get() == null) {
-                            state.connectTask.set(new TaskCompletionSource<Void>());
-                            state.btGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback);
-
-                            if (state.connectFuture.get()!= null) {
-                                state.connectFuture.getAndSet(null).cancel(false);
-                            }
-                            state.connectFuture.set(taskScheduler.schedule(state.connectTimeout, 7500L, TimeUnit.MILLISECONDS));
-                        }
-
-                        return state.connectTask.get().getTask();
-                    }
-
-                    @Override
-                    public Task<Integer> readRssiTask() {
-                        TaskCompletionSource<Integer> taskSource = new TaskCompletionSource<>();
-                        state.rssiTask = taskSource;
-                        gattScheduler.queueAction(new Callable<Boolean>() {
-                            @Override
-                            public Boolean call() {
-                                gattScheduler.setExpectedGattKey(GattActionKey.RSSI_READ);
-                                state.btGatt.readRemoteRssi();
-                                return true;
-                            }
-                        });
-                        gattScheduler.executeNext(GattActionKey.NONE);
-                        return taskSource.getTask();
-                    }
-
-                    @Override
-                    public Task<File> downloadFile(final String source, final String dest) {
-                        final TaskCompletionSource<File> downloadTask = new TaskCompletionSource<>();
-
-                        new AsyncTask<String, Void, Void>() {
-                            @Override
-                            protected Void doInBackground(String... params) {
-                                HttpURLConnection urlConn = null;
-
-                                try {
-                                    URL fileUrl = new URL(source);
-                                    urlConn = (HttpURLConnection) fileUrl.openConnection();
-                                    InputStream ins = urlConn.getInputStream();
-
-                                    File firmwareDir = new File(getFilesDir(), FIRMWARE_DIR_NAME);
-                                    if (!firmwareDir.exists()) {
-                                        firmwareDir.mkdir();
-                                    }
-
-                                    File location = new File(firmwareDir, dest);
-                                    FileOutputStream fos = new FileOutputStream(location);
-
-                                    byte data[] = new byte[1024];
-                                    int count;
-                                    while ((count = ins.read(data)) != -1) {
-                                        fos.write(data, 0, count);
-                                    }
-                                    fos.close();
-
-                                    downloadTask.setResult(location);
-                                } catch (MalformedURLException e) {
-                                    downloadTask.setError(e);
-                                } catch (IOException e) {
-                                    downloadTask.setError(e);
-                                } finally {
-                                    if (urlConn != null) {
-                                        urlConn.disconnect();
-                                    }
-                                }
-
-                                return null;
-                            }
-                        }.execute(dest);
-                        return downloadTask.getTask();
-                    }
-
-                    @Override
-                    public File findFile(String filename) {
-                        return new File(getFilesDir(), filename);
-                    }
-                }, btDevice.getAddress()));
+        public MetaWearBoard getMetaWearBoard(final BluetoothDevice device) {
+            if (!btleDevices.containsKey(device)) {
+                btleDevices.put(device, new AndroidPlatform(device));
             }
-            return mwBoards.get(btDevice);
+            return btleDevices.get(device).board;
         }
         /**
          * Removes the MetaWearBoard object associated with the BluetoothDevice object
          * @param btDevice    BluetoothDevice object corresponding to the target MetaWear board
          */
         public void removeMetaWearBoard(final BluetoothDevice btDevice) {
-            mwBoards.remove(btDevice);
+            btleDevices.remove(btDevice);
         }
         /**
          * Removes the saved serialized state of the MetaWearBoard object associated with the BluetoothDevice object
          * @param btDevice    BluetoothDevice object corresponding to the target MetaWear board
          */
         public void clearSerializedState(final BluetoothDevice btDevice) {
-            SharedPreferences.Editor editor= BtleService.this.getSharedPreferences(btDevice.getAddress(), MODE_PRIVATE).edit();
-            editor.remove(MODULE_INFO);
-            editor.remove(BOARD_STATE);
-            editor.apply();
+            SharedPreferences preferences = BtleService.this.getSharedPreferences(btDevice.getAddress(), MODE_PRIVATE);
+            preferences.edit().clear().apply();
         }
         /**
-         * Removes cached firmware files from the Android device
+         * Removes downloaded files cached on the Android device
          */
-        public void clearFirmwareCache() {
-            File firmwareDir = new File(getFilesDir(), FIRMWARE_DIR_NAME);
-            for(File it: firmwareDir.listFiles()) {
+        public void clearDownloadCache() {
+            File downloadFolder = new File(getFilesDir(), DOWNLOAD_DIR_NAME);
+            for(File it: downloadFolder.listFiles()) {
                 if (it.isFile()) {
                     it.delete();
                 }
@@ -652,13 +631,10 @@ public class BtleService extends Service {
 
     @Override
     public void onDestroy() {
-        for(Map.Entry<BluetoothDevice, BoardState> it: mwBoardStates.entrySet()) {
-            if (it.getValue().btGatt != null) {
-                it.getValue().closeGatt();
-            }
+        for(Map.Entry<BluetoothDevice, AndroidPlatform> it: btleDevices.entrySet()) {
+            it.getValue().closeGatt();
         }
-        mwBoardStates.clear();
-        mwBoards.clear();
+        btleDevices.clear();
 
         super.onDestroy();
     }

@@ -27,7 +27,7 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer.AccelerationDataProducer;
 
 import org.junit.Before;
@@ -64,8 +64,8 @@ public class TestAccFeedback extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo= moduleInfo;
-        btlePlaform.firmware= "1.1.3";
+        junitPlatform.boardInfo= moduleInfo;
+        junitPlatform.firmware= "1.1.3";
         connectToBoard();
     }
 
@@ -87,9 +87,9 @@ public class TestAccFeedback extends UnitTestBase {
         };
         final AccelerationDataProducer acceleration= mwBoard.getModule(Accelerometer.class).acceleration();
 
-        acceleration.addRoute(new RouteBuilder() {
+        acceleration.addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.split()
                         .index(1).delay((byte) 1).map(Function2.SUBTRACT, acceleration.xAxisName()).stream(null).log(null)
                       .end();
@@ -108,7 +108,7 @@ public class TestAccFeedback extends UnitTestBase {
             this.wait();
             mwBoard.lookupRoute(0).remove();
 
-            assertArrayEquals(expected, btlePlaform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 }

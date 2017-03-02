@@ -83,6 +83,6 @@ public class TestGyroBmi160Config extends UnitTestBase {
                 .odr(odr)
                 .range(fsr)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

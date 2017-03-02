@@ -54,7 +54,7 @@ public class TestDebug extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = info;
+        junitPlatform.boardInfo = info;
         connectToBoard();
 
         debug= mwBoard.getModule(Debug.class);
@@ -64,24 +64,24 @@ public class TestDebug extends UnitTestBase {
     public void reset() {
         byte[] expected= new byte[] {(byte) 0xfe, 0x01};
 
-        debug.reset();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        debug.resetAsync();
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void jumpToBootloader() {
         byte[] expected= new byte[] {(byte) 0xfe, 0x02};
 
-        debug.jumpToBootloader();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        debug.jumpToBootloaderAsync();
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void disconnect() {
         byte[] expected= new byte[] {(byte) 0xfe, 0x06};
 
-        debug.disconnect();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        debug.disconnectAsync();
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -89,6 +89,6 @@ public class TestDebug extends UnitTestBase {
         byte[] expected= new byte[] {(byte) 0xfe, 0x05};
 
         debug.resetAfterGc();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

@@ -28,21 +28,14 @@ import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.impl.DataAttributes;
-import com.mbientlab.metawear.impl.MetaWearBoardPrivate;
-import com.mbientlab.metawear.impl.ModuleId;
-import com.mbientlab.metawear.impl.ModuleImplBase;
-import com.mbientlab.metawear.impl.UintData;
-import com.mbientlab.metawear.impl.Util;
 import com.mbientlab.metawear.module.Gpio;
 
-import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Locale;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.GPIO;
+import static com.mbientlab.metawear.impl.Constant.Module.GPIO;
 
 /**
  * Created by etsai on 9/6/16.
@@ -56,33 +49,33 @@ class GpioImpl extends ModuleImplBase implements Gpio {
     private static final byte SET_DO = 1, CLEAR_DO = 2,
             PULL_UP_DI = 3, PULL_DOWN_DI = 4, NO_PULL_DI = 5,
             READ_AI_ABS_REF = 6, READ_AI_ADC = 7, READ_DI = 8,
-            PIN_CHANGE = 9, PIN_CHANGE_NOTIFY_ENABLE = 11;
-    static final byte PIN_CHANGE_NOTIFY = 10;
-    private static final long serialVersionUID = 8515819183631054276L;
+            PIN_CHANGE = 9, PIN_CHANGE_NOTIFY = 10,
+            PIN_CHANGE_NOTIFY_ENABLE = 11;
+    private static final long serialVersionUID = -2789484561911239925L;
 
     private static class AnalogInner implements Analog {
         private final byte pin;
         private final String producerNameFormat;
-        private final MetaWearBoardPrivate owner;
+        private final MetaWearBoardPrivate mwPrivate;
 
-        private AnalogInner(MetaWearBoardPrivate owner, byte pin, String producerNameFormat) {
-            this.owner= owner;
+        private AnalogInner(MetaWearBoardPrivate mwPrivate, byte pin, String producerNameFormat) {
+            this.mwPrivate = mwPrivate;
             this.pin= pin;
             this.producerNameFormat = producerNameFormat;
         }
 
         @Override
         public void read(byte pullup, byte pulldown, short delay, byte virtual) {
-            if (owner.lookupModuleInfo(ModuleId.GPIO).revision >= REVISION_ENHANCED_ANALOG) {
-                owner.lookupProducer(name()).read(owner, new byte[] {pullup, pulldown, (byte) (delay / 4), virtual});
+            if (mwPrivate.lookupModuleInfo(Constant.Module.GPIO).revision >= REVISION_ENHANCED_ANALOG) {
+                mwPrivate.lookupProducer(name()).read(mwPrivate, new byte[] {pullup, pulldown, (byte) (delay / 4), virtual});
             } else {
-                owner.lookupProducer(name()).read(owner);
+                mwPrivate.lookupProducer(name()).read(mwPrivate);
             }
         }
 
         @Override
-        public Task<Route> addRoute(RouteBuilder builder) {
-            return owner.queueRouteBuilder(builder, name());
+        public Task<Route> addRouteAsync(RouteBuilder builder) {
+            return mwPrivate.queueRouteBuilder(builder, name());
         }
 
         @Override
@@ -92,27 +85,22 @@ class GpioImpl extends ModuleImplBase implements Gpio {
 
         @Override
         public void read() {
-            if (owner.lookupModuleInfo(ModuleId.GPIO).revision >= REVISION_ENHANCED_ANALOG) {
-                owner.lookupProducer(name()).read(owner, new byte[] {(byte) 0xff, (byte) 0xff, (byte) 0, (byte) 0xff});
+            if (mwPrivate.lookupModuleInfo(Constant.Module.GPIO).revision >= REVISION_ENHANCED_ANALOG) {
+                mwPrivate.lookupProducer(name()).read(mwPrivate, new byte[] {UNUSED_READ_PIN, UNUSED_READ_PIN, UNUSED_READ_DELAY, UNUSED_READ_PIN});
             } else {
-                owner.lookupProducer(name()).read(owner);
+                mwPrivate.lookupProducer(name()).read(mwPrivate);
             }
         }
     }
-    private static class GpioPinImpl implements Pin, Serializable {
-        private static final long serialVersionUID = -7164069041020837195L;
+    private static class GpioPinImpl implements Pin {
         private final byte pin;
         private final boolean virtual;
-        private transient MetaWearBoardPrivate owner;
+        private transient MetaWearBoardPrivate mwPrivate;
 
-        GpioPinImpl(byte pin, boolean virtual, MetaWearBoardPrivate owner) {
+        GpioPinImpl(byte pin, boolean virtual, MetaWearBoardPrivate mwPrivate) {
             this.pin= pin;
             this.virtual= virtual;
-            this.owner= owner;
-        }
-
-        void restoreTransientVar(MetaWearBoardPrivate owner) {
-            this.owner= owner;
+            this.mwPrivate = mwPrivate;
         }
 
         @Override
@@ -122,40 +110,40 @@ class GpioImpl extends ModuleImplBase implements Gpio {
 
         @Override
         public void setChangeType(PinChangeType type) {
-            owner.sendCommand(new byte[] {GPIO.id, PIN_CHANGE, pin, (byte) (type.ordinal() + 1)});
+            mwPrivate.sendCommand(new byte[] {GPIO.id, PIN_CHANGE, pin, (byte) (type.ordinal() + 1)});
         }
 
         @Override
         public void setPullMode(PullMode mode) {
             switch (mode) {
                 case PULL_UP:
-                    owner.sendCommand(new byte[] {GPIO.id, PULL_UP_DI, pin});
+                    mwPrivate.sendCommand(new byte[] {GPIO.id, PULL_UP_DI, pin});
                     break;
                 case PULL_DOWN:
-                    owner.sendCommand(new byte[] {GPIO.id, PULL_DOWN_DI, pin});
+                    mwPrivate.sendCommand(new byte[] {GPIO.id, PULL_DOWN_DI, pin});
                     break;
                 case NO_PULL:
-                    owner.sendCommand(new byte[] {GPIO.id, NO_PULL_DI, pin});
+                    mwPrivate.sendCommand(new byte[] {GPIO.id, NO_PULL_DI, pin});
                     break;
             }
         }
 
         @Override
         public void clearOutput() {
-            owner.sendCommand(new byte[] {GPIO.id, CLEAR_DO, pin});
+            mwPrivate.sendCommand(new byte[] {GPIO.id, CLEAR_DO, pin});
         }
 
         @Override
         public void setOutput() {
-            owner.sendCommand(new byte[] {GPIO.id, SET_DO, pin});
+            mwPrivate.sendCommand(new byte[] {GPIO.id, SET_DO, pin});
         }
 
         @Override
         public Analog analogAdc() {
-            Analog producer= new AnalogInner(owner, pin, ADC_PRODUCER_FORMAT);
+            Analog producer= new AnalogInner(mwPrivate, pin, ADC_PRODUCER_FORMAT);
 
-            if (!owner.hasProducer(producer.name())) {
-                owner.tagProducer(producer.name(), new UintData(GPIO, Util.setSilentRead(READ_AI_ADC), pin, new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false)));
+            if (!mwPrivate.hasProducer(producer.name())) {
+                mwPrivate.tagProducer(producer.name(), new UintData(GPIO, Util.setSilentRead(READ_AI_ADC), pin, new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false)));
             }
 
             return producer;
@@ -163,9 +151,9 @@ class GpioImpl extends ModuleImplBase implements Gpio {
 
         @Override
         public Analog analogAbsRef() {
-            Analog producer=  new AnalogInner(owner, pin, ABS_REF_PRODUCER_FORMAT);
-            if (!owner.hasProducer(producer.name())) {
-                owner.tagProducer(producer.name(), new UintData(GPIO, Util.setSilentRead(READ_AI_ABS_REF), pin, new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false)));
+            Analog producer=  new AnalogInner(mwPrivate, pin, ABS_REF_PRODUCER_FORMAT);
+            if (!mwPrivate.hasProducer(producer.name())) {
+                mwPrivate.tagProducer(producer.name(), new MilliUnitsUFloatData(GPIO, Util.setSilentRead(READ_AI_ABS_REF), pin, new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false)));
             }
 
             return producer;
@@ -175,8 +163,8 @@ class GpioImpl extends ModuleImplBase implements Gpio {
         public ForcedDataProducer digital() {
             ForcedDataProducer producer=  new ForcedDataProducer() {
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
-                    return owner.queueRouteBuilder(builder, name());
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, name());
                 }
 
                 @Override
@@ -186,11 +174,11 @@ class GpioImpl extends ModuleImplBase implements Gpio {
 
                 @Override
                 public void read() {
-                    owner.lookupProducer(name()).read(owner);
+                    mwPrivate.lookupProducer(name()).read(mwPrivate);
                 }
             };
-            if (!owner.hasProducer(producer.name())) {
-                owner.tagProducer(producer.name(), new UintData(GPIO, Util.setSilentRead(READ_DI), pin, new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
+            if (!mwPrivate.hasProducer(producer.name())) {
+                mwPrivate.tagProducer(producer.name(), new UintData(GPIO, Util.setSilentRead(READ_DI), pin, new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
             }
 
             return producer;
@@ -200,8 +188,8 @@ class GpioImpl extends ModuleImplBase implements Gpio {
         public AsyncDataProducer monitor() {
             AsyncDataProducer producer=  new AsyncDataProducer() {
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
-                    return owner.queueRouteBuilder(builder, name());
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, name());
                 }
 
                 @Override
@@ -211,51 +199,55 @@ class GpioImpl extends ModuleImplBase implements Gpio {
 
                 @Override
                 public void start() {
-                    owner.sendCommand(new byte[]{GPIO.id, PIN_CHANGE_NOTIFY_ENABLE, pin, 1});
+                    mwPrivate.sendCommand(new byte[]{GPIO.id, PIN_CHANGE_NOTIFY_ENABLE, pin, 1});
                 }
 
                 @Override
                 public void stop() {
-                    owner.sendCommand(new byte[]{GPIO.id, PIN_CHANGE_NOTIFY_ENABLE, pin, 0});
+                    mwPrivate.sendCommand(new byte[]{GPIO.id, PIN_CHANGE_NOTIFY_ENABLE, pin, 0});
                 }
             };
-            if (!owner.hasProducer(producer.name())) {
-                owner.tagProducer(producer.name(), new UintData(GPIO, Util.setSilentRead(READ_DI), pin, new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
+            if (!mwPrivate.hasProducer(producer.name())) {
+                mwPrivate.tagProducer(producer.name(), new UintData(GPIO, Util.setSilentRead(READ_DI), pin, new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
             }
-            owner.tagProducer(producer.name(), new UintData(GPIO, PIN_CHANGE_NOTIFY, pin, new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
+            mwPrivate.tagProducer(producer.name(), new UintData(GPIO, PIN_CHANGE_NOTIFY, pin, new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
 
             return producer;
         }
     }
 
-    private final HashMap<Byte, GpioPinImpl> gpioPins= new HashMap<>();
+    private transient HashMap<Byte, GpioPinImpl> gpioPins;
 
     GpioImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
     }
 
     @Override
-    public void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
-        super.restoreTransientVars(mwPrivate);
+    protected void init() {
+        super.init();
 
-        for(GpioPinImpl it: gpioPins.values()) {
-            it.restoreTransientVar(mwPrivate);
-        }
+        gpioPins = new HashMap<>();
     }
 
     @Override
-    public Pin createVirtualPin(byte pin) {
-        if (!gpioPins.containsKey(pin)) {
-            gpioPins.put(pin, new GpioPinImpl(pin, true, mwPrivate));
+    public Pin pin(byte index) {
+        if (index < 0 || index >= mwPrivate.lookupModuleInfo(GPIO).extra.length) {
+            return null;
         }
-        return gpioPins.get(pin);
+
+        if (!gpioPins.containsKey(index)) {
+            gpioPins.put(index, new GpioPinImpl(index, false, mwPrivate));
+        }
+
+        return gpioPins.get(index);
     }
 
     @Override
-    public Pin getPin(byte pin) {
-        if (!gpioPins.containsKey(pin)) {
-            gpioPins.put(pin, new GpioPinImpl(pin, false, mwPrivate));
+    public Pin getVirtualPin(byte index) {
+        if (!gpioPins.containsKey(index)) {
+            gpioPins.put(index, new GpioPinImpl(index, true, mwPrivate));
         }
-        return gpioPins.get(pin);
+        return gpioPins.get(index);
     }
+
 }

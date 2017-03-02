@@ -59,8 +59,8 @@ public class TestSettingsRev1 extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x01 });
-        btlePlaform.boardInfo = info;
+        junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x01 });
+        junitPlatform.boardInfo = info;
         connectToBoard();
 
         settings = mwBoard.getModule(Settings.class);
@@ -70,20 +70,20 @@ public class TestSettingsRev1 extends UnitTestBase {
     public void setConnParams() {
         byte[] expected= new byte[] {0x11, 0x09, 0x58, 0x02, 0x20, 0x03, (byte) 0x80, 0x00, 0x66, 0x06};
 
-        settings.configureConnectionParameters()
+        settings.editBleConnParams()
                 .minConnectionInterval(750f)
                 .maxConnectionInterval(1000f)
                 .slaveLatency((short) 128)
                 .supervisorTimeout((short) 16384)
                 .commit();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test(expected = UnsupportedOperationException.class)
     public void disconnectEvent() throws Exception {
         final Capture<Exception> actual= new Capture<>();
 
-        settings.onDisconnect(null).continueWith(new Continuation<Observer, Void>() {
+        settings.onDisconnectAsync(null).continueWith(new Continuation<Observer, Void>() {
             @Override
             public Void then(Task<Observer> task) throws Exception {
                 actual.set(task.getError());
@@ -104,38 +104,8 @@ public class TestSettingsRev1 extends UnitTestBase {
         assertNull(settings.powerStatus());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void readPowerStatusFail() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
-
-        settings.readPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual.set(task.getError());
-                return null;
-            }
-        });
-
-        throw actual.get();
-    }
-
     @Test
     public void chargeStatusNull() {
         assertNull(settings.chargeStatus());
-    }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void readChargeStatusFail() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
-
-        settings.readChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual.set(task.getError());
-                return null;
-            }
-        });
-
-        throw actual.get();
     }
 }

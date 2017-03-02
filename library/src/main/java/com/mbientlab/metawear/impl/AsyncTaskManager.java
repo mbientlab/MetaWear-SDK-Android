@@ -47,10 +47,10 @@ class AsyncTaskManager<T> {
             execute(true);
         }
     };
-    private final MetaWearBoardPrivate owner;
+    private final MetaWearBoardPrivate mwPrivate;
 
-    public AsyncTaskManager(MetaWearBoardPrivate owner, String timeoutMessage) {
-        this.owner = owner;
+    public AsyncTaskManager(MetaWearBoardPrivate mwPrivate, String timeoutMessage) {
+        this.mwPrivate = mwPrivate;
         this.timeoutMessage = timeoutMessage;
         this.taskSources = new ConcurrentLinkedQueue<>();
     }
@@ -79,7 +79,7 @@ class AsyncTaskManager<T> {
     private void execute(boolean force) {
         if (!taskSources.isEmpty() && (force || taskSources.size() == 1)) {
             taskSources.peek().second.run();
-            timeoutFuture = owner.scheduleTask(taskTimeoutAction, taskSources.peek().third);
+            timeoutFuture = mwPrivate.scheduleTask(taskTimeoutAction, taskSources.peek().third);
         }
     }
 }

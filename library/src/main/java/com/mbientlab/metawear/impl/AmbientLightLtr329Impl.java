@@ -31,7 +31,7 @@ import com.mbientlab.metawear.module.AmbientLightLtr329;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.ModuleId.AMBIENT_LIGHT;
+import static com.mbientlab.metawear.impl.Constant.Module.AMBIENT_LIGHT;
 
 /**
  * Created by etsai on 9/20/16.
@@ -45,7 +45,7 @@ class AmbientLightLtr329Impl extends ModuleImplBase implements AmbientLightLtr32
 
     AmbientLightLtr329Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
-        mwPrivate.tagProducer(ILLUMINANCE_PRODUCER, new UintData(AMBIENT_LIGHT, OUTPUT, new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, false)));
+        mwPrivate.tagProducer(ILLUMINANCE_PRODUCER, new MilliUnitsUFloatData(AMBIENT_LIGHT, OUTPUT, new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, false)));
     }
 
     @Override
@@ -88,7 +88,7 @@ class AmbientLightLtr329Impl extends ModuleImplBase implements AmbientLightLtr32
         if (illuminanceProducer == null) {
             illuminanceProducer = new AsyncDataProducer() {
                 @Override
-                public Task<Route> addRoute(RouteBuilder builder) {
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
                     return mwPrivate.queueRouteBuilder(builder, ILLUMINANCE_PRODUCER);
                 }
 

@@ -31,7 +31,7 @@ package com.mbientlab.metawear.builder;
 public interface RouteMulticast {
     /**
      * Signals the creation of a new multicast branch
-     * @return RouteElement from the most recent multicast component
+     * @return RouteComponent from the most recent multicast component
      */
-    RouteElement to();
+    RouteComponent to();
 }

@@ -24,11 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.GyroBmi160.Range;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteElement;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -59,7 +59,7 @@ public class TestGyroBmi160Data extends UnitTestBase {
         byte[] expected = new byte[] {0x13, 0x01, 0x01};
 
         gyroBmi160.start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -67,7 +67,7 @@ public class TestGyroBmi160Data extends UnitTestBase {
         byte[] expected = new byte[] {0x13, 0x01, 0x00};
 
         gyroBmi160.stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -75,7 +75,7 @@ public class TestGyroBmi160Data extends UnitTestBase {
         byte[] expected = new byte[] {0x13, 0x02, 0x00, 0x01};
 
         gyroBmi160.angularVelocity().stop();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -83,7 +83,7 @@ public class TestGyroBmi160Data extends UnitTestBase {
         byte[] expected = new byte[] {0x13, 0x02, 0x01, 0x00};
 
         gyroBmi160.angularVelocity().start();
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
@@ -94,9 +94,9 @@ public class TestGyroBmi160Data extends UnitTestBase {
         gyroBmi160.configure()
                 .range(Range.FSR_500)
                 .commit();
-        gyroBmi160.angularVelocity().addRoute(new RouteBuilder() {
+        gyroBmi160.angularVelocity().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
                     @Override
                     public void apply(Data data, Object ... env) {
@@ -124,9 +124,9 @@ public class TestGyroBmi160Data extends UnitTestBase {
         gyroBmi160.configure()
                 .range(Range.FSR_500)
                 .commit();
-        gyroBmi160.angularVelocity().addRoute(new RouteBuilder() {
+        gyroBmi160.angularVelocity().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.split()
                         .index(0).stream(new Subscriber() {
                             @Override
@@ -164,22 +164,22 @@ public class TestGyroBmi160Data extends UnitTestBase {
     @Test
     public void subscribe() {
         byte[] expected= new byte[] { 0x13, 0x05, 0x01 };
-        gyroBmi160.angularVelocity().addRoute(new RouteBuilder() {
+        gyroBmi160.angularVelocity().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
     public void unsubscribe() {
         byte[] expected= new byte[] { 0x13, 0x05, 0x00 };
-        gyroBmi160.angularVelocity().addRoute(new RouteBuilder() {
+        gyroBmi160.angularVelocity().addRouteAsync(new RouteBuilder() {
             @Override
-            public void configure(RouteElement source) {
+            public void configure(RouteComponent source) {
                 source.stream(null);
             }
         }).continueWith(new Continuation<Route, Void>() {
@@ -190,6 +190,6 @@ public class TestGyroBmi160Data extends UnitTestBase {
             }
         });
 
-        assertArrayEquals(expected, btlePlaform.getLastCommand());
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 }

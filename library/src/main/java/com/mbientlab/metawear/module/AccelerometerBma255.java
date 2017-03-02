@@ -25,7 +25,7 @@
 package com.mbientlab.metawear.module;
 
 /**
- * Extension of the {@link AccelerometerBosch} interface that provides finer control of the BMA255 accelerometer
+ * Extension of the {@link AccelerometerBosch} interface providing finer control of the BMA255 accelerometer
  * @author Eric Tsai
  */
 public interface AccelerometerBma255 extends AccelerometerBosch {
@@ -73,39 +73,26 @@ public interface AccelerometerBma255 extends AccelerometerBosch {
      * Accelerometer configuration editor specific to the BMA255 accelerometer
      * @author Eric Tsai
      */
-    interface Bma255ConfigEditor extends ConfigEditorBase<Bma255ConfigEditor> {
+    interface ConfigEditor extends Accelerometer.ConfigEditor<ConfigEditor> {
         /**
-         * Sets the output data rate
+         * Set the output data rate
          * @param odr    New output data rate
          * @return Calling object
          */
-        Bma255ConfigEditor odr(OutputDataRate odr);
+        ConfigEditor odr(OutputDataRate odr);
         /**
-         * Sets the data range
+         * Set the data range
          * @param fsr    New data range
          * @return Calling object
          */
-        Bma255ConfigEditor range(AccRange fsr);
+        ConfigEditor range(AccRange fsr);
     }
     /**
      * Configure the BMA255 accelerometer
      * @return Editor object specific to the BMA255 accelerometer
      */
     @Override
-    Bma255ConfigEditor configure();
-
-    /**
-     * Types of motion detection on the BMI160 chip
-     * @author Eric Tsai
-     */
-    enum MotionType {
-        /** Detects if there is no motion */
-        NO_MOTION,
-        /** Same as any motion exceed without information on which axis triggered the interrupt */
-        SLOW_MOTION,
-        /** Detects motion using the slope of successive acceleration signals */
-        ANY_MOTION
-    }
+    ConfigEditor configure();
 
     /**
      * Enumeration of hold times for flat detection
@@ -122,47 +109,47 @@ public interface AccelerometerBma255 extends AccelerometerBosch {
         FHT_2048_MS(2048);
 
         /** Periods represented as a float value */
-        public final float period;
+        public final float delay;
 
-        FlatHoldTime(float period) {
-            this.period = period;
+        FlatHoldTime(float delay) {
+            this.delay = delay;
         }
 
-        public static float[] periods() {
+        public static float[] delays() {
             FlatHoldTime[] values= values();
-            float[] pers= new float[values.length];
-            for(byte i= 0; i < pers.length; i++) {
-                pers[i]= values[i].period;
+            float[] delayValues= new float[values.length];
+            for(byte i= 0; i < delayValues.length; i++) {
+                delayValues[i]= values[i].delay;
             }
 
-            return pers;
+            return delayValues;
         }
     }
 
     /**
-     * Extension of the FlatDataProducer specific to the BMA255 accelerometer
+     * Configuration editor specific to BMA255 flat detection
+     * @author Eric Tsai
+     */
+    interface FlatConfigEditor extends AccelerometerBosch.FlatConfigEditor<FlatConfigEditor> {
+        FlatConfigEditor holdTime(FlatHoldTime time);
+    }
+    /**
+     * Extension of the {@link AccelerometerBosch.FlatDataProducer} interface providing
+     * configuration options specific to the BMA255 accelerometer
      * @author Eric Tsai
      */
     interface FlatDataProducer extends AccelerometerBosch.FlatDataProducer {
         /**
-         * Configuration editor specific to BMA255 flat detection
-         * @author Eric Tsai
-         */
-        interface ConfigEditor extends ConfigEditorBase<ConfigEditor> {
-            ConfigEditor holdTime(FlatHoldTime time);
-        }
-
-        /**
-         * Configures the flat detection algorithm
-         * @return Configuration editor object
+         * Configure the flat detection algorithm
+         * @return BMA255 specific configuration editor object
          */
         @Override
-        ConfigEditor configure();
+        FlatConfigEditor configure();
     }
     /**
-     * Interacts with the flat detection algorithm on the BMA255 accelerometer
-     * @return Object representing flat detection
+     * Get an implementation of the BMA255 specific FlatDataProducer interface
+     * @return BMA255 specific FlatDataProducer object
      */
     @Override
-    FlatDataProducer flatDetector();
+    FlatDataProducer flat();
 }

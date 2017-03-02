@@ -25,7 +25,9 @@
 package com.mbientlab.metawear;
 
 /**
- * Wrapper class around the data from the device information service
+ * Wrapper class holding Characteristics under the
+ * <a href="https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.service.device_information.xml">Device Information</a>
+ * GATT service
  * @author Eric Tsai
  */
 public final class DeviceInformation {

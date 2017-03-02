@@ -24,7 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.impl.Pair;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.SensorFusionBosch.AccRange;
@@ -39,7 +38,6 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.*;
 import static org.junit.Assert.assertArrayEquals;
@@ -49,26 +47,15 @@ import static org.junit.Assert.assertArrayEquals;
  */
 @RunWith(Parameterized.class)
 public class TestSensorFusionConfig extends UnitTestBase {
-    static final byte[] BMI160_ACC_RANGE_BITMASK= new byte[] { 0b0011, 0b0101, 0b1000, 0b1100 };
-    private static HashMap<Pair<AccRange, GyroRange>, Integer> CONFIG_MASKS;
+    private static final byte[] BMI160_ACC_RANGE_BITMASK= new byte[] { 0b0011, 0b0101, 0b1000, 0b1100 };
+    private static byte[][] CONFIG_MASKS;
     static {
-        CONFIG_MASKS = new HashMap<>();
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_2G, GyroRange.GR_2000DPS), 0x10);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_4G, GyroRange.GR_2000DPS), 0x11);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_8G, GyroRange.GR_2000DPS), 0x12);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_16G, GyroRange.GR_2000DPS), 0x13);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_2G, GyroRange.GR_1000DPS), 0x20);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_4G, GyroRange.GR_1000DPS), 0x21);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_8G, GyroRange.GR_1000DPS), 0x22);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_16G, GyroRange.GR_1000DPS), 0x23);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_2G, GyroRange.GR_500DPS), 0x30);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_4G, GyroRange.GR_500DPS), 0x31);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_8G, GyroRange.GR_500DPS), 0x32);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_16G, GyroRange.GR_500DPS), 0x33);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_2G, GyroRange.GR_250DPS), 0x40);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_4G, GyroRange.GR_250DPS), 0x41);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_8G, GyroRange.GR_250DPS), 0x42);
-        CONFIG_MASKS.put(new Pair<>(AccRange.AR_16G, GyroRange.GR_250DPS), 0x43);
+        CONFIG_MASKS = new byte[][] {
+                {0x10, 0x20, 0x30, 0x40},
+                {0x11, 0x21, 0x31, 0x41},
+                {0x12, 0x22, 0x32, 0x42},
+                {0x13, 0x23, 0x33, 0x43}
+        };
     }
 
     @Parameters(name = "{0}, {1}")
@@ -94,7 +81,7 @@ public class TestSensorFusionConfig extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        btlePlaform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
         connectToBoard();
 
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
@@ -108,7 +95,7 @@ public class TestSensorFusionConfig extends UnitTestBase {
     @Test
     public void configureNdof() {
         final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) NDOF.ordinal(), CONFIG_MASKS.get(new Pair<>(accRange, gyroRange)).byteValue()},
+                {0x19, 0x02, (byte) NDOF.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
                 {0x03, 0x03, 0x28, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
                 gyroConfig(),
                 {0x15, 0x04, 0x04, 0x0e},
@@ -121,13 +108,13 @@ public class TestSensorFusionConfig extends UnitTestBase {
                 .gyroRange(gyroRange)
                 .commit();
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
     public void configureImuPlus() {
         final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) IMU_PLUS.ordinal(), CONFIG_MASKS.get(new Pair<>(accRange, gyroRange)).byteValue()},
+                {0x19, 0x02, (byte) IMU_PLUS.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
                 {0x03, 0x03, 0x28, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
                 gyroConfig()
         };
@@ -138,13 +125,13 @@ public class TestSensorFusionConfig extends UnitTestBase {
                 .gyroRange(gyroRange)
                 .commit();
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
     public void configureCompass() {
         final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) COMPASS.ordinal(), CONFIG_MASKS.get(new Pair<>(accRange, gyroRange)).byteValue()},
+                {0x19, 0x02, (byte) COMPASS.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
                 {0x03, 0x03, 0x26, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
                 {0x15, 0x04, 0x04, 0x0e},
                 {0x15, 0x03, 0x6}
@@ -156,13 +143,13 @@ public class TestSensorFusionConfig extends UnitTestBase {
                 .gyroRange(gyroRange)
                 .commit();
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
     public void configureM4g() {
         final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) M4G.ordinal(), CONFIG_MASKS.get(new Pair<>(accRange, gyroRange)).byteValue()},
+                {0x19, 0x02, (byte) M4G.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
                 {0x03, 0x03, 0x27, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
                 {0x15, 0x04, 0x04, 0x0e},
                 {0x15, 0x03, 0x6}
@@ -174,6 +161,6 @@ public class TestSensorFusionConfig extends UnitTestBase {
                 .gyroRange(gyroRange)
                 .commit();
 
-        assertArrayEquals(expected, btlePlaform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 }
