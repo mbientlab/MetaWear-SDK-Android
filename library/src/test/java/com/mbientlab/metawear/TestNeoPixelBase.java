@@ -27,20 +27,16 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.module.NeoPixel;
 
 import org.junit.Before;
-import org.junit.runners.Parameterized.Parameter;
 
 /**
  * Created by etsai on 10/2/16.
  */
 public class TestNeoPixelBase extends UnitTestBase {
-    protected NeoPixel neoPixel;
-
-    @Parameter
-    public MetaWearBoardInfo info;
+    NeoPixel neoPixel;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = info;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(NeoPixel.class);
         connectToBoard();
 
         neoPixel= mwBoard.getModule(NeoPixel.class);

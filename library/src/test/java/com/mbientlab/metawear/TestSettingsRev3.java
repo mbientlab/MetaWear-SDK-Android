@@ -32,12 +32,6 @@ import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
-
-import java.util.Collection;
 
 import bolts.Capture;
 import bolts.Continuation;
@@ -50,22 +44,13 @@ import static org.junit.Assert.assertNull;
 /**
  * Created by etsai on 10/3/16.
  */
-@RunWith(Parameterized.class)
 public class TestSettingsRev3 extends UnitTestBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        return UnitTestBase.allBoardsParams();
-    }
-
     private Settings settings;
-
-    @Parameter
-    public MetaWearBoardInfo info;
 
     @Before
     public void setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x03 });
-        junitPlatform.boardInfo = info;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Haptic.class);
         connectToBoard();
 
         settings = mwBoard.getModule(Settings.class);

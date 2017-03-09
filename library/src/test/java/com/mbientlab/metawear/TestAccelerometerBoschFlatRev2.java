@@ -27,6 +27,8 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Passthrough;
+import com.mbientlab.metawear.module.AccelerometerBma255;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 
 import org.junit.Before;
@@ -36,6 +38,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -43,6 +46,7 @@ import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
 
+import static com.mbientlab.metawear.MetaWearBoardInfo.MODULE_RESPONSE;
 import static org.junit.Assert.assertArrayEquals;
 
 /**
@@ -55,27 +59,27 @@ public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
     };
 
     @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                { MetaWearBoardInfo.MOTION_R },
-                { MetaWearBoardInfo.DETECTOR }
-        });
+    public static Collection<Object[]> boardsParams() {
+        ArrayList<Object[]> parameters= new ArrayList<>();
+        parameters.add(new Object[] {AccelerometerBma255.class});
+        parameters.add(new Object[] {AccelerometerBmi160.class});
+
+        return parameters;
     }
 
     @Parameter
-    public MetaWearBoardInfo info;
+    public Class<? extends AccelerometerBosch> accelClass;
 
     private AccelerometerBosch acc;
 
     @Before
     public void setup() throws Exception {
-        byte[] moduleInfo = new byte[info.moduleResponses.get((byte) 3).length];
-        System.arraycopy(info.moduleResponses.get((byte) 3), 0, moduleInfo, 0, moduleInfo.length);
+        byte[] original = MODULE_RESPONSE.get(accelClass);
+        byte[] moduleInfo = new byte[original.length];
+        System.arraycopy(original, 0, moduleInfo, 0, moduleInfo.length);
         moduleInfo[3] = 0x2;
 
-        junitPlatform.boardInfo = info;
         junitPlatform.addCustomModuleInfo(moduleInfo);
-
         connectToBoard();
 
         acc = mwBoard.getModule(AccelerometerBosch.class);

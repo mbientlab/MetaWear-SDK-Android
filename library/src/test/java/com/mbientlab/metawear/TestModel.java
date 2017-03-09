@@ -31,8 +31,10 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
+import java.util.ArrayList;
 import java.util.Collection;
 
+import static com.mbientlab.metawear.MetaWearBoardInfo.*;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -42,7 +44,12 @@ import static org.junit.Assert.assertEquals;
 public class TestModel extends UnitTestBase {
     @Parameters(name = "board: {0}")
     public static Collection<Object[]> data() {
-        return UnitTestBase.allBoardsParams();
+        ArrayList<Object[]> parameters= new ArrayList<>();
+        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {C, CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R, TRACKER}) {
+            parameters.add(new Object[] {info});
+        }
+
+        return parameters;
     }
 
     @Parameter

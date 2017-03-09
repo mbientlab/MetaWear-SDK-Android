@@ -26,6 +26,8 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
+import com.mbientlab.metawear.module.AccelerometerBma255;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 import com.mbientlab.metawear.module.AccelerometerBosch.DoubleTapWindow;
 import com.mbientlab.metawear.module.AccelerometerBosch.TapQuietTime;
@@ -45,8 +47,6 @@ import java.util.Collection;
 
 import bolts.Capture;
 
-import static com.mbientlab.metawear.MetaWearBoardInfo.ENVIRONMENT;
-import static com.mbientlab.metawear.MetaWearBoardInfo.RPRO;
 import static com.mbientlab.metawear.data.Sign.NEGATIVE;
 import static com.mbientlab.metawear.data.Sign.POSITIVE;
 import static org.junit.Assert.assertArrayEquals;
@@ -59,9 +59,8 @@ public class TestAccelerometerBoshTap extends UnitTestBase {
     @Parameters(name = "board: {0}")
     public static Collection<Object[]> boardsParams() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {ENVIRONMENT, RPRO}) {
-            parameters.add(new Object[] {info});
-        }
+        parameters.add(new Object[] {AccelerometerBma255.class});
+        parameters.add(new Object[] {AccelerometerBmi160.class});
 
         return parameters;
     }
@@ -69,11 +68,11 @@ public class TestAccelerometerBoshTap extends UnitTestBase {
     private AccelerometerBosch boschAcc;
 
     @Parameter
-    public MetaWearBoardInfo info;
+    public Class<? extends AccelerometerBosch> accelClass;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = info;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
         connectToBoard();
 
         boschAcc = mwBoard.getModule(AccelerometerBosch.class);

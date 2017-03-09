@@ -27,6 +27,9 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
 import com.mbientlab.metawear.impl.platform.DeviceInformationService;
@@ -149,6 +152,7 @@ public class TestMetaWearBoard extends UnitTestBase {
 
     @Test(expected = UnsupportedModuleException.class)
     public void metabootGetModule() throws Exception {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Accelerometer.class);
         junitPlatform.enableMetaBootState = true;
         connectToBoard();
 
@@ -157,8 +161,9 @@ public class TestMetaWearBoard extends UnitTestBase {
 
     @Test
     public void readDeviceInfo() throws Exception {
-        final DeviceInformation expected = new DeviceInformation("MbientLab Inc", "1", "003BF9", "1.2.3", "0.3");
+        final DeviceInformation expected = new DeviceInformation("MbientLab Inc", "deadbeef", "003BF9", "1.2.3", "cafebabe");
         final Capture<DeviceInformation> actual = new Capture<>();
+
         connectToBoard();
 
         mwBoard.readDeviceInformationAsync().continueWith(new Continuation<DeviceInformation, Void>() {
@@ -211,7 +216,7 @@ public class TestMetaWearBoard extends UnitTestBase {
                 {0x03, 0x1c, 0x01}
         };
 
-        junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         connectToBoard();
 
         mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(new RouteBuilder() {
@@ -251,7 +256,7 @@ public class TestMetaWearBoard extends UnitTestBase {
                 {0x03, 0x1c, 0x01}
         };
 
-        junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         connectToBoard();
 
         mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(new RouteBuilder() {

@@ -24,6 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 
 import org.junit.Before;
@@ -188,7 +191,7 @@ public class TestSensorFusionControl extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         connectToBoard();
 
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);

@@ -25,6 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
@@ -47,7 +48,7 @@ public class TestLogging extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
         connectToBoard();
 
         logging= mwBoard.getModule(Logging.class);

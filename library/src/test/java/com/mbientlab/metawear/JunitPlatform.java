@@ -61,7 +61,7 @@ class JunitPlatform implements IO, BtleGatt {
     }
 
     public int nConnects = 0, nDisconnects = 0;
-    public MetaWearBoardInfo boardInfo= MetaWearBoardInfo.RPRO;
+    public MetaWearBoardInfo boardInfo= new MetaWearBoardInfo();
     public String firmware= "1.2.3", boardStateSuffix;
     public boolean delayModuleInfoResponse= false, deserializeModuleInfo= false, serializeModuleInfo = false, enableMetaBootState = false, delayReadDevInfo = false;
     private final Map<Byte, byte[]> customModuleInfo= new HashMap<>();

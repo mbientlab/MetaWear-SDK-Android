@@ -29,6 +29,7 @@ import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Haptic;
 import com.mbientlab.metawear.module.Led;
@@ -73,7 +74,10 @@ public class TestRouteErrorHandling extends UnitTestBase {
     @Before
     public void setup() throws Exception {
         junitPlatform.firmware= "1.1.3";
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class, Gpio.class,
+                Temperature.class, Haptic.class, Timer.class);
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x03 });
+        junitPlatform.addCustomModuleInfo(new byte[] { 0x05, (byte) 0x80, 0x00, 0x00, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01 });
         connectToBoard();
     }
 

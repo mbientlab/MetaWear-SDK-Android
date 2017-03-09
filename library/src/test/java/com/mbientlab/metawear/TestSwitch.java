@@ -43,7 +43,7 @@ import static org.junit.Assert.assertEquals;
 public class TestSwitch extends UnitTestBase {
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class);
         connectToBoard();
     }
 

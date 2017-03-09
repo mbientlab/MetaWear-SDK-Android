@@ -55,7 +55,7 @@ public class TestI2C extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.R;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(SerialPassthrough.class);
         connectToBoard();
 
         i2c = mwBoard.getModule(SerialPassthrough.class).i2c((byte) 1, (byte) 0xa);

@@ -27,6 +27,8 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.data.Sign;
+import com.mbientlab.metawear.module.AccelerometerBma255;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 import com.mbientlab.metawear.module.AccelerometerBosch.AnyMotionDataProducer;
 import com.mbientlab.metawear.module.AccelerometerBosch.NoMotionDataProducer;
@@ -44,8 +46,6 @@ import java.util.Collection;
 
 import bolts.Capture;
 
-import static com.mbientlab.metawear.MetaWearBoardInfo.ENVIRONMENT;
-import static com.mbientlab.metawear.MetaWearBoardInfo.RPRO;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
@@ -57,9 +57,8 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
     @Parameters(name = "board: {0}")
     public static Collection<Object[]> boardsParams() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {ENVIRONMENT, RPRO}) {
-            parameters.add(new Object[] {info});
-        }
+        parameters.add(new Object[] {AccelerometerBma255.class});
+        parameters.add(new Object[] {AccelerometerBmi160.class});
 
         return parameters;
     }
@@ -67,11 +66,11 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
     private AccelerometerBosch boschAcc;
 
     @Parameter
-    public MetaWearBoardInfo info;
+    public Class<? extends AccelerometerBosch> accelClass;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = info;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
         connectToBoard();
 
         boschAcc = mwBoard.getModule(AccelerometerBosch.class);
@@ -79,7 +78,7 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
 
     @Test
     public void startNoMotion() {
-        byte[] expected = info == MetaWearBoardInfo.RPRO ?
+        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x09, 0x38, 0x00} :
                 new byte[] {0x03, 0x09, 0x78, 0x00};
 
@@ -89,7 +88,7 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
 
     @Test
     public void stopNoMotion() {
-        byte[] expected = info == MetaWearBoardInfo.RPRO ?
+        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x09, 0x00, 0x38} :
                 new byte[] {0x03, 0x09, 0x00, 0x78};
 
@@ -99,7 +98,7 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
 
     @Test
     public void configureNoMotion() {
-        byte[] expected = info == MetaWearBoardInfo.RPRO ?
+        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x0a, 0x18, 0x14, 0x7f, 0x15} :
                 new byte[] {0x03, 0x0a, 0x24, 0x14, 0x7f};
 
@@ -149,7 +148,7 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
 
     @Test
     public void configureSlowMotion() {
-        byte[] expected = info == MetaWearBoardInfo.RPRO ?
+        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x0a, 0x10, 0x14, (byte) 0xc0, 0x14} :
                 new byte[] {0x03, 0x0a, 0x10, 0x14, (byte) 0xc0};
 
@@ -202,7 +201,7 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
 
     @Test
     public void configureAnyMotion() {
-        byte[] expected = info == MetaWearBoardInfo.RPRO ?
+        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x0a, 0x09, 0x2f, 0x14, 0x14} :
                 new byte[] {0x03, 0x0a, 0x09, 0x2f, 0x14};
 

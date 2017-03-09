@@ -47,7 +47,7 @@ public class TestBmi160StepCounterData extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
         connectToBoard();
 
         counter = mwBoard.getModule(AccelerometerBmi160.class).stepCounter();

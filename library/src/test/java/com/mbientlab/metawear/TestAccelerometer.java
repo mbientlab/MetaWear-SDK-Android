@@ -60,20 +60,20 @@ public class TestAccelerometer extends UnitTestBase {
     @Parameters
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
-                { MetaWearBoardInfo.RG },
-                { MetaWearBoardInfo.R },
-                { MetaWearBoardInfo.ENVIRONMENT },
+                { AccelerometerBmi160.class },
+                { AccelerometerMma8452q.class },
+                { AccelerometerBma255.class },
         });
     }
 
     @Parameter
-    public MetaWearBoardInfo boardInfo;
+    public Class<? extends Accelerometer> accelClass;
 
     private Accelerometer accelerometer;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= boardInfo;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(accelClass);
         connectToBoard();
 
         accelerometer = mwBoard.getModule(Accelerometer.class);
@@ -83,17 +83,17 @@ public class TestAccelerometer extends UnitTestBase {
     public void setOdrCommand() {
         byte[] expected= null;
 
-        if (boardInfo == MetaWearBoardInfo.RG) {
+        if (accelClass.equals(AccelerometerBmi160.class)) {
             expected = new byte[]{0x03, 0x03, 0x27, 0x03};
             accelerometer.configure()
                     .odr(55.f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected= new byte[] {0x03, 0x03, 0x00, 0x00, 0x20, 0x00, 0x00};
             accelerometer.configure()
                     .odr(35.25f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        } else if (accelClass.equals(AccelerometerBma255.class)) {
             expected= new byte[] {0x03, 0x03, 0x0a, 0x03};
             accelerometer.configure()
                     .odr(50.f)
@@ -107,17 +107,17 @@ public class TestAccelerometer extends UnitTestBase {
     public void setOdrValue() {
         float expected = -1, actual;
 
-        if (boardInfo == MetaWearBoardInfo.RG) {
+        if (accelClass.equals(AccelerometerBmi160.class)) {
             expected = 50f;
             accelerometer.configure()
                     .odr(55.f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected= 50f;
             accelerometer.configure()
                     .odr(35.25f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        } else if (accelClass.equals(AccelerometerBma255.class)) {
             expected= 62.5f;
             accelerometer.configure()
                     .odr(50.f)
@@ -132,17 +132,17 @@ public class TestAccelerometer extends UnitTestBase {
     public void setRangeCommand() {
         byte[] expected= null;
 
-        if (boardInfo == MetaWearBoardInfo.RG) {
+        if (accelClass.equals(AccelerometerBmi160.class)) {
             expected = new byte[] {0x03, 0x03, 0x28, 0x0c};
             accelerometer.configure()
                     .range(14.75f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected= new byte[] {0x03, 0x03, 0x02, 0x00, 0x18, 0x00, 0x00};
             accelerometer.configure()
                     .range(7.3333f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        } else if (accelClass.equals(AccelerometerBma255.class)) {
             expected= new byte[] {0x03, 0x03, 0x0b, 0x0c};
             accelerometer.configure()
                     .range(20f)
@@ -156,17 +156,17 @@ public class TestAccelerometer extends UnitTestBase {
     public void setRangeValue() {
         float expected= -1, actual;
 
-        if (boardInfo == MetaWearBoardInfo.RG) {
+        if (accelClass.equals(AccelerometerBmi160.class)) {
             expected = 16f;
             accelerometer.configure()
                     .range(14.75f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected= 8.f;
             accelerometer.configure()
                     .range(7.3333f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        } else if (accelClass.equals(AccelerometerBma255.class)) {
             expected= 16f;
             accelerometer.configure()
                     .range(20f)
@@ -231,9 +231,9 @@ public class TestAccelerometer extends UnitTestBase {
     public void enableAccSampling() {
         byte[] expected= null;
 
-        if (boardInfo == MetaWearBoardInfo.RG || boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        if (accelClass.equals(AccelerometerBmi160.class) || accelClass.equals(AccelerometerBma255.class)) {
             expected = new byte[] {0x03, 0x02, 0x01, 0x00};
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected = new byte[] {0x03, 0x02, 0x01};
         }
         accelerometer.acceleration().start();
@@ -245,9 +245,9 @@ public class TestAccelerometer extends UnitTestBase {
     public void disableAccSampling() {
         byte[] expected = null;
 
-        if (boardInfo == MetaWearBoardInfo.RG || boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        if (accelClass.equals(AccelerometerBmi160.class) || accelClass.equals(AccelerometerBma255.class)) {
             expected = new byte[] {0x03, 0x02, 0x00, 0x01};
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected = new byte[] {0x03, 0x02, 0x00};
         }
         accelerometer.acceleration().stop();
@@ -262,21 +262,21 @@ public class TestAccelerometer extends UnitTestBase {
         final Capture<Acceleration> actual= new Capture<>();
 
 
-        if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        if (accelClass.equals(AccelerometerBma255.class)) {
             // (-4.7576f, 2.2893f, 2.9182f)
             expected = new Acceleration(Float.intBitsToFloat(0xc0983e00), Float.intBitsToFloat(0x40128400), Float.intBitsToFloat(0x403ac400));
             response= new byte[] { 0x03, 0x04, (byte) 0xe1, (byte) 0xb3, (byte) 0xa1, 0x24, (byte) 0xb1, 0x2e };
             accelerometer.configure()
                     .range(8f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.RG) {
+        } else if (accelClass.equals(AccelerometerBmi160.class)) {
             // (-1.872f, -2.919f, -1.495f)
             expected= new Acceleration(Float.intBitsToFloat(0xbfefa800), Float.intBitsToFloat(0xc03ad800), Float.intBitsToFloat(0xbfbf5800));
             response= new byte[] {0x03, 0x04, 0x16, (byte) 0xc4, (byte) 0x94, (byte) 0xa2, 0x2a, (byte) 0xd0};
             accelerometer.configure()
                     .range(4f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             // (-1.450f, -2.555f, 0.792f)
             expected= new Acceleration(Float.intBitsToFloat(0xbfb9999a), Float.intBitsToFloat(0xc023851f), Float.intBitsToFloat(0x3f4ac083));
             response= new byte[] {0x03, 0x04, 0x56, (byte) 0xfa, 0x05, (byte) 0xf6, 0x18, 0x03};
@@ -311,21 +311,21 @@ public class TestAccelerometer extends UnitTestBase {
         byte[] response= null;
         final float[] actual= new float[3];
 
-        if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        if (accelClass.equals(AccelerometerBma255.class)) {
             // (-4.7576f, 2.2893f, 2.9182f)
             expected = new float[] { -4.7576f, 2.2893f, 2.9182f };
             response= new byte[] { 0x03, 0x04, (byte) 0xe1, (byte) 0xb3, (byte) 0xa1, 0x24, (byte) 0xb1, 0x2e };
             accelerometer.configure()
                     .range(8f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.RG) {
+        } else if (accelClass.equals(AccelerometerBmi160.class)) {
             // (-1.872f, -2.919f, -1.495f)
             expected = new float[] { -1.872f, -2.919f, -1.495f };
             response= new byte[] {0x03, 0x04, 0x16, (byte) 0xc4, (byte) 0x94, (byte) 0xa2, 0x2a, (byte) 0xd0};
             accelerometer.configure()
                     .range(4f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             // (-1.450f, -2.555f, 0.792f)
             expected = new float[] { -1.450f, -2.555f, 0.792f };
             response= new byte[] {0x03, 0x04, 0x56, (byte) 0xfa, 0x05, (byte) 0xf6, 0x18, 0x03};
@@ -375,7 +375,7 @@ public class TestAccelerometer extends UnitTestBase {
         byte[] response= null;
         Acceleration[] actual = new Acceleration[3];
 
-        if (boardInfo == MetaWearBoardInfo.ENVIRONMENT) {
+        if (accelClass.equals(AccelerometerBma255.class)) {
             expected = new Acceleration[] {
                     new Acceleration(Float.intBitsToFloat(0x3f98c400), Float.intBitsToFloat(0xbe556000), Float.intBitsToFloat(0x406eca00)),
                     new Acceleration(Float.intBitsToFloat(0x3fa4e400), Float.intBitsToFloat(0xbf91dc00), Float.intBitsToFloat(0x407ffa00)),
@@ -386,7 +386,7 @@ public class TestAccelerometer extends UnitTestBase {
             accelerometer.configure()
                     .range(4f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.RG) {
+        } else if (accelClass.equals(AccelerometerBmi160.class)) {
             expected = new Acceleration[] {
                     new Acceleration(Float.intBitsToFloat(0xc0913c00), Float.intBitsToFloat(0x3f553000), Float.intBitsToFloat(0xbe05c000)),
                     new Acceleration(Float.intBitsToFloat(0xc03fa800), Float.intBitsToFloat(0x3f64d000), Float.intBitsToFloat(0x3e15c000)),
@@ -397,7 +397,7 @@ public class TestAccelerometer extends UnitTestBase {
             accelerometer.configure()
                     .range(8f)
                     .commit();
-        } else if (boardInfo == MetaWearBoardInfo.R) {
+        } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected = new Acceleration[] {
                     new Acceleration(Float.intBitsToFloat(0xc0948312), Float.intBitsToFloat(0x40b5999a), Float.intBitsToFloat(0xbe70a3d7)),
                     new Acceleration(Float.intBitsToFloat(0xbfb49ba6), Float.intBitsToFloat(0x3fa16873), Float.intBitsToFloat(0x403072b0)),
@@ -430,32 +430,5 @@ public class TestAccelerometer extends UnitTestBase {
         received.toArray(actual);
 
         assertArrayEquals(expected, actual);
-    }
-
-    @Test
-    public void getBma255Module() {
-        if (boardInfo == MetaWearBoardInfo.RG || boardInfo == MetaWearBoardInfo.R) {
-            assertNull(mwBoard.getModule(AccelerometerBma255.class));
-        } else {
-            assertNotNull(mwBoard.getModule(AccelerometerBma255.class));
-        }
-    }
-
-    @Test
-    public void getBmi160Module() {
-        if (boardInfo == MetaWearBoardInfo.ENVIRONMENT || boardInfo == MetaWearBoardInfo.R) {
-            assertNull(mwBoard.getModule(AccelerometerBmi160.class));
-        } else {
-            assertNotNull(mwBoard.getModule(AccelerometerBmi160.class));
-        }
-    }
-
-    @Test
-    public void getMma8452qModule() {
-        if (boardInfo == MetaWearBoardInfo.ENVIRONMENT || boardInfo == MetaWearBoardInfo.RG) {
-            assertNull(mwBoard.getModule(AccelerometerMma8452q.class));
-        } else {
-            assertNotNull(mwBoard.getModule(AccelerometerMma8452q.class));
-        }
     }
 }

@@ -30,8 +30,10 @@ import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.ThresholdOutput;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Macro;
+import com.mbientlab.metawear.module.Switch;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -51,7 +53,7 @@ public class TestMacro extends UnitTestBase {
     @Before
     public void setup() throws Exception {
         junitPlatform.firmware = "1.2.3";
-        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class, Macro.class);
         connectToBoard();
 
         macro = mwBoard.getModule(Macro.class);

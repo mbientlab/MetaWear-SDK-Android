@@ -50,7 +50,6 @@ import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
 
-import static com.mbientlab.metawear.MetaWearBoardInfo.MOTION_R;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -112,7 +111,7 @@ public class TestSensorFusionData extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = MOTION_R;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(SensorFusionBosch.class);
         connectToBoard();
 
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);

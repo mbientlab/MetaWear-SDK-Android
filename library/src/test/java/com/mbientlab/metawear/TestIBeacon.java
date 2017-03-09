@@ -31,12 +31,6 @@ import com.mbientlab.metawear.module.Switch;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
-
-import java.util.Collection;
 
 import bolts.Continuation;
 import bolts.Task;
@@ -46,21 +40,12 @@ import static org.junit.Assert.assertArrayEquals;
 /**
  * Created by etsai on 10/18/16.
  */
-@RunWith(Parameterized.class)
 public class TestIBeacon extends UnitTestBase {
     private IBeacon ibeacon;
 
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        return UnitTestBase.allBoardsParams();
-    }
-
-    @Parameter
-    public MetaWearBoardInfo info;
-
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= info;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, IBeacon.class);
         connectToBoard();
 
         ibeacon= mwBoard.getModule(IBeacon.class);

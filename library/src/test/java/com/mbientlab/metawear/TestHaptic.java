@@ -42,26 +42,12 @@ import static org.junit.Assert.assertArrayEquals;
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestHaptic extends UnitTestBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R}) {
-            parameters.add(new Object[] {info});
-        }
-
-        return parameters;
-    }
-
     private Haptic haptic;
-
-    @Parameter
-    public MetaWearBoardInfo info;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= info;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Haptic.class);
         connectToBoard();
 
         haptic= mwBoard.getModule(Haptic.class);

@@ -30,24 +30,13 @@ import com.mbientlab.metawear.module.NeoPixel.Strand.RotationDirection;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
-
-import java.util.Collection;
 
 import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestNeoPixelStrand extends TestNeoPixelBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        return UnitTestBase.allBoardsParams();
-    }
-
     private Strand strand;
 
     @Before

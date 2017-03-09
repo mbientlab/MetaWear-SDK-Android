@@ -27,24 +27,13 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.module.NeoPixel;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
-
-import java.util.Collection;
 
 import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestNeoPixelInit extends TestNeoPixelBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        return UnitTestBase.allBoardsParams();
-    }
-
     @Test
     public void initSlow() {
         byte[] expected= new byte[] {0x06, 0x01, 0x01, 0x03, 0x00, 0x1e};

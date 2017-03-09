@@ -26,6 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
+import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.data.Quaternion;
 
@@ -46,7 +47,7 @@ import static org.junit.Assert.assertEquals;
 public class TestMetaMotionDataProcessor extends UnitTestBase {
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.MOTION_R;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(DataProcessor.class, SensorFusionBosch.class);
         connectToBoard();
     }
 

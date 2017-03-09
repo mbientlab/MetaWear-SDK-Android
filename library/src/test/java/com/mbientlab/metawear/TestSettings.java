@@ -44,13 +44,11 @@ import static org.junit.Assert.assertArrayEquals;
  */
 @RunWith(Parameterized.class)
 public class TestSettings extends UnitTestBase {
-    @Parameters(name = "board: {0}, revision: {1}")
+    @Parameters(name = "revision: {0}")
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R}) {
-            for(byte i= 1; i <= 3; i++) {
-                parameters.add(new Object[] { info, i });
-            }
+        for(byte i= 1; i <= 5; i++) {
+            parameters.add(new Object[] { i });
         }
 
         return parameters;
@@ -59,15 +57,11 @@ public class TestSettings extends UnitTestBase {
     private Settings settings;
 
     @Parameter
-    public MetaWearBoardInfo info;
-
-    @Parameter(value= 1)
     public byte revision;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, revision });
-        junitPlatform.boardInfo = info;
+        junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, revision});
         connectToBoard();
 
         settings = mwBoard.getModule(Settings.class);

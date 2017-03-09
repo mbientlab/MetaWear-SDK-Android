@@ -63,7 +63,7 @@ public class TestHumidityBme280Config extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = MetaWearBoardInfo.ENVIRONMENT;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(HumidityBme280.class);
         connectToBoard();
 
         humidity= mwBoard.getModule(HumidityBme280.class);

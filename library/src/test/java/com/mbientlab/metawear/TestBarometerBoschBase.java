@@ -37,11 +37,11 @@ public abstract class TestBarometerBoschBase extends UnitTestBase {
     protected BarometerBosch baroBosch;
 
     @Parameter
-    public MetaWearBoardInfo boardInfo;
+    public Class<? extends MetaWearBoard.Module> moduleClass;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= boardInfo;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(moduleClass);
         connectToBoard();
 
         baroBosch= mwBoard.getModule(BarometerBosch.class);

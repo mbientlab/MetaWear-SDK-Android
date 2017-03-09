@@ -60,8 +60,7 @@ public class TestSPI extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.addCustomModuleInfo(new byte[] { 0x0d, (byte) 0x80, 0x00, 0x01 });
-        junitPlatform.boardInfo= MetaWearBoardInfo.RG;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(SerialPassthrough.class);
         connectToBoard();
 
         spi = mwBoard.getModule(SerialPassthrough.class).spi((byte) 5, (byte) 0xe);

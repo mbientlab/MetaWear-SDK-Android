@@ -40,7 +40,7 @@ public class TestMacroControl extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Macro.class);
         connectToBoard();
 
         macro = mwBoard.getModule(Macro.class);

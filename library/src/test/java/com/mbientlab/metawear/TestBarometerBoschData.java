@@ -26,6 +26,8 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
+import com.mbientlab.metawear.module.BarometerBme280;
+import com.mbientlab.metawear.module.BarometerBmp280;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -54,10 +56,10 @@ public class TestBarometerBoschData extends TestBarometerBoschBase {
     @Parameters(name = "board: {0}, type: {1}")
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {MetaWearBoardInfo.RPRO, MetaWearBoardInfo.ENVIRONMENT}) {
-            parameters.add(new Object[] {info, PRESSURE});
-            parameters.add(new Object[] {info, ALTITUDE});
-        }
+        parameters.add(new Object[] {BarometerBme280.class, PRESSURE});
+        parameters.add(new Object[] {BarometerBme280.class, ALTITUDE});
+        parameters.add(new Object[] {BarometerBmp280.class, PRESSURE});
+        parameters.add(new Object[] {BarometerBmp280.class, ALTITUDE});
         return parameters;
     }
 

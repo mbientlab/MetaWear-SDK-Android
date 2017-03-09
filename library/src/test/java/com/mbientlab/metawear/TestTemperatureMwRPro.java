@@ -24,59 +24,40 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.JunitPlatform.MwBridge;
-import com.mbientlab.metawear.impl.JseMetaWearBoard;
-import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
+import com.mbientlab.metawear.module.Temperature;
+import com.mbientlab.metawear.module.Temperature.ExternalThermistor;
 
-import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
+import org.junit.Before;
+import org.junit.Test;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 /**
- * Created by etsai on 9/1/16.
+ * Created by etsai on 10/3/16.
  */
-public abstract class UnitTestBase implements MwBridge {
-    protected final JunitPlatform junitPlatform = new JunitPlatform(this);
-    protected final MetaWearBoard mwBoard= new JseMetaWearBoard(junitPlatform, junitPlatform, "CB:B7:49:BF:27:33");
+public class TestTemperatureMwRPro extends UnitTestBase {
+    private Temperature temp;
 
-    protected void connectToBoard() throws Exception {
-        final Capture<Exception> result = new Capture<>();
-        mwBoard.connectAsync().continueWith(new Continuation<Void, Void>() {
-            @Override
-            public Void then(Task<Void> task) throws Exception {
-                if (task.isFaulted()) {
-                    result.set(task.getError());
-                }
+    @Before
+    public void setup() throws Exception {
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Temperature.class);
+        connectToBoard();
 
-                synchronized (UnitTestBase.this) {
-                    UnitTestBase.this.notifyAll();
-                }
-
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-
-            if (result.get() != null) {
-                throw result.get();
-            }
-        }
+        temp= mwBoard.getModule(Temperature.class);
     }
 
-    @Override
-    public void disconnected() {
-        junitPlatform.btleCallback.onDisconnect();
+    @Test
+    public void configureExtThermistor() {
+        byte[] expected= new byte[] {0x04, 0x02, 0x02, 0x00, 0x01, 0x00};
+        ((ExternalThermistor) temp.findSensors(Temperature.SensorType.EXT_THERMISTOR)[0])
+                .configure((byte) 0, (byte) 1, false);
+
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Override
-    public void sendMockResponse(byte[] response) {
-        junitPlatform.btleCallback.onMwNotifyCharChanged(response);
-    }
-
-    @Override
-    public void sendMockGattCharReadValue(BtleGattCharacteristic gattChar, byte[] value) {
-        junitPlatform.btleCallback.onCharRead(gattChar, value);
+    @Test
+    public void checkNSources() {
+        assertEquals(4, temp.sensors().length);
     }
 }

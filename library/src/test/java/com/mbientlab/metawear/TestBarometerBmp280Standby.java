@@ -69,6 +69,7 @@ public class TestBarometerBmp280Standby extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(BarometerBmp280.class);
         connectToBoard();
 
         baroBmp280= mwBoard.getModule(BarometerBmp280.class);

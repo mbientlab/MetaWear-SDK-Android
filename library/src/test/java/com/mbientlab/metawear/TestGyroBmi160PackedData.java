@@ -31,37 +31,20 @@ import com.mbientlab.metawear.data.AngularVelocity;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 
 import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 11/17/16.
  */
-@RunWith(Parameterized.class)
 public class TestGyroBmi160PackedData extends UnitTestBase {
-    @Parameters
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                { MetaWearBoardInfo.CPRO },
-                { MetaWearBoardInfo.MOTION_R}
-        });
-    }
-
-    @Parameter
-    public MetaWearBoardInfo boardInfo;
-
     private GyroBmi160 gyroBmi160;
 
     @Before
     public void setup() throws Exception {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(GyroBmi160.class);
         connectToBoard();
 
         gyroBmi160= mwBoard.getModule(GyroBmi160.class);

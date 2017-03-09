@@ -52,29 +52,24 @@ import static org.junit.Assert.assertEquals;
  */
 @RunWith(Parameterized.class)
 public class TestTemperatureMwrProData extends UnitTestBase {
-    @Parameters(name = "board: {0}, channel: {1}")
+    @Parameters(name = "channel: {0}")
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
         for(int i= 0; i < 4; i++) {
-            for (MetaWearBoardInfo info : new MetaWearBoardInfo[]{CPRO, DETECTOR, ENVIRONMENT, RPRO, RG, MOTION_R}) {
-                parameters.add(new Object[] { info, i });
-            }
+            parameters.add(new Object[] { i });
         }
 
         return parameters;
     }
 
     @Parameter
-    public MetaWearBoardInfo info;
-
-    @Parameter(value= 1)
     public int sourceIdx;
 
     private Sensor currentSrc;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= info;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Temperature.class);
         connectToBoard();
 
         currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx];

@@ -49,6 +49,7 @@ public class TestGyroBmi160Data extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(GyroBmi160.class);
         connectToBoard();
 
         gyroBmi160= mwBoard.getModule(GyroBmi160.class);

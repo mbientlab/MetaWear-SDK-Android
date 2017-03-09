@@ -24,6 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.*;
+
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,31 +34,117 @@ import java.util.Map;
  * Created by etsai on 8/31/16.
  */
 public class MetaWearBoardInfo {
-    public final String name;
-    public final byte[] modelNumber, hardwareRevision, manufacturer, serialNumber;
-    public final Map<Byte, byte[]> moduleResponses;
-    public final Model model;
+    static final Map<Class<?>, byte[]> MODULE_RESPONSE;
+    private static final Class<?>[] DEFAULT_MODULES = new Class<?>[] {
+            Logging.class, DataProcessor.class, Timer.class, Macro.class
+    };
+    private static Map<Byte, byte[]> createModuleResponses(Class<?> ... moduleClasses) {
+        HashMap<Byte, byte[]> responses = new HashMap<>();
+        boolean hasDebug = false;
 
-    public MetaWearBoardInfo(Model model, String name, String modelNumber, String hardwareRevision, byte[][] moduleResponsesArray) {
+        if (moduleClasses != null) {
+            for (Class<?> clazz : moduleClasses) {
+                if (MODULE_RESPONSE.containsKey(clazz)) {
+                    byte[] response = MODULE_RESPONSE.get(clazz);
+                    responses.put(response[0], Arrays.copyOf(response, response.length));
+                }
+                hasDebug |= clazz.equals(Debug.class);
+            }
+        }
+        for(Class<?> clazz: DEFAULT_MODULES) {
+            byte[] response = MODULE_RESPONSE.get(clazz);
+            responses.put(response[0], Arrays.copyOf(response, response.length));
+        }
+
+        for(short i = 1; i <= 0x19; i++) {
+            byte casted = (byte) i;
+            if (casted == 0xa) {
+                responses.put((byte) 0xa, new byte[] {0x0a, (byte) 0x80, 0x00, 0x00, 0x1C});
+            } if (!responses.containsKey(casted)) {
+                responses.put(casted, new byte[] {casted, (byte) 0x80});
+            }
+        }
+
+        if (!hasDebug) {
+            responses.put((byte) 0xfe, new byte[] {(byte) 0xfe, (byte) 0x80});
+        }
+
+        return responses;
+    }
+
+    private static Map<Byte, byte[]> createModuleResponses(byte[][] customResponses) {
+        Map<Byte, byte[]> responses = createModuleResponses();
+
+        for(byte[] it: customResponses) {
+            responses.put(it[0], Arrays.copyOf(it, it.length));
+        }
+
+        return responses;
+    }
+
+    static {
+        MODULE_RESPONSE = new HashMap<>();
+        MODULE_RESPONSE.put(Switch.class, new byte[] {0x01, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(Led.class, new byte[] {0x02, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(AccelerometerBma255.class, new byte[] {0x03, (byte) 0x80, 0x03, 0x01});
+        MODULE_RESPONSE.put(AccelerometerBmi160.class, new byte[] {0x03, (byte) 0x80, 0x01, 0x01});
+        MODULE_RESPONSE.put(AccelerometerMma8452q.class, new byte[] {0x03, (byte) 0x80, 0x00, 0x01});
+        MODULE_RESPONSE.put(Temperature.class, new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x03, 0x01, 0x02});
+        MODULE_RESPONSE.put(Gpio.class, new byte[] {0x05, (byte) 0x80, 0x00, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
+        MODULE_RESPONSE.put(NeoPixel.class, new byte[] {0x06, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(IBeacon.class, new byte[] {0x07, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(Haptic.class, new byte[] {0x08, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(DataProcessor.class, new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
+        MODULE_RESPONSE.put(Logging.class, new byte[] {0x0b, (byte) 0x80, 0x00, 0x02, 0x08, (byte) 0x80, 0x2b, 0x00, 0x00});
+        MODULE_RESPONSE.put(Timer.class, new byte[] {0x0c, (byte) 0x80, 0x00, 0x00, 0x08});
+        MODULE_RESPONSE.put(SerialPassthrough.class, new byte[] {0x0d, (byte) 0x80, 0x00, 0x01});
+        MODULE_RESPONSE.put(Macro.class, new byte[] {0x0f, (byte) 0x80, 0x00, 0x01, 0x08});
+        MODULE_RESPONSE.put(Settings.class, new byte[] {0x11, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(BarometerBme280.class, new byte[] {0x12, (byte) 0x80, 0x01, 0x00});
+        MODULE_RESPONSE.put(BarometerBmp280.class, new byte[] {0x12, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(GyroBmi160.class, new byte[] {0x13, (byte) 0x80, 0x00, 0x01});
+        MODULE_RESPONSE.put(AmbientLightLtr329.class, new byte[] {0x14, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(MagnetometerBmm150.class, new byte[] {0x15, (byte) 0x80, 0x00, 0x01});
+        MODULE_RESPONSE.put(HumidityBme280.class, new byte[] {0x16, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(ColorTcs34725.class, new byte[] {0x17, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(ProximityTsl2671.class, new byte[] {0x18, (byte) 0x80, 0x00, 0x00});
+        MODULE_RESPONSE.put(SensorFusionBosch.class, new byte[] {0x19, (byte) 0x80, 0x00, 0x00, 0x03, 0x00, 0x06, 0x00, 0x02, 0x00, 0x01, 0x00});
+        MODULE_RESPONSE.put(Debug.class, new byte[] {(byte) 0xfe, (byte) 0x80, 0x00, 0x00});
+    }
+
+    final byte[] modelNumber, hardwareRevision, manufacturer, serialNumber;
+    final Map<Byte, byte[]> moduleResponses;
+    final Model model;
+
+    private MetaWearBoardInfo(Model model, String modelNumber, String hardwareRevision) {
         this.model = model;
-        this.name= name;
         this.modelNumber = modelNumber.getBytes();
         this.hardwareRevision = hardwareRevision.getBytes();
         this.manufacturer = new byte[] {0x4d, 0x62, 0x69, 0x65, 0x6e, 0x74, 0x4c, 0x61, 0x62, 0x20, 0x49, 0x6e, 0x63};
         this.serialNumber = new byte[] {0x30, 0x30, 0x33, 0x42, 0x46, 0x39};
+        moduleResponses = new HashMap<>();
+    }
 
-        this.moduleResponses = new HashMap<>();
+    public MetaWearBoardInfo(Model model, String modelNumber, String hardwareRevision, byte[][] moduleResponsesArray) {
+        this(model, modelNumber, hardwareRevision);
+
         for(byte[] response: moduleResponsesArray) {
             this.moduleResponses.put(response[0], response);
         }
     }
 
-    @Override
-    public String toString() {
-        return name;
+    public MetaWearBoardInfo(Class<?> ... moduleClasses) {
+        this(null, "deadbeef", "cafebabe");
+
+        this.moduleResponses.putAll(createModuleResponses(moduleClasses));
     }
 
-    public static final MetaWearBoardInfo CPRO= new MetaWearBoardInfo(Model.METAWEAR_CPRO, "cpro", "2", "0.2", new byte[][] {
+    @Override
+    public String toString() {
+        return model.name();
+    }
+
+    static final MetaWearBoardInfo CPRO= new MetaWearBoardInfo(Model.METAWEAR_CPRO, "2", "0.2", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x00},
             {0x03, (byte) 0x80, 0x01, 0x01},
@@ -82,7 +171,7 @@ public class MetaWearBoardInfo {
             {0x19, (byte) 0x80},
             {(byte) 0xFE, (byte) 0x80, 0x00, 0x00}
     }),
-    DETECTOR= new MetaWearBoardInfo(Model.METADETECT, "detector", "2", "0.2", new byte[][] {
+    DETECTOR= new MetaWearBoardInfo(Model.METADETECT, "2", "0.2", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x00},
             {0x03, (byte) 0x80, 0x03, 0x01},
@@ -109,7 +198,7 @@ public class MetaWearBoardInfo {
             {0x19, (byte) 0x80},
             {(byte) 0xfe, (byte) 0x80, 0x00, 0x00},
     }),
-    ENVIRONMENT= new MetaWearBoardInfo(Model.METAENV, "environment", "2", "0.2", new byte[][] {
+    ENVIRONMENT= new MetaWearBoardInfo(Model.METAENV, "2", "0.2", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x00},
             {0x03, (byte) 0x80, 0x03, 0x01},
@@ -136,7 +225,7 @@ public class MetaWearBoardInfo {
             {0x19, (byte) 0x80},
             {(byte) 0xfe, (byte) 0x80, 0x00, 0x00},
     }),
-    RPRO= new MetaWearBoardInfo(Model.METAWEAR_RPRO, "rpro", "1", "0.3", new byte[][] {
+    RPRO= new MetaWearBoardInfo(Model.METAWEAR_RPRO, "1", "0.3", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x00},
             {0x03, (byte) 0x80, 0x01, 0x01},
@@ -163,7 +252,7 @@ public class MetaWearBoardInfo {
             {0x19, (byte) 0x80},
             {(byte) 0xFE, (byte) 0x80, 0x00, 0x00}
     }),
-    R= new MetaWearBoardInfo(Model.METAWEAR_R, "r", "0", "0.2", new byte[][] {
+    R= new MetaWearBoardInfo(Model.METAWEAR_R, "0", "0.2", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x00},
             {0x03, (byte) 0x80, 0x00, 0x01},
@@ -190,7 +279,7 @@ public class MetaWearBoardInfo {
             {0x19, (byte) 0x80},
             {(byte) 0xFE, (byte) 0x80, 0x00, 0x00}
     }),
-    RG= new MetaWearBoardInfo(Model.METAWEAR_RG, "rg", "1", "0.2", new byte[][] {
+    RG= new MetaWearBoardInfo(Model.METAWEAR_RG, "1", "0.2", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x00},
             {0x03, (byte) 0x80, 0x01, 0x01},
@@ -217,7 +306,7 @@ public class MetaWearBoardInfo {
             {0x19, (byte) 0x80},
             {(byte) 0xfe, (byte) 0x80, 0x00, 0x00}
     }),
-    MOTION_R = new MetaWearBoardInfo(Model.METAMOTION_R, "motionr", "5", "0.1", new byte[][] {
+    MOTION_R = new MetaWearBoardInfo(Model.METAMOTION_R, "5", "0.1", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x00},
             {0x03, (byte) 0x80, 0x01, 0x01},
@@ -244,7 +333,7 @@ public class MetaWearBoardInfo {
             {0x19, (byte) 0x80, 0x00, 0x00, 0x03, 0x00, 0x06, 0x00, 0x02, 0x00, 0x01, 0x00},
             {(byte) 0xfe, (byte) 0x80, 0x00, 0x00}
     }),
-    TRACKER = new MetaWearBoardInfo(Model.METATRACKER, "tracker", "4", "0.1", new byte[][] {
+    TRACKER = new MetaWearBoardInfo(Model.METATRACKER, "4", "0.1", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x01, 0x03, 0x00},
             {0x03, (byte) 0x80, 0x01, 0x01},
@@ -271,7 +360,7 @@ public class MetaWearBoardInfo {
             {0x19, (byte) 0x80},
             {(byte) 0xfe, (byte) 0x80, 0x00, 0x01}
     }),
-    C = new MetaWearBoardInfo(Model.METAWEAR_C, "c", "2", "0.3", new byte[][] {
+    C = new MetaWearBoardInfo(Model.METAWEAR_C, "2", "0.3", new byte[][] {
             {0x01, (byte) 0x80, 0x00, 0x00},
             {0x02, (byte) 0x80, 0x00, 0x00},
             {0x03, (byte) 0x80, 0x01, 0x00},

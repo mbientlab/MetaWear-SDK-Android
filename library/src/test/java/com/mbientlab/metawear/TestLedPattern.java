@@ -119,7 +119,7 @@ public class TestLedPattern extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Led.class);
 
         expected= new byte[expectedBase.length];
         System.arraycopy(expectedBase, 0, expected, 0, expectedBase.length);

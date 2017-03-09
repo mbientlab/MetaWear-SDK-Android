@@ -50,7 +50,7 @@ public class TestGpioAnalog extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.addCustomModuleInfo(new byte[] {0x05, (byte) 0x80, 0x00, 0x00, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
         connectToBoard();
 
         gpio= mwBoard.getModule(Gpio.class);

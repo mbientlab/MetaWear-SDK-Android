@@ -48,6 +48,7 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AmbientLightLtr329.class);
         connectToBoard();
 
         alsLtr329= mwBoard.getModule(AmbientLightLtr329.class);

@@ -49,7 +49,7 @@ public class TestMma8452qTap extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = MetaWearBoardInfo.R;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
         connectToBoard();
 
         mma8452qAcc = mwBoard.getModule(AccelerometerMma8452q.class);

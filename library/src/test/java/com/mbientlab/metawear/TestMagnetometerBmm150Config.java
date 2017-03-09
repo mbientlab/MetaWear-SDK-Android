@@ -64,7 +64,7 @@ public class TestMagnetometerBmm150Config extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(MagnetometerBmm150.class);
         connectToBoard();
 
         mag= mwBoard.getModule(MagnetometerBmm150.class);

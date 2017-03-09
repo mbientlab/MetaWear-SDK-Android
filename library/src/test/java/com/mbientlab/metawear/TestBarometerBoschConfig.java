@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.BarometerBme280;
+import com.mbientlab.metawear.module.BarometerBmp280;
 import com.mbientlab.metawear.module.BarometerBosch.FilterCoeff;
 import com.mbientlab.metawear.module.BarometerBosch.OversamplingMode;
 
@@ -49,7 +51,7 @@ public class TestBarometerBoschConfig extends TestBarometerBoschBase {
     @Parameters(name = "board: {0}, filter: {1}, os: {2}")
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {MetaWearBoardInfo.CPRO, MetaWearBoardInfo.RPRO, MetaWearBoardInfo.ENVIRONMENT}) {
+        for(Class<?> info: new Class<?>[] {BarometerBme280.class, BarometerBmp280.class}) {
             for(FilterCoeff filter: FilterCoeff.values()) {
                 for(OversamplingMode os: OversamplingMode.values()) {
                     parameters.add(new Object[]{info, filter, os});

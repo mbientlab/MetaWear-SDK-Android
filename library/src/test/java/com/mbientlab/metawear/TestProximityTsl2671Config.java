@@ -77,7 +77,7 @@ public class TestProximityTsl2671Config extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = MetaWearBoardInfo.DETECTOR;
+        junitPlatform.boardInfo = new MetaWearBoardInfo(ProximityTsl2671.class);
         connectToBoard();
 
         proximity= mwBoard.getModule(ProximityTsl2671.class);

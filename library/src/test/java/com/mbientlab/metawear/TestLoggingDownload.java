@@ -47,7 +47,7 @@ public class TestLoggingDownload extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Logging.class);
         connectToBoard();
 
         logging= mwBoard.getModule(Logging.class);

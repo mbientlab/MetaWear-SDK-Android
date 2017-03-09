@@ -30,10 +30,13 @@ import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.builder.predicate.PulseOutput;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.module.Led;
+import com.mbientlab.metawear.module.Switch;
 import com.mbientlab.metawear.module.Temperature;
 
 import org.junit.Before;
@@ -50,7 +53,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestDataProcessor extends UnitTestBase {
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class, Gpio.class, Temperature.class);
         junitPlatform.firmware= "1.2.5";
         connectToBoard();
     }

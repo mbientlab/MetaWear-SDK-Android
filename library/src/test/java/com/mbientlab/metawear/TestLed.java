@@ -35,7 +35,7 @@ import static org.junit.Assert.assertArrayEquals;
  */
 public class TestLed extends UnitTestBase {
     public TestLed() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Led.class);
         connectToBoard();
     }
 

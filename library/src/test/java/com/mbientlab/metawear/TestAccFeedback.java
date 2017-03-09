@@ -29,6 +29,9 @@ import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer.AccelerationDataProducer;
+import com.mbientlab.metawear.module.AccelerometerBma255;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -53,18 +56,18 @@ public class TestAccFeedback extends UnitTestBase {
     @Parameters
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
-                { MetaWearBoardInfo.RG },
-                { MetaWearBoardInfo.R },
-                { MetaWearBoardInfo.ENVIRONMENT },
+                { AccelerometerBmi160.class },
+                { AccelerometerMma8452q.class },
+                { AccelerometerBma255.class },
         });
     }
 
     @Parameter
-    public MetaWearBoardInfo moduleInfo;
+    public Class<? extends Accelerometer> accelClass;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= moduleInfo;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(accelClass);
         junitPlatform.firmware= "1.1.3";
         connectToBoard();
     }

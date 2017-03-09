@@ -24,6 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.BarometerBme280;
+import com.mbientlab.metawear.module.BarometerBmp280;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -42,9 +45,8 @@ public class TestBarometerBosch extends TestBarometerBoschBase {
     @Parameters(name = "board: {0}")
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][] {
-                {MetaWearBoardInfo.CPRO},
-                {MetaWearBoardInfo.RPRO},
-                {MetaWearBoardInfo.ENVIRONMENT}
+                {BarometerBme280.class},
+                {BarometerBmp280.class}
         });
     }
 

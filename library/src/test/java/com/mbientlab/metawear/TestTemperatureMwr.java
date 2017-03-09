@@ -43,7 +43,7 @@ public class TestTemperatureMwr extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.R;
+        junitPlatform.addCustomModuleInfo(new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x01});
         connectToBoard();
 
         temp= mwBoard.getModule(Temperature.class);

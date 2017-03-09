@@ -27,6 +27,7 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.builder.RouteBuilder;
 
@@ -48,7 +49,8 @@ public class TestActivityMonitor extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.CPRO;
+        junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x00, 0x1c});
+        junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
         connectToBoard();
 
         mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {

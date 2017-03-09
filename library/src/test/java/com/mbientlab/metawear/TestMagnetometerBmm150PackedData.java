@@ -31,38 +31,21 @@ import com.mbientlab.metawear.data.MagneticField;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 
 import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 11/17/16.
  */
-@RunWith(Parameterized.class)
 public class TestMagnetometerBmm150PackedData extends UnitTestBase {
-    @Parameters
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                { MetaWearBoardInfo.CPRO },
-                { MetaWearBoardInfo.MOTION_R}
-        });
-    }
-
-    @Parameter
-    public MetaWearBoardInfo boardInfo;
 
     private MagnetometerBmm150 mag;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= boardInfo;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(MagnetometerBmm150.class);
         connectToBoard();
 
         mag= mwBoard.getModule(MagnetometerBmm150.class);

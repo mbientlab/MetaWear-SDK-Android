@@ -28,12 +28,6 @@ import com.mbientlab.metawear.module.Settings;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
-
-import java.util.Collection;
 
 import bolts.Capture;
 import bolts.Continuation;
@@ -44,22 +38,12 @@ import static org.junit.Assert.assertNull;
 /**
  * Created by etsai on 12/10/16.
  */
-@RunWith(Parameterized.class)
 public class TestSettingsRev5Unsupported extends UnitTestBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        return UnitTestBase.allBoardsParams();
-    }
-
     private Settings settings;
-
-    @Parameter
-    public MetaWearBoardInfo info;
 
     @Before
     public void setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x05, 0x00});
-        junitPlatform.boardInfo = info;
         connectToBoard();
 
         settings = mwBoard.getModule(Settings.class);

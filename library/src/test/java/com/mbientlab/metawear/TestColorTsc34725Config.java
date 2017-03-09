@@ -73,7 +73,7 @@ public class TestColorTsc34725Config extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.ENVIRONMENT;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(ColorTcs34725.class);
         connectToBoard();
 
         colorTcs34725= mwBoard.getModule(ColorTcs34725.class);

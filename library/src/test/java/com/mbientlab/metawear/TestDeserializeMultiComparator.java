@@ -26,6 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.module.DataProcessor;
+import com.mbientlab.metawear.module.Gpio;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -41,6 +42,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestDeserializeMultiComparator extends UnitTestBase {
     @Before
     public void setup() throws Exception {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Gpio.class);
         junitPlatform.firmware = "1.2.3";
         connectToBoard();
 

@@ -54,6 +54,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -78,7 +80,7 @@ import bolts.TaskCompletionSource;
  */
 public class BtleService extends Service {
     private static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-    private static String DOWNLOAD_DIR_NAME = "download";
+    private static String DOWNLOAD_DIR_NAME = "download", LOG_TAG = "metawear-btle";
 
     private final BluetoothGattCallback btleGattCallback= new BluetoothGattCallback() {
         @Override
@@ -140,13 +142,46 @@ public class BtleService extends Service {
             } else {
                 final BluetoothGattService service = gatt.getService(MetaWearBoard.METAWEAR_GATT_SERVICE);
                 if (service == null) {
-                    platform.closeGatt();
-                    taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            platform.setConnectTaskError(new RuntimeException("MetaWear GATT service does not exist: " + MetaWearBoard.METAWEAR_GATT_SERVICE.toString()));
+                    boolean dfuServiceExists = false;
+                    platform.nDescriptors = 0;
+                    ArrayList<Callable<Boolean>> enNotifyActions = new ArrayList<>();
+
+                    for (final BluetoothGattService it : gatt.getServices()) {
+                        if (it.getUuid().equals(MetaWearBoard.METABOOT_SERVICE)) {
+                            dfuServiceExists= true;
                         }
-                    }));
+                        for (final BluetoothGattCharacteristic characteristic : it.getCharacteristics()) {
+                            int charProps = characteristic.getProperties();
+                            if ((charProps & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                                platform.nDescriptors++;
+                                enNotifyActions.add(new Callable<Boolean>() {
+                                    @Override
+                                    public Boolean call() {
+                                        gatt.setCharacteristicNotification(characteristic, true);
+
+                                        gattScheduler.setExpectedGattKey(GattActionKey.DESCRIPTOR_WRITE);
+                                        BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CHARACTERISTIC_CONFIG);
+                                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                                        gatt.writeDescriptor(descriptor);
+
+                                        return true;
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    if (!dfuServiceExists) {
+                        platform.closeGatt();
+                        taskFutures.add(backgroundThreadPool.submit(new Runnable() {
+                            @Override
+                            public void run() {
+                                platform.setConnectTaskError(new RuntimeException("Bluetooth LE device is not recognized by the API"));
+                            }
+                        }));
+                    } else {
+                        gattScheduler.queueActions(enNotifyActions);
+                    }
                 } else {
                     platform.nDescriptors= 1;
 
@@ -281,6 +316,11 @@ public class BtleService extends Service {
         void queueAction(Callable<Boolean> newAction) {
             actions.add(newAction);
         }
+
+        void queueActions(Collection<Callable<Boolean>> newActions) {
+            actions.addAll(newActions);
+        }
+
         void executeNext(GattActionKey key) {
             if (!actions.isEmpty()) {
                 if (key == gattKey || !isExecActions.get()) {
@@ -342,7 +382,7 @@ public class BtleService extends Service {
                 try {
                     androidBtGatt.getClass().getMethod("refresh").invoke(androidBtGatt);
                 } catch (final Exception e) {
-                    Log.e("MetaWear", "Error refreshing gatt cache", e);
+                    Log.e(LOG_TAG, "Error refreshing gatt cache", e);
                 } finally {
                     androidBtGatt.close();
                     androidBtGatt = null;
@@ -478,7 +518,7 @@ public class BtleService extends Service {
 
         @Override
         public boolean serviceExists(UUID serviceUuid) {
-            return androidBtGatt.getService(MetaWearBoard.METABOOT_SERVICE) != null;
+            return androidBtGatt.getService(serviceUuid) != null;
         }
 
         @Override
@@ -557,7 +597,7 @@ public class BtleService extends Service {
                     try {
                         next.get();
                     } catch (Exception e) {
-                        Log.e("MetaWear", "Background task reported an error", e);
+                        Log.e(LOG_TAG, "Background task reported an error", e);
                     }
                 } else {
                     notYetCompleted.add(next);

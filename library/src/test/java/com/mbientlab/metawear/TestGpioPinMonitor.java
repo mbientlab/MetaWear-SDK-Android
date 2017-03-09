@@ -47,7 +47,7 @@ public class TestGpioPinMonitor extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= MetaWearBoardInfo.RPRO;
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Gpio.class);
         connectToBoard();
 
         gpio= mwBoard.getModule(Gpio.class);
