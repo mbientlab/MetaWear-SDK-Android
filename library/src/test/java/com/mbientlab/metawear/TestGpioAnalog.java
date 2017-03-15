@@ -146,7 +146,7 @@ public class TestGpioAnalog extends UnitTestBase {
     }
 
     @Test
-    public void receivedAnalogData() {
+    public void receivedAnalogData() throws IOException {
         final Capture<Float> absRef = new Capture<>();
         final Capture<Short> adc = new Capture<>();
 
@@ -167,15 +167,8 @@ public class TestGpioAnalog extends UnitTestBase {
 
 
         // for TestGpioAnalog
-        /*
         junitPlatform.boardStateSuffix = "gpio_analog";
-        try {
-            mwBoard.serialize();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        */
-
+        mwBoard.serialize();
 
         sendMockResponse(new byte[] {0x05, (byte) 0x87, 0x01, 0x72, 0x03});
         sendMockResponse(new byte[] {0x05, (byte) 0x86, 0x01, (byte) 0xc2, 0x09});

@@ -99,10 +99,11 @@ class StreamedDataConsumer extends DeviceDataConsumer {
                     public void onResponseReceived(byte[] response) {
                         byte[] dataRaw = new byte[dataUnitLength];
 
+                        Calendar now = Calendar.getInstance();
                         for(int i = 0, j = source.eventConfig[2] == DataTypeBase.NO_DATA_ID ? 2 : 3;
                             i < source.attributes.copies && j < response.length; i++, j+= dataUnitLength) {
                             System.arraycopy(response, j, dataRaw, 0, dataRaw.length);
-                            call(source.createMessage(false, mwPrivate, dataRaw, Calendar.getInstance()));
+                            call(source.createMessage(false, mwPrivate, dataRaw, now));
                         }
                     }
                 };

@@ -32,6 +32,7 @@ import com.mbientlab.metawear.module.SerialPassthrough.SpiParameterBuilder;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
@@ -91,7 +92,7 @@ public class TestSPI extends UnitTestBase {
     }
 
     @Test
-    public void bmi160Data() {
+    public void bmi160Data() throws IOException {
         byte[] expected= new byte[] {0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0};
         final Capture<byte[]> actual= new Capture<>();
 
@@ -104,11 +105,9 @@ public class TestSPI extends UnitTestBase {
         });
         sendMockResponse(new byte[] {0x0d, (byte) 0x82, 0x0e, 0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0});
 
-        /*
         // For TestDeserializeSPI
         junitPlatform.boardStateSuffix = "spi_stream";
         mwBoard.serialize();
-        */
 
         assertArrayEquals(expected, actual.get());
     }

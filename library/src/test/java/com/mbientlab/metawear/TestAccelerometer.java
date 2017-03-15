@@ -41,6 +41,7 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
 
 import bolts.Capture;
@@ -373,7 +374,6 @@ public class TestAccelerometer extends UnitTestBase {
     public void receivedPackedData() {
         Acceleration[] expected= null;
         byte[] response= null;
-        Acceleration[] actual = new Acceleration[3];
 
         if (accelClass.equals(AccelerometerBma255.class)) {
             expected = new Acceleration[] {
@@ -407,28 +407,34 @@ public class TestAccelerometer extends UnitTestBase {
                     (byte) 0xed, 0x04, (byte) 0xc5, 0x0a, 0x31, (byte) 0xfb, (byte) 0xdb, (byte) 0xf8, 0x7b, (byte) 0xf2};
         }
 
-        final ArrayList<Acceleration> received = new ArrayList<>();
+        final Acceleration[] actual = new Acceleration[3];
+        final String[] timestamps = new String[3];
         accelerometer.packedAcceleration().addRouteAsync(new RouteBuilder() {
             @Override
             public void configure(RouteComponent source) {
                 source.stream(new Subscriber() {
+                    int i = 0;
                     @Override
                     public void apply(Data data, Object... env) {
-                        ((ArrayList<Acceleration>) env[0]).add(data.value(Acceleration.class));
+                        ((Acceleration[]) env[0])[i] = data.value(Acceleration.class);
+                        ((String[]) env[1])[i] = data.formattedTimestamp();
+                        i++;
                     }
                 });
             }
         }).continueWith(new Continuation<Route, Void>() {
             @Override
             public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, received);
+                task.getResult().setEnvironment(0, actual, timestamps);
                 return null;
             }
         });
 
         sendMockResponse(response);
-        received.toArray(actual);
+        final String[] expectedTimestamps = new String[3];
+        Arrays.fill(expectedTimestamps, timestamps[0]);
 
         assertArrayEquals(expected, actual);
+        assertArrayEquals(expectedTimestamps, timestamps);
     }
 }

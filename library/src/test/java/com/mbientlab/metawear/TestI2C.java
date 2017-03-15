@@ -31,6 +31,7 @@ import com.mbientlab.metawear.builder.RouteComponent;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
@@ -79,7 +80,7 @@ public class TestI2C extends UnitTestBase {
     }
 
     @Test
-    public void whoAmIData() {
+    public void whoAmIData() throws IOException {
         byte[] expected= new byte[] {0x2a};
         final Capture<byte[]> actual= new Capture<>();
 
@@ -92,11 +93,9 @@ public class TestI2C extends UnitTestBase {
         });
         sendMockResponse(new byte[] {0x0d, (byte) 0x81, 0x0a, 0x2a});
 
-        /*
         // For TestDeserializedI2C
         junitPlatform.boardStateSuffix = "i2c_stream";
         mwBoard.serialize();
-        */
 
         assertArrayEquals(expected, actual.get());
     }

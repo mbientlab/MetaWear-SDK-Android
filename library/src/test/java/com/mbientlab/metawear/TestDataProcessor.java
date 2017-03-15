@@ -42,6 +42,8 @@ import com.mbientlab.metawear.module.Temperature;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
+
 import bolts.Continuation;
 import bolts.Task;
 
@@ -222,7 +224,7 @@ public class TestDataProcessor extends UnitTestBase {
     }
 
     @Test
-    public void createGpioFeedback() throws InterruptedException {
+    public void createGpioFeedback() throws InterruptedException, IOException {
         byte[][] expected= {
                 {0x09, 0x02, 0x05, (byte) 0xc6, 0x00, 0x20, 0x01, 0x02, 0x00, 0x00},
                 {0x09, 0x02, 0x05, (byte) 0xc6, 0x00, 0x20, 0x09, 0x05, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -262,14 +264,8 @@ public class TestDataProcessor extends UnitTestBase {
             this.wait();
 
             // For TestDeserializeGpioFeedback
-            /*
             junitPlatform.boardStateSuffix = "gpio_feedback";
-            try {
-                mwBoard.serialize();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            */
+            mwBoard.serialize();
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }

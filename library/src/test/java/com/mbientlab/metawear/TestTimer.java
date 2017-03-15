@@ -79,11 +79,9 @@ public class TestTimer extends UnitTestBase {
                 this.wait();
             }
 
-            /*
             // For TestDeserializeTimer
             junitPlatform.boardStateSuffix = "timer";
             mwBoard.serialize();
-            */
         }
     }
 

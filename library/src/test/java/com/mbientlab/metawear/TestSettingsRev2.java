@@ -30,6 +30,8 @@ import com.mbientlab.metawear.module.Settings;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
+
 import bolts.Continuation;
 import bolts.Task;
 
@@ -52,7 +54,7 @@ public class TestSettingsRev2 extends UnitTestBase {
     }
 
     @Test
-    public void disconnectEvent() throws InterruptedException {
+    public void disconnectEvent() throws InterruptedException, IOException {
         byte[][] expected= new byte[][] {
             {0x0a, 0x02, 0x11, 0x0a, (byte) 0xff, 0x02, 0x03, 0x0f},
             {0x0a, 0x03, 0x02, 0x02, 0x1f, 0x00, 0x00, 0x00, 0x32, 0x00, 0x00, 0x00, (byte) 0xf4, 0x01, 0x00, 0x00, 0x0a},
@@ -85,6 +87,10 @@ public class TestSettingsRev2 extends UnitTestBase {
 
         synchronized (this) {
             this.wait();
+
+            // check observers properly serialize
+            junitPlatform.boardStateSuffix = "dc_observer";
+            mwBoard.serialize();
         }
 
         assertArrayEquals(expected, junitPlatform.getCommands());

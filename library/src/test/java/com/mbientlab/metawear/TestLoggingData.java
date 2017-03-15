@@ -95,11 +95,9 @@ public class TestLoggingData extends TestLogDataBase {
                 this.wait();
             }
 
-            /*
             // For TestDeserializeLoggingData
             junitPlatform.boardStateSuffix = "log_acc";
             mwBoard.serialize();
-            */
 
             mwBoard.getModule(Logging.class).downloadAsync()
                     .continueWith(new Continuation<Void, Void>() {
@@ -164,11 +162,9 @@ public class TestLoggingData extends TestLogDataBase {
                 this.wait();
             }
 
-            /*
             // For TestDeserializeLoggingData
             junitPlatform.boardStateSuffix = "log_offset";
             mwBoard.serialize();
-            */
 
             mwBoard.getModule(Logging.class).downloadAsync()
                     .continueWith(new Continuation<Void, Void>() {

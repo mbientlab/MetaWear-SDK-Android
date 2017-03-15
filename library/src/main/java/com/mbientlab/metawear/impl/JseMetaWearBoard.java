@@ -260,7 +260,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
         private final int id;
         private boolean active;
 
-        private MetaWearBoardPrivate mwPrivate;
+        private transient MetaWearBoardPrivate mwPrivate;
 
         private ObserverInner(int id, LinkedList<Byte> eventCmdIds) {
             this.eventCmdIds = eventCmdIds;
