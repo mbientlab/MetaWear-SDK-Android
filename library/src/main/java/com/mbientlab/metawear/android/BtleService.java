@@ -565,8 +565,10 @@ public class BtleService extends Service {
         @Override
         public Task<Integer> readRssiAsync() {
             if (androidBtGatt != null) {
-                if (rssiTask.get() == null) {
-                    rssiTask.set(new TaskCompletionSource<Integer>());
+                TaskCompletionSource<Integer> pendingTask = rssiTask.get();
+                if (pendingTask == null) {
+                    pendingTask = new TaskCompletionSource<>();
+                    rssiTask.set(pendingTask);
                     gattScheduler.queueAction(new Callable<Boolean>() {
                         @Override
                         public Boolean call() {
@@ -577,7 +579,7 @@ public class BtleService extends Service {
                     });
                     gattScheduler.executeNext(GattActionKey.NONE);
                 }
-                return rssiTask.get().getTask();
+                return pendingTask.getTask();
             }
             return Task.forError(new RuntimeException("No active BLE connection"));
         }

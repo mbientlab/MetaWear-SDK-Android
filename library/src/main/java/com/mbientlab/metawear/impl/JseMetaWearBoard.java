@@ -325,20 +325,14 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     // Device Information
     private String serialNumber, manufacturer;
-    private final AtomicReference<TaskCompletionSource<Byte>> readBatteryTask = new AtomicReference<>();
+    private final AsyncTaskManager<Byte> readBatteryTasks;
     private final AtomicReference<TaskCompletionSource<DeviceInformation>> readDevInfoTaskSource = new AtomicReference<>();
-    private ScheduledFuture<?> readDevInfoFuture, readBatteryFuture;
+    private ScheduledFuture<?> readDevInfoFuture;
     private final Runnable readDevInfoTimeout = new Runnable() {
         @Override
         public void run() {
             readDevInfoFuture.cancel(false);
             readDevInfoTaskSource.getAndSet(null).setError(new TimeoutException("Reading device information timed out"));
-        }
-    }, readBatteryTimeout = new Runnable() {
-        @Override
-        public void run() {
-            readBatteryFuture.cancel(false);
-            readBatteryTask.getAndSet(null).setError(new TimeoutException("Reading battery level timed out"));
         }
     };
 
@@ -619,7 +613,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                     persist.boardInfo.hardwareRevision= new String(value);
                     startServiceDiscovery(true);
                 } else if (characteristic.equals(BatteryService.BATTERY_LEVEL)) {
-                    readBatteryTask.getAndSet(null).setResult(value[0]);
+                    readBatteryTasks.setResult(value[0]);
                 } else if (characteristic.equals(DeviceInformationService.SERIAL_NUMBER)) {
                     serialNumber = new String(value);
                     if (manufacturer == null) {
@@ -637,6 +631,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 }
             }
         });
+        readBatteryTasks = new AsyncTaskManager<>(mwPrivate, "Reading battery level timed out");
     }
 
     @Override
@@ -725,35 +720,32 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Task<Byte> readBatteryLevelAsync() {
-        if (connected) {
-            if (readBatteryTask.get() == null) {
-                readBatteryTask.set(new TaskCompletionSource<Byte>());
+        return connected ? readBatteryTasks.queueTask(250L, new Runnable() {
+            @Override
+            public void run() {
                 gatt.readCharacteristic(BatteryService.BATTERY_LEVEL);
-                readBatteryFuture = mwPrivate.scheduleTask(readBatteryTimeout, 250L);
             }
-            return readBatteryTask.get().getTask();
-        }
-        return Task.forError(new RuntimeException("No active BLE connection"));
+        }) : Task.<Byte>forError(new RuntimeException("No active BLE connection"));
     }
 
     @Override
     public Task<DeviceInformation> readDeviceInformationAsync() {
         if (connected) {
-            if (readDevInfoTaskSource.get() != null) {
-                return readDevInfoTaskSource.get().getTask();
-            }
-
-            if (serialNumber != null && manufacturer != null) {
-                TaskCompletionSource<DeviceInformation> taskSource = new TaskCompletionSource<>();
-                taskSource.setResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber, serialNumber,
-                        persist.boardInfo.firmware.toString(), persist.boardInfo.hardwareRevision));
+            TaskCompletionSource<DeviceInformation> taskSource = readDevInfoTaskSource.get();
+            if (taskSource != null) {
                 return taskSource.getTask();
             }
 
-            readDevInfoTaskSource.set(new TaskCompletionSource<DeviceInformation>());
+            if (serialNumber != null && manufacturer != null) {
+                return Task.forResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber, serialNumber,
+                        persist.boardInfo.firmware.toString(), persist.boardInfo.hardwareRevision));
+            }
+
+            taskSource = new TaskCompletionSource<>();
+            readDevInfoTaskSource.set(taskSource);
             gatt.readCharacteristic(serialNumber == null ? DeviceInformationService.SERIAL_NUMBER : DeviceInformationService.MANUFACTURER_NAME);
             readDevInfoFuture = mwPrivate.scheduleTask(readDevInfoTimeout, 500L);
-            return readDevInfoTaskSource.get().getTask();
+            return taskSource.getTask();
         }
         return Task.forError(new RuntimeException("No active BLE connection"));
     }
