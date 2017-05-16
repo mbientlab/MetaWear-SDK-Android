@@ -38,6 +38,7 @@ import com.mbientlab.metawear.builder.RouteComponent.Action;
 import com.mbientlab.metawear.impl.RouteComponentImpl.Cache;
 import com.mbientlab.metawear.impl.DataProcessorImpl.Processor;
 import com.mbientlab.metawear.impl.LoggingImpl.DataLogger;
+import com.mbientlab.metawear.impl.platform.BtleGatt.WriteType;
 import com.mbientlab.metawear.module.*;
 import com.mbientlab.metawear.Subscriber;
 import com.mbientlab.metawear.module.Timer.ScheduledTask;
@@ -84,7 +85,6 @@ import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 import static com.mbientlab.metawear.impl.Constant.Module.MACRO;
-import static com.mbientlab.metawear.impl.platform.BtleGatt.GattCharWriteType.*;
 
 /**
  * Platform agnostic implementation of the {@link MetaWearBoard} interface using only standard Java APIs.  Platform specific functionality
@@ -95,6 +95,9 @@ public class JseMetaWearBoard implements MetaWearBoard {
     private static final BtleGattCharacteristic MW_CMD_GATT_CHAR= new BtleGattCharacteristic(
             METAWEAR_GATT_SERVICE,
             UUID.fromString("326A9001-85CB-9195-D9DD-464CFBBAE75A")
+    ), MW_NOTIFY_CHAR = new BtleGattCharacteristic(
+            METAWEAR_GATT_SERVICE,
+            UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A")
     );
 
     private static final ScheduledExecutorService SCHEDULED_TASK_THREADPOOL = Executors.newScheduledThreadPool(4);
@@ -325,21 +328,11 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     // Device Information
     private String serialNumber, manufacturer;
-    private final AsyncTaskManager<Byte> readBatteryTasks;
-    private final AtomicReference<TaskCompletionSource<DeviceInformation>> readDevInfoTaskSource = new AtomicReference<>();
-    private ScheduledFuture<?> readDevInfoFuture;
-    private final Runnable readDevInfoTimeout = new Runnable() {
-        @Override
-        public void run() {
-            readDevInfoFuture.cancel(false);
-            readDevInfoTaskSource.getAndSet(null).setError(new TimeoutException("Reading device information timed out"));
-        }
-    };
 
     // Connection
     private ScheduledFuture<?> serviceDiscoveryFuture;
-    private final AtomicReference<TaskCompletionSource<Void>> connectTaskSource = new AtomicReference<>();
     private UnexpectedDisconnectHandler unexpectedDcHandler;
+    private final AtomicReference<TaskCompletionSource<Void>> connectTaskSource = new AtomicReference<>();
     private boolean connected;
     private final Continuation<Void, Void> timeReadContinuation = new Continuation<Void, Void>() {
         @Override
@@ -366,7 +359,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
     private final MetaWearBoardPrivate mwPrivate = new MetaWearBoardPrivate() {
         @Override
         public Task<Void> boardDisconnect() {
-            return gatt.boardDisconnectAsync();
+            return gatt.remoteDisconnectAsync();
         }
 
         @Override
@@ -374,9 +367,9 @@ public class JseMetaWearBoard implements MetaWearBoard {
             if (event.getEventConfig() != null) {
                 event.convertToEventCommand(command);
             } else {
-                gatt.writeCharacteristic(
+                gatt.writeCharacteristicAsync(
                         MW_CMD_GATT_CHAR,
-                        command[0] == MACRO.id ? WRITE_WITH_RESPONSE : WRITE_WITHOUT_RESPONSE,
+                        command[0] == MACRO.id ? WriteType.DEFAULT : WriteType.WITHOUT_RESPONSE,
                         command
                 );
 
@@ -543,15 +536,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
         this.gatt = gatt;
         this.macAddress = macAddress;
 
-        this.gatt.registerCallback(new BtleGatt.Callback() {
-            @Override
-            public void onUnexpectedDisconnect(int status) {
-                if (unexpectedDcHandler != null) {
-                    unexpectedDcHandler.disconnected(status);
-                }
-                onDisconnect();
-            }
-
+        gatt.onDisconnect(new BtleGatt.DisconnectHandler() {
             @Override
             public void onDisconnect() {
                 connected = false;
@@ -561,77 +546,14 @@ public class JseMetaWearBoard implements MetaWearBoard {
             }
 
             @Override
-            public void onMwNotifyCharChanged(byte[] value) {
-                Pair<Byte, Byte> header= new Pair<>(value[0], value[1]);
-                Tuple3<Byte, Byte, Byte> dataHandlerKey= new Tuple3<>(value[0], value[1], dataIdHeaders.contains(header) ? value[2] : DataTypeBase.NO_DATA_ID);
+            public void onUnexpectedDisconnect(int status) {
+                onDisconnect();
 
-                if (dataHandlers.containsKey(dataHandlerKey)) {
-                    for(RegisterResponseHandler handler: dataHandlers.get(dataHandlerKey)) {
-                        handler.onResponseReceived(value);
-                    }
-                } else if (registerResponseHandlers.containsKey(header)) {
-                    registerResponseHandlers.get(header).onResponseReceived(value);
-                } else if (value[1] == READ_INFO_REGISTER) {
-                    ModuleInfo current= new ModuleInfo(value);
-                    persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(value[0]), current);
-
-                    instantiateModule(current);
-
-                    if (moduleQueries.isEmpty()) {
-                        logger.queryTime().continueWith(timeReadContinuation);
-                    } else {
-                        JseMetaWearBoard.this.gatt.writeCharacteristic(MW_CMD_GATT_CHAR, WRITE_WITHOUT_RESPONSE, new byte[] {moduleQueries.poll().id, READ_INFO_REGISTER});
-                    }
-                }
-            }
-
-            @Override
-            public void onCharRead(BtleGattCharacteristic characteristic, byte[] value) {
-                if (characteristic.equals(DeviceInformationService.FIRMWARE_REVISION)) {
-                    Version readFirmware= new Version(new String(value));
-                    if (persist.boardInfo.firmware.compareTo(readFirmware) != 0) {
-                        persist.boardInfo.firmware= readFirmware;
-
-                        if (persist.boardInfo.modelNumber == null) {
-                            JseMetaWearBoard.this.gatt.readCharacteristic(DeviceInformationService.MODEL_NUMBER);
-                        } else if (persist.boardInfo.hardwareRevision == null) {
-                            JseMetaWearBoard.this.gatt.readCharacteristic(DeviceInformationService.HARDWARE_REVISION);
-                        } else {
-                            startServiceDiscovery(true);
-                        }
-                    } else {
-                        startServiceDiscovery(false);
-                    }
-                } else if (characteristic.equals(DeviceInformationService.MODEL_NUMBER)) {
-                    persist.boardInfo.modelNumber= new String(value);
-                    if (persist.boardInfo.hardwareRevision == null) {
-                        JseMetaWearBoard.this.gatt.readCharacteristic(DeviceInformationService.HARDWARE_REVISION);
-                    } else {
-                        startServiceDiscovery(true);
-                    }
-                } else if (characteristic.equals(DeviceInformationService.HARDWARE_REVISION)) {
-                    persist.boardInfo.hardwareRevision= new String(value);
-                    startServiceDiscovery(true);
-                } else if (characteristic.equals(BatteryService.BATTERY_LEVEL)) {
-                    readBatteryTasks.setResult(value[0]);
-                } else if (characteristic.equals(DeviceInformationService.SERIAL_NUMBER)) {
-                    serialNumber = new String(value);
-                    if (manufacturer == null) {
-                        JseMetaWearBoard.this.gatt.readCharacteristic(DeviceInformationService.MANUFACTURER_NAME);
-                    } else {
-                        readDevInfoFuture.cancel(false);
-                        readDevInfoTaskSource.getAndSet(null).setResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber,
-                                serialNumber, persist.boardInfo.firmware.toString(), persist.boardInfo.hardwareRevision));
-                    }
-                } else if (characteristic.equals(DeviceInformationService.MANUFACTURER_NAME)) {
-                    manufacturer = new String(value);
-                    readDevInfoFuture.cancel(false);
-                    readDevInfoTaskSource.getAndSet(null).setResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber,
-                            serialNumber, persist.boardInfo.firmware.toString(), persist.boardInfo.hardwareRevision));
+                if (unexpectedDcHandler != null) {
+                    unexpectedDcHandler.disconnected(status);
                 }
             }
         });
-        readBatteryTasks = new AsyncTaskManager<>(mwPrivate, "Reading battery level timed out");
     }
 
     @Override
@@ -720,34 +642,33 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Task<Byte> readBatteryLevelAsync() {
-        return connected ? readBatteryTasks.queueTask(250L, new Runnable() {
+        return gatt.readCharacteristicAsync(BatteryService.BATTERY_LEVEL).onSuccessTask(new Continuation<byte[], Task<Byte>>() {
             @Override
-            public void run() {
-                gatt.readCharacteristic(BatteryService.BATTERY_LEVEL);
+            public Task<Byte> then(Task<byte[]> task) throws Exception {
+                return Task.forResult(task.getResult()[0]);
             }
-        }) : Task.<Byte>forError(new RuntimeException("No active BLE connection"));
+        });
     }
 
     @Override
     public Task<DeviceInformation> readDeviceInformationAsync() {
-        if (connected) {
-            TaskCompletionSource<DeviceInformation> taskSource = readDevInfoTaskSource.get();
-            if (taskSource != null) {
-                return taskSource.getTask();
-            }
+        if (serialNumber != null && manufacturer != null) {
+            return Task.forResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber, serialNumber,
+                    persist.boardInfo.firmware.toString(), persist.boardInfo.hardwareRevision));
+        }
+        return gatt.readCharacteristicAsync(new BtleGattCharacteristic[] {
+                DeviceInformationService.SERIAL_NUMBER,
+                DeviceInformationService.MANUFACTURER_NAME
+        }).onSuccessTask(new Continuation<byte[][], Task<DeviceInformation>>() {
+            @Override
+            public Task<DeviceInformation> then(Task<byte[][]> task) throws Exception {
+                serialNumber = new String(task.getResult()[0]);
+                manufacturer = new String(task.getResult()[1]);
 
-            if (serialNumber != null && manufacturer != null) {
                 return Task.forResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber, serialNumber,
                         persist.boardInfo.firmware.toString(), persist.boardInfo.hardwareRevision));
             }
-
-            taskSource = new TaskCompletionSource<>();
-            readDevInfoTaskSource.set(taskSource);
-            gatt.readCharacteristic(serialNumber == null ? DeviceInformationService.SERIAL_NUMBER : DeviceInformationService.MANUFACTURER_NAME);
-            readDevInfoFuture = mwPrivate.scheduleTask(readDevInfoTimeout, 500L);
-            return taskSource.getTask();
-        }
-        return Task.forError(new RuntimeException("No active BLE connection"));
+        });
     }
 
     private String buildFirmwareFileName(Pair<Version, String> latest) {
@@ -819,7 +740,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
             return taskSource.getTask();
         }
-        return Task.forError(new RuntimeException("No active BLE connection"));
+        return Task.forError(new IllegalStateException("No active BLE connection"));
     }
 
     @Override
@@ -856,7 +777,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
             return taskSource.getTask();
         }
-        return Task.forError(new RuntimeException("No active BLE connection"));
+        return Task.forError(new IllegalStateException("No active BLE connection"));
     }
 
     private Pair<Version, String> findLatestRelease(File releaseInfo) throws JSONException, IOException {
@@ -892,23 +813,15 @@ public class JseMetaWearBoard implements MetaWearBoard {
             return new Pair<>(latest, availableVersions.getJSONObject(latest.toString()).getString("filename"));
         }
 
-        throw new RuntimeException("No information available for this board");
+        throw new IllegalStateException("No information available for this board");
     }
 
-    private final Continuation<Void, Void> connectContinuation = new Continuation<Void, Void>() {
-        @Override
-        public Void then(Task<Void> task) throws Exception {
-            if (task.isFaulted()) {
-                connectTaskSource.getAndSet(null).setError(task.getError());
-            } else {
-                serviceDiscoveryFuture = mwPrivate.scheduleTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        gatt.disconnectAsync();
-                        connectTaskSource.getAndSet(null).setError(new TimeoutException("Service discovery timed out"));
-                    }
-                }, 7500L);
+    private void handleConnectContinuation(Task<Void> connectTask) {
+        final Capture<Boolean> serviceDiscoveryRefresh = new Capture<>();
 
+        connectTask.onSuccessTask(new Continuation<Void, Task<byte[]>>() {
+            @Override
+            public Task<byte[]> then(Task<Void> task) throws Exception {
                 if (persist.boardInfo == null) {
                     InputStream ins = io.localRetrieve(BOARD_INFO);
                     if (ins != null) {
@@ -928,47 +841,151 @@ public class JseMetaWearBoard implements MetaWearBoard {
                     }
                 }
 
-                gatt.readCharacteristic(DeviceInformationService.FIRMWARE_REVISION);
+                return gatt.readCharacteristicAsync(DeviceInformationService.FIRMWARE_REVISION);
             }
-            return null;
-        }
-    };
+        }).onSuccessTask(new Continuation<byte[], Task<byte[][]>>() {
+            @Override
+            public Task<byte[][]> then(Task<byte[]> task) throws Exception {
+                Version readFirmware = new Version(new String(task.getResult()));
+                if (persist.boardInfo.firmware.compareTo(readFirmware) != 0) {
+                    persist.boardInfo.firmware = readFirmware;
+                    serviceDiscoveryRefresh.set(true);
+                } else {
+                    serviceDiscoveryRefresh.set(false);
+                }
+
+                if (persist.boardInfo.modelNumber == null || persist.boardInfo.hardwareRevision == null) {
+                    return gatt.readCharacteristicAsync(new BtleGattCharacteristic[]{
+                            DeviceInformationService.MODEL_NUMBER,
+                            DeviceInformationService.HARDWARE_REVISION
+                    });
+                }
+                return Task.forResult(null);
+            }
+        }).onSuccessTask(new Continuation<byte[][], Task<Void>>() {
+            @Override
+            public Task<Void> then(Task<byte[][]> task) throws Exception {
+                if (task.getResult() != null) {
+                    persist.boardInfo.modelNumber = new String(task.getResult()[0]);
+                    persist.boardInfo.hardwareRevision = new String(task.getResult()[1]);
+                }
+
+                return gatt.enableNotificationsAsync(MW_NOTIFY_CHAR, new BtleGatt.NotificationListener() {
+                    @Override
+                    public void onChange(byte[] value) {
+                        Pair<Byte, Byte> header= new Pair<>(value[0], value[1]);
+                        Tuple3<Byte, Byte, Byte> dataHandlerKey= new Tuple3<>(value[0], value[1], dataIdHeaders.contains(header) ? value[2] : DataTypeBase.NO_DATA_ID);
+
+                        if (dataHandlers.containsKey(dataHandlerKey)) {
+                            for(RegisterResponseHandler handler: dataHandlers.get(dataHandlerKey)) {
+                                handler.onResponseReceived(value);
+                            }
+                        } else if (registerResponseHandlers.containsKey(header)) {
+                            registerResponseHandlers.get(header).onResponseReceived(value);
+                        } else if (value[1] == READ_INFO_REGISTER) {
+                            ModuleInfo current= new ModuleInfo(value);
+                            persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(value[0]), current);
+
+                            instantiateModule(current);
+
+                            if (moduleQueries.isEmpty()) {
+                                logger.queryTime().continueWith(timeReadContinuation);
+                            } else {
+                                JseMetaWearBoard.this.gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] {moduleQueries.poll().id, READ_INFO_REGISTER});
+                            }
+                        }
+                    }
+                });
+            }
+        }).continueWith(new Continuation<Void, Void>() {
+            @Override
+            public Void then(Task<Void> task) throws Exception {
+                if (task.isFaulted()) {
+                    TaskCompletionSource<Void> taskSource = connectTaskSource.getAndSet(null);
+                    if (taskSource != null) {
+                        if (!inMetaBootMode()) {
+                            taskSource.setError(task.getError());
+                        } else {
+                            connected = true;
+                            taskSource.setResult(null);
+                        }
+                    }
+                } else if (task.isCancelled()) {
+                    TaskCompletionSource<Void> taskSource = connectTaskSource.getAndSet(null);
+                    if (taskSource != null) {
+                        taskSource.setCancelled();
+                    }
+                } else {
+                    serviceDiscoveryFuture = mwPrivate.scheduleTask(new Runnable() {
+                        @Override
+                        public void run() {
+                            gatt.localDisconnectAsync();
+                            connectTaskSource.getAndSet(null).setError(new TimeoutException("Service discovery timed out"));
+                        }
+                    }, 7500L);
+
+                    if (serviceDiscoveryRefresh.get()) {
+                        persist.routeIdCounter= 0;
+                        persist.taggedProducers.clear();
+                        persist.activeEventManagers.clear();
+                        persist.activeRoutes.clear();
+                        persist.boardInfo.moduleInfo.clear();
+                        persist.modules.clear();
+                    }
+
+                    Constant.Module[] modules = Constant.Module.values();
+                    moduleQueries= new LinkedList<>();
+                    for(Constant.Module it: modules) {
+                        if (serviceDiscoveryRefresh.get() || !persist.boardInfo.moduleInfo.containsKey(it)) {
+                            moduleQueries.add(it);
+                        }
+                    }
+
+                    if (moduleQueries.isEmpty()) {
+                        logger.queryTime().continueWith(timeReadContinuation);
+                    } else {
+                        gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
+                    }
+                }
+                return null;
+            }
+        });
+    }
     @Override
     public Task<Void> connectAsync() {
-        if (connectTaskSource.get() == null) {
-            connectTaskSource.set(new TaskCompletionSource<Void>());
-            gatt.connectAsync().continueWith(connectContinuation);
+        TaskCompletionSource<Void> taskSource = connectTaskSource.get();
+        if (taskSource == null) {
+            taskSource = new TaskCompletionSource<>();
+            connectTaskSource.set(taskSource);
+            handleConnectContinuation(gatt.connectAsync());
         }
 
-        return connectTaskSource.get().getTask();
+        return taskSource.getTask();
     }
 
     @Override
     public Task<Void> connectAsync(long delay) {
-        if (connectTaskSource.get() == null) {
-            connectTaskSource.set(new TaskCompletionSource<Void>());
-            mwPrivate.scheduleTask(new Runnable() {
-                @Override
-                public void run() {
-                    gatt.connectAsync().continueWith(connectContinuation);
-                }
-            }, delay);
-        }
-        return connectTaskSource.get().getTask();
+        return Task.delay(delay).continueWithTask(new Continuation<Void, Task<Void>>() {
+            @Override
+            public Task<Void> then(Task<Void> task) throws Exception {
+                return connectAsync();
+            }
+        });
     }
 
     @Override
     public Task<Void> disconnectAsync() {
-        if (connectTaskSource.get() != null) {
-            connectTaskSource.getAndSet(null).setCancelled();
+        TaskCompletionSource<Void> taskSource = connectTaskSource.getAndSet(null);
+        if (taskSource != null) {
+            taskSource.setCancelled();
         }
 
-        return gatt.disconnectAsync();
+        return gatt.localDisconnectAsync();
     }
 
     @Override
     public void onUnexpectedDisconnect(UnexpectedDisconnectHandler handler) {
-        this.unexpectedDcHandler= handler;
+        unexpectedDcHandler = handler;
     }
 
     @Override
@@ -1095,38 +1112,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
         command[2]= id;
 
         mwPrivate.sendCommand(command, dest, input);
-    }
-
-    private void startServiceDiscovery(boolean refresh) {
-        if (inMetaBootMode()) {
-            serviceDiscoveryFuture.cancel(false);
-            connected= true;
-            connectTaskSource.getAndSet(null).setResult(null);
-            return;
-        }
-
-        if (refresh) {
-            persist.routeIdCounter= 0;
-            persist.taggedProducers.clear();
-            persist.activeEventManagers.clear();
-            persist.activeRoutes.clear();
-            persist.boardInfo.moduleInfo.clear();
-            persist.modules.clear();
-        }
-
-        Constant.Module[] modules = Constant.Module.values();
-        moduleQueries= new LinkedList<>();
-        for(Constant.Module it: modules) {
-            if (refresh || !persist.boardInfo.moduleInfo.containsKey(it)) {
-                moduleQueries.add(it);
-            }
-        }
-
-        if (moduleQueries.isEmpty()) {
-            logger.queryTime().continueWith(timeReadContinuation);
-        } else {
-            gatt.writeCharacteristic(MW_CMD_GATT_CHAR, WRITE_WITHOUT_RESPONSE, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
-        }
     }
 
     private void instantiateModule(ModuleInfo info) {
@@ -1299,11 +1284,14 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
                             final Queue<Pair<? extends DataTypeBase, ? extends CodeBlock>> eventCodeBlocks = new LinkedList<>();
                             for(final Pair<String, Tuple3<DataTypeBase, Integer, byte[]>> it: signalVars.feedback) {
+                                if (!persist.taggedProducers.containsKey(it.first)) {
+                                    throw new IllegalRouteOperationException("\'" + it.first + "\' is not associated with any data producer or name component");
+                                }
                                 final DataTypeBase feedbackSource = persist.taggedProducers.get(it.first);
                                 eventCodeBlocks.add(new Pair<>(feedbackSource, new CodeBlock() {
                                     @Override
                                     public void program() {
-                                        sendCommand(it.second.second, it.second.first, DATA_PROCESSOR, DataProcessorImpl.PARAMETER, it.second.first.eventConfig[2], it.second.third);
+                                        sendCommand(it.second.second, persist.taggedProducers.get(it.first), DATA_PROCESSOR, DataProcessorImpl.PARAMETER, it.second.first.eventConfig[2], it.second.third);
                                     }
                                 }));
                             }

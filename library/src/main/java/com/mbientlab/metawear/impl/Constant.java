@@ -30,6 +30,7 @@ import java.util.HashMap;
  * Created by etsai on 9/20/16.
  */
 class Constant {
+    static final long RESPONSE_TIMEOUT = 1000L;
     static final byte COMMAND_LENGTH = 18;
 
     enum Module {

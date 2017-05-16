@@ -38,6 +38,7 @@ import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 import static com.mbientlab.metawear.impl.Constant.Module.SERIAL_PASSTHROUGH;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 10/3/16.
@@ -313,7 +314,7 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
 
     @Override
     public Task<byte[]> readI2cAsync(final byte deviceAddr, final byte registerAddr, final byte length) {
-        return i2cDataTaskSource.queueTask(250L, new Runnable() {
+        return i2cDataTaskSource.queueTask(RESPONSE_TIMEOUT, new Runnable() {
             @Override
             public void run() {
                 mwPrivate.sendCommand(new byte[] {SERIAL_PASSTHROUGH.id, Util.setRead(I2C_RW), deviceAddr, registerAddr, DIRECT_I2C_READ_ID, length});
@@ -352,7 +353,7 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
         return new SpiParameterBuilderInner<Task<byte[]>>((byte) ((length - 1) | (DIRECT_SPI_READ_ID << 4))) {
             @Override
             public Task<byte[]> commit() {
-                return spiDataTaskSources.queueTask(250L, new Runnable() {
+                return spiDataTaskSources.queueTask(RESPONSE_TIMEOUT, new Runnable() {
                     @Override
                     public void run() {
                         mwPrivate.sendCommand(SERIAL_PASSTHROUGH, Util.setRead(SPI_RW), config);

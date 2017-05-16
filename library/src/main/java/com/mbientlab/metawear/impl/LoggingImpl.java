@@ -47,6 +47,7 @@ import bolts.Task;
 import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.LOGGING;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/4/16.
@@ -404,7 +405,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
 
                 mwPrivate.sendCommand(command);
             }
-            timeoutFuture= mwPrivate.scheduleTask(taskTimeout, nReqLogIds * 250L);
+            timeoutFuture= mwPrivate.scheduleTask(taskTimeout, nReqLogIds * RESPONSE_TIMEOUT);
         } else {
             createLoggerTask.setResult(successfulLoggers);
         }

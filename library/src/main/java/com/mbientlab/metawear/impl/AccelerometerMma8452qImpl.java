@@ -138,7 +138,7 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         private static final long serialVersionUID = 8580438661319009866L;
 
         Mma8452QCartesianFloatData() {
-            this(DATA_VALUE, (byte) 2);
+            this(DATA_VALUE, (byte) 1);
         }
 
         Mma8452QCartesianFloatData(byte register, byte copies) {

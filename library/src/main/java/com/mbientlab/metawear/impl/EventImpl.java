@@ -36,6 +36,7 @@ import bolts.Task;
 import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.EVENT;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 10/26/16.
@@ -82,7 +83,7 @@ class EventImpl extends ModuleImplBase implements Module {
                     mwPrivate.sendCommand(recordedCommands.poll());
                     mwPrivate.sendCommand(recordedCommands.poll());
 
-                    eventTimeoutFuture= mwPrivate.scheduleTask(recordCmdTimeout, 250L);
+                    eventTimeoutFuture= mwPrivate.scheduleTask(recordCmdTimeout, RESPONSE_TIMEOUT);
                 } else {
                     pendingEventCodeBlocks.poll();
 
@@ -145,7 +146,7 @@ class EventImpl extends ModuleImplBase implements Module {
 
             mwPrivate.sendCommand(recordedCommands.poll());
             mwPrivate.sendCommand(recordedCommands.poll());
-            eventTimeoutFuture= mwPrivate.scheduleTask(recordCmdTimeout, 250L);
+            eventTimeoutFuture= mwPrivate.scheduleTask(recordCmdTimeout, RESPONSE_TIMEOUT);
         } else {
             createEventsTask.setResult(successfulEvents);
         }

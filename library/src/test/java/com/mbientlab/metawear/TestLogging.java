@@ -92,38 +92,6 @@ public class TestLogging extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void setupAndRemove() throws InterruptedException {
-        byte[][] expected= new byte[][]{
-                {0x0b, 0x02, 0x03, 0x04, (byte) 0xff, 0x60},
-                {0x0b, 0x02, 0x03, 0x04, (byte) 0xff, 0x24},
-                {0x0b, 0x03, 0x00},
-                {0x0b, 0x03, 0x01}
-        };
-
-        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.log(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().remove();
-
-                synchronized (TestLogging.this) {
-                    TestLogging.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
-    }
-
     @Test(expected = TimeoutException.class)
     public void timeoutHandler() throws Exception {
         final Exception[] actual= new Exception[1];

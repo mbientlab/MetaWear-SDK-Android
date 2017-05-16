@@ -44,7 +44,9 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import bolts.Continuation;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
@@ -57,7 +59,6 @@ class JunitPlatform implements IO, BtleGatt {
     interface MwBridge {
         void disconnected();
         void sendMockResponse(byte[] response);
-        void sendMockGattCharReadValue(BtleGattCharacteristic gattChar, byte[] value);
     }
 
     public int nConnects = 0, nDisconnects = 0;
@@ -71,7 +72,8 @@ class JunitPlatform implements IO, BtleGatt {
     private final MwBridge bridge;
     private final ArrayList<byte[]> commandHistory= new ArrayList<>(), connectCmds= new ArrayList<>();
     private final ArrayList<BtleGattCharacteristic> gattCharReadHistory = new ArrayList<>();
-    public BtleGatt.Callback btleCallback;
+    NotificationListener notificationListener;
+    DisconnectHandler dcHandler;
 
     public JunitPlatform(MwBridge bridge) {
         this.bridge= bridge;
@@ -86,15 +88,6 @@ class JunitPlatform implements IO, BtleGatt {
             @Override
             public void run() {
                 bridge.sendMockResponse(response);
-            }
-        }, 20, TimeUnit.MILLISECONDS);
-    }
-
-    private void scheduleMockGattCharReadValue(final BtleGattCharacteristic gattChar, final byte[] response) {
-        SCHEDULED_TASK_THREADPOOL.schedule(new Runnable() {
-            @Override
-            public void run() {
-                bridge.sendMockGattCharReadValue(gattChar, response);
             }
         }, 20, TimeUnit.MILLISECONDS);
     }
@@ -125,12 +118,7 @@ class JunitPlatform implements IO, BtleGatt {
     }
 
     @Override
-    public void registerCallback(Callback callback) {
-        btleCallback = callback;
-    }
-
-    @Override
-    public void writeCharacteristic(BtleGattCharacteristic gattCharr, BtleGatt.GattCharWriteType writeType, byte[] value) {
+    public Task<Void> writeCharacteristicAsync(BtleGattCharacteristic gattCharr, WriteType writeType, byte[] value) {
         if (value[1] == (byte) 0x80) {
             connectCmds.add(value);
             byte[] response = customModuleInfo.containsKey(value[0]) ?
@@ -172,46 +160,103 @@ class JunitPlatform implements IO, BtleGatt {
                 bridge.sendMockResponse(new byte[] {0x0b, (byte) 0x85, (byte) 0x9e, 0x01, 0x00, 0x00});
             }
         }
+
+        return Task.forResult(null);
     }
 
     @Override
-    public void readCharacteristic(BtleGattCharacteristic gattChar) {
-        byte[] value;
-
+    public Task<byte[]> readCharacteristicAsync(BtleGattCharacteristic gattChar) {
         gattCharReadHistory.add(gattChar);
         if (gattChar.equals(DeviceInformationService.FIRMWARE_REVISION)) {
-            value= firmware.getBytes();
-            scheduleMockGattCharReadValue(gattChar, value);
+            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
+                @Override
+                public Task<byte[]> then(Task<Void> task) throws Exception {
+                    return Task.forResult(firmware.getBytes());
+                }
+            });
         } else if (gattChar.equals(DeviceInformationService.HARDWARE_REVISION)) {
-            value= boardInfo.hardwareRevision;
-            scheduleMockGattCharReadValue(gattChar, value);
+            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
+                @Override
+                public Task<byte[]> then(Task<Void> task) throws Exception {
+                    return Task.forResult(boardInfo.hardwareRevision);
+                }
+            });
         } else if (gattChar.equals(DeviceInformationService.MODEL_NUMBER)) {
-            value= boardInfo.modelNumber;
-            scheduleMockGattCharReadValue(gattChar, value);
-        } else if (!delayReadDevInfo && gattChar.equals(DeviceInformationService.MANUFACTURER_NAME)) {
-            value= boardInfo.manufacturer;
-            scheduleMockGattCharReadValue(gattChar, value);
-        } else if (!delayReadDevInfo && gattChar.equals(DeviceInformationService.SERIAL_NUMBER)) {
-            value= boardInfo.serialNumber;
-            scheduleMockGattCharReadValue(gattChar, value);
+            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
+                @Override
+                public Task<byte[]> then(Task<Void> task) throws Exception {
+                    return Task.forResult(boardInfo.modelNumber);
+                }
+            });
+        } else if (gattChar.equals(DeviceInformationService.MANUFACTURER_NAME)) {
+            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
+                @Override
+                public Task<byte[]> then(Task<Void> task) throws Exception {
+                    return delayReadDevInfo ? Task.<byte[]>forError(new TimeoutException("Reading gatt characteristic timed out")) : Task.forResult(boardInfo.manufacturer);
+                }
+            });
+        } else if (gattChar.equals(DeviceInformationService.SERIAL_NUMBER)) {
+            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
+                @Override
+                public Task<byte[]> then(Task<Void> task) throws Exception {
+                    return delayReadDevInfo ? Task.<byte[]>forError(new TimeoutException("Reading gatt characteristic timed out")) : Task.forResult(boardInfo.serialNumber);
+                }
+            });
         }
+
+        return Task.forResult(null);
+    }
+
+    @Override
+    public Task<Void> enableNotificationsAsync(BtleGattCharacteristic characteristic, NotificationListener listener) {
+        if (enableMetaBootState && !characteristic.serviceUuid.equals(MetaWearBoard.METABOOT_SERVICE)) {
+            return Task.forError(new IllegalStateException("Service " + characteristic.serviceUuid.toString() + " does not exist"));
+        }
+        notificationListener = listener;
+        return Task.forResult(null);
+    }
+
+    @Override
+    public void onDisconnect(DisconnectHandler handler) {
+        dcHandler = handler;
     }
 
     @Override
     public boolean serviceExists(UUID serviceUuid) {
-        return serviceUuid.equals(MetaWearBoard.METABOOT_SERVICE) && enableMetaBootState;
+        return enableMetaBootState && serviceUuid.equals(MetaWearBoard.METABOOT_SERVICE) ||
+                serviceUuid.equals(MetaWearBoard.METAWEAR_GATT_SERVICE);
     }
 
     @Override
-    public Task<Void> disconnectAsync() {
+    public Task<byte[][]> readCharacteristicAsync(BtleGattCharacteristic[] characteristics) {
+        final ArrayList<Task<byte[]>> tasks = new ArrayList<>();
+        for(BtleGattCharacteristic it: characteristics) {
+            tasks.add(readCharacteristicAsync(it));
+        }
+
+        return Task.whenAll(tasks).onSuccessTask(new Continuation<Void, Task<byte[][]>>() {
+            @Override
+            public Task<byte[][]> then(Task<Void> task) throws Exception {
+                byte[][] valuesArray = new byte[tasks.size()][];
+                for (int i = 0; i < valuesArray.length; i++) {
+                    valuesArray[i] = tasks.get(i).getResult();
+                }
+
+                return Task.forResult(valuesArray);
+            }
+        });
+    }
+
+    @Override
+    public Task<Void> localDisconnectAsync() {
         nDisconnects++;
         bridge.disconnected();
         return Task.forResult(null);
     }
 
     @Override
-    public Task<Void> boardDisconnectAsync() {
-        return disconnectAsync();
+    public Task<Void> remoteDisconnectAsync() {
+        return localDisconnectAsync();
     }
 
     @Override

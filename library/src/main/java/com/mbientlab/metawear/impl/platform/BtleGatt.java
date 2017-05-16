@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear.impl.platform;
 
-import com.mbientlab.metawear.MetaWearBoard;
-
 import java.util.UUID;
 
 import bolts.Task;
@@ -33,81 +31,94 @@ import bolts.Task;
 /**
  * Bluetooth GATT operations used by the API, must be implemented by the target platform
  * @author Eric Tsai
+ * @version 2.0
  */
 public interface BtleGatt {
     /**
-     * Defines callback functions for handling asynchronous notifications from the GATT server.
+     * Listener for GATT characteristic notifications
      * @author Eric Tsai
      */
-    interface Callback {
+    interface NotificationListener {
         /**
-         * Handles disconnect events that were not initiated by the API
-         * @param status    Status code reported by the btle stack
+         * Called when the GATT characteristic's value changes
+         * @param value    New value for the characteristic
          */
-        void onUnexpectedDisconnect(int status);
+        void onChange(byte[] value);
+    }
+    /**
+     * Handler for disconnect events
+     * @author Eric Tsai
+     */
+    interface DisconnectHandler {
         /**
-         * Handles a disconnect event initiated through the API
+         * Called when the connection with the BLE device has been closed
          */
         void onDisconnect();
         /**
-         * Handles characteristic changes received by the {@link MetaWearBoard#METAWEAR_NOTIFY_CHAR} characteristic
-         * @param value    New value of the characteristic
+         * Similar to {@link #onDisconnect()} except this variant handles instances where the connection
+         * was unexpectedly dropped i.e. not initiated by the API
+         * @param status    Status code reported by the btle stack
          */
-        void onMwNotifyCharChanged(byte[] value);
-        /**
-         * Handles responses from a GATT read operation
-         * @param characteristic    Characteristic that was read
-         * @param value             Value of the read
-         */
-        void onCharRead(BtleGattCharacteristic characteristic, byte[] value);
+        void onUnexpectedDisconnect(int status);
     }
     /**
-     * Register callback functions to handle notifications from the GATT server
-     * @param callback    Callbacks that will be run
-     */
-    void registerCallback(Callback callback);
-
-    /**
-     * Types of GATT write operation that can be performed
+     * Write types for the GATT characteristic
      * @author Eric Tsai
      */
-    enum GattCharWriteType {
-        /** Write characteristic with an ack requested from the remote device */
-        WRITE_WITH_RESPONSE,
-        /** Write characteristic without requiring an ack from the remote device */
-        WRITE_WITHOUT_RESPONSE
+    enum WriteType {
+        WITHOUT_RESPONSE,
+        DEFAULT
     }
-    /**
-     * Write a value to the GATT characteristic
-     * @param gattChar     Characteristic to write
-     * @param writeType    Type of write to perform
-     * @param value        Value to write
-     */
-    void writeCharacteristic(BtleGattCharacteristic gattChar, GattCharWriteType writeType, byte[] value);
-    /**
-     * Read the value of a GATT characteristic.  Received values are passed to the {@link Callback#onCharRead(BtleGattCharacteristic, byte[])}
-     * callback function
-     * @param gattChar    Characteristic to read
-     */
-    void readCharacteristic(BtleGattCharacteristic gattChar);
 
+    /**
+     * Register a handler for disconnect events
+     * @param handler    Handler to respond to the dc events
+     */
+    void onDisconnect(DisconnectHandler handler);
     /**
      * Checks if a service exists
-     * @param serviceUuid    UUID identifying the service to lookup
+     * @param gattService    UUID identifying the service to lookup
      * @return True if service exists, false if not
      */
-    boolean serviceExists(UUID serviceUuid);
+    boolean serviceExists(UUID gattService);
+    /**
+     * Writes a GATT characteristic and its value to the remote device
+     * @param characteristic    GATT characteristic to write
+     * @param type              Type of GATT write to use
+     * @param value             Value to be written
+     * @return Task holding the result of the operation
+     */
+    Task<Void> writeCharacteristicAsync(BtleGattCharacteristic characteristic, WriteType type, byte[] value);
+    /**
+     * Convenience method to do bulk characteristic reads
+     * @param characteristics    Array of characteristics to read
+     * @return Task which holds the characteristic values in order if all reads are successful
+     */
+    Task<byte[][]> readCharacteristicAsync(BtleGattCharacteristic[] characteristics);
+    /**
+     * Reads the requested characteristic's value
+     * @param characteristic    Characteristic to read
+     * @return Task holding the characteristic's value if successful
+     */
+    Task<byte[]> readCharacteristicAsync(BtleGattCharacteristic characteristic);
+    /**
+     * Enable notifications for the characteristic
+     * @param characteristic    Characteristic to enable notifications for
+     * @param listener          Listener for handling characteristic notifications
+     * @return Task holding the result of the operation
+     */
+    Task<Void> enableNotificationsAsync(BtleGattCharacteristic characteristic, NotificationListener listener);
 
     /**
-     * A disconnect attempted initiated by the local device
+     * A disconnect attempted initiated by the Android device
      * @return Task holding the result of the disconnect attempt
      */
-    Task<Void> disconnectAsync();
+    Task<Void> localDisconnectAsync();
     /**
      * A disconnect attempt that will be initiated by the remote device
      * @return Task holding the result of the disconnect attempt
      */
-    Task<Void> boardDisconnectAsync();
+    Task<Void> remoteDisconnectAsync();
     /**
      * Connects to the GATT server on the remote device
      * @return Task holding the result of the connect attempt

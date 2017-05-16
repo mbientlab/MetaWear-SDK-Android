@@ -17,7 +17,7 @@ allprojects {
         jcenter()
 
         ivy {
-            url "http://ivyrep.mbientlab.com"
+            url "https://mbientlab.com/releases/ivyrep"
             layout "gradle"
         }
     }

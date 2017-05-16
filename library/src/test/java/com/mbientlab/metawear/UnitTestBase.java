@@ -26,10 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.JunitPlatform.MwBridge;
 import com.mbientlab.metawear.impl.JseMetaWearBoard;
-import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
 
-import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 
 /**
@@ -40,43 +37,21 @@ public abstract class UnitTestBase implements MwBridge {
     protected final MetaWearBoard mwBoard= new JseMetaWearBoard(junitPlatform, junitPlatform, "CB:B7:49:BF:27:33");
 
     protected void connectToBoard() throws Exception {
-        final Capture<Exception> result = new Capture<>();
-        mwBoard.connectAsync().continueWith(new Continuation<Void, Void>() {
-            @Override
-            public Void then(Task<Void> task) throws Exception {
-                if (task.isFaulted()) {
-                    result.set(task.getError());
-                }
+        Task<Void> task = mwBoard.connectAsync();
+        task.waitForCompletion();
 
-                synchronized (UnitTestBase.this) {
-                    UnitTestBase.this.notifyAll();
-                }
-
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-
-            if (result.get() != null) {
-                throw result.get();
-            }
+        if (task.isFaulted()) {
+            throw task.getError();
         }
     }
 
     @Override
     public void disconnected() {
-        junitPlatform.btleCallback.onDisconnect();
+        junitPlatform.dcHandler.onDisconnect();
     }
 
     @Override
     public void sendMockResponse(byte[] response) {
-        junitPlatform.btleCallback.onMwNotifyCharChanged(response);
-    }
-
-    @Override
-    public void sendMockGattCharReadValue(BtleGattCharacteristic gattChar, byte[] value) {
-        junitPlatform.btleCallback.onCharRead(gattChar, value);
+        junitPlatform.notificationListener.onChange(response);
     }
 }

@@ -38,6 +38,7 @@ import org.junit.Test;
 
 import java.util.concurrent.TimeoutException;
 
+import bolts.AggregateException;
 import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
@@ -184,27 +185,16 @@ public class TestMetaWearBoard extends UnitTestBase {
     }
 
     @Test(expected = TimeoutException.class)
-    public void readDeviceInfoTimeout() throws Exception {
-        final Capture<Exception> actual = new Capture<>();
-
+    public void readDeviceInfoTimeout() throws Throwable {
         connectToBoard();
+
         junitPlatform.delayReadDevInfo = true;
-        mwBoard.readDeviceInformationAsync().continueWith(new Continuation<DeviceInformation, Void>() {
-            @Override
-            public Void then(Task<DeviceInformation> task) throws Exception {
-                actual.set(task.getError());
+        Task<DeviceInformation> task = mwBoard.readDeviceInformationAsync();
+        task.waitForCompletion();
 
-                synchronized (TestMetaWearBoard.this) {
-                    TestMetaWearBoard.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-            throw actual.get();
-        }
+        AggregateException exception = (AggregateException) task.getError();
+        assertEquals(2, exception.getInnerThrowables().size());
+        throw exception.getInnerThrowables().get(1);
     }
 
     @Test

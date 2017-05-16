@@ -42,6 +42,7 @@ import bolts.Task;
 import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/5/16.
@@ -180,7 +181,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             System.arraycopy(current.editor.config, 0, filterConfig, input.eventConfig.length + 1, current.editor.config.length);
 
             mwPrivate.sendCommand(DATA_PROCESSOR, ADD, filterConfig);
-            timeoutFuture= mwPrivate.scheduleTask(taskTimeout, 250L);
+            timeoutFuture= mwPrivate.scheduleTask(taskTimeout, RESPONSE_TIMEOUT);
         } else {
             createProcessorsTask.setResult(successfulProcessors);
         }

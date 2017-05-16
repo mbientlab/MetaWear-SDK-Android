@@ -8,7 +8,7 @@ To add the library to your project, first, update the repositories closure to in
 ```gradle
 repositories {
     ivy {
-        url "http://ivyrep.mbientlab.com"
+        url "https://mbientlab.com/releases/ivyrep"
         layout "gradle"
     }
 }
@@ -18,7 +18,7 @@ Then, add the compile element to the dependencies closure in the module's *build
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:3.0.17'
+    compile 'com.mbientlab:metawear:3.0.32'
 }
 ```
 

@@ -34,6 +34,7 @@ import java.util.UUID;
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.IBEACON;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/18/16.
@@ -220,7 +221,7 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
 
     @Override
     public Task<Configuration> readConfigAsync() {
-        return readConfigTasks.queueTask(1500L, new Runnable() {
+        return readConfigTasks.queueTask(7 * RESPONSE_TIMEOUT, new Runnable() {
             @Override
             public void run() {
                 mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(AD_UUID)});

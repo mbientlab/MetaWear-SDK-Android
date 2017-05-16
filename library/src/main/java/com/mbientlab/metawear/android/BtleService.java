@@ -54,24 +54,25 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Queue;
 import java.util.UUID;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import bolts.Continuation;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
@@ -82,23 +83,54 @@ public class BtleService extends Service {
     private static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
     private static String DOWNLOAD_DIR_NAME = "download", LOG_TAG = "metawear-btle";
 
+    private interface GattOp {
+        AndroidPlatform owner();
+        void execute();
+        TaskCompletionSource<byte[]> taskCompletionSource();
+    }
+
+    private ScheduledFuture<?> gattTaskTimeoutFuture;
+    private final Queue<GattOp> pendingGattOps = new ConcurrentLinkedQueue<>();
+    private void addGattOperation(AndroidPlatform platform, GattOp task) {
+        int count = platform.nGattOps.incrementAndGet();
+        pendingGattOps.add(task);
+        executeGattOperation(false);
+    }
+    private void executeGattOperation(boolean ready) {
+        if (!pendingGattOps.isEmpty() && (pendingGattOps.size() == 1 || ready)) {
+            try {
+                gattTaskTimeoutFuture = taskScheduler.schedule(new Runnable() {
+                    @Override
+                    public void run() {
+                        GattOp task = pendingGattOps.peek();
+                        task.taskCompletionSource().setError(new TimeoutException("Gatt operation timed out"));
+
+                        task.owner().gattTaskCompleted();
+
+                        pendingGattOps.poll();
+                        executeGattOperation(true);
+                    }
+                }, 1000L, TimeUnit.MILLISECONDS);
+
+                pendingGattOps.peek().execute();
+            } catch (Exception e) {
+                pendingGattOps.poll().taskCompletionSource().setError(e);
+                executeGattOperation(true);
+            }
+        }
+    }
+
+    private final Map<BluetoothDevice, AndroidPlatform> btleDevices = new HashMap<>();
     private final BluetoothGattCallback btleGattCallback= new BluetoothGattCallback() {
         @Override
-        public void onConnectionStateChange(final BluetoothGatt gatt, final int status, int newState) {
-            final AndroidPlatform platform= btleDevices.get(gatt.getDevice());
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            final AndroidPlatform platform = btleDevices.get(gatt.getDevice());
 
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
                     if (status != 0) {
                         platform.closeGatt();
-                        if (platform.connectTask.get() != null) {
-                            taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                                @Override
-                                public void run() {
-                                    platform.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
-                                }
-                            }));
-                        }
+                        platform.setConnectTaskError(new IllegalStateException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
                     } else {
                         gatt.discoverServices();
                     }
@@ -106,283 +138,159 @@ public class BtleService extends Service {
                 case BluetoothProfile.STATE_DISCONNECTED:
                     platform.closeGatt();
 
-                    final BluetoothDevice device= gatt.getDevice();
-                    taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (platform.connectTask.get() != null && status != 0) {
-                                platform.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
-                                btleDevices.get(device).gattCallback.onDisconnect();
-                            } else if (platform.disconnectTask.get() == null) {
-                                btleDevices.get(device).gattCallback.onUnexpectedDisconnect(status);
-                            } else {
-                                platform.disconnectTask.getAndSet(null).setResult(null);
-                                btleDevices.get(device).gattCallback.onDisconnect();
-                            }
+                    if (platform.connectTask.get() != null && status != 0) {
+                        platform.setConnectTaskError(new IllegalStateException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
+                    } else {
+                        TaskCompletionSource<Void> dcTaskSource = platform.disconnectTask.getAndSet(null);
+
+                        if (dcTaskSource == null) {
+                            platform.dcHandler.onUnexpectedDisconnect(status);
+                        } else {
+                            dcTaskSource.setResult(null);
+                            platform.dcHandler.onDisconnect();
                         }
-                    }));
+                    }
                     break;
             }
         }
 
         @Override
-        public void onServicesDiscovered(final BluetoothGatt gatt, final int status) {
-            final AndroidPlatform platform= btleDevices.get(gatt.getDevice());
-
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            final AndroidPlatform platform = btleDevices.get(gatt.getDevice());
             if (status != 0) {
                 platform.closeGatt();
-                if (platform.connectTask.get() != null) {
-                    taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            platform.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero service discovery status (%s)", status)));
-                        }
-                    }));
-                }
+                platform.setConnectTaskError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
             } else {
-                final BluetoothGattService service = gatt.getService(MetaWearBoard.METAWEAR_GATT_SERVICE);
-                if (service == null) {
-                    boolean dfuServiceExists = false;
-                    platform.nDescriptors = 0;
-                    ArrayList<Callable<Boolean>> enNotifyActions = new ArrayList<>();
+                platform.cancelConnectTimeout();
 
-                    for (final BluetoothGattService it : gatt.getServices()) {
-                        if (it.getUuid().equals(MetaWearBoard.METABOOT_SERVICE)) {
-                            dfuServiceExists= true;
-                        }
-                        for (final BluetoothGattCharacteristic characteristic : it.getCharacteristics()) {
-                            int charProps = characteristic.getProperties();
-                            if ((charProps & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
-                                platform.nDescriptors++;
-                                enNotifyActions.add(new Callable<Boolean>() {
-                                    @Override
-                                    public Boolean call() {
-                                        gatt.setCharacteristicNotification(characteristic, true);
-
-                                        gattScheduler.setExpectedGattKey(GattActionKey.DESCRIPTOR_WRITE);
-                                        BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CHARACTERISTIC_CONFIG);
-                                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                                        gatt.writeDescriptor(descriptor);
-
-                                        return true;
-                                    }
-                                });
-                            }
-                        }
-                    }
-
-                    if (!dfuServiceExists) {
-                        platform.closeGatt();
-                        taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                            @Override
-                            public void run() {
-                                platform.setConnectTaskError(new RuntimeException("Bluetooth LE device is not recognized by the API"));
-                            }
-                        }));
-                    } else {
-                        gattScheduler.queueActions(enNotifyActions);
-                    }
-                } else {
-                    platform.nDescriptors= 1;
-
-                    gattScheduler.queueAction(new Callable<Boolean>() {
-                        @Override
-                        public Boolean call() {
-                            BluetoothGattCharacteristic characteristic = service.getCharacteristic(MetaWearBoard.METAWEAR_NOTIFY_CHAR);
-                            gatt.setCharacteristicNotification(characteristic, true);
-
-                            gattScheduler.setExpectedGattKey(GattActionKey.DESCRIPTOR_WRITE);
-                            BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CHARACTERISTIC_CONFIG);
-                            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                            gatt.writeDescriptor(descriptor);
-
-                            return true;
-                        }
-                    });
-
+                TaskCompletionSource<Void> reference = platform.connectTask.getAndSet(null);
+                if (reference != null) {
+                    reference.setResult(null);
                 }
             }
-
-            gattScheduler.executeNext(GattActionKey.NONE);
         }
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            gattScheduler.updateExecActionsState();
-            gattScheduler.executeNext(GattActionKey.CHAR_READ);
+            gattTaskTimeoutFuture.cancel(false);
 
-            btleDevices.get(gatt.getDevice()).gattCallback.onCharRead(
-                    new BtleGattCharacteristic(characteristic.getService().getUuid(), characteristic.getUuid()),
-                    characteristic.getValue()
-            );
+            GattOp task = pendingGattOps.peek();
+            if (status != 0) {
+                task.taskCompletionSource().setError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
+            } else {
+                task.taskCompletionSource().setResult(characteristic.getValue());
+            }
+
+            task.owner().gattTaskCompleted();
+
+            pendingGattOps.poll();
+            executeGattOperation(true);
         }
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            gattScheduler.updateExecActionsState();
-            gattScheduler.executeNext(GattActionKey.CHAR_WRITE);
+            gattTaskTimeoutFuture.cancel(false);
+
+            GattOp task = pendingGattOps.peek();
+            if (status != 0) {
+                task.taskCompletionSource().setError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
+            } else {
+                task.taskCompletionSource().setResult(characteristic.getValue());
+            }
+
+            task.owner().gattTaskCompleted();
+
+            pendingGattOps.poll();
+            executeGattOperation(true);
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            btleDevices.get(gatt.getDevice()).gattCallback.onMwNotifyCharChanged(characteristic.getValue());
+            btleDevices.get(gatt.getDevice()).notificationListener.onChange(characteristic.getValue());
         }
 
         @Override
-        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, final int status) {
-            gattScheduler.updateExecActionsState();
+        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+            gattTaskTimeoutFuture.cancel(false);
 
-            final AndroidPlatform platform= btleDevices.get(gatt.getDevice());
+            GattOp task = pendingGattOps.peek();
             if (status != 0) {
-                platform.closeGatt();
-
-                gattScheduler.executeNext(GattActionKey.DESCRIPTOR_WRITE);
-                if (platform.connectTask.get() != null) {
-                    taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            platform.setConnectTaskError(new RuntimeException(String.format(Locale.US, "Non-zero descriptor writing status (%s)", status)));
-                        }
-                    }));
-                }
+                task.taskCompletionSource().setError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
             } else {
-                gattScheduler.executeNext(GattActionKey.DESCRIPTOR_WRITE);
-                platform.nDescriptors--;
-                if (platform.nDescriptors == 0) {
-                    platform.connectFuture.getAndSet(null).cancel(false);
-                    taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (platform.connectTask.get() != null) {
-                                platform.connectTask.getAndSet(null).setResult(null);
-                            }
-                        }
-                    }));
-                    gattScheduler.executeNext(GattActionKey.NONE);
-                }
+                task.taskCompletionSource().setResult(null);
             }
+
+            task.owner().gattTaskCompleted();
+
+            pendingGattOps.poll();
+            executeGattOperation(true);
         }
 
         @Override
-        public void onReadRemoteRssi(BluetoothGatt gatt, final int rssi, final int status) {
-            gattScheduler.updateExecActionsState();
-            gattScheduler.executeNext(GattActionKey.RSSI_READ);
+        public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
+            gattTaskTimeoutFuture.cancel(false);
 
-            final AndroidPlatform platform= btleDevices.get(gatt.getDevice());
-            taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                @Override
-                public void run() {
-                    if (status != 0) {
-                        platform.rssiTask.getAndSet(null).setError(new RuntimeException(String.format(Locale.US, "Non-zero read RSSI status (%s)", status)));
-                    } else {
-                        platform.rssiTask.getAndSet(null).setResult(rssi);
-                    }
-                }
-            }));
+            GattOp task = pendingGattOps.peek();
+            if (status != 0) {
+                task.taskCompletionSource().setError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
+            } else {
+                task.taskCompletionSource().setResult(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(rssi).array());
+            }
+
+            task.owner().gattTaskCompleted();
+
+            pendingGattOps.poll();
+            executeGattOperation(true);
         }
     };
 
-    private enum GattActionKey {
-        NONE,
-        DESCRIPTOR_WRITE,
-        CHAR_READ,
-        CHAR_WRITE,
-        RSSI_READ
-    }
-    private class GattActionScheduler {
-        final int GATT_FORCE_EXEC_DELAY= 1000;
-
-        private ConcurrentLinkedQueue<Callable<Boolean>> actions= new ConcurrentLinkedQueue<>();
-        private AtomicBoolean isExecActions= new AtomicBoolean();
-        private GattActionKey gattKey= GattActionKey.NONE;
-        private ScheduledFuture<?> gattForceExecFuture;
-        private final Runnable gattForceExec= new Runnable() {
-            @Override
-            public void run() {
-                gattScheduler.setExpectedGattKey(GattActionKey.NONE);
-                gattScheduler.executeNext(GattActionKey.NONE);
-            }
-        };
-
-        void setExpectedGattKey(GattActionKey newKey) {
-            gattKey= newKey;
-        }
-
-        void updateExecActionsState() {
-            gattForceExecFuture.cancel(false);
-            isExecActions.set(!actions.isEmpty());
-        }
-
-        void queueAction(Callable<Boolean> newAction) {
-            actions.add(newAction);
-        }
-
-        void queueActions(Collection<Callable<Boolean>> newActions) {
-            actions.addAll(newActions);
-        }
-
-        void executeNext(GattActionKey key) {
-            if (!actions.isEmpty()) {
-                if (key == gattKey || !isExecActions.get()) {
-                    isExecActions.set(true);
-                    boolean lastResult= false;
-                    try {
-                        while (!actions.isEmpty() && !(lastResult = actions.poll().call())) {
-                        }
-
-                        if (lastResult) {
-                            gattForceExecFuture = taskScheduler.schedule(gattForceExec, GATT_FORCE_EXEC_DELAY,  TimeUnit.MILLISECONDS);
-                        }
-                    } catch (Exception ex) {
-                        lastResult= false;
-                    }
-
-                    if (!lastResult && actions.isEmpty()) {
-                        isExecActions.set(false);
-                        gattKey= GattActionKey.NONE;
-                    }
-                }
-            } else {
-                isExecActions.set(false);
-                gattKey= GattActionKey.NONE;
-            }
-        }
-    }
-
     private class AndroidPlatform implements IO, BtleGatt {
-        int nDescriptors;
+        private final AtomicBoolean readyToClose = new AtomicBoolean();
+        private final AtomicInteger nGattOps = new AtomicInteger();
+
         final AtomicReference<TaskCompletionSource<Void>> connectTask = new AtomicReference<>(),
                 disconnectTask = new AtomicReference<>();
-        final AtomicReference<TaskCompletionSource<Integer>> rssiTask = new AtomicReference<>();
         BluetoothGatt androidBtGatt;
-        final AtomicReference<ScheduledFuture<?>> connectFuture = new AtomicReference<>();
-        final Runnable connectTimeout = new Runnable() {
-            @Override
-            public void run() {
-                connectFuture.getAndSet(null).cancel(false);
-                closeGatt();
-                if (connectTask.get() != null) {
-                    connectTask.getAndSet(null).setError(new TimeoutException("Timed out establishing Bluetooth Connection"));
-                }
-            }
-        };
+        private final AtomicReference<ScheduledFuture<?>> connectFuture = new AtomicReference<>();
 
+        private DisconnectHandler dcHandler;
+        private NotificationListener notificationListener;
         private final BluetoothDevice btDevice;
         private final MetaWearBoard board;
-
-        BtleGatt.Callback gattCallback;
 
         AndroidPlatform(BluetoothDevice btDevice) {
             this.btDevice = btDevice;
             board = new JseMetaWearBoard(this, this, btDevice.getAddress());
         }
 
+        void cancelConnectTimeout() {
+            ScheduledFuture<?> futureReference = connectFuture.getAndSet(null);
+            if (futureReference != null) {
+                futureReference.cancel(false);
+            }
+        }
+
+        void gattTaskCompleted() {
+            int count = nGattOps.decrementAndGet();
+            if (count == 0 && readyToClose.get()) {
+                taskScheduler.schedule(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (androidBtGatt != null) {
+                            androidBtGatt.disconnect();
+                        }
+                    }
+                }, 1000, TimeUnit.MILLISECONDS);
+            }
+        }
+
         void closeGatt() {
+            readyToClose.set(false);
             if (androidBtGatt != null) {
                 try {
                     androidBtGatt.getClass().getMethod("refresh").invoke(androidBtGatt);
                 } catch (final Exception e) {
-                    Log.e(LOG_TAG, "Error refreshing gatt cache", e);
+                    Log.w(LOG_TAG, "Error refreshing gatt cache", e);
                 } finally {
                     androidBtGatt.close();
                     androidBtGatt = null;
@@ -391,8 +299,12 @@ public class BtleService extends Service {
         }
 
         void setConnectTaskError(Exception e) {
-            connectFuture.getAndSet(null).cancel(false);
-            connectTask.getAndSet(null).setError(e);
+            TaskCompletionSource<Void> reference = connectTask.getAndSet(null);
+            if (reference != null) {
+                reference.setError(e);
+            }
+
+            cancelConnectTimeout();
         }
 
         @Override
@@ -473,147 +385,259 @@ public class BtleService extends Service {
         }
 
         @Override
-        public void registerCallback(Callback callback) {
-            gattCallback = callback;
+        public void onDisconnect(DisconnectHandler handler) {
+            dcHandler = handler;
+        }
+
+        public boolean serviceExists(UUID gattService) {
+            return androidBtGatt != null && androidBtGatt.getService(gattService) != null;
         }
 
         @Override
-        public void writeCharacteristic(final BtleGattCharacteristic gattChar, final BtleGatt.GattCharWriteType writeType, final byte[] value) {
-            gattScheduler.queueAction(new Callable<Boolean>() {
+        public Task<Void> writeCharacteristicAsync(final BtleGattCharacteristic characteristic, final WriteType type, final byte[] value) {
+            if (androidBtGatt != null) {
+                final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
+
+                addGattOperation(this, new GattOp() {
+                    @Override
+                    public AndroidPlatform owner() {
+                        return AndroidPlatform.this;
+                    }
+
+                    @Override
+                    public void execute() {
+                        BluetoothGattService service = androidBtGatt.getService(characteristic.serviceUuid);
+                        BluetoothGattCharacteristic androidGattChar = service.getCharacteristic(characteristic.uuid);
+                        androidGattChar.setWriteType(type == WriteType.WITHOUT_RESPONSE ?
+                                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
+                                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                        );
+                        androidGattChar.setValue(value);
+
+                        androidBtGatt.writeCharacteristic(androidGattChar);
+                    }
+
+                    @Override
+                    public TaskCompletionSource<byte[]> taskCompletionSource() {
+                        return taskSource;
+                    }
+                });
+
+                return taskSource.getTask().onSuccessTask(new Continuation<byte[], Task<Void>>() {
+                    @Override
+                    public Task<Void> then(Task<byte[]> task) throws Exception {
+                        return Task.forResult(null);
+                    }
+                });
+            }
+            return Task.forError(new IllegalStateException("No longer connected to the BTLE gatt server"));
+        }
+
+        @Override
+        public Task<byte[][]> readCharacteristicAsync(final BtleGattCharacteristic[] characteristics) {
+            // Can use do this in parallel since internally, gatt operations are queued and only executed 1 by 1
+            final ArrayList<Task<byte[]>> tasks = new ArrayList<>();
+            for(BtleGattCharacteristic it: characteristics) {
+                tasks.add(readCharacteristicAsync(it));
+            }
+
+            return Task.whenAll(tasks).onSuccessTask(new Continuation<Void, Task<byte[][]>>() {
                 @Override
-                public Boolean call() throws Exception {
-                    gattScheduler.setExpectedGattKey(GattActionKey.CHAR_WRITE);
+                public Task<byte[][]> then(Task<Void> task) throws Exception {
+                    byte[][] valuesArray = new byte[tasks.size()][];
+                    for (int i = 0; i < valuesArray.length; i++) {
+                        valuesArray[i] = tasks.get(i).getResult();
+                    }
 
-                    BluetoothGattService service = androidBtGatt.getService(gattChar.serviceUuid);
-                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(gattChar.uuid);
-                    characteristic.setWriteType(writeType == BtleGatt.GattCharWriteType.WRITE_WITHOUT_RESPONSE ?
-                            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
-                            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                    );
-                    characteristic.setValue(value);
-
-                    androidBtGatt.writeCharacteristic(characteristic);
-
-                    return true;
+                    return Task.forResult(valuesArray);
                 }
             });
-            gattScheduler.executeNext(GattActionKey.NONE);
         }
 
         @Override
-        public void readCharacteristic(final BtleGattCharacteristic gattChar) {
-            gattScheduler.queueAction(new Callable<Boolean>() {
-                @Override
-                public Boolean call() {
-                    gattScheduler.setExpectedGattKey(GattActionKey.CHAR_READ);
-                    BluetoothGattService service = androidBtGatt.getService(gattChar.serviceUuid);
-                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(gattChar.uuid);
+        public Task<byte[]> readCharacteristicAsync(final BtleGattCharacteristic characteristic) {
+            if (androidBtGatt != null) {
+                final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
 
-                    androidBtGatt.readCharacteristic(characteristic);
-                    return true;
+                addGattOperation(this, new GattOp() {
+                    @Override
+                    public AndroidPlatform owner() {
+                        return AndroidPlatform.this;
+                    }
+
+                    @Override
+                    public void execute() {
+                        androidBtGatt.readCharacteristic(androidBtGatt.getService(characteristic.serviceUuid).getCharacteristic(characteristic.uuid));
+                    }
+
+                    @Override
+                    public TaskCompletionSource<byte[]> taskCompletionSource() {
+                        return taskSource;
+                    }
+                });
+
+                return taskSource.getTask();
+            }
+            return Task.forError(new IllegalStateException("No longer connected to the BTLE gatt server"));
+        }
+
+        private Task<Void> editNotifications(BtleGattCharacteristic characteristic, final NotificationListener listener) {
+            if (androidBtGatt != null) {
+                BluetoothGattService service = androidBtGatt.getService(characteristic.serviceUuid);
+                if (service == null) {
+                    return Task.forError(new IllegalStateException("Service \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
                 }
-            });
-            gattScheduler.executeNext(GattActionKey.NONE);
+
+                final BluetoothGattCharacteristic androidGattChar = service.getCharacteristic(characteristic.uuid);
+                if (androidGattChar == null) {
+                    return Task.forError(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
+                }
+
+                Task<Void> task;
+                int charProps = androidGattChar.getProperties();
+                if ((charProps & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                    final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
+
+                    task = taskSource.getTask().onSuccessTask(new Continuation<byte[], Task<Void>>() {
+                        @Override
+                        public Task<Void> then(Task<byte[]> task) throws Exception {
+                            // Cheat here since the only characteristic we enable notifications for is the MetaWear notify characteristic
+                            notificationListener = listener;
+                            return Task.forResult(null);
+                        }
+                    });
+
+                    addGattOperation(this, new GattOp() {
+                        @Override
+                        public AndroidPlatform owner() {
+                            return AndroidPlatform.this;
+                        }
+
+                        @Override
+                        public void execute() {
+                            androidBtGatt.setCharacteristicNotification(androidGattChar, true);
+                            BluetoothGattDescriptor descriptor = androidGattChar.getDescriptor(CHARACTERISTIC_CONFIG);
+                            descriptor.setValue(listener == null ? BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE : BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                            androidBtGatt.writeDescriptor(descriptor);
+
+                        }
+
+                        @Override
+                        public TaskCompletionSource<byte[]> taskCompletionSource() {
+                            return taskSource;
+                        }
+                    });
+                } else {
+                    task = Task.forError(new IllegalStateException(("Characteristic does not have 'notify property' bit set")));
+                }
+                return task;
+            }
+            return Task.forError(new IllegalStateException("No longer connected to the BTLE gatt server"));
         }
 
         @Override
-        public boolean serviceExists(UUID serviceUuid) {
-            return androidBtGatt.getService(serviceUuid) != null;
+        public Task<Void> enableNotificationsAsync(BtleGattCharacteristic characteristic, final NotificationListener listener) {
+            return editNotifications(characteristic, listener);
         }
 
         @Override
-        public Task<Void> disconnectAsync() {
-            Task<Void> task = boardDisconnectAsync();
-            androidBtGatt.disconnect();
+        public Task<Void> localDisconnectAsync() {
+            if (androidBtGatt == null) {
+                return Task.forResult(null);
+            }
+
+            Task<Void> task = remoteDisconnectAsync();
+
+            if (nGattOps.get() > 0) {
+                readyToClose.set(true);
+            } else {
+                androidBtGatt.disconnect();
+            }
             return task;
         }
 
         @Override
-        public Task<Void> boardDisconnectAsync() {
-            if (connectTask.get() != null) {
-                taskFutures.add(backgroundThreadPool.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        connectFuture.getAndSet(null).cancel(false);
-                        connectTask.getAndSet(null).setCancelled();
-                    }
-                }));
+        public Task<Void> remoteDisconnectAsync() {
+            TaskCompletionSource<Void> taskReference = connectTask.getAndSet(null);
+            if (taskReference != null) {
+                taskReference.setCancelled();
             }
 
-            if (disconnectTask.get() == null) {
-                disconnectTask.set(new TaskCompletionSource<Void>());
+            cancelConnectTimeout();
+
+            taskReference = disconnectTask.get();
+            if (taskReference == null) {
+                taskReference = new TaskCompletionSource<>();
+                disconnectTask.set(taskReference);
             }
 
-            return disconnectTask.get().getTask();
+            return taskReference.getTask();
         }
 
         @Override
         public Task<Void> connectAsync() {
-            if (connectTask.get() == null) {
-                connectTask.set(new TaskCompletionSource<Void>());
-                androidBtGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback);
+            TaskCompletionSource<Void> taskReference = connectTask.get();
+            if (taskReference == null) {
+                taskReference = new TaskCompletionSource<>();
+                connectTask.set(taskReference);
 
-                if (connectFuture.get()!= null) {
-                    connectFuture.getAndSet(null).cancel(false);
-                }
-                connectFuture.set(taskScheduler.schedule(connectTimeout, 7500L, TimeUnit.MILLISECONDS));
+                cancelConnectTimeout();
+
+                connectFuture.set(taskScheduler.schedule(new Runnable() {
+                    @Override
+                    public void run() {
+                        cancelConnectTimeout();
+
+                        closeGatt();
+
+                        TaskCompletionSource<Void> reference = connectTask.getAndSet(null);
+                        if (reference != null) {
+                            reference.setError(new TimeoutException("Timed out establishing Bluetooth Connection"));
+                        }
+                    }
+                }, 7500L, TimeUnit.MILLISECONDS));
+
+                androidBtGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback);
             }
 
-            return connectTask.get().getTask();
+            return taskReference.getTask();
         }
 
         @Override
         public Task<Integer> readRssiAsync() {
             if (androidBtGatt != null) {
-                TaskCompletionSource<Integer> pendingTask = rssiTask.get();
-                if (pendingTask == null) {
-                    pendingTask = new TaskCompletionSource<>();
-                    rssiTask.set(pendingTask);
-                    gattScheduler.queueAction(new Callable<Boolean>() {
-                        @Override
-                        public Boolean call() {
-                            gattScheduler.setExpectedGattKey(GattActionKey.RSSI_READ);
-                            androidBtGatt.readRemoteRssi();
-                            return true;
-                        }
-                    });
-                    gattScheduler.executeNext(GattActionKey.NONE);
-                }
-                return pendingTask.getTask();
+                final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
+
+                addGattOperation(this, new GattOp() {
+                    @Override
+                    public AndroidPlatform owner() {
+                        return AndroidPlatform.this;
+                    }
+
+                    @Override
+                    public void execute() {
+                        androidBtGatt.readRemoteRssi();
+                    }
+
+                    @Override
+                    public TaskCompletionSource<byte[]> taskCompletionSource() {
+                        return taskSource;
+                    }
+                });
+
+                return taskSource.getTask().onSuccessTask(new Continuation<byte[], Task<Integer>>() {
+                    @Override
+                    public Task<Integer> then(Task<byte[]> task) throws Exception {
+                        return Task.forResult(ByteBuffer.wrap(task.getResult()).order(ByteOrder.LITTLE_ENDIAN).getInt(0));
+                    }
+                });
             }
-            return Task.forError(new RuntimeException("No active BLE connection"));
+            return Task.forError(new IllegalStateException("No longer connected to the BTLE gatt server"));
         }
     }
 
-    private final static long FUTURE_CHECKER_PERIOD= 1000L;
-    private final ConcurrentLinkedQueue<Future<?>> taskFutures = new ConcurrentLinkedQueue<>();
-    private final ExecutorService backgroundThreadPool= Executors.newCachedThreadPool();
     private final ScheduledExecutorService taskScheduler = Executors.newScheduledThreadPool(4);
-    private final Runnable futureChecker = new Runnable() {
-        @Override
-        public void run() {
-            ConcurrentLinkedQueue<Future<?>> notYetCompleted= new ConcurrentLinkedQueue<>();
-            while (!taskFutures.isEmpty()) {
-                Future<?> next= taskFutures.poll();
-                if (next.isDone()) {
-                    try {
-                        next.get();
-                    } catch (Exception e) {
-                        Log.e(LOG_TAG, "Background task reported an error", e);
-                    }
-                } else {
-                    notYetCompleted.add(next);
-                }
-            }
-
-            taskFutures.addAll(notYetCompleted);
-            taskScheduler.schedule(futureChecker, FUTURE_CHECKER_PERIOD, TimeUnit.MILLISECONDS);
-        }
-    };
-
     private final IBinder mBinder= new LocalBinder();
-    private final GattActionScheduler gattScheduler= new GattActionScheduler();
-    private final Map<BluetoothDevice, AndroidPlatform> btleDevices = new HashMap<>();
 
     /**
      * Provides methods for interacting with the service
@@ -636,7 +660,11 @@ public class BtleService extends Service {
          * @param btDevice    BluetoothDevice object corresponding to the target MetaWear board
          */
         public void removeMetaWearBoard(final BluetoothDevice btDevice) {
-            btleDevices.remove(btDevice);
+            AndroidPlatform value;
+            if ((value = btleDevices.get(btDevice)) != null) {
+                value.closeGatt();
+                btleDevices.remove(btDevice);
+            }
         }
         /**
          * Removes the saved serialized state of the MetaWearBoard object associated with the BluetoothDevice object
@@ -662,13 +690,6 @@ public class BtleService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return mBinder;
-    }
-
-    @Override
-    public void onCreate() {
-        taskScheduler.schedule(futureChecker, FUTURE_CHECKER_PERIOD, TimeUnit.MILLISECONDS);
-
-        super.onCreate();
     }
 
     @Override

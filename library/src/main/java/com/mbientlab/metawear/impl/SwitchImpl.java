@@ -32,6 +32,7 @@ import com.mbientlab.metawear.module.Switch;
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.SWITCH;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/4/16.
@@ -82,7 +83,7 @@ class SwitchImpl extends ModuleImplBase implements Switch {
 
     @Override
     public Task<Byte> readCurrentStateAsync() {
-        return stateTasks.queueTask(250L, new Runnable() {
+        return stateTasks.queueTask(RESPONSE_TIMEOUT, new Runnable() {
             @Override
             public void run() {
                 mwPrivate.sendCommand(new byte[] {SWITCH.id, Util.setRead(STATE)});

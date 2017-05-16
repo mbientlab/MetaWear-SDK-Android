@@ -37,8 +37,6 @@ class DataAttributes implements Serializable {
     final byte copies, offset;
     final boolean signed;
 
-    transient byte unitLength;
-
     DataAttributes(byte[] sizes, byte copies, byte offset, boolean signed) {
         this.sizes = sizes;
         this.copies = copies;

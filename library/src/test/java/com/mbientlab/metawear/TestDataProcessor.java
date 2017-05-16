@@ -413,4 +413,19 @@ public class TestDataProcessor extends UnitTestBase {
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
+
+    @Test(expected = IllegalRouteOperationException.class)
+    public void missingFeedbackName() throws Exception {
+        Gpio.Pin pin = mwBoard.getModule(Gpio.class).pin((byte) 0);
+
+        Task<Route> routeTask = pin.analogAdc().addRouteAsync(new RouteBuilder() {
+            @Override
+            public void configure(RouteComponent source) {
+                source.map(Function2.ADD, "non-existent");
+            }
+        });
+        routeTask.waitForCompletion();
+
+        throw routeTask.getError() == null ? new NullPointerException("Task expected to fail") : routeTask.getError();
+    }
 }

@@ -40,6 +40,7 @@ import java.util.Calendar;
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.SETTINGS;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/20/16.
@@ -314,7 +315,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
 
     @Override
     public Task<BleAdvertisementConfig> readBleAdConfigAsync() {
-        return adConfigTasks.queueTask(1800L, new Runnable() {
+        return adConfigTasks.queueTask(RESPONSE_TIMEOUT * 4, new Runnable() {
             @Override
             public void run() {
                 mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(DEVICE_NAME)});
@@ -367,7 +368,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
 
     @Override
     public Task<BleConnectionParameters> readBleConnParamsAsync() {
-        return connParamsTasks.queueTask(250L, new Runnable() {
+        return connParamsTasks.queueTask(RESPONSE_TIMEOUT, new Runnable() {
             @Override
             public void run() {
                 mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CONNECTION_PARAMS)});
@@ -434,7 +435,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     public Task<Byte> readCurrentPowerStatusAsync() {
         ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
         if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x1) == 0x1)) {
-            return powerStatusTasks.queueTask(250L, new Runnable() {
+            return powerStatusTasks.queueTask(RESPONSE_TIMEOUT, new Runnable() {
                 @Override
                 public void run() {
                     mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(POWER_STATUS)});
@@ -470,7 +471,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     public Task<Byte> readCurrentChargeStatusAsync() {
         ModuleInfo info = mwPrivate.lookupModuleInfo(SETTINGS);
         if (info.revision >= CHARGE_STATUS_REVISION && (info.extra.length > 0 && (info.extra[0] & 0x2) == 0x2)) {
-            return chargeStatusTasks.queueTask(250L, new Runnable() {
+            return chargeStatusTasks.queueTask(RESPONSE_TIMEOUT, new Runnable() {
                 @Override
                 public void run() {
                     mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CHARGE_STATUS)});

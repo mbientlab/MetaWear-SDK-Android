@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.builder.RouteBuilder;
@@ -65,11 +66,15 @@ public class TestAccFeedback extends UnitTestBase {
     @Parameter
     public Class<? extends Accelerometer> accelClass;
 
+    private Accelerometer accelerometer;
+
     @Before
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(accelClass);
         junitPlatform.firmware= "1.1.3";
         connectToBoard();
+
+        accelerometer = mwBoard.getModule(Accelerometer.class);
     }
 
     @Test
@@ -88,7 +93,7 @@ public class TestAccFeedback extends UnitTestBase {
                 {0x09, 0x06, 0x01},
                 {0x0a, 0x04, 0x00}
         };
-        final AccelerationDataProducer acceleration= mwBoard.getModule(Accelerometer.class).acceleration();
+        final AccelerationDataProducer acceleration = accelerometer.acceleration();
 
         acceleration.addRouteAsync(new RouteBuilder() {
             @Override
@@ -110,6 +115,40 @@ public class TestAccFeedback extends UnitTestBase {
         synchronized (this) {
             this.wait();
             mwBoard.lookupRoute(0).remove();
+
+            assertArrayEquals(expected, junitPlatform.getCommands());
+        }
+    }
+
+    @Test
+    public void xyAbsAdd() throws InterruptedException {
+        final byte[][] expected = new byte[][] {
+                {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x20, 0x09, 0x15, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00},
+                {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x22, 0x09, 0x15, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00},
+                {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x09, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00},
+                {0x0a, 0x02, 0x09, 0x03, 0x00, 0x09, 0x05, 0x09, 0x05, 0x04},
+                {0x0a, 0x03, 0x02, 0x09, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00}
+        };
+        final AccelerationDataProducer acceleration = accelerometer.acceleration();
+
+        acceleration.addRouteAsync(new RouteBuilder() {
+            @Override
+            public void configure(RouteComponent source) {
+                source.split().index(0).map(Function1.ABS_VALUE).name("x-abs")
+                        .index(1).map(Function1.ABS_VALUE).map(Function2.ADD, "x-abs");
+            }
+        }).continueWith(new Continuation<Route, Void>() {
+            @Override
+            public Void then(Task<Route> task) throws Exception {
+                synchronized (TestAccFeedback.this) {
+                    TestAccFeedback.this.notifyAll();
+                }
+                return null;
+            }
+        });
+
+        synchronized (this) {
+            this.wait();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
         }

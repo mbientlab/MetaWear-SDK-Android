@@ -40,6 +40,7 @@ import bolts.Task;
 import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.TIMER;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/17/16.
@@ -169,7 +170,7 @@ class TimerImpl extends ModuleImplBase implements Timer {
 
     Task<DataTypeBase> create(byte[] config) {
         createTimerTask= new TaskCompletionSource<>();
-        timeoutFuture= mwPrivate.scheduleTask(taskTimeout, 250L);
+        timeoutFuture= mwPrivate.scheduleTask(taskTimeout, RESPONSE_TIMEOUT);
         mwPrivate.sendCommand(TIMER, TIMER_ENTRY, config);
 
         return createTimerTask.getTask();
