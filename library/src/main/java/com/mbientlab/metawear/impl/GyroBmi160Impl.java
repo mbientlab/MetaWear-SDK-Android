@@ -43,6 +43,7 @@ import static com.mbientlab.metawear.impl.Constant.Module.GYRO;
  * Created by etsai on 9/20/16.
  */
 class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
+    private static final byte PACKED_ROT_REVISION= 1;
     private final static byte POWER_MODE = 1, DATA_INTERRUPT_ENABLE = 2, CONFIG = 3, DATA = 5, PACKED_DATA= 0x7;
     private final static String ROT_PRODUCER= "com.mbientlab.metawear.impl.GyroBmi160Impl.ROT_PRODUCER",
             ROT_X_AXIS_PRODUCER= "com.mbientlab.metawear.impl.GyroBmi160Impl.ROT_X_AXIS_PRODUCER",
@@ -232,30 +233,33 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
 
     @Override
     public AsyncDataProducer packedAngularVelocity() {
-        if (packedRotationalSpeed == null) {
-            packedRotationalSpeed = new AsyncDataProducer() {
-                @Override
-                public Task<Route> addRouteAsync(RouteBuilder builder) {
-                    return mwPrivate.queueRouteBuilder(builder, ROT_PACKED_PRODUCER);
-                }
+        if (mwPrivate.lookupModuleInfo(GYRO).revision >= PACKED_ROT_REVISION) {
+            if (packedRotationalSpeed == null) {
+                packedRotationalSpeed = new AsyncDataProducer() {
+                    @Override
+                    public Task<Route> addRouteAsync(RouteBuilder builder) {
+                        return mwPrivate.queueRouteBuilder(builder, ROT_PACKED_PRODUCER);
+                    }
 
-                @Override
-                public String name() {
-                    return ROT_PACKED_PRODUCER;
-                }
+                    @Override
+                    public String name() {
+                        return ROT_PACKED_PRODUCER;
+                    }
 
-                @Override
-                public void start() {
-                    mwPrivate.sendCommand(new byte[] {GYRO.id, DATA_INTERRUPT_ENABLE, 1, 0});
-                }
+                    @Override
+                    public void start() {
+                        mwPrivate.sendCommand(new byte[]{GYRO.id, DATA_INTERRUPT_ENABLE, 1, 0});
+                    }
 
-                @Override
-                public void stop() {
-                    mwPrivate.sendCommand(new byte[] {GYRO.id, DATA_INTERRUPT_ENABLE, 0, 1});
-                }
-            };
+                    @Override
+                    public void stop() {
+                        mwPrivate.sendCommand(new byte[]{GYRO.id, DATA_INTERRUPT_ENABLE, 0, 1});
+                    }
+                };
+            }
+            return packedRotationalSpeed;
         }
-        return packedRotationalSpeed;
+        return null;
     }
 
     @Override

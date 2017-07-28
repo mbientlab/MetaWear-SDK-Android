@@ -153,7 +153,7 @@ class JunitPlatform implements IO, BtleGatt {
                 dataProcessorId++;
                 scheduleMockResponse(response);
             } else if (value[0] == 0xf && value[1] == 0x2) {
-                byte[] response = {value[2], 0x2, macroId};
+                byte[] response = {value[0], 0x2, macroId};
                 macroId++;
                 scheduleMockResponse(response);
             } else if (value[0] == (byte) 0xb && value[1] == (byte) 0x85) {

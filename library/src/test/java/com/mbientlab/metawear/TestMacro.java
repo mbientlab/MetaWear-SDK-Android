@@ -78,21 +78,8 @@ public class TestMacro extends UnitTestBase {
                 .highIntensity((byte) 16).lowIntensity((byte) 16)
                 .commit();
         led.play();
-        macro.endRecordAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                synchronized (TestMacro.this) {
-                    TestMacro.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        macro.endRecordAsync().waitForCompletion();
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -147,21 +134,9 @@ public class TestMacro extends UnitTestBase {
                 accelerometer.start();
                 return macro.endRecordAsync();
             }
-        }).continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                synchronized (TestMacro.this) {
-                    TestMacro.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        }).waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -197,20 +172,8 @@ public class TestMacro extends UnitTestBase {
             public Task<Byte> then(Task<Route> task) throws Exception {
                 return macro.endRecordAsync();
             }
-        }).continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                synchronized (TestMacro.this) {
-                    TestMacro.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        }).waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 }

@@ -48,6 +48,7 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
             BFIELD_Y_AXIS_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_Y_AXIS_PRODUCER",
             BFIELD_Z_AXIS_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_Z_AXIS_PRODUCER",
             BFIELD_PACKED_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_PACKED_PRODUCER";
+    private static final byte PACKED_BFIELD_REVISION= 1;
     private static final byte POWER_MODE = 1,
         DATA_INTERRUPT_ENABLE = 2, DATA_RATE = 3, DATA_REPETITIONS = 4, MAG_DATA = 5,
         PACKED_MAG_DATA = 0x09;
@@ -126,7 +127,7 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
 
         @Override
         protected float scale(MetaWearBoardPrivate mwPrivate) {
-            return 16.f;
+            return 16000000.f;
         }
 
         @Override
@@ -193,30 +194,33 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
 
     @Override
     public AsyncDataProducer packedMagneticField() {
-        if (packedBfield == null) {
-            packedBfield = new AsyncDataProducer() {
-                @Override
-                public Task<Route> addRouteAsync(RouteBuilder builder) {
-                    return mwPrivate.queueRouteBuilder(builder, BFIELD_PACKED_PRODUCER);
-                }
+        if (mwPrivate.lookupModuleInfo(MAGNETOMETER).revision >= PACKED_BFIELD_REVISION) {
+            if (packedBfield == null) {
+                packedBfield = new AsyncDataProducer() {
+                    @Override
+                    public Task<Route> addRouteAsync(RouteBuilder builder) {
+                        return mwPrivate.queueRouteBuilder(builder, BFIELD_PACKED_PRODUCER);
+                    }
 
-                @Override
-                public String name() {
-                    return BFIELD_PACKED_PRODUCER;
-                }
+                    @Override
+                    public String name() {
+                        return BFIELD_PACKED_PRODUCER;
+                    }
 
-                @Override
-                public void stop() {
-                    mwPrivate.sendCommand(new byte[]{MAGNETOMETER.id, DATA_INTERRUPT_ENABLE, 0, 1});
-                }
+                    @Override
+                    public void stop() {
+                        mwPrivate.sendCommand(new byte[]{MAGNETOMETER.id, DATA_INTERRUPT_ENABLE, 0, 1});
+                    }
 
-                @Override
-                public void start() {
-                    mwPrivate.sendCommand(new byte[]{MAGNETOMETER.id, DATA_INTERRUPT_ENABLE, 1, 0});
-                }
-            };
+                    @Override
+                    public void start() {
+                        mwPrivate.sendCommand(new byte[]{MAGNETOMETER.id, DATA_INTERRUPT_ENABLE, 1, 0});
+                    }
+                };
+            }
+            return packedBfield;
         }
-        return packedBfield;
+        return null;
     }
 
     @Override

@@ -31,8 +31,8 @@ android {
     defaultConfig {
         minSdkVersion 18
         targetSdkVersion 25
-        versionCode 49
-        versionName "3.0.32"
+        versionCode 50
+        versionName "3.0.37"
     }
     buildTypes {
         release {

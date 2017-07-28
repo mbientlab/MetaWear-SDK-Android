@@ -146,7 +146,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
 
     @Test
     public void bFieldComponentData() {
-        float[] expected = new float[] {-251.1250f, 165.1875f, 71.3125f};
+        float[] expected = new float[] {-0.0002511250f, 0.0001651875f, 0.0000713125f};
         final float[] actual= new float[3];
 
         mag.magneticField().addRouteAsync(new RouteBuilder() {
@@ -183,6 +183,6 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         });
         sendMockResponse(new byte[] {0x15, 0x05, 0x4e, (byte) 0xf0, 0x53, 0x0a, 0x75, 0x04});
 
-        assertArrayEquals(expected, actual, 0.001f);
+        assertArrayEquals(expected, actual, 0.0000003f);
     }
 }

@@ -50,7 +50,6 @@ class MacroImpl extends ModuleImplBase implements Macro {
     private transient boolean isRecording= false;
     private transient Queue<byte[]> commands;
     private transient Pair<TaskCompletionSource<Byte>, Boolean> pendingMacro;
-    private transient byte newId;
 
     MacroImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -61,7 +60,14 @@ class MacroImpl extends ModuleImplBase implements Macro {
         this.mwPrivate.addResponseHandler(new Pair<>(MACRO.id, BEGIN), new RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
-                newId = response[2];
+                while(!commands.isEmpty()) {
+                    for(byte[] converted: convertToMacroCommand(commands.poll())) {
+                        mwPrivate.sendCommand(converted);
+                    }
+                }
+                mwPrivate.sendCommand(new byte[] {MACRO.id, END});
+
+                pendingMacro.first.setResult(response[2]);
             }
         });
     }
@@ -85,14 +91,6 @@ class MacroImpl extends ModuleImplBase implements Macro {
             @Override
             public void run() {
                 mwPrivate.sendCommand(new byte[] {MACRO.id, BEGIN, (byte) (pendingMacro.second ? 1 : 0)});
-                while(!commands.isEmpty()) {
-                    for(byte[] converted: convertToMacroCommand(commands.poll())) {
-                        mwPrivate.sendCommand(converted);
-                    }
-                }
-                mwPrivate.sendCommand(new byte[] {MACRO.id, END});
-
-                pendingMacro.first.setResult(newId);
             }
         }, WRITE_MACRO_DELAY);
 
