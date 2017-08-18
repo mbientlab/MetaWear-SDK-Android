@@ -1,4 +1,4 @@
-Copyright 2014-2015 MbientLab Inc. All rights reserved.
+Copyright 2014-2017 MbientLab Inc. All rights reserved.
 
 IMPORTANT: Your use of this Software is limited to those specific rights granted under the terms of a software
 license agreement between the user who downloaded the software, his/her employer (which must be your
