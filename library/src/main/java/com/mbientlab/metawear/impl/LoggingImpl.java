@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.impl;
 
+import android.util.Log;
+
 import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.Logging;
 
@@ -70,7 +72,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
         private static final long serialVersionUID = -4058532490858952714L;
 
         final byte resetUid;
-        final long tick;
+        long tick;
         final Calendar timestamp;
 
         public TimeReference(byte resetUid, long tick, Calendar timestamp) {
@@ -168,6 +170,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     private transient int nUpdates;
     private transient LogDownloadUpdateHandler updateHandler;
     private transient LogDownloadErrorHandler errorHandler;
+    private transient HashMap<Byte, Long> rollbackTimestamps;
 
     private transient byte nReqLogIds;
     private transient ScheduledFuture<?> timeoutFuture;
@@ -185,6 +188,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
 
     @Override
     public void disconnected() {
+        rollbackTimestamps.putAll(lastTimestamp);
         if (downloadTask.get() != null) {
             downloadTask.getAndSet(null).setError(new RuntimeException("Lost connection while downloading log data"));
         }
@@ -203,8 +207,6 @@ class LoggingImpl extends ModuleImplBase implements Logging {
 
     @Override
     public void tearDown() {
-        logReferenceTicks.clear();
-        lastTimestamp.clear();
         dataLoggers.clear();
 
         mwPrivate.sendCommand(new byte[] {LOGGING.id, REMOVE_ALL});
@@ -213,6 +215,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     @Override
     protected void init() {
         downloadTask = new AtomicReference<>();
+        rollbackTimestamps= new HashMap<>();
         taskTimeout = new Runnable() {
             @Override
             public void run() {
@@ -257,7 +260,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                 long nEntriesLeft= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
 
                 if (nEntriesLeft == 0) {
-                    lastTimestamp.clear();
+                    rollbackTimestamps.clear();
                     downloadTask.getAndSet(null).setResult(null);
                 } else if (updateHandler != null) {
                     updateHandler.receivedUpdate(nEntriesLeft, nLogEntries);
@@ -272,12 +275,19 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                 final long tick= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
                 byte resetUid= (response.length > 6) ? response[6] : -1;
 
-                latestReference= new TimeReference(resetUid, tick, Calendar.getInstance());
-                if (resetUid != -1) {
-                    logReferenceTicks.put(latestReference.resetUid, latestReference);
+                // if in the middle of a log download, don't update the reference
+                // rollbackTimestamps var is cleared after readout progress hits 0
+                if (rollbackTimestamps.isEmpty()) {
+                    latestReference = new TimeReference(resetUid, tick, Calendar.getInstance());
+                    if (resetUid != -1) {
+                        logReferenceTicks.put(latestReference.resetUid, latestReference);
+                    }
                 }
 
-                queryTimeTask.setResult(null);
+                if (queryTimeTask != null) {
+                    queryTimeTask.setResult(null);
+                    queryTimeTask = null;
+                }
             }
         });
         this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(LENGTH)), new RegisterResponseHandler() {
@@ -290,6 +300,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                 nLogEntries= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong();
 
                 if (nLogEntries == 0) {
+                    rollbackTimestamps.clear();
                     downloadTask.getAndSet(null).setResult(null);
                 } else {
                     if (updateHandler != null) {
@@ -412,26 +423,43 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     }
 
     private void processLogData(byte[] logEntry) {
-        final byte logId= (byte) (logEntry[0] & 0x1f), resetUid= (byte) ((logEntry[0] & ~0x1f) >> 5);
-        TimeReference reference= logReferenceTicks.containsKey(resetUid) ? logReferenceTicks.get(resetUid) : latestReference;
+        final byte logId= (byte) (logEntry[0] & 0x1f), resetUid = (byte) (((logEntry[0] & ~0x1f) >> 5) & 0x7);
 
         byte[] padded= new byte[8];
         System.arraycopy(logEntry, 1, padded, 0, 4);
         long tick= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
 
-        final Calendar timestamp= (Calendar) reference.timestamp.clone();
-        timestamp.add(Calendar.MILLISECOND, (int) ((tick - reference.tick) * TICK_TIME_STEP));
-
-        if (!lastTimestamp.containsKey(logId) || lastTimestamp.get(logId) < tick) {
-            lastTimestamp.put(logId, tick);
-
-            final byte[] logData= Arrays.copyOfRange(logEntry, 5, logEntry.length);
+        if (!rollbackTimestamps.containsKey(resetUid) || rollbackTimestamps.get(resetUid) < tick) {
+            final byte[] logData = Arrays.copyOfRange(logEntry, 5, logEntry.length);
+            final Calendar realTimestamp = computeTimestamp(resetUid, tick);
 
             if (dataLoggers.containsKey(logId)) {
-                dataLoggers.get(logId).handleLogMessage(mwPrivate, logId, timestamp, logData, errorHandler);
-            } else if (errorHandler != null){
-                errorHandler.receivedError(DownloadError.UNKNOWN_LOG_ENTRY, logId, timestamp, logData);
+                dataLoggers.get(logId).handleLogMessage(mwPrivate, logId, realTimestamp, logData, errorHandler);
+            } else if (errorHandler != null) {
+                errorHandler.receivedError(DownloadError.UNKNOWN_LOG_ENTRY, logId, realTimestamp, logData);
             }
         }
+    }
+
+    Calendar computeTimestamp(byte resetUid, long tick) {
+        TimeReference reference= logReferenceTicks.containsKey(resetUid) ? logReferenceTicks.get(resetUid) : latestReference;
+
+        if (lastTimestamp.containsKey(resetUid) && lastTimestamp.get(resetUid) > tick) {
+            long diff = (tick - lastTimestamp.get(resetUid)) & 0xffffffffL;
+            long offset = diff + (lastTimestamp.get(resetUid) - reference.tick);
+            reference.timestamp.setTimeInMillis(reference.timestamp.getTimeInMillis() + (long) (offset * TICK_TIME_STEP));
+            reference.tick = tick;
+
+            if (rollbackTimestamps.containsKey(resetUid)) {
+                rollbackTimestamps.put(resetUid, tick);
+            }
+        }
+        lastTimestamp.put(resetUid, tick);
+
+        long offset = (long) ((tick - reference.tick) * TICK_TIME_STEP);
+        final Calendar timestamp= (Calendar) reference.timestamp.clone();
+        timestamp.setTimeInMillis(timestamp.getTimeInMillis() + offset);
+
+        return timestamp;
     }
 }

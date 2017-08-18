@@ -31,7 +31,7 @@ import java.util.HashMap;
  */
 class Constant {
     static final long RESPONSE_TIMEOUT = 1000L;
-    static final byte COMMAND_LENGTH = 18;
+    static final byte COMMAND_LENGTH = 18, MAX_BTLE_LENGTH = COMMAND_LENGTH + 2;
 
     enum Module {
         SWITCH(0x01),

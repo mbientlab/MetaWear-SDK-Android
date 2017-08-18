@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  * Created by etsai on 9/5/16.
  */
 class Version implements Comparable<Version>, Serializable {
-    private static final Pattern VERSION_STRING_PATTERN = Pattern.compile("(\\d)+\\.(\\d)+\\.(\\d)+");
+    private static final Pattern VERSION_STRING_PATTERN = Pattern.compile("(\\d+)\\.(\\d+)\\.(\\d+)");
     private static final long serialVersionUID = -6928626294821091652L;
 
     private final int major, minor, step;

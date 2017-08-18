@@ -31,26 +31,58 @@ import com.mbientlab.metawear.data.MagneticField;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
+
+import java.util.ArrayList;
+import java.util.Collection;
 
 import bolts.Capture;
 import bolts.Continuation;
 import bolts.Task;
 
+import static com.mbientlab.metawear.TestMagnetometerBmm150Config.SLEEP_REV;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 /**
  * Created by etsai on 10/6/16.
  */
+@RunWith(Parameterized.class)
 public class TestMagnetometerBmm150 extends UnitTestBase {
+    @Parameters(name = "revision: {0}")
+    public static Collection<Object[]> data() {
+        ArrayList<Object[]> parameters= new ArrayList<>();
+        parameters.add(new Object[] { (byte) 1 });
+        parameters.add(new Object[] { SLEEP_REV });
+        return parameters;
+    }
+
+    @Parameter
+    public byte revision;
+
     private MagnetometerBmm150 mag;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(MagnetometerBmm150.class);
+        junitPlatform.addCustomModuleInfo(new byte[] {0x15, (byte) 0x80, 0x00, revision});
         connectToBoard();
 
         mag= mwBoard.getModule(MagnetometerBmm150.class);
+    }
+
+    @Test
+    public void suspend() {
+        mag.suspend();
+
+        if (revision == SLEEP_REV) {
+            assertArrayEquals(new byte[] {0x15, 0x01, 0x02}, junitPlatform.getLastCommand());
+        } else {
+            assertNull(junitPlatform.getLastCommand());
+        }
     }
 
     @Test

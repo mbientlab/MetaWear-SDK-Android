@@ -176,4 +176,8 @@ public interface MagnetometerBmm150 extends Module, Configurable<MagnetometerBmm
      * Switch the magnetometer into sleep mode
      */
     void stop();
+    /**
+     * Switch the magnetometer into suspend mode.  If placed in suspend mode, sensor settings are reset and will need to be reconfigured.
+     */
+    void suspend();
 }

@@ -49,20 +49,20 @@ class AsyncTaskManager<T> {
     };
     private final MetaWearBoardPrivate mwPrivate;
 
-    public AsyncTaskManager(MetaWearBoardPrivate mwPrivate, String timeoutMessage) {
+    AsyncTaskManager(MetaWearBoardPrivate mwPrivate, String timeoutMessage) {
         this.mwPrivate = mwPrivate;
         this.timeoutMessage = timeoutMessage;
         this.taskSources = new ConcurrentLinkedQueue<>();
     }
 
-    public Task<T> queueTask(long timeout, Runnable task) {
+    Task<T> queueTask(long timeout, Runnable task) {
         TaskCompletionSource<T> source= new TaskCompletionSource<>();
         taskSources.add(new Tuple3<>(source, task, timeout));
         execute(false);
         return source.getTask();
     }
 
-    public void cancelTimeout() {
+    void cancelTimeout() {
         timeoutFuture.cancel(false);
     }
 

@@ -48,7 +48,7 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
             BFIELD_Y_AXIS_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_Y_AXIS_PRODUCER",
             BFIELD_Z_AXIS_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_Z_AXIS_PRODUCER",
             BFIELD_PACKED_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_PACKED_PRODUCER";
-    private static final byte PACKED_BFIELD_REVISION= 1;
+    private static final byte PACKED_BFIELD_REVISION= 1, SUSPEND_REVISION = 2;
     private static final byte POWER_MODE = 1,
         DATA_INTERRUPT_ENABLE = 2, DATA_RATE = 3, DATA_REPETITIONS = 4, MAG_DATA = 5,
         PACKED_MAG_DATA = 0x09;
@@ -249,6 +249,9 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
 
             @Override
             public void commit() {
+                if (mwPrivate.lookupModuleInfo(MAGNETOMETER).revision >= SUSPEND_REVISION) {
+                    stop();
+                }
                 mwPrivate.sendCommand(new byte[] {MAGNETOMETER.id, DATA_REPETITIONS, (byte) ((xyReps - 1) / 2), (byte) (zReps - 1)});
                 mwPrivate.sendCommand(new byte[] {MAGNETOMETER.id, DATA_RATE, (byte) odr.ordinal()});
             }
@@ -298,5 +301,12 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
     @Override
     public void stop() {
         mwPrivate.sendCommand(new byte[] {MAGNETOMETER.id, POWER_MODE, 0});
+    }
+
+    @Override
+    public void suspend() {
+        if (mwPrivate.lookupModuleInfo(MAGNETOMETER).revision >= SUSPEND_REVISION) {
+            mwPrivate.sendCommand(new byte[] {MAGNETOMETER.id, POWER_MODE, 2});
+        }
     }
 }

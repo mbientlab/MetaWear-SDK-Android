@@ -123,13 +123,29 @@ public interface RouteComponent {
      * @return Object representing the output of the counter
      */
     RouteComponent accumulate();
+
     /**
-     * Computes a moving average over the previous N samples.  This component will not output data until the first average i.e.
-     * until N samples have been received.
-     * @param samples    Number of samples to average over
-     * @return Object representing the output of the averager
+     * Applies a high pass filter over the input data, available in firmware v1.3.4 and later
+     * @param nSamples    Number of previous data samples to compare against
+     * @return Object representing the high pass output
      */
-    RouteComponent average(byte samples);
+    RouteComponent highpass(byte nSamples);
+    /**
+     * Applies a low pass filter over the input data.  Starting in firmware v1.3.4, can be used with
+     * multi-component data e.g. acceleration values.
+     * @param nSamples    Number of previous data samples to compare against
+     * @return Object representing the low pass output
+     */
+    RouteComponent lowpass(byte nSamples);
+    /**
+     * Computes a moving average over the previous N samples.  This component will not output data
+     * until the first average i.e. until N samples have been received.
+     * @param nSamples    Number of samples to average over
+     * @return Object representing the output of the averager
+     * @deprecated Renamed to {@link #lowpass(byte) lowpass} in SDK v3.1
+     */
+    @Deprecated
+    RouteComponent average(byte nSamples);
     /**
      * Stops data from leaving until at least N samples have been collected.
      * @param samples    Number of samples to collect
@@ -247,4 +263,15 @@ public interface RouteComponent {
      */
     RouteComponent filter(DifferentialOutput output, Number distance);
 
+    /**
+     * Packs multiple input values into 1 BTLE packet.  Used to reduce the number of packets broadcasted over the link.
+     * @param count    Number of input values to pack
+     * @return Object representing the output of the packer
+     */
+    RouteComponent pack(byte count);
+    /**
+     * Add additional information to the payload to reconstruct timestamps from streamed data
+     * @return Object representing the output of the accounter
+     */
+    RouteComponent account();
 }

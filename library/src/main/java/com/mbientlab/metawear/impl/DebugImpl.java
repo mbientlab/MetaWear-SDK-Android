@@ -26,18 +26,38 @@ package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.module.Debug;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DEBUG;
+import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 10/11/16.
  */
 class DebugImpl extends ModuleImplBase implements Debug {
+    private static final byte POWER_SAVE_REVISION = 1;
     private static final long serialVersionUID = 5168278729613884623L;
+
+    private static final byte TMP_VALUE = 0x4;
+
+    private transient AsyncTaskManager<Integer> readTmpValueTask;
 
     DebugImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
+    }
+
+    protected void init() {
+        readTmpValueTask = new AsyncTaskManager<>(mwPrivate, "Reading tmp value timed out");
+        this.mwPrivate.addResponseHandler(new Pair<>(DEBUG.id, Util.setRead(TMP_VALUE)), new JseMetaWearBoard.RegisterResponseHandler() {
+            @Override
+            public void onResponseReceived(byte[] response) {
+                readTmpValueTask.cancelTimeout();
+                readTmpValueTask.setResult(ByteBuffer.wrap(response, 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt());
+            }
+        });
     }
 
     @Override
@@ -70,5 +90,33 @@ class DebugImpl extends ModuleImplBase implements Debug {
     @Override
     public void resetAfterGc() {
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x5});
+    }
+
+    @Override
+    public void writeTmpValue(int value) {
+        ByteBuffer buffer = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN)
+                .put(DEBUG.id)
+                .put(TMP_VALUE)
+                .putInt(value);
+        mwPrivate.sendCommand(buffer.array());
+    }
+
+    @Override
+    public Task<Integer> readTmpValueAsync() {
+        return readTmpValueTask.queueTask(RESPONSE_TIMEOUT, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {DEBUG.id, Util.setRead(TMP_VALUE)});
+            }
+        });
+    }
+
+    @Override
+    public boolean enablePowersave() {
+        if (mwPrivate.lookupModuleInfo(DEBUG).revision >= POWER_SAVE_REVISION) {
+            mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x07});
+            return true;
+        }
+        return false;
     }
 }

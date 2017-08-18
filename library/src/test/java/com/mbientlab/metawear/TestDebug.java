@@ -29,7 +29,11 @@ import com.mbientlab.metawear.module.Debug;
 import org.junit.Before;
 import org.junit.Test;
 
+import bolts.Task;
+
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 /**
  * Created by etsai on 10/12/16.
@@ -75,5 +79,22 @@ public class TestDebug extends UnitTestBase {
 
         debug.resetAfterGc();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
+    }
+
+    @Test
+    public void receivedTmpValue() throws InterruptedException {
+        int expected = 0xdeadbeef;
+
+        Task<Integer> task = debug.readTmpValueAsync();
+        sendMockResponse(new byte[] {(byte) 0xfe, (byte) 0x84, (byte) 0xef, (byte) 0xbe, (byte) 0xad, (byte) 0xde});
+        task.waitForCompletion();
+
+        assertEquals(expected, task.getResult().intValue());
+    }
+
+    @Test
+    public void noPowersave() {
+        // test framework uses older debug revision, should be false here
+        assertFalse(debug.enablePowersave());
     }
 }

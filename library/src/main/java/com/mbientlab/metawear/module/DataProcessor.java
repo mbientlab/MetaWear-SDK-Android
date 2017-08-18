@@ -204,4 +204,15 @@ public interface DataProcessor extends Module {
          */
         void modify(Number threshold, short samples);
     }
+    /**
+     * Edits a data packer
+     * @author Eric Tsai
+     * @see RouteComponent#pack(byte)
+     */
+    interface PackerEditor extends Editor {
+        /**
+         * Clears buffer of accumulated inputs
+         */
+        void clear();
+    }
 }

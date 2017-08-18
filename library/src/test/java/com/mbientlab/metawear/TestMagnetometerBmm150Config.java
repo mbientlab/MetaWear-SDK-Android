@@ -44,14 +44,16 @@ import static org.junit.Assert.assertArrayEquals;
  */
 @RunWith(Parameterized.class)
 public class TestMagnetometerBmm150Config extends UnitTestBase {
+    static final byte SLEEP_REV = 2;
     private static final byte[] XY_BITMASK= new byte[] { 0x01, 0x04, 0x07, 0x17 },
             Z_BITMASK= new byte[] { 0x02, 0x0e, 0x1a, 0x52 },
             ODR_BITMASK= new byte[] { 0, 0, 0, 5};
-    @Parameters(name = "preset: {0}")
+    @Parameters(name = "preset: {0}, revision: {1}")
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
         for(Preset preset: Preset.values()) {
-            parameters.add(new Object[] { preset });
+            parameters.add(new Object[] { preset, (byte) 1 });
+            parameters.add(new Object[] { preset, SLEEP_REV });
         }
 
         return parameters;
@@ -62,9 +64,12 @@ public class TestMagnetometerBmm150Config extends UnitTestBase {
     @Parameter
     public Preset preset;
 
+    @Parameter(value = 1)
+    public byte revision;
+
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(MagnetometerBmm150.class);
+        junitPlatform.addCustomModuleInfo(new byte[] {0x15, (byte) 0x80, 0x00, revision});
         connectToBoard();
 
         mag= mwBoard.getModule(MagnetometerBmm150.class);
@@ -72,7 +77,11 @@ public class TestMagnetometerBmm150Config extends UnitTestBase {
 
     @Test
     public void configure() {
-        byte[][] expected= new byte[][] {
+        byte[][] expected= revision == SLEEP_REV ? new byte[][] {
+                { 0x15, 0x01, 0x00},
+                { 0x15, 0x04, XY_BITMASK[preset.ordinal()], Z_BITMASK[preset.ordinal()] },
+                { 0x15, 0x03, ODR_BITMASK[preset.ordinal()] }
+        } : new byte[][] {
                 { 0x15, 0x04, XY_BITMASK[preset.ordinal()], Z_BITMASK[preset.ordinal()] },
                 { 0x15, 0x03, ODR_BITMASK[preset.ordinal()] }
         };

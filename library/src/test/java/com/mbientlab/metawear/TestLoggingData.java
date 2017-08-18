@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -79,57 +78,41 @@ public class TestLoggingData extends TestLogDataBase {
         final List<Acceleration> actual= new ArrayList<>();
         final Acceleration[] expected = readAccelerationValues("bmi160_expected_values");
 
-        setupLogDataRoute().continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                synchronized (TestLoggingData.this) {
-                    TestLoggingData.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        Task<Route> task =setupLogDataRoute();
+        task.waitForCompletion();
+        task.getResult().setEnvironment(0, actual);
 
-        synchronized (this) {
-            if (shouldWait.get()) {
-                this.wait();
-            }
+        // For TestDeserializeLoggingData
+        junitPlatform.boardStateSuffix = "log_acc";
+        mwBoard.serialize();
 
-            // For TestDeserializeLoggingData
-            junitPlatform.boardStateSuffix = "log_acc";
-            mwBoard.serialize();
-
-            mwBoard.getModule(Logging.class).downloadAsync()
-                    .continueWith(new Continuation<Void, Void>() {
-                        @Override
-                        public Void then(Task<Void> task) throws Exception {
-                            Acceleration[] actualArray= new Acceleration[actual.size()];
-                            actual.toArray(actualArray);
-
-                            assertArrayEquals(expected, actualArray);
-                            return null;
-                        }
-                    });
-
-            for(byte[] response: downloadResponses) {
-                sendMockResponse(response);
-            }
+        Task<Void> dlTask = mwBoard.getModule(Logging.class).downloadAsync();
+        for(byte[] response: downloadResponses) {
+            sendMockResponse(response);
         }
+        dlTask.waitForCompletion();
+
+        Acceleration[] actualArray= new Acceleration[actual.size()];
+        actual.toArray(actualArray);
+
+        assertArrayEquals(expected, actualArray);
     }
 
+    private static Data offset_handler_prev = null;
+    private static int offset_handler_i = 0;
     private static final Subscriber LOG_TIME_OFFSET_HANDLER= new Subscriber() {
-        private transient Data prev= null;
-        private transient int i= 0;
-
         @Override
         public void apply(Data data, Object ... env) {
-            if (prev != null) {
-                ((long[]) env[0])[i]= data.timestamp().getTimeInMillis() - prev.timestamp().getTimeInMillis();
-                i++;
+            if (offset_handler_prev != null) {
+                ((long[]) env[0])[offset_handler_i++]= data.timestamp().getTimeInMillis() - offset_handler_prev.timestamp().getTimeInMillis();
             }
-            prev= data;
+            offset_handler_prev = data;
         }
     };
+    private static void resetOffsetHandlerState() {
+        offset_handler_prev = null;
+        offset_handler_i = 0;
+    }
 
     protected Task<Route> setupLogOffsetRoute() {
         shouldWait.set(true);
@@ -142,42 +125,54 @@ public class TestLoggingData extends TestLogDataBase {
     }
 
     @Test
-    public void checkTimeOffsets() throws InterruptedException, IOException, JSONException {
+    public void checkTimeOffsets() throws Exception {
+        resetOffsetHandlerState();
+
         final long[] expected = readOffsetData("bmi160_expected_offsets"), actual = new long[expected.length];
 
-        setupLogOffsetRoute().continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, (Object) actual);
-
-                synchronized (TestLoggingData.this) {
-                    TestLoggingData.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            if (shouldWait.get()) {
-                this.wait();
-            }
-
-            // For TestDeserializeLoggingData
-            junitPlatform.boardStateSuffix = "log_offset";
-            mwBoard.serialize();
-
-            mwBoard.getModule(Logging.class).downloadAsync()
-                    .continueWith(new Continuation<Void, Void>() {
-                        @Override
-                        public Void then(Task<Void> task) throws Exception {
-                            assertArrayEquals(expected, actual);
-                            return null;
-                        }
-                    });
-
-            for(byte[] response: downloadResponses) {
-                sendMockResponse(response);
-            }
+        Task<Route> task = setupLogOffsetRoute();
+        task.waitForCompletion();
+        if (task.isFaulted()) {
+            throw task.getError();
         }
+        task.getResult().setEnvironment(0, (Object) actual);
+
+        // For TestDeserializeLoggingData
+        junitPlatform.boardStateSuffix = "log_offset";
+        mwBoard.serialize();
+
+        Task<Void> dlTask = mwBoard.getModule(Logging.class).downloadAsync();
+        for(byte[] response: downloadResponses) {
+            sendMockResponse(response);
+        }
+        dlTask.waitForCompletion();
+
+        assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void checkRollover() throws Exception {
+        resetOffsetHandlerState();
+
+        Task<Route> task = setupLogOffsetRoute();
+        task.waitForCompletion();
+
+        final long[] actual = new long[1];
+        if (task.isFaulted()) {
+            throw task.getError();
+        }
+        task.getResult().setEnvironment(0, (Object) actual);
+
+        Task<Void> dlTask = mwBoard.getModule(Logging.class).downloadAsync();
+
+        sendMockResponse(new byte[] {0x0b, (byte) 0x84, 0x15, 0x04, 0x00, 0x00, 0x05});
+        sendMockResponse(new byte[] { 11, 7,
+                -95, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -111, -17, 0, 0,
+                -96, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -128, -1, -73, -1 });
+        sendMockResponse(new byte[] { 11, 7, -95, 13, 0, 0, 0, 116, -17, 0, 0, -96, 13, 0, 0, 0, 125, -1, -70, -1 });
+        sendMockResponse(new byte[] { 11, 8, 0, 0, 0, 0});
+        dlTask.waitForCompletion();
+
+        assertArrayEquals(new long[] { 21 }, actual);
     }
 }

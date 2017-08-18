@@ -60,6 +60,11 @@ class DataAttributes implements Serializable {
         return new DataAttributes(sizesCopy, copies, (byte) 0, newSigned);
     }
 
+    DataAttributes dataProcessorCopyCopies(byte newCopies) {
+        byte[] sizesCopy = Arrays.copyOf(sizes, sizes.length);
+        return new DataAttributes(sizesCopy, newCopies, (byte) 0, signed);
+    }
+
     public byte length() {
         return (byte) (unitLength() * copies);
     }

@@ -45,6 +45,7 @@ import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Created by etsai on 9/18/16.
@@ -84,26 +85,12 @@ public class TestMetaWearBoard extends UnitTestBase {
 
     @Test(expected = TimeoutException.class)
     public void serviceDiscoveryTimeout() throws Exception {
-        final Capture<Exception> actual = new Capture<>();
-
         junitPlatform.addCustomModuleInfo(new byte[] { 0xf, (byte) 0xff});
-        mwBoard.connectAsync()
-                .continueWith(new Continuation<Void, Void>() {
-                    @Override
-                    public Void then(Task<Void> task) throws Exception {
-                        actual.set(task.getError());
 
-                        synchronized (TestMetaWearBoard.this) {
-                            TestMetaWearBoard.this.notifyAll();
-                        }
-                        return null;
-                    }
-                });
+        Task<Void> task = mwBoard.connectAsync();
+        task.waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-            throw actual.get();
-        }
+        throw task.getError();
     }
 
     @Test()
@@ -111,21 +98,9 @@ public class TestMetaWearBoard extends UnitTestBase {
         int expected = 1;
 
         junitPlatform.addCustomModuleInfo(new byte[] { 0xf, (byte) 0xff});
-        mwBoard.connectAsync()
-                .continueWith(new Continuation<Void, Void>() {
-                    @Override
-                    public Void then(Task<Void> task) throws Exception {
-                        synchronized (TestMetaWearBoard.this) {
-                            TestMetaWearBoard.this.notifyAll();
-                        }
-                        return null;
-                    }
-                });
+        mwBoard.connectAsync().waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-            assertEquals(expected, junitPlatform.nDisconnects);
-        }
+        assertEquals(expected, junitPlatform.nDisconnects);
     }
 
     @Test
@@ -167,21 +142,10 @@ public class TestMetaWearBoard extends UnitTestBase {
 
         connectToBoard();
 
-        mwBoard.readDeviceInformationAsync().continueWith(new Continuation<DeviceInformation, Void>() {
-            @Override
-            public Void then(Task<DeviceInformation> task) throws Exception {
-                actual.set(task.getResult());
-                synchronized (TestMetaWearBoard.this) {
-                    TestMetaWearBoard.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        Task<DeviceInformation> task = mwBoard.readDeviceInformationAsync();
+        task.waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-            assertEquals(expected, actual.get());
-        }
+        assertEquals(expected, task.getResult());
     }
 
     @Test(expected = TimeoutException.class)
@@ -214,27 +178,18 @@ public class TestMetaWearBoard extends UnitTestBase {
             public void configure(RouteComponent source) {
                 source.limit(20).stream(null);
             }
-        });
-        mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(new RouteBuilder() {
+        }).continueWithTask(new Continuation<Route, Task<Route>>() {
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
+            public Task<Route> then(Task<Route> task) throws Exception {
+                return mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(new RouteBuilder() {
+                    @Override
+                    public void configure(RouteComponent source) {
+                        source.stream(null);
+                    }
+                });
             }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestMetaWearBoard.this) {
-                    TestMetaWearBoard.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            wait();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        }).waitForCompletion();
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -264,20 +219,19 @@ public class TestMetaWearBoard extends UnitTestBase {
                     }
                 });
             }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestMetaWearBoard.this) {
-                    TestMetaWearBoard.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        }).waitForCompletion();
+        assertArrayEquals(expected, junitPlatform.getCommands());
+    }
 
-        synchronized (this) {
-            wait();
+    @Test
+    public void longFirmwareString() throws Exception {
+        junitPlatform.firmware = "1.3.90";
+        connectToBoard();
 
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        Task<DeviceInformation> task = mwBoard.readDeviceInformationAsync();
+        task.waitForCompletion();
+
+        assertTrue(mwBoard.isConnected());
+        assertEquals(junitPlatform.firmware, task.getResult().firmwareRevision);
     }
 }

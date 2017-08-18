@@ -46,6 +46,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Stack;
 
+import static com.mbientlab.metawear.impl.Constant.MAX_BTLE_LENGTH;
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
 
@@ -61,18 +62,18 @@ class RouteComponentImpl implements RouteComponent {
     }
 
     static class Cache {
-        public final ArrayList<Tuple3<DataTypeBase, Subscriber, Boolean>> subscribedProducers;
-        public final ArrayList<Pair<String, Tuple3<DataTypeBase, Integer, byte[]>>> feedback;
-        public final LinkedList<Pair<? extends DataTypeBase, ? extends Action>> reactions;
-        public final LinkedList<Processor> dataProcessors;
+        final ArrayList<Tuple3<DataTypeBase, Subscriber, Boolean>> subscribedProducers;
+        final ArrayList<Pair<String, Tuple3<DataTypeBase, Integer, byte[]>>> feedback;
+        final LinkedList<Pair<? extends DataTypeBase, ? extends Action>> reactions;
+        final LinkedList<Processor> dataProcessors;
         public final Version firmware;
         public final MetaWearBoardPrivate mwPrivate;
-        public final Stack<RouteComponentImpl> stashedSignals= new Stack<>();
-        public final Stack<BranchElement> elements;
-        public final Stack<Pair<RouteComponentImpl, DataTypeBase[]>> splits;
-        public final Map<String, Processor> taggedProcessors = new LinkedHashMap<>();
+        final Stack<RouteComponentImpl> stashedSignals= new Stack<>();
+        final Stack<BranchElement> elements;
+        final Stack<Pair<RouteComponentImpl, DataTypeBase[]>> splits;
+        final Map<String, Processor> taggedProcessors = new LinkedHashMap<>();
 
-        public Cache(Version firmware, MetaWearBoardPrivate mwPrivate) {
+        Cache(Version firmware, MetaWearBoardPrivate mwPrivate) {
             this.subscribedProducers= new ArrayList<>();
             this.feedback = new ArrayList<>();
             this.reactions= new LinkedList<>();
@@ -304,23 +305,43 @@ class RouteComponentImpl implements RouteComponent {
             mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2]});
         }
     }
-    @Override
-    public RouteComponent average(byte samples) {
+    private RouteComponent applyAverager(byte nSamples, byte type, String name) {
+        boolean hasHpf = persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision >= DataProcessorImpl.HPF_REVISION;
         if (source.attributes.length() <= 0) {
-            throw new IllegalRouteOperationException("Cannot average null data");
+            throw new IllegalRouteOperationException(String.format("Cannot apply %s filter to null data", name));
         }
-        if (source.attributes.length() > 4) {
-            throw new IllegalRouteOperationException("Cannot average data longer than 4 bytes");
+        if (source.attributes.length() > 4 && !hasHpf) {
+            throw new IllegalRouteOperationException(String.format("Cannot apply %s filter to data longer than 4 bytes", name));
+        }
+        if (source.eventConfig[0] == SENSOR_FUSION.id) {
+            throw new IllegalRouteOperationException(String.format("Cannot apply  %s filter to sensor fusion data", name));
         }
 
         final DataTypeBase processor = source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-        byte[] config= new byte[]{
-                0x3,
-                (byte) (((source.attributes.length() - 1) & 0x3) | (((source.attributes.length() - 1) & 0x3) << 2)),
-                samples
-        };
+        ByteBuffer buffer = ByteBuffer.allocate(hasHpf ? 4 : 3).order(ByteOrder.LITTLE_ENDIAN)
+                .put((byte) 0x3)
+                .put((byte) ((((source.attributes.length() - 1) & 0x3) | (((source.attributes.length() - 1) & 0x3) << 2)) | ((hasHpf ? type : 0) << 5)))
+                .put(nSamples);
+        if (hasHpf) {
+            buffer.put((byte) (source.attributes.sizes.length - 1));
+        }
 
-        return postCreate(null, new AverageEditorInner(config, processor, persistantData.mwPrivate));
+        return postCreate(null, new AverageEditorInner(buffer.array(), processor, persistantData.mwPrivate));
+    }
+    @Override
+    public RouteComponent highpass(byte nSamples) {
+        if (persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision < DataProcessorImpl.HPF_REVISION) {
+            throw new IllegalRouteOperationException("High pass filtering not supported on this firmware version");
+        }
+        return applyAverager(nSamples, (byte) 1, "high-pass");
+    }
+    @Override
+    public RouteComponent lowpass(byte nSamples) {
+        return applyAverager(nSamples, (byte) 0, "low-pass");
+    }
+    @Override
+    public RouteComponent average(byte nSamples) {
+        return lowpass(nSamples);
     }
 
     @Override
@@ -983,6 +1004,52 @@ class RouteComponentImpl implements RouteComponent {
                 .array();
 
         return postCreate(null, new DifferentialEditorInner(config, processor, persistantData.mwPrivate));
+    }
+
+    private static class PackerEditorInner extends EditorImplBase implements DataProcessor.PackerEditor {
+        private static final long serialVersionUID = 9016863579834915719L;
+
+        PackerEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(config, source, mwPrivate);
+        }
+
+        @Override
+        public void clear() {
+            mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2]});
+        }
+    }
+    @Override
+    public RouteComponent pack(byte count) {
+        if (persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision < DataProcessorImpl.ENHANCED_STREAMING_REVISION) {
+            throw new IllegalRouteOperationException("Current firmware does not support data packing");
+        }
+
+        if (source.attributes.length() * count + 3 > MAX_BTLE_LENGTH) {
+            throw new IllegalRouteOperationException("Not enough space in the ble packet to pack " + count + " data samples");
+        }
+
+        byte[] config = new byte[] {DataProcessorImpl.TYPE_PACKER, (byte) ((source.attributes.length() - 1) & 0x1f), (byte) ((count - 1)& 0x1f)};
+        final DataTypeBase processor = source.dataProcessorCopy(source, source.attributes.dataProcessorCopyCopies(count));
+
+        return postCreate(null, new PackerEditorInner(config, processor, persistantData.mwPrivate));
+    }
+
+    @Override
+    public RouteComponent account() {
+        if (persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision < DataProcessorImpl.ENHANCED_STREAMING_REVISION) {
+            throw new IllegalRouteOperationException("Current firmware does not support data accounting");
+        }
+
+        if (source.attributes.length() + 4 + 3 > MAX_BTLE_LENGTH) {
+            throw new IllegalRouteOperationException("Not enough space left in the ble packet to add accounter information");
+        }
+
+        final byte size = 4;
+        byte[] config = new byte[] {DataProcessorImpl.TYPE_ACCOUNTER, (byte) (0x1 | ((size - 1) << 4)), 0x3};
+        final DataTypeBase processor = source.dataProcessorCopy(source,
+                new DataAttributes(new byte[] {size, source.attributes.length()}, (byte) 1, (byte) 0, source.attributes.signed));
+
+        return postCreate(null, new NullEditor(config, processor, persistantData.mwPrivate));
     }
 
     private RouteComponentImpl postCreate(DataTypeBase state, EditorImplBase editor) {

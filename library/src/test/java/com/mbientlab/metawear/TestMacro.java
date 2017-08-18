@@ -53,6 +53,7 @@ public class TestMacro extends UnitTestBase {
     @Before
     public void setup() throws Exception {
         junitPlatform.firmware = "1.2.3";
+        junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
         junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class, Macro.class);
         connectToBoard();
 

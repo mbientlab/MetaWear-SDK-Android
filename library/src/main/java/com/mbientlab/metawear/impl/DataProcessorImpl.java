@@ -49,7 +49,8 @@ import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
  */
 class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     private static final long serialVersionUID = -7439066046235167486L;
-    static final byte TIME_PASSTHROUGH_REVISION = 1;
+    static final byte TIME_PASSTHROUGH_REVISION = 1, ENHANCED_STREAMING_REVISION = 2, HPF_REVISION = 2;
+    static final byte TYPE_ACCOUNTER = 0x11, TYPE_PACKER = 0x10;
 
     static abstract class EditorImplBase implements Editor, Serializable {
         private static final long serialVersionUID = 4723697652659135045L;
@@ -227,5 +228,9 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         for(Map.Entry<String, Processor> it: taggedProcessors.entrySet()) {
             nameToIdMapping.put(it.getKey(), it.getValue().editor.source.eventConfig[2]);
         }
+    }
+
+    Processor lookupProcessor(byte id) {
+        return activeProcessors.get(id);
     }
 }

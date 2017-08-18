@@ -47,7 +47,7 @@ public class TestSettings extends UnitTestBase {
     @Parameters(name = "revision: {0}")
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(byte i= 1; i <= 5; i++) {
+        for(byte i= 1; i <= 6; i++) {
             parameters.add(new Object[] { i });
         }
 
@@ -101,10 +101,16 @@ public class TestSettings extends UnitTestBase {
     }
 
     @Test
-    public void setAdInterval() {
-        byte[] expected= revision >= 1 ?
-                new byte[] {0x11, 0x02, (byte) 0x9b, 0x02, (byte) 0xb4} :
-                new byte[] {0x11, 0x02, (byte) 0xa1, 0x01, (byte) 0xb4};
+    public void setAdParameters() {
+        byte[] expected;
+
+        if (revision >= 6) {
+            expected = new byte[]{0x11, 0x02, (byte) 0x9b, 0x02, (byte) 0xb4, 0x00};
+        } else if (revision >= 1) {
+            expected = new byte[]{0x11, 0x02, (byte) 0x9b, 0x02, (byte) 0xb4};
+        } else {
+            expected = new byte[]{0x11, 0x02, (byte) 0xa1, 0x01, (byte) 0xb4};
+        }
 
         settings.editBleAdConfig()
                 .interval((short) 417)

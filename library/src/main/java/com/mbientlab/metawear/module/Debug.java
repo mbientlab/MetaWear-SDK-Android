@@ -59,4 +59,21 @@ public interface Debug extends Module {
      * {@link #resetAsync()} to reset the board after erasing macros or log data.
      */
     void resetAfterGc();
+
+    /**
+     * Writes a 4 byte value that persists until a reset, can be later retrieved with {@link #readTmpValueAsync()}
+     * @param value    Value to write
+     */
+    void writeTmpValue(int value);
+    /**
+     * Reads the temp value written by {@link #writeTmpValue(int)}
+     * @return Task that is completed once the value is received
+     */
+    Task<Integer> readTmpValueAsync();
+
+    /**
+     * Places the board in a powered down state after the next reset.  When in power save mode, press the switch to wake the board up.
+     * @return True if feature is supported, false if powersave cannot be enabled
+     */
+    boolean enablePowersave();
 }

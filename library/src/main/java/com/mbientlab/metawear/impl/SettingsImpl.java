@@ -53,9 +53,9 @@ class SettingsImpl extends ModuleImplBase implements Settings {
             POWER_STATUS_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.POWER_STATUS_PRODUCER",
             CHARGE_STATUS_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.CHARGE_STATUS_PRODUCER";
 
-    private static final byte CONN_PARAMS_REVISION= 1, DISCONNECTED_EVENT_REVISION= 2, BATTERY_REVISION= 3, CHARGE_STATUS_REVISION = 5;
+    private static final byte CONN_PARAMS_REVISION= 1, DISCONNECTED_EVENT_REVISION= 2, BATTERY_REVISION= 3, CHARGE_STATUS_REVISION = 5, WHITELIST_REVISION = 6;
     private static final float AD_INTERVAL_STEP= 0.625f, CONN_INTERVAL_STEP= 1.25f, SUPERVISOR_TIMEOUT_STEP= 10f;
-    private static final byte DEVICE_NAME = 1, AD_INTERVAL = 2, TX_POWER = 3,
+    private static final byte DEVICE_NAME = 1, AD_PARAM = 2, TX_POWER = 3,
         START_ADVERTISING = 5,
         SCAN_RESPONSE = 7, PARTIAL_SCAN_RESPONSE = 8,
         CONNECTION_PARAMS = 9,
@@ -155,7 +155,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                 } catch (UnsupportedEncodingException e) {
                     bleAdConfig.deviceName = new String(respBody);
                 }
-                SettingsImpl.this.mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(AD_INTERVAL)});
+                SettingsImpl.this.mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(AD_PARAM)});
             }
         });
         this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(TX_POWER)), new JseMetaWearBoard.RegisterResponseHandler() {
@@ -177,7 +177,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         });
 
         if (mwPrivate.lookupModuleInfo(SETTINGS).revision >= CONN_PARAMS_REVISION) {
-            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(AD_INTERVAL)), new JseMetaWearBoard.RegisterResponseHandler() {
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(AD_PARAM)), new JseMetaWearBoard.RegisterResponseHandler() {
                 @Override
                 public void onResponseReceived(byte[] response) {
                     int intervalBytes= ((response[2] & 0xff) | (response[3] << 8)) & 0xffff;
@@ -203,7 +203,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                 }
             });
         } else {
-            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(AD_INTERVAL)), new JseMetaWearBoard.RegisterResponseHandler() {
+            this.mwPrivate.addResponseHandler(new Pair<>(SETTINGS.id, Util.setRead(AD_PARAM)), new JseMetaWearBoard.RegisterResponseHandler() {
                 @Override
                 public void onResponseReceived(byte[] response) {
                     bleAdConfig.interval = (((response[2] & 0xff) | (response[3] << 8)) & 0xffff);
@@ -285,12 +285,23 @@ class SettingsImpl extends ModuleImplBase implements Settings {
                     }
                 }
 
-                if (newAdvInterval != null) {
-                    if (mwPrivate.lookupModuleInfo(SETTINGS).revision >= CONN_PARAMS_REVISION) {
+                if (newAdvInterval != null || newAdvTimeout != null) {
+                    if (newAdvInterval == null) {
+                        newAdvInterval = 417;
+                    }
+                    if (newAdvTimeout == null) {
+                        newAdvTimeout = 0;
+                    }
+                    byte revision = mwPrivate.lookupModuleInfo(SETTINGS).revision;
+                    if (revision >= CONN_PARAMS_REVISION) {
                         newAdvInterval = (short) ((newAdvInterval & 0xffff) / AD_INTERVAL_STEP);
                     }
-                    mwPrivate.sendCommand(SETTINGS, AD_INTERVAL,
-                            ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN).putShort(newAdvInterval).put(newAdvTimeout).array());
+                    ByteBuffer buffer = ByteBuffer.allocate(revision >= WHITELIST_REVISION ? 4 : 3).order(ByteOrder.LITTLE_ENDIAN)
+                            .putShort(newAdvInterval).put(newAdvTimeout);
+                    if (revision >= WHITELIST_REVISION) {
+                        buffer.put((byte) 0);
+                    }
+                    mwPrivate.sendCommand(SETTINGS, AD_PARAM, buffer.array());
                 }
 
                 if (newAdvTxPower != null) {

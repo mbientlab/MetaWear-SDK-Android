@@ -315,7 +315,7 @@ class JunitPlatform implements IO, BtleGatt {
     }
 
     public byte[] getLastCommand() {
-        return commandHistory.get(commandHistory.size() - 1);
+        return commandHistory.isEmpty() ? null : commandHistory.get(commandHistory.size() - 1);
     }
 
     byte[][] getLastCommands(int count) {

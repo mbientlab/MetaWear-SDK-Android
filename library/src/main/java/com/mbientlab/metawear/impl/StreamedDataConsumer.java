@@ -26,7 +26,11 @@ package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Subscriber;
 import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
+import com.mbientlab.metawear.module.DataProcessor;
+import com.mbientlab.metawear.module.Logging;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Calendar;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
@@ -97,13 +101,13 @@ class StreamedDataConsumer extends DeviceDataConsumer {
                 dataResponseHandler = new RegisterResponseHandler() {
                     @Override
                     public void onResponseReceived(byte[] response) {
-                        byte[] dataRaw = new byte[dataUnitLength];
-
                         Calendar now = Calendar.getInstance();
-                        for(int i = 0, j = source.eventConfig[2] == DataTypeBase.NO_DATA_ID ? 2 : 3;
-                            i < source.attributes.copies && j < response.length; i++, j+= dataUnitLength) {
-                            System.arraycopy(response, j, dataRaw, 0, dataRaw.length);
-                            call(source.createMessage(false, mwPrivate, dataRaw, now));
+                        DataProcessorImpl.Processor accounter = findParent((DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), source, DataProcessorImpl.TYPE_ACCOUNTER);
+                        for(int i = 0, j = source.eventConfig[2] == DataTypeBase.NO_DATA_ID ? 2 : 3; i< source.attributes.copies && j < response.length; i++, j+= dataUnitLength) {
+                            Pair<Calendar, Integer> account = fillTimestamp(mwPrivate, accounter, response, j);
+                            byte[] dataRaw = new byte[dataUnitLength - (account.second - j)];
+                            System.arraycopy(response, account.second, dataRaw, 0, dataRaw.length);
+                            call(source.createMessage(false, mwPrivate, dataRaw, accounter == null ? now : account.first));
                         }
                     }
                 };
@@ -121,12 +125,65 @@ class StreamedDataConsumer extends DeviceDataConsumer {
                             System.arraycopy(response, 3, dataRaw, 0, dataRaw.length);
                         }
 
-                        call(source.createMessage(false, mwPrivate, dataRaw, Calendar.getInstance()));
+                        Pair<Calendar, Integer> account = fillTimestamp(mwPrivate, source, dataRaw);
+                        if (account.second > 0) {
+                            byte[] copy = new byte[dataRaw.length - account.second];
+                            System.arraycopy(dataRaw, account.second, copy, 0, copy.length);
+                            dataRaw = copy;
+                        }
+                        DataProcessorImpl.Processor packer = findParent((DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), source, DataProcessorImpl.TYPE_PACKER);
+                        if (packer != null) {
+                            final byte dataUnitLength = packer.editor.source.attributes.unitLength();
+                            byte[] unpacked = new byte[dataUnitLength];
+                            for(int i = 0, j = 3 + account.second; i< packer.editor.source.attributes.copies && j < response.length; i++, j+= dataUnitLength) {
+                                System.arraycopy(response, j, unpacked, 0, unpacked.length);
+                                call(source.createMessage(false, mwPrivate, unpacked, account.first));
+                            }
+                        } else {
+                            call(source.createMessage(false, mwPrivate, dataRaw, account.first));
+                        }
                     }
                 };
             }
         }
 
         mwPrivate.addDataHandler(source.eventConfigAsTuple(), dataResponseHandler);
+    }
+
+    private static DataProcessorImpl.Processor findParent(DataProcessorImpl dataprocessor, DataTypeBase child, byte type) {
+        if (child.eventConfig[0] == DATA_PROCESSOR.id && child.eventConfig[1] == DataProcessorImpl.NOTIFY) {
+            DataProcessorImpl.Processor processor = dataprocessor.lookupProcessor(child.eventConfig[2]);
+            if (processor.editor.config[0] == type) {
+                return processor;
+            }
+
+            return findParent(dataprocessor, child.input, type);
+        }
+        return null;
+    }
+
+    private static Pair<Calendar, Integer> fillTimestamp(MetaWearBoardPrivate mwPrivate, DataTypeBase source, byte[] response) {
+        if (source.eventConfig[0] == DATA_PROCESSOR.id && source.eventConfig[1] == DataProcessorImpl.NOTIFY) {
+            DataProcessorImpl dataprocessor = (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class);
+            return fillTimestamp(mwPrivate, dataprocessor.lookupProcessor(source.eventConfig[2]), response, 0);
+        }
+        return new Pair<>(Calendar.getInstance(), 0);
+    }
+
+    private static Pair<Calendar, Integer> fillTimestamp(MetaWearBoardPrivate mwPrivate, DataProcessorImpl.Processor accounter, byte[] response, int offset) {
+        if (accounter != null) {
+            byte[] config = accounter.editor.config;
+            if (config[0] == DataProcessorImpl.TYPE_ACCOUNTER) {
+                LoggingImpl logging = (LoggingImpl) mwPrivate.getModules().get(Logging.class);
+                int size = ((config[1] & 0x30) >> 4) + 1;
+
+                byte[] padded= new byte[8];
+                System.arraycopy(response, offset, padded, 0, size);
+                long tick= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
+
+                return new Pair<>(logging.computeTimestamp((byte) -1, tick), size + offset);
+            }
+        }
+        return new Pair<>(Calendar.getInstance(), offset);
     }
 }
