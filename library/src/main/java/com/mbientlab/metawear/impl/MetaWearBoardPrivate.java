@@ -32,6 +32,7 @@ import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.Timer;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
 
@@ -53,6 +54,7 @@ interface MetaWearBoardPrivate {
     void removeProducerTag(String name);
 
     ModuleInfo lookupModuleInfo(Constant.Module id);
+    Collection<DataTypeBase> getDataTypes();
     Map<Class<? extends com.mbientlab.metawear.MetaWearBoard.Module>, com.mbientlab.metawear.MetaWearBoard.Module> getModules();
     void addDataIdHeader(Pair<Byte, Byte> key);
     void addDataHandler(Tuple3<Byte, Byte, Byte> key, RegisterResponseHandler handler);
@@ -70,4 +72,6 @@ interface MetaWearBoardPrivate {
     Task<Observer> queueEvent(DataTypeBase owner, CodeBlock codeBlock);
 
     void logWarn(String message);
+
+    Version getFirmwareVersion();
 }

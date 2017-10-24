@@ -54,7 +54,7 @@ import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
  * Created by etsai on 9/4/16.
  */
 class RouteComponentImpl implements RouteComponent {
-    private static final Version MULTI_CHANNEL_MATH= new Version("1.1.0"), MULTI_COMPARISON_MIN_FIRMWARE= new Version("1.2.3");
+    static final Version MULTI_CHANNEL_MATH= new Version("1.1.0"), MULTI_COMPARISON_MIN_FIRMWARE= new Version("1.2.3");
 
     private enum BranchElement {
         MULTICAST,
@@ -66,27 +66,25 @@ class RouteComponentImpl implements RouteComponent {
         final ArrayList<Pair<String, Tuple3<DataTypeBase, Integer, byte[]>>> feedback;
         final LinkedList<Pair<? extends DataTypeBase, ? extends Action>> reactions;
         final LinkedList<Processor> dataProcessors;
-        public final Version firmware;
         public final MetaWearBoardPrivate mwPrivate;
         final Stack<RouteComponentImpl> stashedSignals= new Stack<>();
         final Stack<BranchElement> elements;
         final Stack<Pair<RouteComponentImpl, DataTypeBase[]>> splits;
         final Map<String, Processor> taggedProcessors = new LinkedHashMap<>();
 
-        Cache(Version firmware, MetaWearBoardPrivate mwPrivate) {
+        Cache(MetaWearBoardPrivate mwPrivate) {
             this.subscribedProducers= new ArrayList<>();
             this.feedback = new ArrayList<>();
             this.reactions= new LinkedList<>();
             this.dataProcessors = new LinkedList<>();
-            this.firmware = firmware;
             this.mwPrivate = mwPrivate;
             this.elements= new Stack<>();
             this.splits= new Stack<>();
         }
     }
 
-    public final DataTypeBase source;
-    public Cache persistantData= null;
+    private final DataTypeBase source;
+    Cache persistantData= null;
 
     RouteComponentImpl(DataTypeBase source) {
         this.source= source;
@@ -196,10 +194,9 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Cannot apply \'buffer\' filter to null data");
         }
 
-        DataTypeBase processor= new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, new DataAttributes(new byte[] {}, (byte) 0, (byte) 0, false));
-        byte[] config= new byte[] {0xf, (byte) (source.attributes.length() - 1)};
-
-        return postCreate(source.dataProcessorStateCopy(source, source.attributes), new NullEditor(config, processor, persistantData.mwPrivate));
+        DataProcessorConfig config = new DataProcessorConfig.Buffer(source.attributes.length());
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));
     }
 
     private static class CounterEditorInner extends EditorImplBase implements DataProcessor.CounterEditor {
@@ -261,20 +258,14 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         final byte output= 4;
+        DataProcessorConfig config = new DataProcessorConfig.Accumulator(counter, output, source.attributes.length());
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        DataAttributes attributes= new DataAttributes(new byte[] {output}, (byte) 1, (byte) 0, !counter && source.attributes.signed);
-        final DataTypeBase processor= counter ?
-                new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes) :
-                source.dataProcessorCopy(source, attributes);
-        byte[] config= new byte[] {0x2, (byte) (((output - 1) & 0x3) | (((source.attributes.length() - 1) & 0x3) << 2) | (counter ? 0x10 : 0))};
         EditorImplBase editor= counter ?
-                new CounterEditorInner(config, processor, persistantData.mwPrivate) :
-                new AccumulatorEditorInner(config, processor, persistantData.mwPrivate);
+                new CounterEditorInner(config.build(), next.first, persistantData.mwPrivate) :
+                new AccumulatorEditorInner(config.build(), next.first, persistantData.mwPrivate);
 
-        DataTypeBase state= counter ?
-                new UintData(null, DATA_PROCESSOR, Util.setSilentRead(DataProcessorImpl.STATE), DataTypeBase.NO_DATA_ID, attributes) :
-                processor.dataProcessorStateCopy(source, attributes);
-        return postCreate(state, editor);
+        return postCreate(next.second, editor);
     }
 
     @Override
@@ -305,7 +296,7 @@ class RouteComponentImpl implements RouteComponent {
             mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, DataProcessorImpl.STATE, source.eventConfig[2]});
         }
     }
-    private RouteComponent applyAverager(byte nSamples, byte type, String name) {
+    private RouteComponent applyAverager(byte nSamples, boolean hpf, String name) {
         boolean hasHpf = persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision >= DataProcessorImpl.HPF_REVISION;
         if (source.attributes.length() <= 0) {
             throw new IllegalRouteOperationException(String.format("Cannot apply %s filter to null data", name));
@@ -317,27 +308,21 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException(String.format("Cannot apply  %s filter to sensor fusion data", name));
         }
 
-        final DataTypeBase processor = source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-        ByteBuffer buffer = ByteBuffer.allocate(hasHpf ? 4 : 3).order(ByteOrder.LITTLE_ENDIAN)
-                .put((byte) 0x3)
-                .put((byte) ((((source.attributes.length() - 1) & 0x3) | (((source.attributes.length() - 1) & 0x3) << 2)) | ((hasHpf ? type : 0) << 5)))
-                .put(nSamples);
-        if (hasHpf) {
-            buffer.put((byte) (source.attributes.sizes.length - 1));
-        }
+        DataProcessorConfig config = new DataProcessorConfig.Average(source.attributes, nSamples, hpf, hasHpf);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(null, new AverageEditorInner(buffer.array(), processor, persistantData.mwPrivate));
+        return postCreate(next.second, new AverageEditorInner(config.build(), next.first, persistantData.mwPrivate));
     }
     @Override
     public RouteComponent highpass(byte nSamples) {
         if (persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision < DataProcessorImpl.HPF_REVISION) {
             throw new IllegalRouteOperationException("High pass filtering not supported on this firmware version");
         }
-        return applyAverager(nSamples, (byte) 1, "high-pass");
+        return applyAverager(nSamples, true, "high-pass");
     }
     @Override
     public RouteComponent lowpass(byte nSamples) {
-        return applyAverager(nSamples, (byte) 0, "low-pass");
+        return applyAverager(nSamples, false, "low-pass");
     }
     @Override
     public RouteComponent average(byte nSamples) {
@@ -353,76 +338,43 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Cannot delay data longer than 4 bytes");
         }
 
-        DataTypeBase processor = source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-        byte[] config= new byte[]{0xa, (byte) ((source.attributes.length() - 1) & 0x3), samples};
+        DataProcessorConfig config = new DataProcessorConfig.Delay(source.attributes.length(), samples);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(null, new NullEditor(config, processor, persistantData.mwPrivate));
+        return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));
     }
 
-    private RouteComponentImpl createCombiner(DataTypeBase source, byte mode) {
+    private RouteComponentImpl createCombiner(DataTypeBase source, boolean rss) {
         if (source.attributes.length() <= 0) {
-            throw new IllegalRouteOperationException(String.format(Locale.US, "Cannot apply \'%s\' to null data", mode == 0 ? "rms" : "rss"));
+            throw new IllegalRouteOperationException(String.format(Locale.US, "Cannot apply \'%s\' to null data", !rss ? "rms" : "rss"));
         } else if (source.eventConfig[0] == SENSOR_FUSION.id) {
-            throw new IllegalRouteOperationException(String.format(Locale.US, "Cannot apply \'%s\' to sensor fusion data", mode == 0 ? "rms" : "rss"));
+            throw new IllegalRouteOperationException(String.format(Locale.US, "Cannot apply \'%s\' to sensor fusion data", !rss ? "rms" : "rss"));
         }
 
-        final byte signedMask = (byte) (source.attributes.signed ? 0x80 : 0x0);
         // assume sizes array is filled with the same value
-        DataAttributes attributes= new DataAttributes(new byte[] {source.attributes.sizes[0]}, (byte) 1, (byte) 0, false);
-        DataTypeBase processor= source instanceof FloatVectorData ?
-                new UFloatData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes) :
-                new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes);
-        byte[] config= new byte[] {
-                0x7,
-                (byte) (((processor.attributes.sizes[0] - 1) & 0x3) | (((source.attributes.sizes[0] - 1) & 0x3) << 2) | (((source.attributes.sizes.length - 1) & 0x3) << 4) | signedMask),
-                mode
-        };
+        DataProcessorConfig config = new DataProcessorConfig.Combiner(source.attributes, rss);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
 
-        return postCreate(null, new NullEditor(config, processor, persistantData.mwPrivate));
-    }
-
-    private enum MathOp {
-        /** Add the data */
-        ADD,
-        /** Multiply the data */
-        MULTIPLY,
-        /** Divide the data */
-        DIVIDE,
-        /** Calculate the remainder */
-        MODULUS,
-        /** Calculate exponentiation of the data */
-        EXPONENT,
-        /** Calculate square root */
-        SQRT,
-        /** Perform left shift */
-        LEFT_SHIFT,
-        /** Perform right shift */
-        RIGHT_SHIFT,
-        /** Subtract the data */
-        SUBTRACT,
-        /** Calculates the absolute value */
-        ABS_VALUE,
-        /** Transforms the input into a constant value */
-        CONSTANT
+        return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));
     }
 
     @Override
     public RouteComponent map(Function1 fn) {
         switch(fn) {
             case ABS_VALUE:
-                return applyMath(MathOp.ABS_VALUE, 0);
+                return applyMath(DataProcessorConfig.Maths.Operation.ABS_VALUE, 0);
             case RMS:
                 if (source instanceof FloatVectorData || source instanceof ColorAdcData) {
-                    return createCombiner(source, (byte) 0);
+                    return createCombiner(source, false);
                 }
                 return null;
             case RSS:
                 if (source instanceof FloatVectorData || source instanceof ColorAdcData) {
-                    return createCombiner(source, (byte) 1);
+                    return createCombiner(source, true);
                 }
                 return null;
             case SQRT:
-                return applyMath(MathOp.SQRT, 0);
+                return applyMath(DataProcessorConfig.Maths.Operation.SQRT, 0);
         }
         throw new RuntimeException("Only here so the compiler won't get mad");
     }
@@ -443,35 +395,25 @@ class RouteComponentImpl implements RouteComponent {
     public RouteComponent map(Function2 fn, Number rhs) {
         switch(fn) {
             case ADD:
-                return applyMath(MathOp.ADD, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.ADD, rhs);
             case MULTIPLY:
-                return applyMath(MathOp.MULTIPLY, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.MULTIPLY, rhs);
             case DIVIDE:
-                return applyMath(MathOp.DIVIDE, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.DIVIDE, rhs);
             case MODULUS:
-                return applyMath(MathOp.MODULUS, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.MODULUS, rhs);
             case EXPONENT:
-                return applyMath(MathOp.EXPONENT, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.EXPONENT, rhs);
             case LEFT_SHIFT:
-                return applyMath(MathOp.LEFT_SHIFT, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.LEFT_SHIFT, rhs);
             case RIGHT_SHIFT:
-                return applyMath(MathOp.RIGHT_SHIFT, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.RIGHT_SHIFT, rhs);
             case SUBTRACT:
-                return applyMath(MathOp.SUBTRACT, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.SUBTRACT, rhs);
             case CONSTANT:
-                return applyMath(MathOp.CONSTANT, rhs);
+                return applyMath(DataProcessorConfig.Maths.Operation.CONSTANT, rhs);
         }
         throw new RuntimeException("Only here so the compiler won't get mad");
-    }
-
-    private DataTypeBase createUnsignedToSigned(DataAttributes attrs) {
-        if (source instanceof UFloatData) {
-            return new SFloatData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attrs);
-        } else if (source instanceof UintData) {
-            return new IntData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attrs);
-        } else {
-            return source.dataProcessorCopy(source, attrs);
-        }
     }
 
     private static class MapEditorInner extends EditorImplBase implements DataProcessor.MapEditor {
@@ -485,7 +427,7 @@ class RouteComponentImpl implements RouteComponent {
         public void modifyRhs(Number rhs) {
             final Number scaledRhs;
 
-            switch(MathOp.values()[config[2] - 1]) {
+            switch(DataProcessorConfig.Maths.Operation.values()[config[2] - 1]) {
                 case ADD:
                 case MODULUS:
                 case SUBTRACT:
@@ -504,8 +446,8 @@ class RouteComponentImpl implements RouteComponent {
             mwPrivate.sendCommand(DATA_PROCESSOR, DataProcessorImpl.PARAMETER, source.eventConfig[2], config);
         }
     }
-    private RouteComponent applyMath(MathOp op, Number rhs) {
-        boolean multiChnlMath= persistantData.firmware.compareTo(MULTI_CHANNEL_MATH) >= 0;
+    private RouteComponent applyMath(DataProcessorConfig.Maths.Operation op, Number rhs) {
+        boolean multiChnlMath= persistantData.mwPrivate.getFirmwareVersion().compareTo(MULTI_CHANNEL_MATH) >= 0;
 
         if (!multiChnlMath && source.attributes.length() > 4) {
             throw new IllegalRouteOperationException("Cannot apply math operations on multi-channel data for firmware prior to " + MULTI_CHANNEL_MATH.toString());
@@ -517,67 +459,6 @@ class RouteComponentImpl implements RouteComponent {
 
         if (source.eventConfig[0] == SENSOR_FUSION.id) {
             throw new IllegalRouteOperationException("Cannot apply math operations to sensor fusion data");
-        }
-
-        final DataTypeBase processor;
-
-        switch(op) {
-            case ADD: {
-                DataAttributes newAttrs= source.attributes.dataProcessorCopySize((byte) 4);
-                processor = rhs.floatValue() < 0 ? createUnsignedToSigned(newAttrs) : source.dataProcessorCopy(source, newAttrs);
-                break;
-            }
-            case MULTIPLY: {
-                DataAttributes newAttrs= source.attributes.dataProcessorCopySize(Math.abs(rhs.floatValue()) < 1 ? source.attributes.sizes[0] : 4);
-                processor = rhs.floatValue() < 0 ? createUnsignedToSigned(newAttrs) : source.dataProcessorCopy(source, newAttrs);
-                break;
-            }
-            case DIVIDE: {
-                DataAttributes newAttrs = source.attributes.dataProcessorCopySize(Math.abs(rhs.floatValue()) < 1 ? 4 : source.attributes.sizes[0]);
-                processor = rhs.floatValue() < 0 ? createUnsignedToSigned(newAttrs) : source.dataProcessorCopy(source, newAttrs);
-                break;
-            }
-            case MODULUS: {
-                processor = source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-                break;
-            }
-            case EXPONENT: {
-                processor = new ByteArrayData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
-                        source.attributes.dataProcessorCopySize((byte) 4));
-                break;
-            }
-            case LEFT_SHIFT: {
-                processor = new ByteArrayData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
-                        source.attributes.dataProcessorCopySize((byte) Math.min(source.attributes.sizes[0] + (rhs.intValue() / 8), 4)));
-                break;
-            }
-            case RIGHT_SHIFT: {
-                processor = new ByteArrayData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
-                        source.attributes.dataProcessorCopySize((byte) Math.max(source.attributes.sizes[0] - (rhs.intValue() / 8), 1)));
-                break;
-            }
-            case SUBTRACT: {
-                processor= createUnsignedToSigned(source.attributes.dataProcessorCopySigned(true));
-                break;
-            }
-            case SQRT: {
-                processor = new ByteArrayData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, source.attributes.dataProcessorCopySigned(false));
-                break;
-            }
-            case ABS_VALUE: {
-                DataAttributes copy= source.attributes.dataProcessorCopySigned(false);
-                processor = (source instanceof SFloatData) ? new UFloatData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, copy) :
-                        (source instanceof IntData) ? new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, copy) : source.dataProcessorCopy(source, copy);
-                break;
-            }
-            case CONSTANT:
-                DataAttributes attributes = new DataAttributes(new byte[] {4}, (byte) 1, (byte) 0, source.attributes.signed);
-                processor = source.attributes.signed ? new IntData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes) :
-                        new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes);
-                break;
-            default:
-                processor= null;
-                break;
         }
 
         final Number scaledRhs;
@@ -595,17 +476,10 @@ class RouteComponentImpl implements RouteComponent {
                 scaledRhs= rhs;
         }
 
-        ByteBuffer buffer= ByteBuffer.allocate(multiChnlMath ? 8 : 7)
-                .order(ByteOrder.LITTLE_ENDIAN)
-                .put((byte) 0x9)
-                .put((byte) ((processor.attributes.sizes[0] - 1) & 0x3 | ((source.attributes.sizes[0] - 1) << 2) | (source.attributes.signed ? 0x10 : 0)))
-                .put((byte) (op.ordinal() + 1))
-                .putInt(scaledRhs.intValue());
-        if (multiChnlMath) {
-            buffer.put((byte) (source.attributes.sizes.length - 1));
-        }
-
-        return postCreate(null, new MapEditorInner(buffer.array(), processor, persistantData.mwPrivate));
+        DataProcessorConfig.Maths config = new DataProcessorConfig.Maths(source.attributes, multiChnlMath, op, scaledRhs.intValue());
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        config.output = next.first.attributes.sizes[0];
+        return postCreate(next.second, new MapEditorInner(config.build(), next.first, persistantData.mwPrivate));
     }
 
     private static class TimeEditorInner extends EditorImplBase implements DataProcessor.TimeEditor {
@@ -634,11 +508,10 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Cannot limit frequency of sensor fusion data");
         }
 
-        int outputMask = hasTimePassthrough ? 2 : 0;
-        final DataTypeBase processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-        byte[] config= ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN).put((byte) 0x8)
-                .put((byte) ((source.attributes.length() - 1) & 0x7 | (outputMask << 3))).putInt(period).array();
-        return postCreate(null, new TimeEditorInner(config, processor, persistantData.mwPrivate));
+        DataProcessorConfig config = new DataProcessorConfig.Time(source.attributes.length(), (byte) (hasTimePassthrough ? 2 : 0), period);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
+
+        return postCreate(next.second, new TimeEditorInner(config.build(), next.first, persistantData.mwPrivate));
     }
 
     private static class PassthroughEditorInner extends EditorImplBase implements DataProcessor.PassthroughEditor {
@@ -670,14 +543,10 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Cannot limit null data");
         }
 
-        final DataTypeBase processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-        byte[] config= ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
-                .put((byte) 0x1)
-                .put((byte) (type.ordinal() & 0x7))
-                .putShort(value).array();
-        DataTypeBase state= new UintData(DATA_PROCESSOR, Util.setSilentRead(DataProcessorImpl.STATE), DataTypeBase.NO_DATA_ID,
-                new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false));
-        return postCreate(state, new PassthroughEditorInner(config, processor, persistantData.mwPrivate));
+        DataProcessorConfig config = new DataProcessorConfig.Passthrough(type, value);
+
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        return postCreate(next.second, new PassthroughEditorInner(config.build(), next.first, persistantData.mwPrivate));
     }
 
     private static class PulseEditorInner extends EditorImplBase implements DataProcessor.PulseEditor {
@@ -712,38 +581,11 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Cannot find pulses for sensor fusion data");
         }
 
-        final DataTypeBase processor;
+        DataProcessorConfig config = new DataProcessorConfig.Pulse(source.attributes.length(),
+                source.convertToFirmwareUnits(persistantData.mwPrivate, threshold).intValue(), samples, output);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        switch(output) {
-            case WIDTH:
-                processor= new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
-                        new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false));
-                break;
-            case AREA:
-                processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopySize((byte) 4));
-                break;
-            case PEAK:
-                processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-                break;
-            case ON_DETECT:
-                processor= new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
-                        new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false));
-                break;
-            default:
-                processor= null;
-                break;
-        }
-
-        byte[] config= ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN)
-                .put((byte) 0xb)
-                .put((byte) (source.attributes.length() - 1))
-                .put((byte) 0)
-                .put((byte) output.ordinal())
-                .putInt(source.convertToFirmwareUnits(persistantData.mwPrivate, threshold).intValue())
-                .putShort(samples)
-                .array();
-
-        return postCreate(null, new PulseEditorInner(config, processor, persistantData.mwPrivate));
+        return postCreate(next.second, new PulseEditorInner(config.build(), next.first, persistantData.mwPrivate));
     }
 
     @Override
@@ -765,7 +607,7 @@ class RouteComponentImpl implements RouteComponent {
                         key,
                         new Tuple3<>(
                                 ((RouteComponentImpl) next).source,
-                                persistantData.firmware.compareTo(MULTI_COMPARISON_MIN_FIRMWARE) < 0 ? 5 : 3,
+                                persistantData.mwPrivate.getFirmwareVersion().compareTo(MULTI_COMPARISON_MIN_FIRMWARE) < 0 ? 5 : 3,
                                 persistantData.dataProcessors.peekLast().editor.config
                         )
                 ));
@@ -839,7 +681,7 @@ class RouteComponentImpl implements RouteComponent {
         }
     }
     @Override
-    public RouteComponent filter(Comparison op, ComparisonOutput output, Number... references) {
+    public RouteComponent filter(Comparison op, ComparisonOutput mode, Number... references) {
         if (source.attributes.length() > 4) {
             throw new IllegalRouteOperationException("Cannot compare data longer than 4 bytes");
         }
@@ -852,40 +694,27 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Cannot compare sensor sensor fusion data");
         }
 
-        if (persistantData.firmware.compareTo(MULTI_COMPARISON_MIN_FIRMWARE) < 0) {
+        if (persistantData.mwPrivate.getFirmwareVersion().compareTo(MULTI_COMPARISON_MIN_FIRMWARE) < 0) {
             boolean signed= source.attributes.signed || references[0].floatValue() < 0;
             final Number scaledReference= source.convertToFirmwareUnits(persistantData.mwPrivate, references[0]);
 
-            final DataTypeBase processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-            byte[] config= ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
-                    .put((byte) 0x6)
-                    .put((byte) (signed ? 1 : 0))
-                    .put((byte) op.ordinal())
-                    .put((byte) 0)
-                    .putInt(scaledReference.intValue()).array();
-            return postCreate(null, new SingleValueComparatorEditor(config, processor, persistantData.mwPrivate));
+            DataProcessorConfig config = new DataProcessorConfig.SingleValueComparison(signed, op, scaledReference.intValue());
+            Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
+            return postCreate(next.second, new SingleValueComparatorEditor(config.build(), next.first, persistantData.mwPrivate));
         }
 
         boolean anySigned= false;
-        for(Number it: references) {
-            anySigned|= it.floatValue() < 0;
+        Number[] scaled = new Number[references.length];
+        for(int i = 0; i < references.length; i++) {
+            anySigned|= references[i].floatValue() < 0;
+            scaled[i] = source.convertToFirmwareUnits(persistantData.mwPrivate, references[i]);
         }
         boolean signed= source.attributes.signed || anySigned;
 
-        final DataTypeBase processor;
-        if (output == ComparisonOutput.PASS_FAIL || output == ComparisonOutput.ZONE) {
-            DataAttributes newAttrs= new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false);
-            processor= new UintData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, newAttrs);
-        }  else {
-            processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-        }
+        DataProcessorConfig config = new DataProcessorConfig.MultiValueComparison(signed, source.attributes.length(), op, mode, scaled);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        ByteBuffer buffer= ByteBuffer.allocate(2 + references.length * source.attributes.length()).order(ByteOrder.LITTLE_ENDIAN)
-                .put((byte) 0x6)
-                .put((byte) ((signed ? 1 : 0) | ((source.attributes.length() - 1) << 1) | (op.ordinal() << 3) | (output.ordinal() << 6)));
-        MultiValueComparatorEditor.fillReferences(processor, persistantData.mwPrivate, buffer, source.attributes.length(), references);
-
-        return postCreate(null, new MultiValueComparatorEditor(buffer.array(), processor, persistantData.mwPrivate));
+        return postCreate(next.second, new MultiValueComparatorEditor(config.build(), next.first, persistantData.mwPrivate));
     }
 
     private static class ThresholdEditorInner extends EditorImplBase implements DataProcessor.ThresholdEditor {
@@ -912,7 +741,7 @@ class RouteComponentImpl implements RouteComponent {
     }
 
     @Override
-    public RouteComponent filter(ThresholdOutput output, Number threshold, Number hysteresis) {
+    public RouteComponent filter(ThresholdOutput mode, Number threshold, Number hysteresis) {
         if (source.attributes.length() > 4) {
             throw new IllegalRouteOperationException("Cannot use threshold filter on data longer than 4 bytes");
         }
@@ -925,29 +754,12 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Cannot use threshold filter on sensor fusion data");
         }
 
-        final DataTypeBase processor;
-        switch (output) {
-            case ABSOLUTE:
-                processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-                break;
-            case BINARY:
-                processor= new IntData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
-                        new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, true));
-                break;
-            default:
-                processor= null;
-                break;
-        }
-
-        Number firmwareValue = source.convertToFirmwareUnits(persistantData.mwPrivate, threshold), firmwareHysteresis= source.convertToFirmwareUnits(persistantData.mwPrivate, hysteresis);
-        byte[] config= ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
-                .put((byte) 0xd)
-                .put((byte) ((source.attributes.length() - 1) & 0x3 | (source.attributes.signed ? 0x4 : 0) | (output.ordinal() << 3)))
-                .putInt(firmwareValue.intValue())
-                .putShort(firmwareHysteresis.shortValue())
-                .array();
-
-        return postCreate(null, new ThresholdEditorInner(config, processor, persistantData.mwPrivate));
+        Number firmwareValue = source.convertToFirmwareUnits(persistantData.mwPrivate, threshold),
+                firmwareHysteresis= source.convertToFirmwareUnits(persistantData.mwPrivate, hysteresis);
+        DataProcessorConfig config = new DataProcessorConfig.Threshold(source.attributes.length(), source.attributes.signed, mode,
+                firmwareValue.intValue(), firmwareHysteresis.shortValue());
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        return postCreate(next.second, new ThresholdEditorInner(config.build(), next.first, persistantData.mwPrivate));
     }
 
     private static class DifferentialEditorInner extends EditorImplBase implements DataProcessor.DifferentialEditor {
@@ -966,7 +778,7 @@ class RouteComponentImpl implements RouteComponent {
         }
     }
     @Override
-    public RouteComponent filter(DifferentialOutput output, Number distance) {
+    public RouteComponent filter(DifferentialOutput mode, Number distance) {
         if (source.attributes.length() > 4) {
             throw new IllegalRouteOperationException("Cannot use differential filter for data longer than 4 bytes");
         }
@@ -979,31 +791,12 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Cannot use differential filter on sensor fusion data");
         }
 
-        final DataTypeBase processor;
-        switch(output) {
-            case ABSOLUTE:
-                processor= source.dataProcessorCopy(source, source.attributes.dataProcessorCopy());
-                break;
-            case DIFFERENCE:
-                processor= createUnsignedToSigned(source.attributes.dataProcessorCopySigned(true));
-                break;
-            case BINARY:
-                processor= new IntData(source, DATA_PROCESSOR, DataProcessorImpl.NOTIFY,
-                        new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, true));
-                break;
-            default:
-                processor= null;
-                break;
-        }
 
         Number firmwareUnits = source.convertToFirmwareUnits(persistantData.mwPrivate, distance);
-        byte[] config= ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN)
-                .put((byte) 0xc)
-                .put((byte) (((source.attributes.length() - 1) & 0x3) | (source.attributes.signed ? 0x4 : 0) | (output.ordinal() << 3)))
-                .putInt(firmwareUnits.intValue())
-                .array();
+        DataProcessorConfig config = new DataProcessorConfig.Differential(source.attributes.length(), source.attributes.signed, mode, firmwareUnits.intValue());
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(null, new DifferentialEditorInner(config, processor, persistantData.mwPrivate));
+        return postCreate(next.second, new DifferentialEditorInner(config.build(), next.first, persistantData.mwPrivate));
     }
 
     private static class PackerEditorInner extends EditorImplBase implements DataProcessor.PackerEditor {
@@ -1028,10 +821,10 @@ class RouteComponentImpl implements RouteComponent {
             throw new IllegalRouteOperationException("Not enough space in the ble packet to pack " + count + " data samples");
         }
 
-        byte[] config = new byte[] {DataProcessorImpl.TYPE_PACKER, (byte) ((source.attributes.length() - 1) & 0x1f), (byte) ((count - 1)& 0x1f)};
-        final DataTypeBase processor = source.dataProcessorCopy(source, source.attributes.dataProcessorCopyCopies(count));
+        DataProcessorConfig config = new DataProcessorConfig.Packer(source.attributes.length(), count);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(null, new PackerEditorInner(config, processor, persistantData.mwPrivate));
+        return postCreate(next.second, new PackerEditorInner(config.build(), next.first, persistantData.mwPrivate));
     }
 
     @Override
@@ -1045,11 +838,10 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         final byte size = 4;
-        byte[] config = new byte[] {DataProcessorImpl.TYPE_ACCOUNTER, (byte) (0x1 | ((size - 1) << 4)), 0x3};
-        final DataTypeBase processor = source.dataProcessorCopy(source,
-                new DataAttributes(new byte[] {size, source.attributes.length()}, (byte) 1, (byte) 0, source.attributes.signed));
+        DataProcessorConfig config = new DataProcessorConfig.Accounter(size);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(null, new NullEditor(config, processor, persistantData.mwPrivate));
+        return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));
     }
 
     private RouteComponentImpl postCreate(DataTypeBase state, EditorImplBase editor) {

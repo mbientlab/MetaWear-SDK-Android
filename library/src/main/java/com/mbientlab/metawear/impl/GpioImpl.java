@@ -41,6 +41,21 @@ import static com.mbientlab.metawear.impl.Constant.Module.GPIO;
  * Created by etsai on 9/6/16.
  */
 class GpioImpl extends ModuleImplBase implements Gpio {
+    static String createUri(DataTypeBase dataType) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
+            case READ_AI_ABS_REF:
+                return String.format(Locale.US, "abs-ref[%d]", dataType.eventConfig[2]);
+            case READ_AI_ADC:
+                return String.format(Locale.US, "adc[%d]", dataType.eventConfig[2]);
+            case READ_DI:
+                return String.format(Locale.US, "digital[%d]", dataType.eventConfig[2]);
+            case PIN_CHANGE_NOTIFY:
+                return String.format(Locale.US, "pin-monitor[%d]", dataType.eventConfig[2]);
+            default:
+                return null;
+        }
+    }
+
     private static final String ADC_PRODUCER_FORMAT= "com.mbientlab.metawear.impl.GpioImpl.ADC_PRODUCER_$%d",
             ABS_REF_PRODUCER_FORMAT= "com.mbientlab.metawear.impl.GpioImpl.ABS_REF_PRODUCER_$%d",
             DIGITAL_PRODUCER_FORMAT= "com.mbientlab.metawear.impl.GpioImpl.DIGITAL_PRODUCER_$%d",

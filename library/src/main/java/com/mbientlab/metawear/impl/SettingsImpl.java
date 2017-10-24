@@ -46,6 +46,25 @@ import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
  * Created by etsai on 9/20/16.
  */
 class SettingsImpl extends ModuleImplBase implements Settings {
+    static String createUri(DataTypeBase dataType) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
+            case BATTERY_STATE:
+                switch(dataType.attributes.length()) {
+                    case 1:
+                        return "battery[0]";
+                    case 2:
+                        return "battery[1]";
+                }
+                return "battery";
+            case POWER_STATUS:
+                return "power-status";
+            case CHARGE_STATUS:
+                return "charge-status";
+            default:
+                return null;
+        }
+    }
+
     private static final long serialVersionUID = -8845055245623576362L;
     private final static String BATTERY_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.BATTERY_PRODUCER",
             BATTERY_CHARGE_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.BATTERY_CHARGE_PRODUCER",

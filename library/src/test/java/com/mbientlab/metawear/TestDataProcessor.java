@@ -49,6 +49,7 @@ import org.junit.runner.RunWith;
 import java.io.IOException;
 
 import bolts.Capture;
+import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -67,6 +68,7 @@ public class TestDataProcessor {
             connectToBoard();
         }
     }
+
     public static class TestRms extends TestBase {
         @Test
         public void createLog() throws InterruptedException {
@@ -155,6 +157,17 @@ public class TestDataProcessor {
         public void setup() throws Exception {
             junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
             super.setup();
+
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
+                @Override
+                public void configure(RouteComponent source) {
+                    source.map(Function1.RSS).lowpass((byte) 4).filter(ThresholdOutput.BINARY, 0.5f)
+                        .multicast()
+                            .to().filter(Comparison.EQ, -1).log(null)
+                            .to().filter(Comparison.EQ, 1).log(null)
+                        .end();
+                }
+            }).waitForCompletion();
         }
 
         @Test
@@ -164,22 +177,18 @@ public class TestDataProcessor {
                     {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x03, 0x05, 0x04},
                     {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x0d, 0x09, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00},
                     {0x09, 0x02, 0x09, 0x03, 0x02, 0x00, 0x06, 0b00000001, (byte) 0xff},
-                    {0x09, 0x02, 0x09, 0x03, 0x02, 0x00, 0x06, 0b00000001, (byte) 0x01}
+                    {0x09, 0x02, 0x09, 0x03, 0x02, 0x00, 0x06, 0b00000001, (byte) 0x01},
+                    {0x0b, 0x02, 0x09, 0x03, 0x03, 0x00},
+                    {0x0b, 0x02, 0x09, 0x03, 0x04, 0x00},
             };
 
-
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.map(Function1.RSS).lowpass((byte) 4).filter(ThresholdOutput.BINARY, 0.5f)
-                            .multicast()
-                            .to().filter(Comparison.EQ, -1)
-                            .to().filter(Comparison.EQ, 1)
-                            .end();
-                }
-            }).waitForCompletion();
-
             assertArrayEquals(expected, junitPlatform.getCommands());
+        }
+
+        @Test
+        public void checkIdentifier() throws InterruptedException {
+            assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=3", mwBoard.lookupRoute(0).generateIdentifier(0));
+            assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=4", mwBoard.lookupRoute(0).generateIdentifier(1));
         }
     }
 
@@ -703,6 +712,113 @@ public class TestDataProcessor {
 
             sendMockResponse(new byte[] {0x09, 0x03, 0x00, (byte) 0xef, (byte) 0xff, 0x29, 0x00, 0x16, 0x00});
             assertEquals(expected, actual.get());
+        }
+    }
+
+    public static class TestActivityMonitor extends UnitTestBase {
+        private Route activityRoute, bufferStateRoute;
+
+        @Before
+        public void setup() throws Exception {
+            junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x00, 0x1c});
+            junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
+            connectToBoard();
+
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
+                @Override
+                public void configure(RouteComponent source) {
+                    source.map(Function1.RMS).accumulate()
+                        .multicast()
+                            .to().limit(1000).stream(new Subscriber() {
+                                @Override
+                                public void apply(Data data, Object ... env) {
+                                        ((Capture<Float>) env[0]).set(data.value(Float.class));
+                                    }
+                                })
+                            .to().buffer().name("rms_accum")
+                        .end();
+                }
+            }).continueWithTask(new Continuation<Route, Task<Route>>() {
+                @Override
+                public Task<Route> then(Task<Route> task) throws Exception {
+                    activityRoute = task.getResult();
+                    return mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(new RouteBuilder() {
+                        @Override
+                        public void configure(RouteComponent source) {
+                            source.stream(new Subscriber() {
+                                @Override
+                                public void apply(Data data, Object ... env) {
+                                    ((Capture<Float>) env[0]).set(data.value(Float.class));
+                                }
+                            });
+                        }
+                    });
+                }
+            }).continueWith(new Continuation<Route, Void>() {
+                @Override
+                public Void then(Task<Route> task) throws Exception {
+                    bufferStateRoute= task.getResult();
+                    return null;
+                }
+            }).waitForCompletion();
+        }
+
+        @Test
+        public void createRoute() {
+            byte[][] expected= new byte[][] {
+                    {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x07, (byte) 0xa5, 0x00},
+                    {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x02, 0x07},
+                    {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x08, 0x03, (byte) 0xe8, 0x03, 0x00, 0x00},
+                    {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x0f, 0x03},
+                    {0x09, 0x03, 0x01},
+                    {0x09, 0x07, 0x02, 0x01}
+            };
+
+            assertArrayEquals(expected, junitPlatform.getCommands());
+        }
+
+        @Test
+        public void handleData() {
+            float expected= 33.771667f;
+            Capture<Float> actual= new Capture<>();
+
+            activityRoute.setEnvironment(0, actual);
+
+            sendMockResponse(new byte[] {0x09, 0x03, 0x02, 0x63, 0x71, 0x08, 0x00});
+            assertEquals(expected, actual.get(), 0.0001f);
+        }
+
+        @Test
+        public void readBufferSilent() {
+            byte[] expected= new byte[] {0x9, (byte) 0xc4, 3};
+
+            bufferStateRoute.unsubscribe(0);
+            mwBoard.getModule(DataProcessor.class).state("rms_accum").read();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        }
+
+        @Test
+        public void readBuffer() {
+            byte[] expected= new byte[] {0x9, (byte) 0x84, 3};
+
+            mwBoard.getModule(DataProcessor.class).state("rms_accum").read();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        }
+
+        @Test
+        public void bufferData() {
+            float expected= 71.61182f;
+            Capture<Float> actual= new Capture<>();
+
+            bufferStateRoute.setEnvironment(0, actual);
+            sendMockResponse(new byte[] {0x09, (byte) 0x84, 0x03, 0x28, (byte) 0xe7, 0x11, 0x00});
+            assertEquals(expected, actual.get(), 0.0001f);
+        }
+
+        @Test
+        public void checkScheme() {
+            assertEquals("acceleration:rms?id=0:accumulate?id=1:time?id=2", activityRoute.generateIdentifier(0));
+            assertEquals("acceleration:rms?id=0:accumulate?id=1:buffer-state?id=3", bufferStateRoute.generateIdentifier(0));
         }
     }
 }

@@ -25,9 +25,12 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Data;
+import com.mbientlab.metawear.builder.filter.DifferentialOutput;
 
 import java.nio.ByteBuffer;
 import java.util.Calendar;
+
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 
 /**
  * Created by etsai on 9/5/16.
@@ -92,5 +95,56 @@ class UFloatData extends DataTypeBase {
                 return super.value(clazz);
             }
         };
+    }
+
+    @Override
+    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+        switch(config.id) {
+            case DataProcessorConfig.Maths.ID: {
+                DataProcessorConfig.Maths casted = (DataProcessorConfig.Maths) config;
+                DataTypeBase processor;
+                switch(casted.op) {
+                    case ADD: {
+                        DataAttributes newAttrs= attributes.dataProcessorCopySize((byte) 4);
+                        processor = casted.rhs < 0 ? new SFloatData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, newAttrs) :
+                                dataProcessorCopy(this, newAttrs);
+                        break;
+                    }
+                    case MULTIPLY: {
+                        DataAttributes newAttrs= attributes.dataProcessorCopySize(Math.abs(casted.rhs) < 1 ? attributes.sizes[0] : 4);
+                        processor = casted.rhs < 0 ? new SFloatData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, newAttrs) :
+                                dataProcessorCopy(this, newAttrs);
+                        break;
+                    }
+                    case DIVIDE: {
+                        DataAttributes newAttrs = attributes.dataProcessorCopySize(Math.abs(casted.rhs) < 1 ? 4 : attributes.sizes[0]);
+                        processor = casted.rhs < 0 ? new SFloatData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, newAttrs) :
+                                dataProcessorCopy(this, newAttrs);
+                        break;
+                    }
+                    case SUBTRACT:
+                        processor = new SFloatData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes.dataProcessorCopySigned(true));
+                        break;
+                    case ABS_VALUE:
+                        processor = dataProcessorCopy(this, attributes.dataProcessorCopySigned(false));
+                        break;
+                    default:
+                        processor = null;
+                        break;
+                }
+
+                if (processor != null) {
+                    return new Pair<>(processor, null);
+                }
+                break;
+            }
+            case DataProcessorConfig.Differential.ID: {
+                DataProcessorConfig.Differential casted = (DataProcessorConfig.Differential) config;
+                if (casted.mode == DifferentialOutput.DIFFERENCE) {
+                    return new Pair<>(new SFloatData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes.dataProcessorCopySigned(true)), null);
+                }
+            }
+        }
+        return super.dataProcessorTransform(config);
     }
 }

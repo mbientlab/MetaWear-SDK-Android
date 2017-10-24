@@ -45,7 +45,7 @@ import java.util.List;
  */
 
 abstract class TestLogDataBase extends UnitTestBase {
-    protected static final File rootPath = new File("src/test/res");
+    static final File rootPath = new File("src/test/res");
 
     static Acceleration[] readAccelerationValues(String filename) throws IOException, JSONException {
         List<Acceleration> expectedList = new ArrayList<>();

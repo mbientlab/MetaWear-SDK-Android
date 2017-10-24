@@ -33,7 +33,7 @@ public class UnsupportedModuleException extends Exception {
 
     /**
      * Creates an exception with the given message
-     * @param msg    Data to accompany the exception
+     * @param msg    Message to accompany the exception
      */
     public UnsupportedModuleException(String msg) {
         super(msg);

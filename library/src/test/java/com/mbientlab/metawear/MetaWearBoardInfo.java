@@ -133,10 +133,14 @@ public class MetaWearBoardInfo {
         }
     }
 
-    public MetaWearBoardInfo(Class<?> ... moduleClasses) {
-        this(null, "deadbeef", "cafebabe");
+    public MetaWearBoardInfo(String modelNumber, Class<?> ... moduleClasses) {
+        this(null, modelNumber, "cafebabe");
 
         this.moduleResponses.putAll(createModuleResponses(moduleClasses));
+    }
+
+    public MetaWearBoardInfo(Class<?> ... moduleClasses) {
+        this("deadbeef", moduleClasses);
     }
 
     @Override

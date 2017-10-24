@@ -38,6 +38,15 @@ import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
  * Created by etsai on 9/4/16.
  */
 class SwitchImpl extends ModuleImplBase implements Switch {
+    static String createUri(DataTypeBase dataType) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
+            case STATE:
+                return "switch";
+            default:
+                return null;
+        }
+    }
+
     private final static String PRODUCER= "com.mbientlab.metawear.impl.SwitchImpl.PRODUCER";
     private final static byte STATE= 0x1;
     private static final long serialVersionUID = -6054365836900403723L;

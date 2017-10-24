@@ -27,9 +27,11 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.DataProcessor;
 
 import java.io.Serializable;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Locale;
@@ -48,6 +50,20 @@ import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
  * Created by etsai on 9/5/16.
  */
 class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
+    static String createUri(DataTypeBase dataType, DataProcessorImpl dataprocessor, Version firmware) {
+        byte register = Util.clearRead(dataType.eventConfig[1]);
+        switch (register) {
+            case NOTIFY:
+            case STATE:
+                Processor processor = dataprocessor.lookupProcessor(dataType.eventConfig[2]);
+                DataProcessorConfig config = DataProcessorConfig.from(firmware, processor.editor.config);
+
+                return config.createUri(register == STATE, dataType.eventConfig[2]);
+            default:
+                return null;
+        }
+    }
+
     private static final long serialVersionUID = -7439066046235167486L;
     static final byte TIME_PASSTHROUGH_REVISION = 1, ENHANCED_STREAMING_REVISION = 2, HPF_REVISION = 2;
     static final byte TYPE_ACCOUNTER = 0x11, TYPE_PACKER = 0x10;
@@ -90,6 +106,12 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         }
     }
 
+    static class ProcessorEntry {
+        byte id, offset, length;
+        byte[] source;
+        byte[] config;
+    }
+
     static final byte ADD= 2,
         NOTIFY = 3,
         STATE = 4,
@@ -106,6 +128,9 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     private transient TaskCompletionSource<Queue<Byte>> createProcessorsTask;
     private transient ScheduledFuture<?> timeoutFuture;
     private transient Runnable taskTimeout;
+    private transient Deque<ProcessorEntry> pullChainResult;
+    private transient AsyncTaskManager<Deque<ProcessorEntry>> pullProcessorConfigTask;
+    private transient byte readId;
 
     DataProcessorImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -121,6 +146,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     }
 
     protected void init() {
+        pullProcessorConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading data processor config timed out");
         taskTimeout = new Runnable() {
             @Override
             public void run() {
@@ -132,7 +158,34 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             }
         };
 
-        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, ADD), new JseMetaWearBoard.RegisterResponseHandler() {
+        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, Util.setRead(ADD)), new RegisterResponseHandler() {
+            @Override
+            public void onResponseReceived(byte[] response) {
+                pullProcessorConfigTask.cancelTimeout();
+
+                ProcessorEntry entry = new ProcessorEntry();
+                entry.id = readId;
+                entry.offset = (byte) (response[5] & 0x1f);
+                entry.length = (byte) (((response[5] >> 5) & 0x7) + 1);
+
+                entry.source = new byte[3];
+                System.arraycopy(response, 2, entry.source, 0, entry.source.length);
+
+                entry.config = new byte[response.length - 6];
+                System.arraycopy(response, 6, entry.config, 0, entry.config.length);
+
+                pullChainResult.push(entry);
+
+                if (response[2] == DATA_PROCESSOR.id && response[3] == NOTIFY) {
+                    readId = response[4];
+                    mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, Util.setRead(ADD), response[4]});
+                    pullProcessorConfigTask.restartTimeout(Constant.RESPONSE_TIMEOUT);
+                } else {
+                    pullProcessorConfigTask.setResult(pullChainResult);
+                }
+            }
+        });
+        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, ADD), new RegisterResponseHandler() {
             @Override
             public void onResponseReceived(byte[] response) {
                 timeoutFuture.cancel(false);
@@ -160,6 +213,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     }
     public void tearDown() {
         activeProcessors.clear();
+        nameToIdMapping.clear();
         mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, REMOVE_ALL});
     }
 
@@ -232,5 +286,20 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
 
     Processor lookupProcessor(byte id) {
         return activeProcessors.get(id);
+    }
+
+    void addProcessor(byte id, DataTypeBase state, DataTypeBase source, byte[] config) {
+        activeProcessors.put(id, new Processor(state, new NullEditor(config, source, mwPrivate)));
+    }
+
+    Task<Deque<ProcessorEntry>> pullChainAsync(final byte id) {
+        return pullProcessorConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
+            @Override
+            public void run() {
+                pullChainResult = new LinkedList<>();
+                readId = id;
+                mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, Util.setRead(ADD), id});
+            }
+        });
     }
 }

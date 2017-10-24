@@ -30,6 +30,8 @@ import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 import com.mbientlab.metawear.data.Acceleration;
 
+import bolts.Task;
+
 /**
  * Measures sources of acceleration, such as gravity or motion.  This interface is provides general
  * access to an accelerometer. If you know specifically which accelerometer is on your board, use the
@@ -113,4 +115,9 @@ public interface Accelerometer extends Module, Configurable<Accelerometer.Config
      * @return Selected data range
      */
     float getRange();
+    /**
+     * Pulls the current accelerometer output data rate and data range from the sensor
+     * @return Task that is completed when the settings are received
+     */
+    Task<Void> pullConfigAsync();
 }

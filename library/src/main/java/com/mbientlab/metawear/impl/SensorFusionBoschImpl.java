@@ -31,6 +31,7 @@ import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.EulerAngles;
 import com.mbientlab.metawear.data.Quaternion;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 import com.mbientlab.metawear.module.GyroBmi160;
@@ -43,12 +44,34 @@ import java.util.Calendar;
 
 import bolts.Task;
 
+import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
 import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
 
 /**
  * Created by etsai on 11/12/16.
  */
 class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch {
+    static String createUri(DataTypeBase dataType) {
+        switch (dataType.eventConfig[1]) {
+            case CORRECTED_ACC:
+                return "corrected-acceleration";
+            case CORRECTED_ROT:
+                return "corrected-angular-velocity";
+            case CORRECTED_MAG:
+                return "corrected-magnetic-field";
+            case QUATERNION:
+                return "quaternion";
+            case EULER_ANGLES:
+                return "euler-angles";
+            case GRAVITY_VECTOR:
+                return "gravity";
+            case LINEAR_ACC:
+                return "linear-acceleration";
+            default:
+                return null;
+        }
+    }
+
     private static final long serialVersionUID = -7041546136871081754L;
 
     private static final byte ENABLE = 1, MODE = 2, OUTPUT_ENABLE = 3,
@@ -356,6 +379,8 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     private Mode mode;
     private byte dataEnableMask;
 
+    private transient AsyncTaskManager<Void> pullConfigTask;
+
     SensorFusionBoschImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
@@ -366,6 +391,20 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
         mwPrivate.tagProducer(EULER_ANGLES_PRODUCER, new EulerAngleData());
         mwPrivate.tagProducer(GRAVITY_PRODUCER, new AccelerationData(GRAVITY_VECTOR));
         mwPrivate.tagProducer(LINEAR_ACC_PRODUCER, new AccelerationData(LINEAR_ACC));
+    }
+
+    @Override
+    protected void init() {
+        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading sensor fusion config timed out");
+
+        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MODE)), new RegisterResponseHandler() {
+            @Override
+            public void onResponseReceived(byte[] response) {
+                pullConfigTask.cancelTimeout();
+                mode = Mode.values()[response[2]];
+                pullConfigTask.setResult(null);
+            }
+        });
     }
 
     @Override
@@ -558,5 +597,15 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                 mag.magneticField().stop();
                 break;
         }
+    }
+
+    @Override
+    public Task<Void> pullConfigAsync() {
+        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MODE)});
+            }
+        });
     }
 }

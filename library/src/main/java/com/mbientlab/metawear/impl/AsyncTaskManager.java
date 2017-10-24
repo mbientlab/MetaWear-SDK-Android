@@ -66,6 +66,11 @@ class AsyncTaskManager<T> {
         timeoutFuture.cancel(false);
     }
 
+    void restartTimeout(long timeout) {
+        timeoutFuture.cancel(false);
+        timeoutFuture = mwPrivate.scheduleTask(taskTimeoutAction, timeout);
+    }
+
     public void setResult(T result) {
         taskSources.poll().first.setResult(result);
         execute(true);

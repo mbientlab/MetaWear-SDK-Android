@@ -34,6 +34,7 @@ import com.mbientlab.metawear.module.GyroBmi160;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
+import java.util.Locale;
 
 import bolts.Task;
 
@@ -43,6 +44,15 @@ import static com.mbientlab.metawear.impl.Constant.Module.GYRO;
  * Created by etsai on 9/20/16.
  */
 class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
+    static String createUri(DataTypeBase dataType) {
+        switch (dataType.eventConfig[1]) {
+            case DATA:
+                return dataType.attributes.length() > 2 ? "angular-velocity" : String.format(Locale.US, "angular-velocity[%d]", (dataType.attributes.offset >> 1));
+            default:
+                return null;
+        }
+    }
+
     private static final byte PACKED_ROT_REVISION= 1;
     private final static byte POWER_MODE = 1, DATA_INTERRUPT_ENABLE = 2, CONFIG = 3, DATA = 5, PACKED_DATA= 0x7;
     private final static String ROT_PRODUCER= "com.mbientlab.metawear.impl.GyroBmi160Impl.ROT_PRODUCER",
@@ -137,6 +147,7 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
     ///< ACC_CONF, ACC_RANGE
     private final byte[] gyrDataConfig= new byte[] {(byte) (0x20 | OutputDataRate.ODR_100_HZ.bitmask), Range.FSR_2000.bitmask};
     private transient AsyncDataProducer rotationalSpeed, packedRotationalSpeed;
+    private transient AsyncTaskManager<Void> pullConfigTask;
 
     GyroBmi160Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -147,6 +158,20 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
         mwPrivate.tagProducer(ROT_Y_AXIS_PRODUCER, dataType.split[1]);
         mwPrivate.tagProducer(ROT_Z_AXIS_PRODUCER, dataType.split[2]);
         mwPrivate.tagProducer(ROT_PACKED_PRODUCER, new BoschGyrCartesianFloatData(PACKED_DATA, (byte) 3));
+    }
+
+    @Override
+    protected void init() {
+        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
+
+        mwPrivate.addResponseHandler(new Pair<>(GYRO.id, Util.setRead(CONFIG)), new JseMetaWearBoard.RegisterResponseHandler() {
+            @Override
+            public void onResponseReceived(byte[] response) {
+                pullConfigTask.cancelTimeout();
+                System.arraycopy(response, 2, gyrDataConfig, 0, gyrDataConfig.length);
+                pullConfigTask.setResult(null);
+            }
+        });
     }
 
     private float getGyrDataScale() {
@@ -186,6 +211,16 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
                 mwPrivate.sendCommand(GYRO, CONFIG, gyrDataConfig);
             }
         };
+    }
+
+    @Override
+    public Task<Void> pullConfigAsync() {
+        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {GYRO.id, Util.setRead(CONFIG)});
+            }
+        });
     }
 
     @Override

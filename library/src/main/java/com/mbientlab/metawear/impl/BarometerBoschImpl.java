@@ -37,6 +37,17 @@ import static com.mbientlab.metawear.impl.Constant.Module.BAROMETER;
  * Created by etsai on 9/20/16.
  */
 abstract class BarometerBoschImpl extends ModuleImplBase implements BarometerBosch{
+    static String createUri(DataTypeBase dataType) {
+        switch (dataType.eventConfig[1]) {
+            case PRESSURE:
+                return "pressure";
+            case ALTITUDE:
+                return "altitude";
+            default:
+                return null;
+        }
+    }
+
     private final static String PRESSURE_PRODUCER= "com.mbientlab.metawear.impl.BarometerBoschImpl.PRESSURE_PRODUCER",
             ALTITUDE_PRODUCER= "com.mbientlab.metawear.impl.BarometerBoschImpl.ALTITUDE_PRODUCER";
     private static final byte PRESSURE = 1, ALTITUDE = 2, CYCLIC = 4;

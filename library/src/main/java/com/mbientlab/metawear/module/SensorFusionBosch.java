@@ -36,6 +36,8 @@ import com.mbientlab.metawear.data.Quaternion;
 
 import java.util.Locale;
 
+import bolts.Task;
+
 /**
  * Algorithm combining accelerometer, gyroscope, and magnetometer data for Bosch sensors.  When using
  * sensor fusion, do not configure the accelerometer, gyro, and magnetometer with their respective interface;
@@ -297,4 +299,10 @@ public interface SensorFusionBosch extends Module, Configurable<SensorFusionBosc
      * Stop the algorithm
      */
     void stop();
+
+    /**
+     * Pulls the current sensor fusion configuration from the sensor
+     * @return Task that is completed when the settings are received
+     */
+    Task<Void> pullConfigAsync();
 }

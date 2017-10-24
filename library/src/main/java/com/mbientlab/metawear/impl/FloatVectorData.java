@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+
 /**
  * Created by etsai on 9/4/16.
  */
@@ -41,5 +43,17 @@ abstract class FloatVectorData extends DataTypeBase {
     @Override
     public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
         return value.floatValue() * scale(mwPrivate);
+    }
+
+    @Override
+    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+        switch(config.id) {
+            case DataProcessorConfig.Combiner.ID: {
+                DataAttributes attributes= new DataAttributes(new byte[] {this.attributes.sizes[0]}, (byte) 1, (byte) 0, false);
+                return new Pair<>(new UFloatData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes), null);
+            }
+        }
+
+        return super.dataProcessorTransform(config);
     }
 }

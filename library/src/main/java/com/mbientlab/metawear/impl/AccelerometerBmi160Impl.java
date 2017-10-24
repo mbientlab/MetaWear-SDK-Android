@@ -27,8 +27,10 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
+import java.security.InvalidParameterException;
 import java.util.Arrays;
 
 import bolts.Task;
@@ -39,6 +41,16 @@ import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
  * Created by etsai on 9/1/16.
  */
 class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements AccelerometerBmi160 {
+    static String createUri(DataTypeBase dataType) {
+        switch (dataType.eventConfig[1]) {
+            case STEP_DETECTOR_INTERRUPT:
+                return "step-detector";
+            case STEP_COUNTER_DATA:
+                return "step-counter";
+        }
+        return AccelerometerBoschImpl.createUri(dataType);
+    }
+
     final static byte IMPLEMENTATION= 0x1;
     private static final byte STEP_DETECTOR_INTERRUPT_ENABLE = 0x17,
             STEP_DETECTOR_CONFIG= 0x18,
@@ -55,6 +67,7 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
     private transient AsyncDataProducer lowhigh, noMotion, slowMotion, anyMotion, significantMotion;
     private transient StepDetectorDataProducer stepDetector;
     private transient StepCounterDataProducer stepCounter;
+    private transient AsyncTaskManager<Void> pullConfigTask;
 
     AccelerometerBmi160Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -63,6 +76,20 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
                 new DataAttributes(new byte[] {1}, (byte) 1, (byte) 0, false)));
         mwPrivate.tagProducer(STEP_COUNTER_PRODUCER, new UintData(ACCELEROMETER, Util.setSilentRead(STEP_COUNTER_DATA),
                 new DataAttributes(new byte[] {2}, (byte) 1, (byte) 0, false)));
+    }
+
+    @Override
+    protected void init() {
+        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
+
+        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), new RegisterResponseHandler() {
+            @Override
+            public void onResponseReceived(byte[] response) {
+                pullConfigTask.cancelTimeout();
+                System.arraycopy(response, 2, accDataConfig, 0, accDataConfig.length);
+                pullConfigTask.setResult(null);
+            }
+        });
     }
 
     @Override
@@ -136,6 +163,16 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
     @Override
     public float getRange() {
         return AccRange.bitMaskToRange((byte) (accDataConfig[1] & ~0xf0)).range;
+    }
+
+    @Override
+    public Task<Void> pullConfigAsync() {
+        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)});
+            }
+        });
     }
 
     private class StepConfigEditorInner implements StepConfigEditor {

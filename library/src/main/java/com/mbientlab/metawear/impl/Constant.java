@@ -34,41 +34,43 @@ class Constant {
     static final byte COMMAND_LENGTH = 18, MAX_BTLE_LENGTH = COMMAND_LENGTH + 2;
 
     enum Module {
-        SWITCH(0x01),
-        LED(0x02),
-        ACCELEROMETER(0x03),
-        TEMPERATURE(0x04),
-        GPIO(0x05),
-        NEO_PIXEL(0x06),
-        IBEACON(0x07),
-        HAPTIC(0x08),
-        DATA_PROCESSOR(0x09),
-        EVENT(0x0a),
-        LOGGING(0x0b),
-        TIMER(0x0c),
-        SERIAL_PASSTHROUGH(0x0d),
-        MACRO(0x0f),
-        GSR(0x10),
-        SETTINGS(0x11),
-        BAROMETER(0x12),
-        GYRO(0x13),
-        AMBIENT_LIGHT(0x14),
-        MAGNETOMETER(0x15),
-        HUMIDITY(0x16),
-        COLOR_DETECTOR(0x17),
-        PROXIMITY(0x18),
-        SENSOR_FUSION(0x19),
-        DEBUG(0xfe);
+        SWITCH(0x01, "Switch"),
+        LED(0x02, "Led"),
+        ACCELEROMETER(0x03, "Accelerometer"),
+        TEMPERATURE(0x04, "Temperature"),
+        GPIO(0x05, "Gpio"),
+        NEO_PIXEL(0x06, "NeoPixel"),
+        IBEACON(0x07, "IBeacon"),
+        HAPTIC(0x08, "Haptic"),
+        DATA_PROCESSOR(0x09, "DataProcessor"),
+        EVENT(0x0a, "Event"),
+        LOGGING(0x0b, "Logging"),
+        TIMER(0x0c, "Timer"),
+        SERIAL_PASSTHROUGH(0x0d, "SerialPassthrough"),
+        MACRO(0x0f, "Macro"),
+        GSR(0x10, "Conductance"),
+        SETTINGS(0x11, "Settings"),
+        BAROMETER(0x12, "Barometer"),
+        GYRO(0x13, "Gyro"),
+        AMBIENT_LIGHT(0x14, "AmbientLight"),
+        MAGNETOMETER(0x15, "Magnetometer"),
+        HUMIDITY(0x16, "Humidity"),
+        COLOR_DETECTOR(0x17, "Color"),
+        PROXIMITY(0x18, "Proximity"),
+        SENSOR_FUSION(0x19, "SensorFusion"),
+        DEBUG(0xfe, "Debug");
 
         public final byte id;
+        public final String friendlyName;
 
-        Module(int id) {
+        Module(int id, String friendlyName) {
             this.id= (byte) id;
+            this.friendlyName = friendlyName;
         }
 
         private static final HashMap<Byte, Module> byteToEnum;
         static {
-            byteToEnum= new HashMap<>();
+            byteToEnum = new HashMap<>();
             for(Module it: Module.values()) {
                 byteToEnum.put(it.id, it);
             }

@@ -37,6 +37,15 @@ import static com.mbientlab.metawear.impl.Constant.Module.PROXIMITY;
  * Created by etsai on 9/19/16.
  */
 class ProximityTsl2671Impl extends ModuleImplBase implements ProximityTsl2671 {
+    static String createUri(DataTypeBase dataType) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
+            case ADC:
+                return "proximity";
+            default:
+                return null;
+        }
+    }
+
     private final static String PRODUCER= "com.mbientlab.metawear.impl.ProximityTsl2671Impl.PRODUCER";
     private static final byte ADC= 1, MODE= 2;
     private static final long serialVersionUID = -3980380296316444383L;

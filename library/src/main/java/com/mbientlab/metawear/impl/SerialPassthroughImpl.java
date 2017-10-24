@@ -44,6 +44,17 @@ import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
  * Created by etsai on 10/3/16.
  */
 class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough {
+    static String createUri(DataTypeBase dataType) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
+            case I2C_RW:
+                return String.format(Locale.US, "i2c[%d]", dataType.eventConfig[2]);
+            case SPI_RW:
+                return String.format(Locale.US, "spi[%d]", dataType.eventConfig[2]);
+            default:
+                return null;
+        }
+    }
+
     private final static byte SPI_REVISION= 1;
     private static final byte I2C_RW = 0x1, SPI_RW = 0x2, DIRECT_I2C_READ_ID = (byte) 0xff, DIRECT_SPI_READ_ID = 0xf;
     private static final String I2C_PRODUCER_FORMAT= "com.mbientlab.metawear.impl.SerialPassthroughImpl.I2C_PRODUCER_%d",

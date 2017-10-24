@@ -37,6 +37,7 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -66,11 +67,12 @@ class JunitPlatform implements IO, BtleGatt {
     public String firmware= "1.2.3", boardStateSuffix;
     public boolean delayModuleInfoResponse= false, deserializeModuleInfo= false, serializeModuleInfo = false, enableMetaBootState = false, delayReadDevInfo = false;
     private final Map<Byte, byte[]> customModuleInfo= new HashMap<>();
+    private final Map<Integer, byte[]> customResponses = new HashMap<>();
 
-    public byte maxProcessors= 28, maxLoggers= 8, maxTimers= 8, maxEvents= 28;
+    public byte maxProcessors= 28, maxLoggers= 8, maxTimers= 8, maxEvents= 28, maxModule = -1;
     public byte timerId= 0, eventId= 0, loggerId= 0, dataProcessorId= 0, macroId = 0;
     private final MwBridge bridge;
-    private final ArrayList<byte[]> commandHistory= new ArrayList<>(), connectCmds= new ArrayList<>();
+    final ArrayList<byte[]> commandHistory= new ArrayList<>(), connectCmds= new ArrayList<>();
     private final ArrayList<BtleGattCharacteristic> gattCharReadHistory = new ArrayList<>();
     NotificationListener notificationListener;
     DisconnectHandler dcHandler;
@@ -81,6 +83,9 @@ class JunitPlatform implements IO, BtleGatt {
 
     public void addCustomModuleInfo(byte[] info) {
         customModuleInfo.put(info[0], info);
+    }
+    public void addCustomResponse(byte[] command, byte[] response) {
+        customResponses.put(Arrays.hashCode(command), response);
     }
 
     private void scheduleMockResponse(final byte[] response) {
@@ -119,16 +124,32 @@ class JunitPlatform implements IO, BtleGatt {
 
     @Override
     public Task<Void> writeCharacteristicAsync(BtleGattCharacteristic gattCharr, WriteType writeType, byte[] value) {
+        if (!customResponses.isEmpty()) {
+            for (int i = 2; i < Math.min(3, value.length) + 1; i++) {
+                byte[] prefix = new byte[i];
+                System.arraycopy(value, 0, prefix, 0, prefix.length);
+
+                int hash = Arrays.hashCode(prefix);
+                if (customResponses.containsKey(hash)) {
+                    scheduleMockResponse(customResponses.get(hash));
+                    return Task.forResult(null);
+                }
+            }
+        }
+
         if (value[1] == (byte) 0x80) {
             connectCmds.add(value);
-            byte[] response = customModuleInfo.containsKey(value[0]) ?
-                    customModuleInfo.get(value[0]) :
-                    boardInfo.moduleResponses.get(value[0]);
 
-            if (delayModuleInfoResponse) {
-                scheduleMockResponse(response);
-            } else {
-                bridge.sendMockResponse(response);
+            if (maxModule == -1 || value[0] <= maxModule) {
+                byte[] response = customModuleInfo.containsKey(value[0]) ?
+                        customModuleInfo.get(value[0]) :
+                        boardInfo.moduleResponses.get(value[0]);
+
+                if (delayModuleInfoResponse) {
+                    scheduleMockResponse(response);
+                } else {
+                    bridge.sendMockResponse(response);
+                }
             }
         } else if (value[0] == (byte) 0xb && value[1] == (byte) 0x84) {
             connectCmds.add(value);

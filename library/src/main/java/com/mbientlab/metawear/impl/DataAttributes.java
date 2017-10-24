@@ -77,4 +77,24 @@ class DataAttributes implements Serializable {
 
         return sum;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        DataAttributes that = (DataAttributes) o;
+
+        return copies == that.copies && offset == that.offset && signed == that.signed && Arrays.equals(sizes, that.sizes);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Arrays.hashCode(sizes);
+        result = 31 * result + (int) copies;
+        result = 31 * result + (int) offset;
+        result = 31 * result + (signed ? 1 : 0);
+        return result;
+    }
 }

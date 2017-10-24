@@ -37,6 +37,15 @@ import static com.mbientlab.metawear.impl.Constant.Module.HUMIDITY;
  * Created by etsai on 9/19/16.
  */
 class HumidityBme280Impl extends ModuleImplBase implements HumidityBme280 {
+    static String createUri(DataTypeBase dataType) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
+            case VALUE:
+                return "relative-humidity";
+            default:
+                return null;
+        }
+    }
+
     private final static String PRODUCER= "com.mbientlab.metawear.impl.HumidityBme280Impl.PRODUCER";
     private final static byte VALUE = 1, MODE = 2;
     private static final long serialVersionUID = 1478927889851422678L;

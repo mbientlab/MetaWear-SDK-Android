@@ -25,9 +25,12 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Data;
+import com.mbientlab.metawear.builder.filter.DifferentialOutput;
 
 import java.nio.ByteBuffer;
 import java.util.Calendar;
+
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 
 /**
  * Created by etsai on 9/5/16.
@@ -92,5 +95,22 @@ class SFloatData extends DataTypeBase {
                 return super.value(clazz);
             }
         };
+    }
+
+    @Override
+    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+        switch(config.id) {
+            case DataProcessorConfig.Maths.ID: {
+                DataProcessorConfig.Maths casted = (DataProcessorConfig.Maths) config;
+                switch(casted.op) {
+                    case ABS_VALUE: {
+                        DataAttributes copy= attributes.dataProcessorCopySigned(false);
+                        return new Pair<>(new UFloatData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, copy), null);
+                    }
+                }
+                break;
+            }
+        }
+        return super.dataProcessorTransform(config);
     }
 }

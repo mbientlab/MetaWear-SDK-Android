@@ -24,10 +24,13 @@
 
 package com.mbientlab.metawear;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Map;
 import java.util.UUID;
 
 import bolts.Task;
@@ -60,7 +63,7 @@ public interface MetaWearBoard {
     Model getModel();
     /**
      * Same behavior as {@link #getModel()} except the returned value is a friendly name rather than an enum
-     * @return Board model as string
+     * @return Board model as string, null if unable to determine
      */
     String getModelString();
     /**
@@ -84,6 +87,14 @@ public interface MetaWearBoard {
      * @return Task holding the device information
      */
     Task<DeviceInformation> readDeviceInformationAsync();
+
+    /**
+     * Downloads the specific firmware release for the board to your local device.  You must be connected to the
+     * board before calling this function.
+     * @param version Firmware revision to download
+     * @return Task holding the file pointing to where the downloaded firmware resides on the local device
+     */
+    Task<File> downloadFirmwareAsync(String version);
     /**
      * Downloads the latest firmware release for the board to your local device.  You must be connected to the
      * board before calling this function.
@@ -167,6 +178,11 @@ public interface MetaWearBoard {
     <T extends Module> T getModuleOrThrow(Class<T> moduleClass) throws UnsupportedModuleException;
 
     /**
+     * Reads the current state of the board and creates anonymous routes based on what data is being logged
+     * @return Task that is completed when the anonymous routes are created
+     */
+    Task<AnonymousRoute[]> createAnonymousRoutesAsync();
+    /**
      * Retrieves a route
      * @param id    Numerical ID to look up
      * @return Route corresponding to the specified ID, null if none can be found
@@ -178,6 +194,7 @@ public interface MetaWearBoard {
      * @return Observer corresponding to the specified ID, null if none can be found
      */
     Observer lookupObserver(int id);
+
     /**
      * Removes all routes and resources allocated on the board (observers, data processors, timers, and loggers)
      */
@@ -207,4 +224,12 @@ public interface MetaWearBoard {
      * @throws ClassNotFoundException Class of a serialized object cannot be found
      */
     void deserialize(InputStream ins) throws IOException, ClassNotFoundException;
+
+    /**
+     * Queries all info registers.  If the task times out, you can run the task again using the partially
+     * completed result from the previous execution so the function does not need to query all modules again.
+     * @param partial    Map of previously queries module info results, set to null to query all modules
+     * @return Task that is completed once the query is completed
+     */
+    Task<JSONObject> dumpModuleInfo(JSONObject partial);
 }

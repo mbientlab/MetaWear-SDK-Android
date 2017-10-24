@@ -27,6 +27,8 @@ package com.mbientlab.metawear.impl;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.LinkedList;
 
 /**
  * Created by etsai on 9/4/16.
@@ -114,10 +116,34 @@ public class Util {
         return copy;
     }
 
+    static String createProducerChainString(DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+        Deque<DataTypeBase> parents = new LinkedList<>();
+        DataTypeBase current = source;
+
+        do {
+            parents.push(current);
+            current = current.input;
+        } while(current != null);
+
+        StringBuilder builder = new StringBuilder();
+        boolean first = true;
+        while(!parents.isEmpty()) {
+            if (!first) {
+                builder.append(":");
+            }
+            builder.append(DataTypeBase.createUri(parents.poll(), mwPrivate));
+            first = false;
+        }
+
+        return builder.toString();
+    }
+
+    static byte clearRead(byte value) {
+        return (byte) (value & 0x3f);
+    }
     static byte setRead(byte value) {
         return (byte) (0x80 | value);
     }
-
     static byte setSilentRead(byte value) {
         return (byte) (0xc0 | value);
     }

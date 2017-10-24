@@ -33,6 +33,7 @@ import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.data.TapType;
+import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
 import java.nio.ByteBuffer;
@@ -40,6 +41,7 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 
 import bolts.Task;
 
@@ -49,6 +51,23 @@ import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
  * Created by etsai on 9/1/16.
  */
 class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerMma8452q {
+    static String createUri(DataTypeBase dataType) {
+        switch (dataType.eventConfig[1]) {
+            case DATA_VALUE:
+                return dataType.attributes.length() > 2 ? "acceleration" : String.format(Locale.US, "acceleration[%d]", (dataType.attributes.offset >> 1));
+            case ORIENTATION_VALUE:
+                return "orientation";
+            case SHAKE_STATUS:
+                return "mma8452q-shake";
+            case PULSE_STATUS:
+                return "mma8452q-tap";
+            case MOVEMENT_VALUE:
+                return "mma8452q-movement";
+            default:
+                return null;
+        }
+    }
+
     private static final long serialVersionUID = 8144499912703592184L;
     final static byte IMPLEMENTATION= 0x0;
     private final float MMA8452Q_G_PER_STEP= 0.063f;
@@ -428,6 +447,7 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
     private final byte[] dataSettings= new byte[] {0x00, 0x00, (byte) 0x18, 0x00, 0x00};
 
     private transient AsyncDataProducer packedAcceleration, acceleration, orientation, shake, tap, freeFall, motion;
+    private transient AsyncTaskManager<Void> pullConfigTask;
 
     AccelerometerMma8452qImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -443,6 +463,20 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         this.mwPrivate.tagProducer(TAP_PRODUCER, new Mma8452QTapData());
         this.mwPrivate.tagProducer(MOVEMENT_PRODUCER, new Mma8452QMovementData());
         this.mwPrivate.tagProducer(ACCEL_PACKED_PRODUCER, new Mma8452QCartesianFloatData(PACKED_ACC_DATA, (byte) 3));
+    }
+
+    @Override
+    protected void init() {
+        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
+
+        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), new RegisterResponseHandler() {
+            @Override
+            public void onResponseReceived(byte[] response) {
+                pullConfigTask.cancelTimeout();
+                System.arraycopy(response, 2, dataSettings, 0, dataSettings.length);
+                pullConfigTask.setResult(null);
+            }
+        });
     }
 
     private int pwMode() {
@@ -565,6 +599,16 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
     @Override
     public float getRange() {
         return FullScaleRange.values()[dataSettings[0] & ~0xfc].range;
+    }
+
+    @Override
+    public Task<Void> pullConfigAsync() {
+        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
+            @Override
+            public void run() {
+                mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)});
+            }
+        });
     }
 
     @Override

@@ -32,15 +32,26 @@ import com.mbientlab.metawear.module.ColorTcs34725;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
+import java.util.Locale;
 
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.COLOR_DETECTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 
 /**
  * Created by etsai on 9/19/16.
  */
 class ColorTcs34725Impl extends ModuleImplBase implements ColorTcs34725 {
+    static String createUri(DataTypeBase dataType) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
+            case ADC:
+                return dataType.attributes.length() > 2 ? "color" : String.format(Locale.US, "color[%d]", (dataType.attributes.offset >> 1));
+            default:
+                return null;
+        }
+    }
+
     private final static String ADC_PRODUCER= "com.mbientlab.metawear.impl.ColorTcs34725Impl.ADC_PRODUCER",
             ADC_CLEAR_PRODUCER= "com.mbientlab.metawear.impl.ColorTcs34725Impl.ADC_CLEAR_PRODUCER",
             ADC_RED_PRODUCER= "com.mbientlab.metawear.impl.ColorTcs34725Impl.ADC_RED_PRODUCER",
@@ -103,6 +114,18 @@ class ColorTcs34725Impl extends ModuleImplBase implements ColorTcs34725 {
         public DataTypeBase[] createSplits() {
             return new DataTypeBase[] {createAdcUintDataProducer((byte) 0), createAdcUintDataProducer((byte) 2),
                     createAdcUintDataProducer((byte) 4), createAdcUintDataProducer((byte) 6)};
+        }
+
+        @Override
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+            switch(config.id) {
+                case DataProcessorConfig.Combiner.ID: {
+                    DataAttributes attributes= new DataAttributes(new byte[] {this.attributes.sizes[0]}, (byte) 1, (byte) 0, false);
+                    return new Pair<>(new UintData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes), null);
+                }
+            }
+
+            return super.dataProcessorTransform(config);
         }
     }
 

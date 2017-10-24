@@ -37,6 +37,15 @@ import static com.mbientlab.metawear.impl.Constant.Module.AMBIENT_LIGHT;
  * Created by etsai on 9/20/16.
  */
 class AmbientLightLtr329Impl extends ModuleImplBase implements AmbientLightLtr329 {
+    static String createUri(DataTypeBase dataType) {
+        switch (dataType.eventConfig[1]) {
+            case OUTPUT:
+                return "illuminance";
+            default:
+                return null;
+        }
+    }
+
     private final static String ILLUMINANCE_PRODUCER= "com.mbientlab.metawear.impl.AmbientLightLtr329Impl.ILLUMINANCE_PRODUCER";
     private static final byte ENABLE = 1, CONFIG = 2, OUTPUT = 3;
     private static final long serialVersionUID = 8287988596635899285L;

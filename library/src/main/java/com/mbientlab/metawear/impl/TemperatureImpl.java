@@ -40,6 +40,15 @@ import static com.mbientlab.metawear.impl.Constant.Module.TEMPERATURE;
  * Created by etsai on 9/18/16.
  */
 class TemperatureImpl extends ModuleImplBase implements Temperature {
+    static String createUri(DataTypeBase dataType) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
+            case VALUE:
+                return String.format(Locale.US, "temperature[%d]", dataType.eventConfig[2]);
+            default:
+                return null;
+        }
+    }
+
     private static final long serialVersionUID = -80503384765010385L;
     private static final String PRODUCER_FORMAT= "com.mbientlab.metawear.impl.TemperatureImpl.PRODUCER_%d";
     private final static byte VALUE = 1, MODE= 2;

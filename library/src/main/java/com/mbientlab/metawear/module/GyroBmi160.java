@@ -32,6 +32,8 @@ import com.mbientlab.metawear.data.AngularVelocity;
 
 import java.util.HashMap;
 
+import bolts.Task;
+
 /**
  * Sensor on the BMI160 IMU measuring angular velocity
  * @author Eric Tsai
@@ -118,6 +120,11 @@ public interface GyroBmi160 extends Module, Configurable<GyroBmi160.ConfigEditor
          */
         ConfigEditor odr(OutputDataRate odr);
     }
+    /**
+     * Pulls the current gyro output data rate and data range from the sensor
+     * @return Task that is completed when the settings are received
+     */
+    Task<Void> pullConfigAsync();
 
     /**
      * Reports measured angular velocity values from the gyro.  Combined XYZ data is represented as an

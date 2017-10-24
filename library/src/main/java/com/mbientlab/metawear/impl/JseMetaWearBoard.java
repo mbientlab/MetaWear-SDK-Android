@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.AnonymousRoute;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.DataToken;
 import com.mbientlab.metawear.DeviceInformation;
@@ -32,6 +33,7 @@ import com.mbientlab.metawear.Model;
 import com.mbientlab.metawear.Observer;
 import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.Route;
+import com.mbientlab.metawear.TaskTimeoutException;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.UnsupportedModuleException;
 import com.mbientlab.metawear.builder.RouteComponent.Action;
@@ -57,7 +59,9 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -68,6 +72,7 @@ import java.util.LinkedList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -138,168 +143,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
             routeIdCounter= 0;
         }
     }
-    private static class RouteInner implements Route, Serializable {
-        private static final long serialVersionUID = -8537409673730434416L;
-
-        private final LinkedList<Byte> eventCmdIds;
-        private final ArrayList<DeviceDataConsumer> consumers;
-        private final LinkedList<Byte> dataprocessors;
-        private final HashSet<String> processorNames;
-        private final int id;
-        private boolean active;
-
-        private transient MetaWearBoardPrivate mwPrivate;
-
-        RouteInner(LinkedList<Byte> eventCmdIds, ArrayList<DeviceDataConsumer> consumers, LinkedList<Byte> dataprocessors, HashSet<String> processorNames, int id, MetaWearBoardPrivate mwPrivate) {
-            this.eventCmdIds= eventCmdIds;
-            this.consumers = consumers;
-            this.dataprocessors= dataprocessors;
-            this.processorNames = processorNames;
-            this.id= id;
-            this.active= true;
-            this.mwPrivate = mwPrivate;
-        }
-
-        void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
-            this.mwPrivate = mwPrivate;
-
-            for(DeviceDataConsumer it: consumers) {
-                it.addDataHandler(mwPrivate);
-            }
-        }
-
-        @Override
-        public boolean setEnvironment(int pos, Object ... env) {
-            try {
-                consumers.get(pos).environment= env;
-                return true;
-            } catch (IndexOutOfBoundsException ignored) {
-                return false;
-            }
-        }
-
-        @Override
-        public boolean unsubscribe(int pos) {
-            try {
-                consumers.get(pos).disableStream(mwPrivate);
-                return true;
-            } catch (IndexOutOfBoundsException ignored) {
-                return false;
-            }
-        }
-
-        @Override
-        public boolean resubscribe(int pos) {
-            try {
-                consumers.get(pos).enableStream(mwPrivate);
-                return true;
-            } catch (IndexOutOfBoundsException ignored) {
-                return false;
-            }
-        }
-
-        @Override
-        public boolean resubscribe(int pos, Subscriber subscriber) {
-            try {
-                consumers.get(pos).subscriber= subscriber;
-                consumers.get(pos).enableStream(mwPrivate);
-                return true;
-            } catch (IndexOutOfBoundsException ignored) {
-                return false;
-            }
-        }
-
-        void remove(boolean sync) {
-            if (active) {
-                active = false;
-                for(String it: processorNames) {
-                    mwPrivate.removeProducerTag(it);
-                }
-
-                LoggingImpl logging= (LoggingImpl) mwPrivate.getModules().get(Logging.class);
-                for(DeviceDataConsumer it: consumers) {
-                    if (it instanceof DataLogger) {
-                        logging.removeDataLogger(sync, (DataLogger) it);
-                    } else {
-                        it.disableStream(mwPrivate);
-                    }
-                }
-
-                for(byte it: dataprocessors) {
-                    mwPrivate.removeProcessor(sync, it);
-                }
-                dataprocessors.clear();
-
-                if (sync) {
-                    EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
-                    for(Byte it: eventCmdIds) {
-                        event.removeEventCommand(it);
-                    }
-
-                    mwPrivate.removeRoute(id);
-                }
-            }
-        }
-
-        @Override
-        public void remove() {
-            remove(true);
-        }
-
-        @Override
-        public boolean isActive() {
-            return active;
-        }
-
-        @Override
-        public int id() {
-            return id;
-        }
-    }
-    private static class ObserverInner implements Observer, Serializable {
-        private static final long serialVersionUID = -991370121066262533L;
-
-        private final LinkedList<Byte> eventCmdIds;
-        private final int id;
-        private boolean active;
-
-        private transient MetaWearBoardPrivate mwPrivate;
-
-        private ObserverInner(int id, LinkedList<Byte> eventCmdIds) {
-            this.eventCmdIds = eventCmdIds;
-            this.id = id;
-            active= true;
-        }
-
-        void restoreTransientVar(MetaWearBoardPrivate mwPrivate) {
-            this.mwPrivate = mwPrivate;
-        }
-
-        @Override
-        public int id() {
-            return id;
-        }
-
-        @Override
-        public void remove() {
-            remove(true);
-        }
-
-        public void remove(boolean sync) {
-            if (active) {
-                active= false;
-
-                if (sync) {
-                    EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
-                    for (Byte it : eventCmdIds) {
-                        event.removeEventCommand(it);
-                    }
-
-                    mwPrivate.removeEventManager(id);
-                }
-            }
-        }
-    }
 
     // Persistent data
     private PersistentData persist= new PersistentData();
@@ -325,6 +168,8 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     // module discovery
     private Queue<Constant.Module> moduleQueries;
+    private TaskCompletionSource<JSONObject> diagnosticTaskSource;
+    private Map<String, JSONObject> diagnosticResult;
 
     // Device Information
     private String serialNumber, manufacturer;
@@ -434,6 +279,11 @@ public class JseMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
+        public Collection<DataTypeBase> getDataTypes() {
+            return persist.taggedProducers.values();
+        }
+
+        @Override
         public Map<Class<? extends Module>, Module> getModules() {
             return Collections.unmodifiableMap(persist.modules);
         }
@@ -523,6 +373,11 @@ public class JseMetaWearBoard implements MetaWearBoard {
         public void logWarn(String message) {
             io.logWarn(LOG_TAG, message);
         }
+
+        @Override
+        public Version getFirmwareVersion() {
+            return persist.boardInfo.firmware;
+        }
     };
 
     /**
@@ -558,19 +413,26 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Model getModel() {
-        if (inMetaBootMode() || persist.boardInfo.moduleInfo.isEmpty() || persist.boardInfo.modelNumber == null) {
+        if (persist.boardInfo.modelNumber == null) {
             return null;
         }
 
+        boolean hasModuleInfo = !(inMetaBootMode() || persist.boardInfo.moduleInfo.isEmpty());
         switch(persist.boardInfo.modelNumber) {
             case "0":
                 return Model.METAWEAR_R;
             case "1":
-                if (persist.boardInfo.moduleInfo.get(Constant.Module.BAROMETER).present() && persist.boardInfo.moduleInfo.get(Constant.Module.AMBIENT_LIGHT).present()) {
-                    return Model.METAWEAR_RPRO;
+                if (hasModuleInfo) {
+                    if (persist.boardInfo.moduleInfo.get(Constant.Module.BAROMETER).present() && persist.boardInfo.moduleInfo.get(Constant.Module.AMBIENT_LIGHT).present()) {
+                        return Model.METAWEAR_RPRO;
+                    }
+                    return Model.METAWEAR_RG;
                 }
-                return Model.METAWEAR_RG;
+                return null;
             case "2":
+                if (!hasModuleInfo) {
+                    return null;
+                }
                 if (persist.boardInfo.moduleInfo.get(Constant.Module.MAGNETOMETER).present()) {
                     return Model.METAWEAR_CPRO;
                 }
@@ -602,31 +464,36 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public String getModelString() {
-        switch(getModel()) {
-            case METAWEAR_R:
-                return "MetaWear R";
-            case METAWEAR_RG:
-                return "MetaWear RG";
-            case METAWEAR_RPRO:
-                return "MetaWear RPro";
-            case METAWEAR_C:
-                return "MetaWear C";
-            case METAWEAR_CPRO:
-                return "MetaWear CPro";
-            case METAENV:
-                return "MetaEnvironment";
-            case METADETECT:
-                return "MetaDetector";
-            case METAHEALTH:
-                return "MetaHealth";
-            case METATRACKER:
-                return "MetaTracker";
-            case METAMOTION_R:
-                return "MetaMotion R";
-            case METAMOTION_C:
-                return "MetaMotion C";
-            default:
-                return "Unknown";
+        Model model;
+
+        if ((model = getModel()) != null) {
+            switch (model) {
+                case METAWEAR_R:
+                    return "MetaWear R";
+                case METAWEAR_RG:
+                    return "MetaWear RG";
+                case METAWEAR_RPRO:
+                    return "MetaWear RPro";
+                case METAWEAR_C:
+                    return "MetaWear C";
+                case METAWEAR_CPRO:
+                    return "MetaWear CPro";
+                case METAENV:
+                    return "MetaEnvironment";
+                case METADETECT:
+                    return "MetaDetector";
+                case METAHEALTH:
+                    return "MetaHealth";
+                case METATRACKER:
+                    return "MetaTracker";
+                case METAMOTION_R:
+                    return "MetaMotion R";
+                case METAMOTION_C:
+                    return "MetaMotion C";
+            }
+            return null;
+        } else {
+            return null;
         }
     }
 
@@ -690,57 +557,47 @@ public class JseMetaWearBoard implements MetaWearBoard {
     }
 
     @Override
-    public Task<File> downloadLatestFirmwareAsync() {
+    public Task<File> downloadFirmwareAsync(final String version) {
         if (connected) {
-            final TaskCompletionSource<File> taskSource = new TaskCompletionSource<>();
-            File info1Json = io.findDownloadedFile("info1.json");
-
-            if (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL) {
-                io.downloadFileAsync("https://releases.mbientlab.com/metawear/info1.json", "info1.json")
-                        .onSuccessTask(new Continuation<File, Task<File>>() {
-                            @Override
-                            public Task<File> then(Task<File> task) throws Exception {
-                                return downloadFirmware(findLatestRelease(task.getResult()));
-                            }
-                        }).continueWith(new Continuation<File, Void>() {
-                            @Override
-                            public Void then(Task<File> task) throws Exception {
-                                if (task.isFaulted()) {
-                                    taskSource.setError(task.getError());
-                                } else {
-                                    taskSource.setResult(task.getResult());
+            if (version == null) {
+                File info1Json = io.findDownloadedFile("info1.json");
+                if (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL) {
+                    return io.downloadFileAsync("https://releases.mbientlab.com/metawear/info1.json", "info1.json")
+                            .onSuccessTask(new Continuation<File, Task<File>>() {
+                                @Override
+                                public Task<File> then(Task<File> task) throws Exception {
+                                    return downloadFirmware(findRelease(task.getResult(), null));
                                 }
-                                return null;
-                            }
-                        });
-            } else {
-                try {
-                    Pair<Version, String> latest = findLatestRelease(info1Json);
-                    File firmware = io.findDownloadedFile(buildFirmwareFileName(latest));
-
-                    if (!firmware.exists()) {
-                        downloadFirmware(latest).continueWith(new Continuation<File, Void>() {
-                            @Override
-                            public Void then(Task<File> task) throws Exception {
-                                if (task.isFaulted()) {
-                                    taskSource.setError(task.getError());
-                                } else {
-                                    taskSource.setResult(task.getResult());
-                                }
-                                return null;
-                            }
-                        });
-                    } else {
-                        taskSource.setResult(firmware);
+                            });
+                } else {
+                    try {
+                        Pair<Version, String> latest = findRelease(info1Json, null);
+                        File firmware = io.findDownloadedFile(buildFirmwareFileName(latest));
+                        return !firmware.exists() ? downloadFirmware(latest) : Task.forResult(firmware);
+                    } catch (Exception e) {
+                        return Task.forError(e);
                     }
-                } catch (Exception e) {
-                    taskSource.setError(e);
                 }
+            } else {
+                final Version versionObj = new Version(version);
+                return downloadFirmware(new Pair<>(versionObj, "firmware.zip")).continueWithTask(new Continuation<File, Task<File>>() {
+                    @Override
+                    public Task<File> then(Task<File> task) throws Exception {
+                        return task.isFaulted() ? downloadFirmware(new Pair<>(versionObj, "firmware.bin")) : task;
+                    }
+                }).continueWithTask(new Continuation<File, Task<File>>() {
+                    @Override
+                    public Task<File> then(Task<File> task) throws Exception {
+                        return task.isFaulted() ? Task.<File>forError(new RuntimeException("Firmware version \'" + version + "\' not available for this board", task.getError())) : task;
+                    }
+                });
             }
-
-            return taskSource.getTask();
         }
         return Task.forError(new IllegalStateException("No active BLE connection"));
+    }
+    @Override
+    public Task<File> downloadLatestFirmwareAsync() {
+        return downloadFirmwareAsync(null);
     }
 
     @Override
@@ -754,7 +611,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                         .onSuccessTask(new Continuation<File, Task<Boolean>>() {
                             @Override
                             public Task<Boolean> then(Task<File> task) throws Exception {
-                                return Task.forResult(persist.boardInfo.firmware.compareTo(findLatestRelease(task.getResult()).first) < 0);
+                                return Task.forResult(persist.boardInfo.firmware.compareTo(findRelease(task.getResult(), null).first) < 0);
                             }
                         }).continueWith(new Continuation<Boolean, Void>() {
                     @Override
@@ -769,7 +626,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 });
             } else {
                 try {
-                    taskSource.setResult(persist.boardInfo.firmware.compareTo(findLatestRelease(info1Json).first) < 0);
+                    taskSource.setResult(persist.boardInfo.firmware.compareTo(findRelease(info1Json, null).first) < 0);
                 } catch (Exception e) {
                     taskSource.setError(e);
                 }
@@ -780,7 +637,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
         return Task.forError(new IllegalStateException("No active BLE connection"));
     }
 
-    private Pair<Version, String> findLatestRelease(File releaseInfo) throws JSONException, IOException {
+    private Pair<Version, String> findRelease(File releaseInfo, String version) throws JSONException, IOException {
         String info1Json;
 
         {
@@ -801,16 +658,20 @@ public class JseMetaWearBoard implements MetaWearBoard {
         JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
         JSONObject availableVersions = builds.getJSONObject(FIRMWARE_BUILD);
 
-        Iterator<String> versionKeys = availableVersions.keys();
-        TreeSet<Version> versions = new TreeSet<>();
-        while (versionKeys.hasNext()) {
-            versions.add(new Version(versionKeys.next()));
-        }
+        if (version == null) {
+            Iterator<String> versionKeys = availableVersions.keys();
+            TreeSet<Version> versions = new TreeSet<>();
+            while (versionKeys.hasNext()) {
+                versions.add(new Version(versionKeys.next()));
+            }
 
-        Iterator<Version> it = versions.descendingIterator();
-        if (it.hasNext()) {
-            Version latest = it.next();
-            return new Pair<>(latest, availableVersions.getJSONObject(latest.toString()).getString("filename"));
+            Iterator<Version> it = versions.descendingIterator();
+            if (it.hasNext()) {
+                Version latest = it.next();
+                return new Pair<>(latest, availableVersions.getJSONObject(latest.toString()).getString("filename"));
+            }
+        } else {
+            return new Pair<>(new Version(version), availableVersions.getJSONObject(version).getString("filename"));
         }
 
         throw new IllegalStateException("No information available for this board");
@@ -884,14 +745,31 @@ public class JseMetaWearBoard implements MetaWearBoard {
                             registerResponseHandlers.get(header).onResponseReceived(value);
                         } else if (value[1] == READ_INFO_REGISTER) {
                             ModuleInfo current= new ModuleInfo(value);
-                            persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(value[0]), current);
+                            if (diagnosticTaskSource == null) {
+                                persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(value[0]), current);
 
-                            instantiateModule(current);
+                                instantiateModule(current);
 
-                            if (moduleQueries.isEmpty()) {
-                                logger.queryTime().continueWith(timeReadContinuation);
+                                if (moduleQueries.isEmpty()) {
+                                    logger.queryTime().continueWith(timeReadContinuation);
+                                } else {
+                                    JseMetaWearBoard.this.gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
+                                }
                             } else {
-                                JseMetaWearBoard.this.gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] {moduleQueries.poll().id, READ_INFO_REGISTER});
+                                diagnosticResult.put(Constant.Module.lookupEnum(value[0]).friendlyName, current.toJSON());
+                                if (moduleQueries.isEmpty()) {
+                                    serviceDiscoveryFuture.cancel(false);
+
+                                    TaskCompletionSource<JSONObject> temp = diagnosticTaskSource;
+                                    diagnosticTaskSource = null;
+
+                                    Map<String, JSONObject> temp2 = diagnosticResult;
+                                    diagnosticResult = null;
+
+                                    temp.setResult(new JSONObject(temp2));
+                                } else {
+                                    JseMetaWearBoard.this.gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
+                                }
                             }
                         }
                     }
@@ -1104,6 +982,106 @@ public class JseMetaWearBoard implements MetaWearBoard {
         deserializeInner(ins);
     }
 
+    @Override
+    public Task<JSONObject> dumpModuleInfo(JSONObject partial) {
+        if (diagnosticTaskSource == null) {
+            diagnosticResult = new TreeMap<>();
+            diagnosticTaskSource = new TaskCompletionSource<>();
+            if (partial == null) {
+                moduleQueries = new LinkedList<>(Arrays.asList(Constant.Module.values()));
+            } else {
+                {
+                    Iterator<String> it = partial.keys();
+                    while (it.hasNext()) {
+                        String current = it.next();
+                        diagnosticResult.put(current, partial.optJSONObject(current));
+                    }
+                }
+
+                for(Constant.Module it: Constant.Module.values()) {
+                    if (!partial.has(it.friendlyName)) {
+                        moduleQueries.add(it);
+                    }
+                }
+            }
+
+            serviceDiscoveryFuture = mwPrivate.scheduleTask(new Runnable() {
+                @Override
+                public void run() {
+                    JSONObject temp = new JSONObject(diagnosticResult);
+                    diagnosticResult = null;
+
+                    TaskCompletionSource<JSONObject> temp2 = diagnosticTaskSource;
+                    diagnosticTaskSource = null;
+
+                    temp2.setError(new TaskTimeoutException("Querying module info timed out", temp));
+                }
+            }, 7500L);
+            gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] {moduleQueries.poll().id, READ_INFO_REGISTER});
+        }
+
+        return diagnosticTaskSource.getTask();
+    }
+
+    private static class AnonymousRouteInner implements AnonymousRoute {
+        private DeviceDataConsumer consumer;
+        private MetaWearBoardPrivate bridge;
+
+        AnonymousRouteInner(DeviceDataConsumer consumer, MetaWearBoardPrivate bridge) {
+            this.consumer = consumer;
+            this.bridge = bridge;
+        }
+
+        @Override
+        public String identifier() {
+            return Util.createProducerChainString(consumer.source, bridge);
+        }
+
+        @Override
+        public void subscribe(Subscriber subscriber) {
+            consumer.subscriber = subscriber;
+        }
+
+        @Override
+        public void setEnvironment(Object... env) {
+            consumer.environment = env;
+        }
+    }
+    @Override
+    public Task<AnonymousRoute[]> createAnonymousRoutesAsync() {
+        Accelerometer accelerometer = getModule(Accelerometer.class);
+        final GyroBmi160 gyro = getModule(GyroBmi160.class);
+        final SensorFusionBosch sensorFusion = getModule(SensorFusionBosch.class);
+
+        return (accelerometer == null ? Task.<Void>forResult(null) : accelerometer.pullConfigAsync()).onSuccessTask(new Continuation<Void, Task<Void>>() {
+            @Override
+            public Task<Void> then(Task<Void> task) throws Exception {
+                return gyro == null ? Task.<Void>forResult(null) : gyro.pullConfigAsync();
+            }
+        }).onSuccessTask(new Continuation<Void, Task<Void>>() {
+            @Override
+            public Task<Void> then(Task<Void> task) throws Exception {
+                return sensorFusion == null ? Task.<Void>forResult(null) : sensorFusion.pullConfigAsync();
+            }
+        }).onSuccessTask(new Continuation<Void, Task<Collection<DataLogger>>>() {
+            @Override
+            public Task<Collection<DataLogger>> then(Task<Void> task) throws Exception {
+                return logger.queryActiveLoggersAsync();
+            }
+        }).onSuccessTask(new Continuation<Collection<DataLogger>, Task<AnonymousRoute[]>>() {
+            @Override
+            public Task<AnonymousRoute[]> then(Task<Collection<DataLogger>> task) throws Exception {
+                AnonymousRoute[] routes = new AnonymousRoute[task.getResult().size()];
+                int i = 0;
+                for(DataLogger it: task.getResult()) {
+                    routes[i] = new AnonymousRouteInner(it, mwPrivate);
+                    i++;
+                }
+                return Task.forResult(routes);
+            }
+        });
+    }
+
     private void sendCommand(int dest, DataToken input, Constant.Module module, byte register, byte id, byte... parameters) {
         byte[] command= new byte[parameters.length + 3];
         System.arraycopy(parameters, 0, command, 3, parameters.length);
@@ -1234,6 +1212,178 @@ public class JseMetaWearBoard implements MetaWearBoard {
         }
     }
 
+    private static class RouteInner implements Route, Serializable {
+        private static final long serialVersionUID = -8537409673730434416L;
+
+        private final LinkedList<Byte> eventCmdIds;
+        private final ArrayList<DeviceDataConsumer> consumers;
+        private final LinkedList<Byte> dataprocessors;
+        private final HashSet<String> processorNames;
+        private final int id;
+        private boolean active;
+
+        private transient MetaWearBoardPrivate mwPrivate;
+
+        RouteInner(LinkedList<Byte> eventCmdIds, ArrayList<DeviceDataConsumer> consumers, LinkedList<Byte> dataprocessors,
+                   HashSet<String> processorNames, int id, MetaWearBoardPrivate mwPrivate) {
+            this.eventCmdIds= eventCmdIds;
+            this.consumers = consumers;
+            this.dataprocessors= dataprocessors;
+            this.processorNames = processorNames;
+            this.id= id;
+            this.active= true;
+            this.mwPrivate = mwPrivate;
+        }
+
+        void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
+            this.mwPrivate = mwPrivate;
+
+            for(DeviceDataConsumer it: consumers) {
+                it.addDataHandler(mwPrivate);
+            }
+        }
+
+        @Override
+        public String generateIdentifier(int pos) {
+            try {
+                return Util.createProducerChainString(consumers.get(pos).source, mwPrivate);
+            } catch (IndexOutOfBoundsException ignored) {
+                return null;
+            }
+        }
+
+        @Override
+        public boolean setEnvironment(int pos, Object ... env) {
+            try {
+                consumers.get(pos).environment= env;
+                return true;
+            } catch (IndexOutOfBoundsException ignored) {
+                return false;
+            }
+        }
+
+        @Override
+        public boolean unsubscribe(int pos) {
+            try {
+                consumers.get(pos).disableStream(mwPrivate);
+                return true;
+            } catch (IndexOutOfBoundsException ignored) {
+                return false;
+            }
+        }
+
+        @Override
+        public boolean resubscribe(int pos) {
+            try {
+                consumers.get(pos).enableStream(mwPrivate);
+                return true;
+            } catch (IndexOutOfBoundsException ignored) {
+                return false;
+            }
+        }
+
+        @Override
+        public boolean resubscribe(int pos, Subscriber subscriber) {
+            try {
+                consumers.get(pos).subscriber= subscriber;
+                consumers.get(pos).enableStream(mwPrivate);
+                return true;
+            } catch (IndexOutOfBoundsException ignored) {
+                return false;
+            }
+        }
+
+        void remove(boolean sync) {
+            if (active) {
+                active = false;
+                for(String it: processorNames) {
+                    mwPrivate.removeProducerTag(it);
+                }
+
+                LoggingImpl logging= (LoggingImpl) mwPrivate.getModules().get(Logging.class);
+                for(DeviceDataConsumer it: consumers) {
+                    if (it instanceof DataLogger) {
+                        logging.removeDataLogger(sync, (DataLogger) it);
+                    } else {
+                        it.disableStream(mwPrivate);
+                    }
+                }
+
+                for(byte it: dataprocessors) {
+                    mwPrivate.removeProcessor(sync, it);
+                }
+                dataprocessors.clear();
+
+                if (sync) {
+                    EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
+                    for(Byte it: eventCmdIds) {
+                        event.removeEventCommand(it);
+                    }
+
+                    mwPrivate.removeRoute(id);
+                }
+            }
+        }
+
+        @Override
+        public void remove() {
+            remove(true);
+        }
+
+        @Override
+        public boolean isActive() {
+            return active;
+        }
+
+        @Override
+        public int id() {
+            return id;
+        }
+    }
+    private static class ObserverInner implements Observer, Serializable {
+        private static final long serialVersionUID = -991370121066262533L;
+
+        private final LinkedList<Byte> eventCmdIds;
+        private final int id;
+        private boolean active;
+
+        private transient MetaWearBoardPrivate mwPrivate;
+
+        private ObserverInner(int id, LinkedList<Byte> eventCmdIds) {
+            this.eventCmdIds = eventCmdIds;
+            this.id = id;
+            active= true;
+        }
+
+        void restoreTransientVar(MetaWearBoardPrivate mwPrivate) {
+            this.mwPrivate = mwPrivate;
+        }
+
+        @Override
+        public int id() {
+            return id;
+        }
+
+        @Override
+        public void remove() {
+            remove(true);
+        }
+
+        public void remove(boolean sync) {
+            if (active) {
+                active= false;
+
+                if (sync) {
+                    EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
+                    for (Byte it : eventCmdIds) {
+                        event.removeEventCommand(it);
+                    }
+
+                    mwPrivate.removeEventManager(id);
+                }
+            }
+        }
+    }
     private void createRoute(boolean ready) {
         if (!routeTypes.isEmpty() && (ready || routeTypes.size() == 1)) {
             switch(routeTypes.peek()) {
@@ -1241,7 +1391,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                     final Tuple3<RouteBuilder, ? extends RouteComponentImpl, TaskCompletionSource<Route>> current= pendingRoutes.peek();
                     final LinkedList<Byte> createdProcessors= new LinkedList<>();
                     final LinkedList<DataLogger> createdLoggers= new LinkedList<>();
-                    final Cache signalVars= new Cache(persist.boardInfo.firmware, mwPrivate);
+                    final Cache signalVars= new Cache(mwPrivate);
                     final HashSet<Integer> loggerIndices= new HashSet<>();
                     Task<Queue<Byte>> queueProcessorTask;
 

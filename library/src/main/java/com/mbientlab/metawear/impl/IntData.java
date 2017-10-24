@@ -29,6 +29,8 @@ import com.mbientlab.metawear.Data;
 import java.nio.ByteBuffer;
 import java.util.Calendar;
 
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+
 /**
  * Created by etsai on 9/5/16.
  */
@@ -80,5 +82,20 @@ class IntData extends DataTypeBase {
                 return super.value(clazz);
             }
         };
+    }
+
+    @Override
+    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+        switch(config.id) {
+            case DataProcessorConfig.Maths.ID: {
+                DataProcessorConfig.Maths casted = (DataProcessorConfig.Maths) config;
+                switch(casted.op) {
+                    case ABS_VALUE:
+                        return new Pair<>(new UintData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes.dataProcessorCopySigned(false)), null);
+                }
+                break;
+            }
+        }
+        return super.dataProcessorTransform(config);
     }
 }

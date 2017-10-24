@@ -37,9 +37,11 @@ import com.mbientlab.metawear.module.AccelerometerBosch;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.security.InvalidParameterException;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 
 import bolts.Task;
 
@@ -49,6 +51,25 @@ import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
  * Created by etsai on 9/1/16.
  */
 abstract class AccelerometerBoschImpl extends ModuleImplBase implements AccelerometerBosch {
+    static String createUri(DataTypeBase dataType) {
+        switch (dataType.eventConfig[1]) {
+            case DATA_INTERRUPT:
+                return dataType.attributes.length() > 2 ? "acceleration" : String.format(Locale.US, "acceleration[%d]", (dataType.attributes.offset >> 1));
+            case ORIENT_INTERRUPT:
+                return "orientation";
+            case FLAT_INTERRUPT:
+                return "bosch-flat";
+            case LOW_HIGH_G_INTERRUPT:
+                return "bosch-low-high";
+            case MOTION_INTERRUPT:
+                return "bosch-motion";
+            case TAP_INTERRUPT:
+                return "bosch-tap";
+            default:
+                return null;
+        }
+    }
+
     private static final long serialVersionUID = -5265441447807910938L;
 
     private static final byte PACKED_ACC_REVISION = 0x1, FLAT_REVISION = 0x2;

@@ -24,7 +24,11 @@
 
 package com.mbientlab.metawear.impl;
 
+import org.json.JSONObject;
+
 import java.io.Serializable;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Created by etsai on 8/31/16.
@@ -35,7 +39,7 @@ class ModuleInfo implements Serializable {
     final byte id, implementation, revision;
     final byte[] extra;
 
-    public ModuleInfo(byte[] response) {
+    ModuleInfo(byte[] response) {
         id= response[0];
         if (response.length > 2) {
             implementation = response[2];
@@ -55,5 +59,21 @@ class ModuleInfo implements Serializable {
 
     boolean present() {
         return implementation != (byte) 0xff && revision != (byte) 0xff;
+    }
+
+    JSONObject toJSON() {
+        if (!present()) {
+            return new JSONObject();
+        }
+
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("implementation", implementation);
+        attributes.put("revision", revision);
+
+        if (extra.length > 0) {
+            attributes.put("extra", Util.arrayToHexString(extra));
+        }
+
+        return new JSONObject(attributes);
     }
 }

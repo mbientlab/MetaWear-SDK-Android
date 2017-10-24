@@ -34,6 +34,7 @@ import com.mbientlab.metawear.module.MagnetometerBmm150;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
+import java.util.Locale;
 
 import bolts.Task;
 
@@ -43,6 +44,15 @@ import static com.mbientlab.metawear.impl.Constant.Module.MAGNETOMETER;
  * Created by etsai on 9/20/16.
  */
 class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm150 {
+    static String createUri(DataTypeBase dataType) {
+        switch (dataType.eventConfig[1]) {
+            case MAG_DATA:
+                return dataType.attributes.length() > 2 ? "magnetic-field" : String.format(Locale.US, "magnetic-field[%d]", (dataType.attributes.offset >> 1));
+            default:
+                return null;
+        }
+    }
+
     private final static String BFIELD_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_PRODUCER",
             BFIELD_X_AXIS_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_X_AXIS_PRODUCER",
             BFIELD_Y_AXIS_PRODUCER= "com.mbientlab.metawear.impl.MagnetometerBmm150Impl.BFIELD_Y_AXIS_PRODUCER",

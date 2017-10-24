@@ -46,8 +46,6 @@ import static org.junit.Assert.assertArrayEquals;
  * Created by etsai on 9/3/16.
  */
 public class TestLoggingData extends TestLogDataBase {
-    private final AtomicBoolean shouldWait= new AtomicBoolean();
-
     @Override
     protected String logDataFilename() {
         return "bmi160_log_dl";
@@ -61,7 +59,6 @@ public class TestLoggingData extends TestLogDataBase {
     };
 
     protected Task<Route> setupLogDataRoute() {
-        shouldWait.set(true);
         mwBoard.getModule(Accelerometer.class).configure()
                 .range(8f)
                 .commit();
@@ -115,7 +112,6 @@ public class TestLoggingData extends TestLogDataBase {
     }
 
     protected Task<Route> setupLogOffsetRoute() {
-        shouldWait.set(true);
         return mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
             @Override
             public void configure(RouteComponent source) {
