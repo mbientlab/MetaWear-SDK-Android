@@ -172,12 +172,12 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     private final HashMap<Byte, Long> lastTimestamp= new HashMap<>();
     private TimeReference latestReference;
     private final HashMap<Byte, DataLogger> dataLoggers= new HashMap<>();
+    private HashMap<Byte, Long> rollbackTimestamps = new HashMap<>();
 
     private transient long nLogEntries;
     private transient int nUpdates;
     private transient LogDownloadUpdateHandler updateHandler;
     private transient LogDownloadErrorHandler errorHandler;
-    private transient HashMap<Byte, Long> rollbackTimestamps;
 
     private transient HashMap<DataTypeBase, Byte> nRemainingLoggers;
     private transient byte nReqLogIds, queryLogId;
@@ -230,7 +230,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
         mwPrivate.sendCommand(new byte[] {LOGGING.id, REMOVE_ALL});
     }
 
-    private transient HashMap<Tuple3<Byte, Byte, Byte>, Byte> placeholder = new HashMap<>();
+    private transient HashMap<Tuple3<Byte, Byte, Byte>, Byte> placeholder;
     private DataTypeBase guessLogSource(Collection<DataTypeBase> producers, Tuple3<Byte, Byte, Byte> key, byte offset, byte length) {
         List<DataTypeBase> possible = new ArrayList<>();
 
@@ -278,7 +278,9 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     protected void init() {
         queryTimeTask = new AtomicReference<>();
         downloadTask = new AtomicReference<>();
-        rollbackTimestamps= new HashMap<>();
+        if (rollbackTimestamps == null) {
+            rollbackTimestamps = new HashMap<>();
+        }
 
         queryLoggerTimeout = new Runnable() {
             @Override
@@ -653,8 +655,9 @@ class LoggingImpl extends ModuleImplBase implements Logging {
         if (queryLoggerTask != null) {
             return queryLoggerTask.getTask();
         }
-        queryLoggerTask = new TaskCompletionSource<>();
 
+        queryLoggerTask = new TaskCompletionSource<>();
+        placeholder = new HashMap<>();
         nRemainingLoggers = new HashMap<>();
         queryLogId = 0;
         mwPrivate.sendCommand(new byte[] {0x0b, Util.setRead(TRIGGER), queryLogId});

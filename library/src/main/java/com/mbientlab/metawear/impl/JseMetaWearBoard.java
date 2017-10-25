@@ -794,14 +794,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
                         taskSource.setCancelled();
                     }
                 } else {
-                    serviceDiscoveryFuture = mwPrivate.scheduleTask(new Runnable() {
-                        @Override
-                        public void run() {
-                            gatt.localDisconnectAsync();
-                            connectTaskSource.getAndSet(null).setError(new TimeoutException("Service discovery timed out"));
-                        }
-                    }, 7500L);
-
                     if (serviceDiscoveryRefresh.get()) {
                         persist.routeIdCounter= 0;
                         persist.taggedProducers.clear();
@@ -818,6 +810,14 @@ public class JseMetaWearBoard implements MetaWearBoard {
                             moduleQueries.add(it);
                         }
                     }
+
+                    serviceDiscoveryFuture = mwPrivate.scheduleTask(new Runnable() {
+                        @Override
+                        public void run() {
+                            gatt.localDisconnectAsync();
+                            connectTaskSource.getAndSet(null).setError(new TimeoutException("Service discovery timed out"));
+                        }
+                    }, 7500L);
 
                     if (moduleQueries.isEmpty()) {
                         logger.queryTime().continueWith(timeReadContinuation);
