@@ -24,17 +24,12 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.module.Debug;
 import com.mbientlab.metawear.module.Switch;
 
 import org.junit.Before;
 import org.junit.Test;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static junit.framework.TestCase.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -61,29 +56,10 @@ public class TestDebugRoute extends UnitTestBase {
 
     @Test
     public void resetRoute() throws InterruptedException {
-        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.filter(Comparison.EQ, 1).react(new RouteComponent.Action() {
-                    @Override
-                    public void execute(DataToken token) {
-                        debug.resetAsync();
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestDebugRoute.this) {
-                    TestDebugRoute.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
+                source.filter(Comparison.EQ, 1).react(token -> debug.resetAsync())
+        ).waitForCompletion();
 
-        synchronized (this) {
-            wait();
-        }
         assertTrue(mwBoard.isConnected());
     }
 
@@ -95,29 +71,10 @@ public class TestDebugRoute extends UnitTestBase {
 
     @Test
     public void jumpToBootloaderRoute() throws InterruptedException {
-        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.filter(Comparison.EQ, 1).react(new RouteComponent.Action() {
-                    @Override
-                    public void execute(DataToken token) {
-                        debug.jumpToBootloaderAsync();
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestDebugRoute.this) {
-                    TestDebugRoute.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
+                source.filter(Comparison.EQ, 1).react(token -> debug.jumpToBootloaderAsync())
+        ).waitForCompletion();
 
-        synchronized (this) {
-            wait();
-        }
         assertTrue(mwBoard.isConnected());
     }
 
@@ -129,29 +86,10 @@ public class TestDebugRoute extends UnitTestBase {
 
     @Test
     public void disconnectRoute() throws InterruptedException {
-        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.filter(Comparison.EQ, 1).react(new RouteComponent.Action() {
-                    @Override
-                    public void execute(DataToken token) {
-                        debug.disconnectAsync();
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestDebugRoute.this) {
-                    TestDebugRoute.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
+                source.filter(Comparison.EQ, 1).react(token -> debug.disconnectAsync())
+        ).waitForCompletion();
 
-        synchronized (this) {
-            wait();
-        }
         assertTrue(mwBoard.isConnected());
     }
 }

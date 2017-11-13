@@ -24,16 +24,11 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.Switch;
 
 import org.junit.Before;
 import org.junit.Test;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 
@@ -61,33 +56,13 @@ public class TestIBeacon extends UnitTestBase {
         };
 
         Switch mwSwitch= mwBoard.getModule(Switch.class);
-        mwSwitch.state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.count().react(new RouteComponent.Action() {
-                    @Override
-                    public void execute(DataToken token) {
-                        ibeacon.configure()
-                                .major(token)
-                                .commit();
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                ibeacon.enable();
-                synchronized (TestIBeacon.this) {
-                    TestIBeacon.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        mwSwitch.state().addRouteAsync(source -> source.count().react(token -> ibeacon.configure()
+                .major(token)
+                .commit())
+        ).waitForCompletion();
+        ibeacon.enable();
 
-        synchronized (this) {
-            this.wait();
 
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 }

@@ -63,12 +63,9 @@ class SwitchImpl extends ModuleImplBase implements Switch {
     @Override
     protected void init() {
         stateTasks = new AsyncTaskManager<>(mwPrivate, "Reading button state timed out");
-        this.mwPrivate.addResponseHandler(new Pair<>(SWITCH.id, Util.setRead(STATE)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                stateTasks.cancelTimeout();
-                stateTasks.setResult(response[2]);
-            }
+        this.mwPrivate.addResponseHandler(new Pair<>(SWITCH.id, Util.setRead(STATE)), response -> {
+            stateTasks.cancelTimeout();
+            stateTasks.setResult(response[2]);
         });
     }
 
@@ -92,11 +89,6 @@ class SwitchImpl extends ModuleImplBase implements Switch {
 
     @Override
     public Task<Byte> readCurrentStateAsync() {
-        return stateTasks.queueTask(RESPONSE_TIMEOUT, new Runnable() {
-            @Override
-            public void run() {
-                mwPrivate.sendCommand(new byte[] {SWITCH.id, Util.setRead(STATE)});
-            }
-        });
+        return stateTasks.queueTask(RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {SWITCH.id, Util.setRead(STATE)}));
     }
 }

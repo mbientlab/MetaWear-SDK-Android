@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
@@ -96,19 +94,14 @@ public class TestMma8452qMovement extends UnitTestBase {
         final Capture<Movement[]> actual = new Capture<>();
 
         actual.set(new Movement[3]);
-        mma8452qAcc.freeFall().addRouteAsync(new RouteBuilder() {
+        mma8452qAcc.freeFall().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Movement.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Movement.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }
@@ -142,19 +135,14 @@ public class TestMma8452qMovement extends UnitTestBase {
         final Capture<Movement[]> actual = new Capture<>();
 
         actual.set(new Movement[3]);
-        mma8452qAcc.motion().addRouteAsync(new RouteBuilder() {
+        mma8452qAcc.motion().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Movement.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Movement.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }

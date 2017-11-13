@@ -24,9 +24,7 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.SerialPassthrough;
-import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.module.SerialPassthrough.SpiParameterBuilder;
 
 import org.junit.Before;
@@ -36,7 +34,6 @@ import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -75,34 +72,19 @@ public class TestSPI extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    private static final Subscriber DATA_HANDLER= new Subscriber() {
-        @Override
-        public void apply(Data data, Object ... env) {
-            ((Capture<byte[]>) env[0]).set(data.value(byte[].class));
-        }
-    };
-
     protected Task<Route> setupSpiStream() {
-        return spi.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(DATA_HANDLER);
-            }
-        });
+        return spi.addRouteAsync(source -> source.stream((data, env) -> ((Capture<byte[]>) env[0]).set(data.value(byte[].class))));
     }
 
     @Test
-    public void bmi160Data() throws IOException {
+    public void bmi160Data() throws IOException, InterruptedException {
         byte[] expected= new byte[] {0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0};
         final Capture<byte[]> actual= new Capture<>();
 
-        setupSpiStream().continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
-        });
+        setupSpiStream().continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
+        }).waitForCompletion();
         sendMockResponse(new byte[] {0x0d, (byte) 0x82, 0x0e, 0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0});
 
         // For TestDeserializeSPI
@@ -126,12 +108,9 @@ public class TestSPI extends UnitTestBase {
         final Capture<byte[]> actual= new Capture<>();
 
         setParameters(mwBoard.getModule(SerialPassthrough.class).readSpiAsync((byte) 5)).commit()
-                .continueWith(new Continuation<byte[], Void>() {
-                    @Override
-                    public Void then(Task<byte[]> task) throws Exception {
-                        actual.set(task.getResult());
-                        return null;
-                    }
+                .continueWith(task -> {
+                    actual.set(task.getResult());
+                    return null;
                 });
 
         sendMockResponse(new byte[] {0x0d, (byte) 0x82, (byte) 0x0f, 0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0});
@@ -143,23 +122,11 @@ public class TestSPI extends UnitTestBase {
         final Capture<Exception> actual= new Capture<>();
 
         setParameters(mwBoard.getModule(SerialPassthrough.class).readSpiAsync((byte) 5)).commit()
-                .continueWith(new Continuation<byte[], Void>() {
-                    @Override
-                    public Void then(Task<byte[]> task) throws Exception {
-                        actual.set(task.getError());
+                .continueWith(task -> {
+                    actual.set(task.getError());
+                    return null;
+                }).waitForCompletion();
 
-                        synchronized (TestSPI.this) {
-                            TestSPI.this.notifyAll();
-                        }
-
-                        return null;
-                    }
-                });
-
-        synchronized (this) {
-            wait();
-
-            throw actual.get();
-        }
+        throw actual.get();
     }
 }

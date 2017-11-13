@@ -51,19 +51,16 @@ class DebugImpl extends ModuleImplBase implements Debug {
 
     protected void init() {
         readTmpValueTask = new AsyncTaskManager<>(mwPrivate, "Reading tmp value timed out");
-        this.mwPrivate.addResponseHandler(new Pair<>(DEBUG.id, Util.setRead(TMP_VALUE)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                readTmpValueTask.cancelTimeout();
-                readTmpValueTask.setResult(ByteBuffer.wrap(response, 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt());
-            }
+        this.mwPrivate.addResponseHandler(new Pair<>(DEBUG.id, Util.setRead(TMP_VALUE)), response -> {
+            readTmpValueTask.cancelTimeout();
+            readTmpValueTask.setResult(ByteBuffer.wrap(response, 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt());
         });
     }
 
     @Override
     public Task<Void> resetAsync() {
         EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
-        Task<Void> task= event.getEventConfig() != null ? Task.<Void>cancelled() : mwPrivate.boardDisconnect();
+        Task<Void> task= (event != null && event.getEventConfig() != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
 
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x1});
         return task;
@@ -72,7 +69,7 @@ class DebugImpl extends ModuleImplBase implements Debug {
     @Override
     public Task<Void> disconnectAsync() {
         EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
-        Task<Void> task= event.getEventConfig() != null ? Task.<Void>cancelled() : mwPrivate.boardDisconnect();
+        Task<Void> task= (event != null && event.getEventConfig() != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
 
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x6});
         return task;
@@ -81,7 +78,7 @@ class DebugImpl extends ModuleImplBase implements Debug {
     @Override
     public Task<Void> jumpToBootloaderAsync() {
         EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
-        Task<Void> task= event.getEventConfig() != null ? Task.<Void>cancelled() : mwPrivate.boardDisconnect();
+        Task<Void> task= (event != null && event.getEventConfig() != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
 
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x2});
         return task;
@@ -103,12 +100,7 @@ class DebugImpl extends ModuleImplBase implements Debug {
 
     @Override
     public Task<Integer> readTmpValueAsync() {
-        return readTmpValueTask.queueTask(RESPONSE_TIMEOUT, new Runnable() {
-            @Override
-            public void run() {
-                mwPrivate.sendCommand(new byte[] {DEBUG.id, Util.setRead(TMP_VALUE)});
-            }
-        });
+        return readTmpValueTask.queueTask(RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {DEBUG.id, Util.setRead(TMP_VALUE)}));
     }
 
     @Override

@@ -34,7 +34,6 @@ import org.junit.Test;
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -48,12 +47,9 @@ public class TestTimer extends UnitTestBase {
 
     protected Task<ScheduledTask> setupTimer() {
         wait = true;
-        return mwBoard.getModule(Timer.class).scheduleAsync(3141, (short) 59, true, new CodeBlock() {
-            @Override
-            public void program() {
-                mwBoard.getModule(Gpio.class).pin((byte) 0).analogAbsRef().read();
-                mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().read();
-            }
+        return mwBoard.getModule(Timer.class).scheduleAsync(3141, (short) 59, true, () -> {
+            mwBoard.getModule(Gpio.class).pin((byte) 0).analogAbsRef().read();
+            mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().read();
         });
     }
 
@@ -62,27 +58,14 @@ public class TestTimer extends UnitTestBase {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Gpio.class, Timer.class);
         connectToBoard();
 
-        setupTimer().continueWith(new Continuation<ScheduledTask, Void>() {
-            @Override
-            public Void then(Task<ScheduledTask> task) throws Exception {
-                manager= task.getResult();
+        setupTimer().continueWith(task -> {
+            manager= task.getResult();
+            return null;
+        }).waitForCompletion();
 
-                synchronized (TestTimer.this) {
-                    TestTimer.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            if (wait) {
-                this.wait();
-            }
-
-            // For TestDeserializeTimer
-            junitPlatform.boardStateSuffix = "timer";
-            mwBoard.serialize();
-        }
+        // For TestDeserializeTimer
+        junitPlatform.boardStateSuffix = "timer";
+        mwBoard.serialize();
     }
 
     @Test
@@ -131,26 +114,13 @@ public class TestTimer extends UnitTestBase {
         final Capture<Exception> actual= new Capture<>();
 
         junitPlatform.maxTimers= 0;
-        mwBoard.getModule(Timer.class).scheduleAsync(26535, false, new CodeBlock() {
-            @Override
-            public void program() {
+        mwBoard.getModule(Timer.class).scheduleAsync(26535, false, () -> {
 
-            }
-        }).continueWith(new Continuation<ScheduledTask, Void>() {
-            @Override
-            public Void then(Task<ScheduledTask> task) throws Exception {
-                actual.set(task.getError());
+        }).continueWith(task -> {
+            actual.set(task.getError());
+            return null;
+        }).waitForCompletion();
 
-                synchronized (TestTimer.this) {
-                    TestTimer.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-            throw actual.get();
-        }
+        throw actual.get();
     }
 }

@@ -59,36 +59,30 @@ class EventImpl extends ModuleImplBase implements Module {
     }
 
     protected void init() {
-        recordCmdTimeout = new Runnable() {
-            @Override
-            public void run() {
-                for(Byte id: successfulEvents) {
-                    removeEventCommand(id);
-                }
-
-                pendingEventCodeBlocks= null;
-                recordedCommands= null;
-                createEventsTask.setError(new TimeoutException("Timed out programming commands"));
+        recordCmdTimeout = () -> {
+            for(Byte id: successfulEvents) {
+                removeEventCommand(id);
             }
+
+            pendingEventCodeBlocks= null;
+            recordedCommands= null;
+            createEventsTask.setError(new TimeoutException("Timed out programming commands"));
         };
 
-        mwPrivate.addResponseHandler(new Pair<>(EVENT.id, ENTRY), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(final byte[] response) {
-                eventTimeoutFuture.cancel(false);
+        mwPrivate.addResponseHandler(new Pair<>(EVENT.id, ENTRY), response -> {
+            eventTimeoutFuture.cancel(false);
 
-                successfulEvents.add(response[2]);
+            successfulEvents.add(response[2]);
 
-                if (!recordedCommands.isEmpty()) {
-                    mwPrivate.sendCommand(recordedCommands.poll());
-                    mwPrivate.sendCommand(recordedCommands.poll());
+            if (!recordedCommands.isEmpty()) {
+                mwPrivate.sendCommand(recordedCommands.poll());
+                mwPrivate.sendCommand(recordedCommands.poll());
 
-                    eventTimeoutFuture= mwPrivate.scheduleTask(recordCmdTimeout, RESPONSE_TIMEOUT);
-                } else {
-                    pendingEventCodeBlocks.poll();
+                eventTimeoutFuture= mwPrivate.scheduleTask(recordCmdTimeout, RESPONSE_TIMEOUT);
+            } else {
+                pendingEventCodeBlocks.poll();
 
-                    recordCommand();
-                }
+                recordCommand();
             }
         });
     }

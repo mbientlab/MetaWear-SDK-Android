@@ -164,13 +164,10 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
     protected void init() {
         pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
 
-        mwPrivate.addResponseHandler(new Pair<>(GYRO.id, Util.setRead(CONFIG)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                pullConfigTask.cancelTimeout();
-                System.arraycopy(response, 2, gyrDataConfig, 0, gyrDataConfig.length);
-                pullConfigTask.setResult(null);
-            }
+        mwPrivate.addResponseHandler(new Pair<>(GYRO.id, Util.setRead(CONFIG)), response -> {
+            pullConfigTask.cancelTimeout();
+            System.arraycopy(response, 2, gyrDataConfig, 0, gyrDataConfig.length);
+            pullConfigTask.setResult(null);
         });
     }
 
@@ -215,12 +212,7 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
-            @Override
-            public void run() {
-                mwPrivate.sendCommand(new byte[] {GYRO.id, Util.setRead(CONFIG)});
-            }
-        });
+        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {GYRO.id, Util.setRead(CONFIG)}));
     }
 
     @Override

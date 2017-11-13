@@ -157,13 +157,13 @@ public interface Settings extends Module {
      */
     class BleConnectionParameters {
         /** Minimum time the central device asks for data from the peripheral, in milliseconds (ms) */
-        public float minConnectionInterval;
+        public final float minConnectionInterval;
         /** Maximum time the central device asks for data from the peripheral, in milliseconds (ms */
-        public float maxConnectionInterval;
+        public final float maxConnectionInterval;
         /** How many times the peripheral can choose to discard data requests from the central device */
-        public short slaveLatency;
+        public final short slaveLatency;
         /** Timeout from the last data exchange until the ble link is considered lost */
-        public short supervisorTimeout;
+        public final short supervisorTimeout;
 
         public BleConnectionParameters(float minConnectionInterval, float maxConnectionInterval, short slaveLatency, short supervisorTimeout) {
             this.minConnectionInterval = minConnectionInterval;

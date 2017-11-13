@@ -47,7 +47,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import bolts.Continuation;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
@@ -65,7 +64,11 @@ class JunitPlatform implements IO, BtleGatt {
     public int nConnects = 0, nDisconnects = 0;
     public MetaWearBoardInfo boardInfo= new MetaWearBoardInfo();
     public String firmware= "1.2.3", boardStateSuffix;
-    public boolean delayModuleInfoResponse= false, deserializeModuleInfo= false, serializeModuleInfo = false, enableMetaBootState = false, delayReadDevInfo = false;
+    public boolean delayModuleInfoResponse= false;
+    public boolean deserializeModuleInfo= false;
+    public final boolean serializeModuleInfo = false;
+    public boolean enableMetaBootState = false;
+    public boolean delayReadDevInfo = false;
     private final Map<Byte, byte[]> customModuleInfo= new HashMap<>();
     private final Map<Integer, byte[]> customResponses = new HashMap<>();
 
@@ -89,12 +92,7 @@ class JunitPlatform implements IO, BtleGatt {
     }
 
     private void scheduleMockResponse(final byte[] response) {
-        SCHEDULED_TASK_THREADPOOL.schedule(new Runnable() {
-            @Override
-            public void run() {
-                bridge.sendMockResponse(response);
-            }
-        }, 20, TimeUnit.MILLISECONDS);
+        SCHEDULED_TASK_THREADPOOL.schedule(() -> bridge.sendMockResponse(response), 20, TimeUnit.MILLISECONDS);
     }
 
     public void scheduleTask(Runnable r, long timeout) {
@@ -189,40 +187,15 @@ class JunitPlatform implements IO, BtleGatt {
     public Task<byte[]> readCharacteristicAsync(BtleGattCharacteristic gattChar) {
         gattCharReadHistory.add(gattChar);
         if (gattChar.equals(DeviceInformationService.FIRMWARE_REVISION)) {
-            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
-                @Override
-                public Task<byte[]> then(Task<Void> task) throws Exception {
-                    return Task.forResult(firmware.getBytes());
-                }
-            });
+            return Task.delay(20L).continueWithTask(task -> Task.forResult(firmware.getBytes()));
         } else if (gattChar.equals(DeviceInformationService.HARDWARE_REVISION)) {
-            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
-                @Override
-                public Task<byte[]> then(Task<Void> task) throws Exception {
-                    return Task.forResult(boardInfo.hardwareRevision);
-                }
-            });
+            return Task.delay(20L).continueWithTask(task -> Task.forResult(boardInfo.hardwareRevision));
         } else if (gattChar.equals(DeviceInformationService.MODEL_NUMBER)) {
-            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
-                @Override
-                public Task<byte[]> then(Task<Void> task) throws Exception {
-                    return Task.forResult(boardInfo.modelNumber);
-                }
-            });
+            return Task.delay(20L).continueWithTask(task -> Task.forResult(boardInfo.modelNumber));
         } else if (gattChar.equals(DeviceInformationService.MANUFACTURER_NAME)) {
-            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
-                @Override
-                public Task<byte[]> then(Task<Void> task) throws Exception {
-                    return delayReadDevInfo ? Task.<byte[]>forError(new TimeoutException("Reading gatt characteristic timed out")) : Task.forResult(boardInfo.manufacturer);
-                }
-            });
+            return Task.delay(20L).continueWithTask(task -> delayReadDevInfo ? Task.forError(new TimeoutException("Reading gatt characteristic timed out")) : Task.forResult(boardInfo.manufacturer));
         } else if (gattChar.equals(DeviceInformationService.SERIAL_NUMBER)) {
-            return Task.delay(20L).continueWithTask(new Continuation<Void, Task<byte[]>>() {
-                @Override
-                public Task<byte[]> then(Task<Void> task) throws Exception {
-                    return delayReadDevInfo ? Task.<byte[]>forError(new TimeoutException("Reading gatt characteristic timed out")) : Task.forResult(boardInfo.serialNumber);
-                }
-            });
+            return Task.delay(20L).continueWithTask(task -> delayReadDevInfo ? Task.forError(new TimeoutException("Reading gatt characteristic timed out")) : Task.forResult(boardInfo.serialNumber));
         }
 
         return Task.forResult(null);
@@ -255,16 +228,13 @@ class JunitPlatform implements IO, BtleGatt {
             tasks.add(readCharacteristicAsync(it));
         }
 
-        return Task.whenAll(tasks).onSuccessTask(new Continuation<Void, Task<byte[][]>>() {
-            @Override
-            public Task<byte[][]> then(Task<Void> task) throws Exception {
-                byte[][] valuesArray = new byte[tasks.size()][];
-                for (int i = 0; i < valuesArray.length; i++) {
-                    valuesArray[i] = tasks.get(i).getResult();
-                }
-
-                return Task.forResult(valuesArray);
+        return Task.whenAll(tasks).onSuccessTask(task -> {
+            byte[][] valuesArray = new byte[tasks.size()][];
+            for (int i = 0; i < valuesArray.length; i++) {
+                valuesArray[i] = tasks.get(i).getResult();
             }
+
+            return Task.forResult(valuesArray);
         });
     }
 

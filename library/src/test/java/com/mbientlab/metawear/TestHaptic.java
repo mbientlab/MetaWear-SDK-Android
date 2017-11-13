@@ -28,15 +28,7 @@ import com.mbientlab.metawear.module.Haptic;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static com.mbientlab.metawear.MetaWearBoardInfo.*;
 import static org.junit.Assert.assertArrayEquals;
 
 /**

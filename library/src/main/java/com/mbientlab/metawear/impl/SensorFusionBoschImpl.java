@@ -31,7 +31,6 @@ import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.EulerAngles;
 import com.mbientlab.metawear.data.Quaternion;
-import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 import com.mbientlab.metawear.module.GyroBmi160;
@@ -44,7 +43,6 @@ import java.util.Calendar;
 
 import bolts.Task;
 
-import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
 import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
 
 /**
@@ -174,7 +172,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
         }
     }
     private static class AccelerationData extends DataTypeBase {
-        private static float MSS_TO_G = 9.80665f;
+        private static final float MSS_TO_G = 9.80665f;
         private static final long serialVersionUID = -8031176383111665723L;
 
         AccelerationData(byte register) {
@@ -397,13 +395,10 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     protected void init() {
         pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading sensor fusion config timed out");
 
-        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MODE)), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                pullConfigTask.cancelTimeout();
-                mode = Mode.values()[response[2]];
-                pullConfigTask.setResult(null);
-            }
+        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MODE)), response -> {
+            pullConfigTask.cancelTimeout();
+            mode = Mode.values()[response[2]];
+            pullConfigTask.setResult(null);
         });
     }
 
@@ -601,11 +596,6 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
-            @Override
-            public void run() {
-                mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MODE)});
-            }
-        });
+        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MODE)}));
     }
 }

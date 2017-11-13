@@ -27,7 +27,6 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 
 import java.util.Arrays;
@@ -57,13 +56,10 @@ class AccelerometerBma255Impl extends AccelerometerBoschImpl implements Accelero
     protected void init() {
         pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
 
-        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                pullConfigTask.cancelTimeout();
-                System.arraycopy(response, 2, accDataConfig, 0, accDataConfig.length);
-                pullConfigTask.setResult(null);
-            }
+        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), response -> {
+            pullConfigTask.cancelTimeout();
+            System.arraycopy(response, 2, accDataConfig, 0, accDataConfig.length);
+            pullConfigTask.setResult(null);
         });
     }
 
@@ -141,12 +137,7 @@ class AccelerometerBma255Impl extends AccelerometerBoschImpl implements Accelero
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
-            @Override
-            public void run() {
-                mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)});
-            }
-        });
+        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)}));
     }
 
     private class Bma255FlatDataProducer extends BoschFlatDataProducer implements AccelerometerBma255.FlatDataProducer {

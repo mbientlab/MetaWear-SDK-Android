@@ -98,50 +98,44 @@ class StreamedDataConsumer extends DeviceDataConsumer {
         if (dataResponseHandler == null) {
             if (source.attributes.copies > 1) {
                 final byte dataUnitLength = source.attributes.unitLength();
-                dataResponseHandler = new RegisterResponseHandler() {
-                    @Override
-                    public void onResponseReceived(byte[] response) {
-                        Calendar now = Calendar.getInstance();
-                        DataProcessorImpl.Processor accounter = findParent((DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), source, DataProcessorImpl.TYPE_ACCOUNTER);
-                        for(int i = 0, j = source.eventConfig[2] == DataTypeBase.NO_DATA_ID ? 2 : 3; i< source.attributes.copies && j < response.length; i++, j+= dataUnitLength) {
-                            Pair<Calendar, Integer> account = fillTimestamp(mwPrivate, accounter, response, j);
-                            byte[] dataRaw = new byte[dataUnitLength - (account.second - j)];
-                            System.arraycopy(response, account.second, dataRaw, 0, dataRaw.length);
-                            call(source.createMessage(false, mwPrivate, dataRaw, accounter == null ? now : account.first));
-                        }
+                dataResponseHandler = response -> {
+                    Calendar now = Calendar.getInstance();
+                    DataProcessorImpl.Processor accounter = findParent((DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), source, DataProcessorImpl.TYPE_ACCOUNTER);
+                    for(int i = 0, j = source.eventConfig[2] == DataTypeBase.NO_DATA_ID ? 2 : 3; i< source.attributes.copies && j < response.length; i++, j+= dataUnitLength) {
+                        Pair<Calendar, Integer> account = fillTimestamp(mwPrivate, accounter, response, j);
+                        byte[] dataRaw = new byte[dataUnitLength - (account.second - j)];
+                        System.arraycopy(response, account.second, dataRaw, 0, dataRaw.length);
+                        call(source.createMessage(false, mwPrivate, dataRaw, accounter == null ? now : account.first));
                     }
                 };
             } else {
-                dataResponseHandler = new RegisterResponseHandler() {
-                    @Override
-                    public void onResponseReceived(byte[] response) {
-                        byte[] dataRaw;
+                dataResponseHandler = response -> {
+                    byte[] dataRaw;
 
-                        if (source.eventConfig[2] == DataTypeBase.NO_DATA_ID) {
-                            dataRaw = new byte[response.length - 2];
-                            System.arraycopy(response, 2, dataRaw, 0, dataRaw.length);
-                        } else {
-                            dataRaw = new byte[response.length - 3];
-                            System.arraycopy(response, 3, dataRaw, 0, dataRaw.length);
-                        }
+                    if (source.eventConfig[2] == DataTypeBase.NO_DATA_ID) {
+                        dataRaw = new byte[response.length - 2];
+                        System.arraycopy(response, 2, dataRaw, 0, dataRaw.length);
+                    } else {
+                        dataRaw = new byte[response.length - 3];
+                        System.arraycopy(response, 3, dataRaw, 0, dataRaw.length);
+                    }
 
-                        Pair<Calendar, Integer> account = fillTimestamp(mwPrivate, source, dataRaw);
-                        if (account.second > 0) {
-                            byte[] copy = new byte[dataRaw.length - account.second];
-                            System.arraycopy(dataRaw, account.second, copy, 0, copy.length);
-                            dataRaw = copy;
+                    Pair<Calendar, Integer> account = fillTimestamp(mwPrivate, source, dataRaw);
+                    if (account.second > 0) {
+                        byte[] copy = new byte[dataRaw.length - account.second];
+                        System.arraycopy(dataRaw, account.second, copy, 0, copy.length);
+                        dataRaw = copy;
+                    }
+                    DataProcessorImpl.Processor packer = findParent((DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), source, DataProcessorImpl.TYPE_PACKER);
+                    if (packer != null) {
+                        final byte dataUnitLength = packer.editor.source.attributes.unitLength();
+                        byte[] unpacked = new byte[dataUnitLength];
+                        for(int i = 0, j = 3 + account.second; i< packer.editor.source.attributes.copies && j < response.length; i++, j+= dataUnitLength) {
+                            System.arraycopy(response, j, unpacked, 0, unpacked.length);
+                            call(source.createMessage(false, mwPrivate, unpacked, account.first));
                         }
-                        DataProcessorImpl.Processor packer = findParent((DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), source, DataProcessorImpl.TYPE_PACKER);
-                        if (packer != null) {
-                            final byte dataUnitLength = packer.editor.source.attributes.unitLength();
-                            byte[] unpacked = new byte[dataUnitLength];
-                            for(int i = 0, j = 3 + account.second; i< packer.editor.source.attributes.copies && j < response.length; i++, j+= dataUnitLength) {
-                                System.arraycopy(response, j, unpacked, 0, unpacked.length);
-                                call(source.createMessage(false, mwPrivate, unpacked, account.first));
-                            }
-                        } else {
-                            call(source.createMessage(false, mwPrivate, dataRaw, account.first));
-                        }
+                    } else {
+                        call(source.createMessage(false, mwPrivate, dataRaw, account.first));
                     }
                 };
             }

@@ -1,7 +1,5 @@
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -16,9 +14,6 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.Arrays;
 import java.util.Collection;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 
@@ -58,27 +53,12 @@ public class TestLogAccelerometer extends UnitTestBase {
                 {0x0b, 0x03, 0x01}
         };
 
-        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.log(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().remove();
+        accelerometer.acceleration().addRouteAsync(source -> source.log(null)).continueWith(task -> {
+            task.getResult().remove();
+            return null;
+        }).waitForCompletion();
 
-                synchronized (TestLogAccelerometer.this) {
-                    TestLogAccelerometer.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
 }

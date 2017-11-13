@@ -37,7 +37,6 @@ import com.mbientlab.metawear.module.AccelerometerBosch;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.security.InvalidParameterException;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.LinkedHashSet;
@@ -827,7 +826,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
                         private TapShockTime newShockTime= null;
                         private DoubleTapWindow newWindow= null;
                         private Float newThs= null;
-                        private LinkedHashSet<TapType> types = new LinkedHashSet<>();
+                        private final LinkedHashSet<TapType> types = new LinkedHashSet<>();
 
                         @Override
                         public TapConfigEditor enableDoubleTap() {

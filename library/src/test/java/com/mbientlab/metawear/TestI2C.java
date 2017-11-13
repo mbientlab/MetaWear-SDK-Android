@@ -25,8 +25,6 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.SerialPassthrough;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -35,7 +33,6 @@ import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -45,13 +42,6 @@ import static org.junit.Assert.assertArrayEquals;
  */
 
 public class TestI2C extends UnitTestBase {
-    private static final Subscriber DATA_HANDLER= new Subscriber() {
-        @Override
-        public void apply(Data data, Object ... env) {
-            ((Capture<byte[]>) env[0]).set(data.value(byte[].class));
-        }
-    };
-
     private SerialPassthrough.I2C i2c;
 
     @Before
@@ -71,12 +61,9 @@ public class TestI2C extends UnitTestBase {
     }
 
     protected Task<Route> setupI2cRoute() {
-        return i2c.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(DATA_HANDLER);
-            }
-        });
+        return i2c.addRouteAsync(source ->
+                source.stream((data, env) -> ((Capture<byte[]>) env[0]).set(data.value(byte[].class)))
+        );
     }
 
     @Test
@@ -84,12 +71,9 @@ public class TestI2C extends UnitTestBase {
         byte[] expected= new byte[] {0x2a};
         final Capture<byte[]> actual= new Capture<>();
 
-        setupI2cRoute().continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        setupI2cRoute().continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
         });
         sendMockResponse(new byte[] {0x0d, (byte) 0x81, 0x0a, 0x2a});
 
@@ -114,12 +98,9 @@ public class TestI2C extends UnitTestBase {
         final Capture<byte[]> actual= new Capture<>();
 
         mwBoard.getModule(SerialPassthrough.class).readI2cAsync((byte) 0x1c, (byte) 0x0d, (byte) 1)
-                .continueWith(new Continuation<byte[], Void>() {
-                    @Override
-                    public Void then(Task<byte[]> task) throws Exception {
-                        actual.set(task.getResult());
-                        return null;
-                    }
+                .continueWith(task -> {
+                    actual.set(task.getResult());
+                    return null;
                 });
 
         sendMockResponse(new byte[] {0x0d, (byte) 0x81, (byte) 0xff, 0x2a});
@@ -131,22 +112,11 @@ public class TestI2C extends UnitTestBase {
         final Capture<Exception> actual= new Capture<>();
 
         mwBoard.getModule(SerialPassthrough.class).readI2cAsync((byte) 0x1c, (byte) 0x0d, (byte) 1)
-                .continueWith(new Continuation<byte[], Void>() {
-                    @Override
-                    public Void then(Task<byte[]> task) throws Exception {
-                        actual.set(task.getError());
+                .continueWith(task -> {
+                    actual.set(task.getError());
+                    return null;
+                }).waitForCompletion();
 
-                        synchronized (TestI2C.this) {
-                            TestI2C.this.notifyAll();
-                        }
-                        return null;
-                    }
-                });
-
-        synchronized (this) {
-            wait();
-
-            throw actual.get();
-        }
+        throw actual.get();
     }
 }

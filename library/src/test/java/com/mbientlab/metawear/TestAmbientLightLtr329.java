@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AmbientLightLtr329;
 import com.mbientlab.metawear.module.AmbientLightLtr329.*;
 
@@ -33,8 +31,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -150,23 +146,11 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
         float expected = 11571.949f;
         final Capture<Float> actual = new Capture<>();
 
-        alsLtr329.illuminance().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.set(data.value(Float.class));
-                    }
+        alsLtr329.illuminance().addRouteAsync(source -> source.stream((data, env) -> actual.set(data.value(Float.class))))
+                .continueWith(task -> {
+                    alsLtr329.illuminance().start();
+                    return null;
                 });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                alsLtr329.illuminance().start();
-                return null;
-            }
-        });
         sendMockResponse(new byte[] {0x14, 0x03, (byte) 0xed, (byte) 0x92, (byte) 0xb0, 0x00});
 
         assertEquals(expected, actual.get(), 0.001f);

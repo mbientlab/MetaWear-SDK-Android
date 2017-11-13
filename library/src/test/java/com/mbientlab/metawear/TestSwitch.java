@@ -24,15 +24,10 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Switch;
-import com.mbientlab.metawear.builder.RouteBuilder;
 
 import org.junit.Before;
 import org.junit.Test;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -51,17 +46,7 @@ public class TestSwitch extends UnitTestBase {
     public void subscribe() {
         byte[] expected= new byte[] {0x1, 0x1, 0x1};
 
-        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                return null;
-            }
-        });
+        mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.stream(null));
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -70,17 +55,9 @@ public class TestSwitch extends UnitTestBase {
     public void unsubscribe() {
         byte[] expected= new byte[] {0x1, 0x1, 0x0};
 
-        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().unsubscribe(0);
-                return null;
-            }
+        mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.stream(null)).continueWith(task -> {
+            task.getResult().unsubscribe(0);
+            return null;
         });
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
@@ -91,22 +68,9 @@ public class TestSwitch extends UnitTestBase {
         final long expected= 1;
         final long[] actual= new long[1];
 
-        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((long[]) env[0])[0]= data.value(Long.class);
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.stream((data, env) -> ((long[]) env[0])[0]= data.value(Long.class))).continueWith(task -> {
+            task.getResult().setEnvironment(0, (Object) actual);
+            return null;
         });
 
         sendMockResponse(new byte[] {0x1, 0x1, 0x1});
@@ -118,22 +82,9 @@ public class TestSwitch extends UnitTestBase {
         final long expected= 0;
         final long[] actual= new long[1];
 
-        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((long[]) env[0])[0]= data.value(Long.class);
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.stream((data, env) -> ((long[]) env[0])[0]= data.value(Long.class))).continueWith(task -> {
+            task.getResult().setEnvironment(0, (Object) actual);
+            return null;
         });
 
         sendMockResponse(new byte[] {0x1, 0x1, 0x0});
@@ -154,19 +105,13 @@ public class TestSwitch extends UnitTestBase {
         byte[] expected = new byte[] {0x01, 0x00};
         final byte[] actual = new byte[2];
 
-        mwBoard.getModule(Switch.class).readCurrentStateAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual[0] = task.getResult();
-                return null;
-            }
+        mwBoard.getModule(Switch.class).readCurrentStateAsync().continueWith(task -> {
+            actual[0] = task.getResult();
+            return null;
         });
-        mwBoard.getModule(Switch.class).readCurrentStateAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual[1] = task.getResult();
-                return null;
-            }
+        mwBoard.getModule(Switch.class).readCurrentStateAsync().continueWith(task -> {
+            actual[1] = task.getResult();
+            return null;
         });
 
         sendMockResponse(new byte[] {0x01, (byte) 0x81, 0x1});

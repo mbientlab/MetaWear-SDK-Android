@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.data.AngularVelocity;
 
@@ -48,17 +46,7 @@ public class TestGyroBmi160PackedData extends UnitTestBase {
         connectToBoard();
 
         gyroBmi160= mwBoard.getModule(GyroBmi160.class);
-        gyroBmi160.packedAngularVelocity().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        ((ArrayList<AngularVelocity>) env[0]).add(data.value(AngularVelocity.class));
-                    }
-                });
-            }
-        });
+        gyroBmi160.packedAngularVelocity().addRouteAsync(source -> source.stream((data, env) -> ((ArrayList<AngularVelocity>) env[0]).add(data.value(AngularVelocity.class))));
     }
 
     @Test

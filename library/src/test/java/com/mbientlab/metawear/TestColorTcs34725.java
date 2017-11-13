@@ -24,17 +24,13 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.ColorTcs34725;
 import com.mbientlab.metawear.module.ColorTcs34725.ColorAdc;
-import com.mbientlab.metawear.builder.RouteBuilder;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -58,12 +54,7 @@ public class TestColorTcs34725 extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x17, (byte) 0x81};
 
-        colorTcs34725.adc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        colorTcs34725.adc().addRouteAsync(source -> source.stream(null));
         colorTcs34725.adc().read();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -81,23 +72,11 @@ public class TestColorTcs34725 extends UnitTestBase {
         ColorAdc expected= new ColorAdc(418, 123, 154, 124);
         final Capture<ColorAdc> actual= new Capture<>();
 
-        colorTcs34725.adc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((Capture<ColorAdc>) env[0]).set(data.value(ColorAdc.class));
-                    }
+        colorTcs34725.adc().addRouteAsync(source -> source.stream((data, env) -> ((Capture<ColorAdc>) env[0]).set(data.value(ColorAdc.class))))
+                .continueWith(task -> {
+                    task.getResult().setEnvironment(0, actual);
+                    return null;
                 });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
-        });
 
         sendMockResponse(new byte[] {0x17, (byte) 0x81, (byte) 0xa2, 0x01, 0x7b, 0x00, (byte) 0x9a, 0x00, 0x7c, 0x00});
         assertEquals(expected, actual.get());
@@ -108,44 +87,17 @@ public class TestColorTcs34725 extends UnitTestBase {
         int[] expected = new int[] {418, 123, 154, 124};
         final int[] actual= new int[4];
 
-        colorTcs34725.adc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.split()
-                        .index(0).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((int[]) env[0])[0] = data.value(Integer.class);
-                            }
-                        })
-                        .index(1).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((int[]) env[0])[1] = data.value(Integer.class);
-                            }
-                        })
-                        .index(2).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((int[]) env[0])[2] = data.value(Integer.class);
-                            }
-                        })
-                        .index(3).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((int[]) env[0])[3] = data.value(Integer.class);
-                            }
-                        });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, (Object) actual);
-                task.getResult().setEnvironment(1, (Object) actual);
-                task.getResult().setEnvironment(2, (Object) actual);
-                task.getResult().setEnvironment(3, (Object) actual);
-                return null;
-            }
+        colorTcs34725.adc().addRouteAsync(source -> source.split()
+                .index(0).stream((data, env) -> ((int[]) env[0])[0] = data.value(Integer.class))
+                .index(1).stream((data, env) -> ((int[]) env[0])[1] = data.value(Integer.class))
+                .index(2).stream((data, env) -> ((int[]) env[0])[2] = data.value(Integer.class))
+                .index(3).stream((data, env) -> ((int[]) env[0])[3] = data.value(Integer.class)))
+        .continueWith(task -> {
+            task.getResult().setEnvironment(0, (Object) actual);
+            task.getResult().setEnvironment(1, (Object) actual);
+            task.getResult().setEnvironment(2, (Object) actual);
+            task.getResult().setEnvironment(3, (Object) actual);
+            return null;
         });
 
         sendMockResponse(new byte[] {0x17, (byte) 0x81, (byte) 0xa2, 0x01, 0x7b, 0x00, (byte) 0x9a, 0x00, 0x7c, 0x00});

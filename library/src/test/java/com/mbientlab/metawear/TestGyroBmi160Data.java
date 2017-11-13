@@ -24,18 +24,14 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.GyroBmi160.Range;
-import com.mbientlab.metawear.builder.RouteBuilder;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -95,22 +91,11 @@ public class TestGyroBmi160Data extends UnitTestBase {
         gyroBmi160.configure()
                 .range(Range.FSR_500)
                 .commit();
-        gyroBmi160.angularVelocity().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((Capture<AngularVelocity>) env[0]).set(data.value(AngularVelocity.class));
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        gyroBmi160.angularVelocity().addRouteAsync(source ->
+                source.stream((data, env) -> ((Capture<AngularVelocity>) env[0]).set(data.value(AngularVelocity.class))))
+        .continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
         });
         sendMockResponse(new byte[] {0x13, 0x05, 0x3e, 0x43, (byte) 0xff, 0x7f, 0x00, (byte) 0x80});
 
@@ -125,37 +110,15 @@ public class TestGyroBmi160Data extends UnitTestBase {
         gyroBmi160.configure()
                 .range(Range.FSR_500)
                 .commit();
-        gyroBmi160.angularVelocity().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.split()
-                        .index(0).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[0] = data.value(Float.class);
-                            }
-                        })
-                        .index(1).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[1] = data.value(Float.class);
-                            }
-                        })
-                        .index(2).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[2] = data.value(Float.class);
-                            }
-                        });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, (Object) actual);
-                task.getResult().setEnvironment(1, (Object) actual);
-                task.getResult().setEnvironment(2, (Object) actual);
-                return null;
-            }
+        gyroBmi160.angularVelocity().addRouteAsync(source -> source.split()
+                .index(0).stream((data, env) -> ((float[]) env[0])[0] = data.value(Float.class))
+                .index(1).stream((data, env) -> ((float[]) env[0])[1] = data.value(Float.class))
+                .index(2).stream((data, env) -> ((float[]) env[0])[2] = data.value(Float.class)))
+        .continueWith(task -> {
+            task.getResult().setEnvironment(0, (Object) actual);
+            task.getResult().setEnvironment(1, (Object) actual);
+            task.getResult().setEnvironment(2, (Object) actual);
+            return null;
         });
         sendMockResponse(new byte[] {0x13, 0x05, 0x3e, 0x43, (byte) 0xff, 0x7f, 0x00, (byte) 0x80});
 
@@ -165,12 +128,7 @@ public class TestGyroBmi160Data extends UnitTestBase {
     @Test
     public void subscribe() {
         byte[] expected= new byte[] { 0x13, 0x05, 0x01 };
-        gyroBmi160.angularVelocity().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        gyroBmi160.angularVelocity().addRouteAsync(source -> source.stream(null));
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -178,17 +136,9 @@ public class TestGyroBmi160Data extends UnitTestBase {
     @Test
     public void unsubscribe() {
         byte[] expected= new byte[] { 0x13, 0x05, 0x00 };
-        gyroBmi160.angularVelocity().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().unsubscribe(0);
-                return null;
-            }
+        gyroBmi160.angularVelocity().addRouteAsync(source -> source.stream(null)).continueWith(task -> {
+            task.getResult().unsubscribe(0);
+            return null;
         });
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());

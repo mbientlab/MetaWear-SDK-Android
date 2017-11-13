@@ -28,8 +28,8 @@ package com.mbientlab.metawear.impl;
  * Created by etsai on 8/31/16.
  */
 class Pair<T, U> {
-    public T first;
-    public U second;
+    public final T first;
+    public final U second;
 
     public Pair(T first, U second) {
         this.first= first;

@@ -36,7 +36,6 @@ import com.mbientlab.metawear.module.BarometerBmp280;
 import com.mbientlab.metawear.module.BarometerBosch;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Gpio;
-import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
 import com.mbientlab.metawear.module.Temperature;
@@ -49,7 +48,6 @@ import org.junit.runner.RunWith;
 import java.io.IOException;
 
 import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -77,12 +75,7 @@ public class TestDataProcessor {
                     {0x0b, 0x02, 0x09, 0x03, 0x00, 0x20}
             };
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.map(Function1.RMS).log(null);
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function1.RMS).log(null)).waitForCompletion();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
@@ -96,12 +89,7 @@ public class TestDataProcessor {
                     {0x0b, 0x02, 0x09, 0x03, 0x00, 0x40}
             };
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.map(Function2.RIGHT_SHIFT, 8).log(null);
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function2.RIGHT_SHIFT, 8).log(null)).waitForCompletion();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
@@ -111,20 +99,12 @@ public class TestDataProcessor {
             float[] expected = new float[] {1.969f, 0.812f, 0.984f};
             final float[] actual = new float[3];
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.map(Function2.RIGHT_SHIFT, 8).stream(new Subscriber() {
-                        @Override
-                        public void apply(Data data, Object... env) {
-                            byte[] bytes = data.bytes();
-                            for(int i = 0; i < bytes.length; i++) {
-                                actual[i] = (bytes[i] << 8) / data.scale();
-                            }
-                        }
-                    });
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function2.RIGHT_SHIFT, 8).stream((data, env) -> {
+                byte[] bytes = data.bytes();
+                for(int i = 0; i < bytes.length; i++) {
+                    actual[i] = (bytes[i] << 8) / data.scale();
                 }
-            }).waitForCompletion();
+            })).waitForCompletion();
 
             sendMockResponse(new byte[] {0x09, 0x03, 0x00, 126, 52, 63});
             assertArrayEquals(expected, actual, 0.001f);
@@ -140,12 +120,9 @@ public class TestDataProcessor {
                     .range(16f)
                     .odr(100f)
                     .commit();
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.map(Function1.RMS).accumulate().name("rms_acc");
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
+                    source.map(Function1.RMS).accumulate().name("rms_acc")
+            ).waitForCompletion();
 
             mwBoard.getModule(DataProcessor.class).edit("rms_acc", DataProcessor.AccumulatorEditor.class).set(20000f);
             assertArrayEquals(expected, junitPlatform.getLastCommand());
@@ -158,16 +135,13 @@ public class TestDataProcessor {
             junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
             super.setup();
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
                     source.map(Function1.RSS).lowpass((byte) 4).filter(ThresholdOutput.BINARY, 0.5f)
                         .multicast()
                             .to().filter(Comparison.EQ, -1).log(null)
                             .to().filter(Comparison.EQ, 1).log(null)
-                        .end();
-                }
-            }).waitForCompletion();
+                        .end()
+            ).waitForCompletion();
         }
 
         @Test
@@ -224,12 +198,9 @@ public class TestDataProcessor {
             };
 
             final Gpio gpio = mwBoard.getModule(Gpio.class);
-            gpio.pin((byte) 0).analogAdc().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.filter(Comparison.GT, "reference").name("reference");
-                }
-            }).waitForCompletion();
+            gpio.pin((byte) 0).analogAdc().addRouteAsync(source ->
+                    source.filter(Comparison.GT, "reference").name("reference")
+            ).waitForCompletion();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
@@ -280,12 +251,9 @@ public class TestDataProcessor {
             };
 
             Gpio.Pin pin = mwBoard.getModule(Gpio.class).pin((byte) 0);
-            pin.analogAdc().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.find(PulseOutput.AREA, 512, (short) 16).stream(null);
-                }
-            }).waitForCompletion();
+            pin.analogAdc().addRouteAsync(source ->
+                    source.find(PulseOutput.AREA, 512, (short) 16).stream(null)
+            ).waitForCompletion();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
@@ -308,21 +276,17 @@ public class TestDataProcessor {
 
 
             final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.NRF_SOC)[0];
-            thermometer.addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.multicast()
-                            .to().stream(null)
-                            .to()
-                                .map(Function2.MULTIPLY, 18)
-                                .map(Function2.DIVIDE, 10)
-                                .map(Function2.ADD, 32)
-                                .stream(null)
-                            .to()
-                                .map(Function2.ADD, 273.15f)
-                                .stream(null);
-                }
-            }).waitForCompletion();
+            thermometer.addRouteAsync(source -> source.multicast()
+                    .to().stream(null)
+                    .to()
+                        .map(Function2.MULTIPLY, 18)
+                        .map(Function2.DIVIDE, 10)
+                        .map(Function2.ADD, 32)
+                        .stream(null)
+                    .to()
+                        .map(Function2.ADD, 273.15f)
+                        .stream(null)
+            ).waitForCompletion();
             thermometer.read();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
@@ -334,12 +298,7 @@ public class TestDataProcessor {
         public void missingFeedbackName() throws Exception {
             Gpio.Pin pin = mwBoard.getModule(Gpio.class).pin((byte) 0);
 
-            Task<Route> routeTask = pin.analogAdc().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.map(Function2.ADD, "non-existent");
-                }
-            });
+            Task<Route> routeTask = pin.analogAdc().addRouteAsync(source -> source.map(Function2.ADD, "non-existent"));
             routeTask.waitForCompletion();
 
             throw routeTask.getError() == null ? new NullPointerException("Task expected to fail") : routeTask.getError();
@@ -352,12 +311,7 @@ public class TestDataProcessor {
             byte[] expected = new byte[] {0x9, 0x2, 0x4, (byte) 0xc1, 0x1, 0x20, 0x10, 0x1, 0x3};
             final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.PRESET_THERMISTOR)[0];
 
-            thermometer.addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.pack((byte) 4);
-                }
-            }).waitForCompletion();
+            thermometer.addRouteAsync(source -> source.pack((byte) 4)).waitForCompletion();
 
             assertArrayEquals(expected, junitPlatform.getLastCommand());
         }
@@ -368,18 +322,13 @@ public class TestDataProcessor {
             final float[] actual = new float[4];
 
             final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.NRF_SOC)[0];
-            thermometer.addRouteAsync(new RouteBuilder() {
+            thermometer.addRouteAsync(source -> source.pack((byte) 4).stream(new Subscriber() {
+                int i = 0;
                 @Override
-                public void configure(RouteComponent source) {
-                    source.pack((byte) 4).stream(new Subscriber() {
-                        int i = 0;
-                        @Override
-                        public void apply(Data data, Object... env) {
-                            actual[i++] = data.value(Float.class);
-                        }
-                    });
+                public void apply(Data data, Object... env) {
+                    actual[i++] = data.value(Float.class);
                 }
-            }).waitForCompletion();
+            })).waitForCompletion();
 
             byte[] response = new byte[] {0x09, 0x03, 0x00, (byte) 0xf5, 0x00, (byte) 0xf1, 0x00, (byte) 0xf2, 0x00, (byte) 0xf2, 0x00};
             sendMockResponse(response);
@@ -389,12 +338,7 @@ public class TestDataProcessor {
 
         @Test(expected = IllegalRouteOperationException.class)
         public void countTooHigh() throws Exception {
-            Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.pack((byte) 5);
-                }
-            });
+            Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 5));
             task.waitForCompletion();
 
             throw task.getError();
@@ -406,12 +350,7 @@ public class TestDataProcessor {
         public void createTempAccounter() throws InterruptedException {
             byte[] expected = new byte[] {0x9, 0x2, 0x3, 0x4, (byte) 0xff, (byte) 0xa0, 0x11, 0x31, 0x3};
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.account();
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(RouteComponent::account).waitForCompletion();
 
             assertArrayEquals(expected, junitPlatform.getLastCommand());
         }
@@ -421,17 +360,7 @@ public class TestDataProcessor {
             final Acceleration expected = new Acceleration(Float.intBitsToFloat(0x3c410000), Float.intBitsToFloat(0x3f12c400), Float.intBitsToFloat(0xbf4b9c00));
             final Capture<Acceleration> actual = new Capture<>();
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.account().stream(new Subscriber() {
-                        @Override
-                        public void apply(Data data, Object... env) {
-                            actual.set(data.value(Acceleration.class));
-                        }
-                    });
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream((Subscriber) (data, env) -> actual.set(data.value(Acceleration.class)))).waitForCompletion();
 
             byte[] response = new byte[] {0x09, 0x03, 0x00, (byte) 0xa6, 0x33, 0x0d, 0x00, (byte) 0xc1, 0x00, (byte) 0xb1, 0x24, 0x19, (byte) 0xcd};
             sendMockResponse(response);
@@ -439,7 +368,7 @@ public class TestDataProcessor {
             assertEquals(expected, actual.get());
         }
 
-        private Subscriber timeExtractor = new Subscriber() {
+        private final Subscriber timeExtractor = new Subscriber() {
             int i = 0;
             long prev = -1;
             @Override
@@ -457,12 +386,7 @@ public class TestDataProcessor {
             long expected[] = new long[] {10, 10, 9, 10, 11};
             final long actual[] = new long[5];
 
-            Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.account().stream(timeExtractor);
-                }
-            });
+            Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor));
             task.waitForCompletion();
             task.getResult().setEnvironment(0, (Object) actual);
 
@@ -486,12 +410,7 @@ public class TestDataProcessor {
             long expected[] = new long[] {11, 10, 9, 10, 10};
             final long actual[] = new long[5];
 
-            Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.account().stream(timeExtractor);
-                }
-            });
+            Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor));
             task.waitForCompletion();
             task.getResult().setEnvironment(0, (Object) actual);
 
@@ -512,12 +431,7 @@ public class TestDataProcessor {
 
         @Test(expected = IllegalRouteOperationException.class)
         public void noSpace() throws Exception {
-            Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.pack((byte) 4).account();
-                }
-            });
+            Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 4).account());
             task.waitForCompletion();
 
             throw task.getError();
@@ -530,12 +444,7 @@ public class TestDataProcessor {
             super.setup();
 
             final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.PRESET_THERMISTOR)[0];
-            thermometer.addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.account().pack((byte) 2).stream(null);
-                }
-            }).waitForCompletion();
+            thermometer.addRouteAsync(source -> source.account().pack((byte) 2).stream(null)).waitForCompletion();
         }
 
         @Test
@@ -606,12 +515,7 @@ public class TestDataProcessor {
             super.setup();
 
             final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.PRESET_THERMISTOR)[0];
-            thermometer.addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.pack((byte) 4).account().stream(null);
-                }
-            }).waitForCompletion();
+            thermometer.addRouteAsync(source -> source.pack((byte) 4).account().stream(null)).waitForCompletion();
         }
 
         @Test
@@ -684,12 +588,7 @@ public class TestDataProcessor {
             byte[][] expected = new byte[][] {
                     {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x03, 0x25, 0x04, 0x02}
             };
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.highpass((byte) 4);
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.highpass((byte) 4)).waitForCompletion();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
@@ -698,17 +597,7 @@ public class TestDataProcessor {
         public void accHpfData() throws InterruptedException {
             Acceleration expected = new Acceleration(Float.intBitsToFloat(0xba880000), Float.intBitsToFloat(0x3b240000), Float.intBitsToFloat(0x3ab00000));
             final Capture<Acceleration> actual = new Capture<>();
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.highpass((byte) 4).stream(new Subscriber() {
-                        @Override
-                        public void apply(Data data, Object... env) {
-                            actual.set(data.value(Acceleration.class));
-                        }
-                    });
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.highpass((byte) 4).stream((Subscriber) (data, env) -> actual.set(data.value(Acceleration.class)))).waitForCompletion();
 
             sendMockResponse(new byte[] {0x09, 0x03, 0x00, (byte) 0xef, (byte) 0xff, 0x29, 0x00, 0x16, 0x00});
             assertEquals(expected, actual.get());
@@ -724,42 +613,16 @@ public class TestDataProcessor {
             junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
             connectToBoard();
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.map(Function1.RMS).accumulate()
-                        .multicast()
-                            .to().limit(1000).stream(new Subscriber() {
-                                @Override
-                                public void apply(Data data, Object ... env) {
-                                        ((Capture<Float>) env[0]).set(data.value(Float.class));
-                                    }
-                                })
-                            .to().buffer().name("rms_accum")
-                        .end();
-                }
-            }).continueWithTask(new Continuation<Route, Task<Route>>() {
-                @Override
-                public Task<Route> then(Task<Route> task) throws Exception {
-                    activityRoute = task.getResult();
-                    return mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(new RouteBuilder() {
-                        @Override
-                        public void configure(RouteComponent source) {
-                            source.stream(new Subscriber() {
-                                @Override
-                                public void apply(Data data, Object ... env) {
-                                    ((Capture<Float>) env[0]).set(data.value(Float.class));
-                                }
-                            });
-                        }
-                    });
-                }
-            }).continueWith(new Continuation<Route, Void>() {
-                @Override
-                public Void then(Task<Route> task) throws Exception {
-                    bufferStateRoute= task.getResult();
-                    return null;
-                }
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function1.RMS).accumulate()
+                .multicast()
+                    .to().limit(1000).stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))
+                    .to().buffer().name("rms_accum")
+                .end()).continueWithTask(task -> {
+                activityRoute = task.getResult();
+                return mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(source -> source.stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))));
+            }).continueWith(task -> {
+                bufferStateRoute= task.getResult();
+                return null;
             }).waitForCompletion();
         }
 

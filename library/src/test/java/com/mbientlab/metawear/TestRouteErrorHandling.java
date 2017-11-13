@@ -37,15 +37,10 @@ import com.mbientlab.metawear.module.Settings;
 import com.mbientlab.metawear.module.Switch;
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Timer;
-import com.mbientlab.metawear.builder.RouteBuilder;
 
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -56,21 +51,6 @@ import static org.junit.Assert.assertNull;
  */
 
 public class TestRouteErrorHandling extends UnitTestBase {
-    private final AtomicBoolean needToWait= new AtomicBoolean(true);
-    private final Capture<Exception> actual= new Capture<>();
-    private final Continuation<Route, Void> errorHandler= new Continuation<Route, Void>() {
-        @Override
-        public Void then(Task<Route> task) throws Exception {
-            actual.set(task.getError());
-            needToWait.set(false);
-
-            synchronized (TestRouteErrorHandling.this) {
-                TestRouteErrorHandling.this.notifyAll();
-            }
-            return null;
-        }
-    };
-
     @Before
     public void setup() throws Exception {
         junitPlatform.firmware= "1.1.3";
@@ -83,60 +63,41 @@ public class TestRouteErrorHandling extends UnitTestBase {
 
     @Test(expected = IllegalRouteOperationException.class)
     public void emptyEnd() throws Exception {
-        mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.end();
-            }
-        }).continueWith(errorHandler);
+        Task<Route> actual = mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(RouteComponent::end);
+        actual.waitForCompletion();
 
-        throw actual.get();
+        throw actual.getError();
     }
 
     @Test(expected = NullPointerException.class)
     public void endNoMulticast() throws Exception {
-        mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
+        Task<Route> actual = mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(source ->
                 source.multicast()
                         .to()
                         .end()
-                        .end();
-            }
-        }).continueWith(errorHandler);
+                        .end()
+        );
+        actual.waitForCompletion();
 
-        throw actual.get();
+        throw actual.getError();
     }
 
     @Test(expected = IllegalRouteOperationException.class)
     public void splitIndexOob() throws Exception {
-        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.split()
-                        .index(3);
-            }
-        }).continueWith(errorHandler);
+        Task<Route> actual = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.split()
+                .index(3));
+        actual.waitForCompletion();
 
-        throw actual.get();
+        throw actual.getError();
     }
 
     @Test(expected = IllegalRouteOperationException.class)
     public void duplicateKey1() throws Exception {
         final Accelerometer.AccelerationDataProducer accData= mwBoard.getModule(Accelerometer.class).acceleration();
-        accData.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.map(Function1.RMS).name(accData.name());
-            }
-        }).continueWith(errorHandler);
+        Task<Route> actual = accData.addRouteAsync(source -> source.map(Function1.RMS).name(accData.name()));
+        actual.waitForCompletion();
 
-        if (needToWait.get()) {
-            synchronized (this) {
-                this.wait();
-            }
-        }
-        throw actual.get();
+        throw actual.getError();
     }
 
     @Test(expected = IllegalRouteOperationException.class)
@@ -144,31 +105,15 @@ public class TestRouteErrorHandling extends UnitTestBase {
         final Temperature.Sensor sensor1 = mwBoard.getModule(Temperature.class).sensors()[0],
                 sensor2 = mwBoard.getModule(Temperature.class).sensors()[1];
 
-        sensor1.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.map(Function2.SUBTRACT, 273.15).name("duplicate_key");
-            }
-        }).continueWithTask(new Continuation<Route, Task<Route>>() {
-            @Override
-            public Task<Route> then(Task<Route> task) throws Exception {
-                return sensor2.addRouteAsync(new RouteBuilder() {
-                    @Override
-                    public void configure(RouteComponent source) {
-                        source.map(Function2.MULTIPLY, 1.8f)
-                                .map(Function2.ADD, 32f)
-                                .name("duplicate_key");
-                    }
-                });
-            }
-        }).continueWith(errorHandler);
+        Task<Route> actual = sensor1.addRouteAsync(source ->
+                source.map(Function2.SUBTRACT, 273.15).name("duplicate_key")
+        ).continueWithTask(task -> sensor2.addRouteAsync(source ->
+                source.map(Function2.MULTIPLY, 1.8f)
+                        .map(Function2.ADD, 32f).name("duplicate_key"))
+        );
+        actual.waitForCompletion();
 
-        if (needToWait.get()) {
-            synchronized (this) {
-                this.wait();
-            }
-        }
-        throw actual.get();
+        throw actual.getError();
     }
 
     @Test
@@ -176,41 +121,18 @@ public class TestRouteErrorHandling extends UnitTestBase {
         final Temperature.Sensor sensor1 = mwBoard.getModule(Temperature.class).sensors()[0],
                 sensor2 = mwBoard.getModule(Temperature.class).sensors()[1];
 
-        sensor1.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.map(Function2.SUBTRACT, 273.15).name("duplicate_key");
-            }
-        }).continueWithTask(new Continuation<Route, Task<Route>>() {
-            @Override
-            public Task<Route> then(Task<Route> task) throws Exception {
-                return sensor2.addRouteAsync(new RouteBuilder() {
-                    @Override
-                    public void configure(RouteComponent source) {
-                        source.map(Function2.MULTIPLY, 1.8f).name("new_key")
-                                .map(Function2.ADD, 32f).name("duplicate_key");
-                    }
-                });
-            }
-        }).continueWithTask(new Continuation<Route, Task<Route>>() {
-            @Override
-            public Task<Route> then(Task<Route> task) throws Exception {
-                return sensor2.addRouteAsync(new RouteBuilder() {
-                    @Override
-                    public void configure(RouteComponent source) {
-                        source.map(Function2.MULTIPLY, 1.8f).name("new_key")
-                                .map(Function2.ADD, 32f);
-                    }
-                });
-            }
-        }).continueWith(errorHandler);
+        Task<Route> actual = sensor1.addRouteAsync(source ->
+                source.map(Function2.SUBTRACT, 273.15).name("duplicate_key")
+        ).continueWithTask(task -> sensor2.addRouteAsync(source ->
+                source.map(Function2.MULTIPLY, 1.8f).name("new_key")
+                    .map(Function2.ADD, 32f).name("duplicate_key"))
+        ).continueWithTask(task -> sensor2.addRouteAsync(source ->
+                source.map(Function2.MULTIPLY, 1.8f).name("new_key")
+                    .map(Function2.ADD, 32f))
+        );
+        actual.waitForCompletion();
 
-        if (needToWait.get()) {
-            synchronized (this) {
-                this.wait();
-            }
-        }
-        assertNull(actual.get());
+        assertNull(actual.getError());
     }
 
     @Test
@@ -230,19 +152,14 @@ public class TestRouteErrorHandling extends UnitTestBase {
         };
 
         junitPlatform.maxProcessors= 5;
-        RouteCreator.createGpioFeedback(mwBoard).continueWith(errorHandler);
-
-        if (needToWait.get()) {
-            synchronized (this) {
-                this.wait();
-            }
-        }
+        Task<Route> actual = RouteCreator.createGpioFeedback(mwBoard);
+        actual.waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
-    public void routeLoggingRemoval() throws InterruptedException {
+    public void actualLoggingRemoval() throws InterruptedException {
         byte[][] expected= {
                 {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x07, (byte) 0xa5, 0x00},
                 {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x02, 0x07},
@@ -258,24 +175,14 @@ public class TestRouteErrorHandling extends UnitTestBase {
         };
 
         junitPlatform.maxLoggers= 3;
-        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.multicast()
-                        .to()
-                            .map(Function1.RMS).log(null)
-                            .accumulate().log(null)
-                        .to()
-                            .log(null)
-                        .end();
-            }
-        }).continueWith(errorHandler);
-
-        if (needToWait.get()) {
-            synchronized (this) {
-                this.wait();
-            }
-        }
+        Task<Route> actual = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.multicast()
+                .to()
+                    .map(Function1.RMS).log(null)
+                    .accumulate().log(null)
+                .to()
+                    .log(null)
+                .end());
+        actual.waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
@@ -300,38 +207,20 @@ public class TestRouteErrorHandling extends UnitTestBase {
 
         junitPlatform.maxEvents= 1;
         final Led led= mwBoard.getModule(Led.class);
-        mwBoard.getModule(Switch.class).state().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.count().map(Function2.MODULUS, 2)
-                        .multicast()
-                        .to().filter(Comparison.EQ, 1).react(new RouteComponent.Action() {
-                            @Override
-                            public void execute(DataToken token) {
-                                    led.editPattern(Led.Color.BLUE)
-                                            .highIntensity((byte) 16).lowIntensity((byte) 16)
-                                            .pulseDuration((short) 1000)
-                                            .highTime((short) 500)
-                                            .repeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
-                                            .commit();
-                                    led.play();
-                                }
-                            })
-                        .to().filter(Comparison.EQ, 0).react(new RouteComponent.Action() {
-                            @Override
-                                public void execute(DataToken token) {
-                                led.stop(true);
-                            }
-                        })
-                        .end();
-            }
-        }).continueWith(errorHandler);
-
-        if (needToWait.get()) {
-            synchronized (this) {
-                this.wait();
-            }
-        }
+        Task<Route> actual = mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.count().map(Function2.MODULUS, 2)
+                .multicast()
+                .to().filter(Comparison.EQ, 1).react(token -> {
+                        led.editPattern(Led.Color.BLUE)
+                                .highIntensity((byte) 16).lowIntensity((byte) 16)
+                                .pulseDuration((short) 1000)
+                                .highTime((short) 500)
+                                .repeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
+                                .commit();
+                        led.play();
+                    })
+                .to().filter(Comparison.EQ, 0).react(token -> led.stop(true))
+                .end());
+        actual.waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
@@ -348,29 +237,10 @@ public class TestRouteErrorHandling extends UnitTestBase {
         };
 
         junitPlatform.maxEvents= 1;
-        mwBoard.getModule(Timer.class).scheduleAsync(3141, (short) 59, true, new CodeBlock() {
-            @Override
-            public void program() {
-                mwBoard.getModule(Gpio.class).pin((byte) 0).analogAbsRef().read();
-                mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().read();
-            }
-        }).continueWith(new Continuation<Timer.ScheduledTask, Void>() {
-            @Override
-            public Void then(Task<Timer.ScheduledTask> task) throws Exception {
-                needToWait.set(false);
-
-                synchronized (TestRouteErrorHandling.this) {
-                    TestRouteErrorHandling.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        if (needToWait.get()) {
-            synchronized (this) {
-                this.wait();
-            }
-        }
+        mwBoard.getModule(Timer.class).scheduleAsync(3141, (short) 59, true, () -> {
+            mwBoard.getModule(Gpio.class).pin((byte) 0).analogAbsRef().read();
+            mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().read();
+        }).waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
@@ -392,35 +262,16 @@ public class TestRouteErrorHandling extends UnitTestBase {
         final Haptic haptic= mwBoard.getModule(Haptic.class);
 
         junitPlatform.maxEvents= 2;
-        mwBoard.getModule(Settings.class).onDisconnectAsync(new CodeBlock() {
-            @Override
-            public void program() {
-                led.editPattern(Led.Color.BLUE)
-                        .highIntensity((byte) 16).lowIntensity((byte) 16)
-                        .pulseDuration((short) 1000)
-                        .highTime((short) 500)
-                        .repeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
-                        .commit();
-                led.play();
-                haptic.startMotor(100f, (short) 3000);
-            }
-        }).continueWith(new Continuation<Observer, Void>() {
-            @Override
-            public Void then(Task<Observer> task) throws Exception {
-                needToWait.set(false);
-
-                synchronized (TestRouteErrorHandling.this) {
-                    TestRouteErrorHandling.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        if (needToWait.get()) {
-            synchronized (this) {
-                this.wait();
-            }
-        }
+        mwBoard.getModule(Settings.class).onDisconnectAsync(() -> {
+            led.editPattern(Led.Color.BLUE)
+                    .highIntensity((byte) 16).lowIntensity((byte) 16)
+                    .pulseDuration((short) 1000)
+                    .highTime((short) 500)
+                    .repeatCount(Led.PATTERN_REPEAT_INDEFINITELY)
+                    .commit();
+            led.play();
+            haptic.startMotor(100f, (short) 3000);
+        }).waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }

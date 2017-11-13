@@ -24,19 +24,10 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
-import com.mbientlab.metawear.module.AccelerometerBmi160;
-import com.mbientlab.metawear.module.GyroBmi160;
-import com.mbientlab.metawear.module.MagnetometerBmm150;
-import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.Settings;
 
 import org.junit.Before;
 import org.junit.Test;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 
@@ -68,19 +59,13 @@ public class TestSettingsRev5 extends UnitTestBase {
         byte[] expected = new byte[] {0x1, 0x0};
         final byte[] actual = new byte[2];
 
-        settings.readCurrentPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual[0] = task.getResult();
-                return null;
-            }
+        settings.readCurrentPowerStatusAsync().continueWith(task -> {
+            actual[0] = task.getResult();
+            return null;
         });
-        settings.readCurrentPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual[1] = task.getResult();
-                return null;
-            }
+        settings.readCurrentPowerStatusAsync().continueWith(task -> {
+            actual[1] = task.getResult();
+            return null;
         });
 
         sendMockResponse(new byte[] {0x11, (byte) 0x91, 0x1});
@@ -92,12 +77,7 @@ public class TestSettingsRev5 extends UnitTestBase {
     public void powerStatus() {
         byte[] expected = new byte[] {0x11, 0x11, 0x01};
 
-        settings.powerStatus().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        settings.powerStatus().addRouteAsync(source -> source.stream(null));
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -107,20 +87,15 @@ public class TestSettingsRev5 extends UnitTestBase {
         final byte[] actual = new byte[2];
         byte[] expected = new byte[] {0x0, 0x1};
 
-        settings.powerStatus().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
+        settings.powerStatus().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
 
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual[i] = data.value(Byte.class);
-                        i++;
-                    }
-                });
+            @Override
+            public void apply(Data data, Object... env) {
+                actual[i] = data.value(Byte.class);
+                i++;
             }
-        });
+        }));
 
         sendMockResponse(new byte[] {0x11, 0x11, 0x00});
         sendMockResponse(new byte[] {0x11, 0x11, 0x01});
@@ -141,19 +116,13 @@ public class TestSettingsRev5 extends UnitTestBase {
         byte[] expected = new byte[] {0x1, 0x0};
         final byte[] actual = new byte[2];
 
-        settings.readCurrentChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual[0] = task.getResult();
-                return null;
-            }
+        settings.readCurrentChargeStatusAsync().continueWith(task -> {
+            actual[0] = task.getResult();
+            return null;
         });
-        settings.readCurrentChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                actual[1] = task.getResult();
-                return null;
-            }
+        settings.readCurrentChargeStatusAsync().continueWith(task -> {
+            actual[1] = task.getResult();
+            return null;
         });
 
         sendMockResponse(new byte[] {0x11, (byte) 0x92, 0x1});
@@ -165,12 +134,7 @@ public class TestSettingsRev5 extends UnitTestBase {
     public void chargeStatus() {
         byte[] expected = new byte[] {0x11, 0x12, 0x01};
 
-        settings.chargeStatus().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        settings.chargeStatus().addRouteAsync(source -> source.stream(null));
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -180,20 +144,15 @@ public class TestSettingsRev5 extends UnitTestBase {
         final byte[] actual = new byte[2];
         byte[] expected = new byte[] {0x0, 0x1};
 
-        settings.chargeStatus().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
+        settings.chargeStatus().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
 
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual[i] = data.value(Byte.class);
-                        i++;
-                    }
-                });
+            @Override
+            public void apply(Data data, Object... env) {
+                actual[i] = data.value(Byte.class);
+                i++;
             }
-        });
+        }));
 
         sendMockResponse(new byte[] {0x11, 0x12, 0x00});
         sendMockResponse(new byte[] {0x11, 0x12, 0x01});

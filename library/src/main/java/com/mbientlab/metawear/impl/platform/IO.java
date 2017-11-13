@@ -46,7 +46,7 @@ public interface IO {
      * Retrieves data saved locally to the device
      * @param key    Key value identifying the data
      * @return Stream to read the data
-     * @throws IOException
+     * @throws IOException If I/O error occurs
      */
     InputStream localRetrieve(String key) throws IOException;
 

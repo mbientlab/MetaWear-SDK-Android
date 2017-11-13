@@ -24,13 +24,11 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
-import com.mbientlab.metawear.builder.RouteBuilder;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -39,19 +37,13 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Collection;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 
 /**
  * Created by etsai on 9/1/16.
@@ -181,22 +173,12 @@ public class TestAccelerometer extends UnitTestBase {
     @Test
     public void subscribeAccStream() {
         byte[] expected = new byte[] {0x03, 0x04, 0x01};
-        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.multicast()
-                        .to().stream(null)
-                        .to().split()
-                            .index(0).stream(null)
-                            .index(1).stream(null)
-                            .index(2).stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                return null;
-            }
-        });
+        accelerometer.acceleration().addRouteAsync(source -> source.multicast()
+                .to().stream(null)
+                .to().split()
+                    .index(0).stream(null)
+                    .index(1).stream(null)
+                    .index(2).stream(null)).continueWith(task -> null);
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -204,25 +186,18 @@ public class TestAccelerometer extends UnitTestBase {
     @Test
     public void unsubscribeAccStream() {
         byte[] expected = new byte[] {0x03, 0x04, 0x00};
-        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.multicast()
-                        .to().stream(null)
-                        .to().split()
-                            .index(0).stream(null)
-                            .index(1).stream(null)
-                            .index(2).stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().unsubscribe(0);
-                task.getResult().unsubscribe(1);
-                task.getResult().unsubscribe(2);
-                task.getResult().unsubscribe(3);
-                return null;
-            }
+        accelerometer.acceleration().addRouteAsync(source -> source.multicast()
+                .to().stream(null)
+                .to().split()
+                    .index(0).stream(null)
+                    .index(1).stream(null)
+                    .index(2).stream(null))
+        .continueWith(task -> {
+            task.getResult().unsubscribe(0);
+            task.getResult().unsubscribe(1);
+            task.getResult().unsubscribe(2);
+            task.getResult().unsubscribe(3);
+            return null;
         });
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
@@ -283,22 +258,11 @@ public class TestAccelerometer extends UnitTestBase {
             response= new byte[] {0x03, 0x04, 0x56, (byte) 0xfa, 0x05, (byte) 0xf6, 0x18, 0x03};
         }
 
-        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((Capture<Acceleration>) env[0]).set(data.value(Acceleration.class));
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        accelerometer.acceleration().addRouteAsync(source -> source.stream((data, env) ->
+                ((Capture<Acceleration>) env[0]).set(data.value(Acceleration.class))))
+        .continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
         });
 
         sendMockResponse(response);
@@ -332,37 +296,15 @@ public class TestAccelerometer extends UnitTestBase {
             response= new byte[] {0x03, 0x04, 0x56, (byte) 0xfa, 0x05, (byte) 0xf6, 0x18, 0x03};
         }
 
-        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.split()
-                        .index(0).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[0]= data.value(Float.class);
-                            }
-                        })
-                        .index(1).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[1]= data.value(Float.class);
-                            }
-                        })
-                        .index(2).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[2]= data.value(Float.class);
-                            }
-                        });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, (Object) actual);
-                task.getResult().setEnvironment(1, (Object) actual);
-                task.getResult().setEnvironment(2, (Object) actual);
-                return null;
-            }
+        accelerometer.acceleration().addRouteAsync(source -> source.split()
+                .index(0).stream((data, env) -> ((float[]) env[0])[0]= data.value(Float.class))
+                .index(1).stream((data, env) -> ((float[]) env[0])[1]= data.value(Float.class))
+                .index(2).stream((data, env) -> ((float[]) env[0])[2]= data.value(Float.class)))
+        .continueWith(task -> {
+            task.getResult().setEnvironment(0, (Object) actual);
+            task.getResult().setEnvironment(1, (Object) actual);
+            task.getResult().setEnvironment(2, (Object) actual);
+            return null;
         });
 
         sendMockResponse(response);
@@ -409,25 +351,17 @@ public class TestAccelerometer extends UnitTestBase {
 
         final Acceleration[] actual = new Acceleration[3];
         final String[] timestamps = new String[3];
-        accelerometer.packedAcceleration().addRouteAsync(new RouteBuilder() {
+        accelerometer.packedAcceleration().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        ((Acceleration[]) env[0])[i] = data.value(Acceleration.class);
-                        ((String[]) env[1])[i] = data.formattedTimestamp();
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                ((Acceleration[]) env[0])[i] = data.value(Acceleration.class);
+                ((String[]) env[1])[i] = data.formattedTimestamp();
+                i++;
             }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual, timestamps);
-                return null;
-            }
+        })).continueWith(task -> {
+            task.getResult().setEnvironment(0, actual, timestamps);
+            return null;
         });
 
         sendMockResponse(response);

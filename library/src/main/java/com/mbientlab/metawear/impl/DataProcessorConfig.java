@@ -64,8 +64,8 @@ abstract class DataProcessorConfig {
     static class Passthrough extends DataProcessorConfig {
         static final byte ID = 0x1;
 
-        com.mbientlab.metawear.builder.filter.Passthrough type;
-        short value;
+        final com.mbientlab.metawear.builder.filter.Passthrough type;
+        final short value;
 
         Passthrough(byte[] config) {
             super(config[0]);
@@ -98,8 +98,9 @@ abstract class DataProcessorConfig {
     static class Accumulator extends DataProcessorConfig {
         static final byte ID = 0x2;
 
-        boolean counter;
-        byte output, input;
+        final boolean counter;
+        final byte output;
+        final byte input;
 
         Accumulator(boolean counter, byte output, byte input) {
             super(ID);
@@ -131,7 +132,10 @@ abstract class DataProcessorConfig {
     static class Average extends DataProcessorConfig {
         static final byte ID = 0x3;
 
-        byte output, input, samples, nInputs;
+        final byte output;
+        final byte input;
+        final byte samples;
+        byte nInputs;
         boolean hpf, supportsHpf;
 
         Average(DataAttributes attributes, byte samples, boolean hpf, boolean supportsHpf) {
@@ -240,10 +244,10 @@ abstract class DataProcessorConfig {
         }
 
         byte input;
-        Number[] references;
-        com.mbientlab.metawear.builder.filter.Comparison op;
-        ComparisonOutput mode;
-        boolean isSigned;
+        final Number[] references;
+        final com.mbientlab.metawear.builder.filter.Comparison op;
+        final ComparisonOutput mode;
+        final boolean isSigned;
 
         MultiValueComparison(boolean isSigned, byte input, com.mbientlab.metawear.builder.filter.Comparison op, ComparisonOutput mode, Number[] references) {
             super(ID);
@@ -277,9 +281,9 @@ abstract class DataProcessorConfig {
         }
     }
     static class SingleValueComparison extends Comparison {
-        boolean isSigned;
-        com.mbientlab.metawear.builder.filter.Comparison op;
-        int reference;
+        final boolean isSigned;
+        final com.mbientlab.metawear.builder.filter.Comparison op;
+        final int reference;
 
         SingleValueComparison(boolean isSigned, com.mbientlab.metawear.builder.filter.Comparison op, int reference) {
             super(ID);
@@ -311,8 +315,11 @@ abstract class DataProcessorConfig {
     static class Combiner extends DataProcessorConfig {
         static final byte ID = 0x7;
 
-        byte output, input, nInputs;
-        boolean isSigned, rss;
+        final byte output;
+        final byte input;
+        final byte nInputs;
+        final boolean isSigned;
+        final boolean rss;
 
         Combiner(DataAttributes attributes, boolean rss) {
             super(ID);
@@ -352,8 +359,9 @@ abstract class DataProcessorConfig {
     static class Time extends DataProcessorConfig {
         static final byte ID = 0x8;
 
-        byte input, type;
-        int period;
+        final byte input;
+        final byte type;
+        final int period;
 
         Time(byte input, byte type, int period) {
             super(ID);
@@ -411,10 +419,13 @@ abstract class DataProcessorConfig {
             CONSTANT
         }
 
-        byte output, input, nInputs;
-        boolean isSigned, multiChnlMath;
-        Operation op;
-        int rhs;
+        byte output;
+        final byte input;
+        byte nInputs;
+        final boolean isSigned;
+        boolean multiChnlMath;
+        final Operation op;
+        final int rhs;
 
         Maths(DataAttributes attributes, boolean multiChnlMath, Operation op, int rhs) {
             super(ID);
@@ -470,7 +481,8 @@ abstract class DataProcessorConfig {
     static class Delay extends DataProcessorConfig {
         static final byte ID = 0xa;
 
-        byte input, samples;
+        final byte input;
+        final byte samples;
 
         Delay(byte input, byte samples) {
             super(ID);
@@ -500,10 +512,10 @@ abstract class DataProcessorConfig {
     static class Pulse extends DataProcessorConfig {
         static final byte ID = 0xb;
 
-        byte input;
-        int threshold;
-        short samples;
-        PulseOutput mode;
+        final byte input;
+        final int threshold;
+        final short samples;
+        final PulseOutput mode;
 
         Pulse(byte input, int threshold, short samples, PulseOutput mode) {
             super(ID);
@@ -543,10 +555,10 @@ abstract class DataProcessorConfig {
     static class Differential extends DataProcessorConfig {
         static final byte ID = 0xc;
 
-        byte input;
-        boolean isSigned;
-        DifferentialOutput mode;
-        int differential;
+        final byte input;
+        final boolean isSigned;
+        final DifferentialOutput mode;
+        final int differential;
 
         Differential(byte input, boolean isSigned, DifferentialOutput mode, int differential) {
             super(ID);
@@ -584,11 +596,11 @@ abstract class DataProcessorConfig {
     static class Threshold extends DataProcessorConfig {
         static final byte ID = 0xd;
 
-        byte input;
-        boolean isSigned;
-        ThresholdOutput mode;
-        int boundary;
-        short hysteresis;
+        final byte input;
+        final boolean isSigned;
+        final ThresholdOutput mode;
+        final int boundary;
+        final short hysteresis;
 
         Threshold(byte input, boolean isSigned, ThresholdOutput mode, int boundary, short hysteresis) {
             super(ID);
@@ -630,7 +642,7 @@ abstract class DataProcessorConfig {
     static class Buffer extends DataProcessorConfig {
         static final byte ID = 0xf;
 
-        byte input;
+        final byte input;
 
         Buffer(byte input) {
             super(ID);
@@ -658,7 +670,8 @@ abstract class DataProcessorConfig {
     static class Packer extends DataProcessorConfig {
         static final byte ID = 0x10;
 
-        byte input, count;
+        final byte input;
+        final byte count;
 
         Packer(byte input, byte count) {
             super(ID);
@@ -688,7 +701,7 @@ abstract class DataProcessorConfig {
     static class Accounter extends DataProcessorConfig {
         static final byte ID = 0x11;
 
-        byte length;
+        final byte length;
 
         Accounter(byte length) {
             super(ID);

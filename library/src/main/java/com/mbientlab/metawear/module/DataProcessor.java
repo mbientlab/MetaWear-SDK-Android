@@ -102,9 +102,10 @@ public interface DataProcessor extends Module {
         void modify(Number distance);
     }
     /**
-     * Edits an average processor
+     * Edits a high or low pass processor
      * @author Eric Tsai
-     * @see RouteComponent#average(byte)
+     * @see RouteComponent#lowpass(byte)
+     * @see RouteComponent#highpass(byte)
      */
     interface AverageEditor extends Editor {
         /**

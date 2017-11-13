@@ -24,16 +24,12 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -58,23 +54,11 @@ public class TestBmi160StepCounterData extends UnitTestBase {
         final Capture<Short> actual = new Capture<>();
         short expected= 43;
 
-        counter.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        ((Capture<Short>) env[0]).set(data.value(Short.class));
-                    }
+        counter.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Short>) env[0]).set(data.value(Short.class))))
+                .continueWith(task -> {
+                    task.getResult().setEnvironment(0, actual);
+                    return null;
                 });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
-        });
 
         sendMockResponse(new byte[] {0x03, (byte) 0x9a, 0x2b, 0x00});
         assertEquals(expected, actual.get().shortValue());
@@ -84,17 +68,9 @@ public class TestBmi160StepCounterData extends UnitTestBase {
     public void read() {
         byte[] expected = new byte[] {0x03, (byte) 0x9a};
 
-        counter.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                counter.read();
-                return null;
-            }
+        counter.addRouteAsync(source -> source.stream(null)).continueWith(task -> {
+            counter.read();
+            return null;
         });
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());

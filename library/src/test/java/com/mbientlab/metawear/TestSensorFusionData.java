@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedAcceleration;
@@ -47,8 +45,6 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertEquals;
 
@@ -123,22 +119,9 @@ public class TestSensorFusionData extends UnitTestBase {
         AsyncDataProducer producer = (AsyncDataProducer) m.invoke(sensorFusion);
         final Capture<Object> actual = new Capture<>();
 
-        producer.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        ((Capture<Object>) env[0]).set(data.value(data.types()[0]));
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        producer.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Object>) env[0]).set(data.value(data.types()[0])))).continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
         });
 
         sendMockResponse(response);

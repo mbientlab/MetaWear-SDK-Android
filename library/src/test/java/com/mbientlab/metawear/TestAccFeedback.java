@@ -27,8 +27,6 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.Accelerometer;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer.AccelerationDataProducer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -43,9 +41,6 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.Arrays;
 import java.util.Collection;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 
@@ -95,29 +90,15 @@ public class TestAccFeedback extends UnitTestBase {
         };
         final AccelerationDataProducer acceleration = accelerometer.acceleration();
 
-        acceleration.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
+        acceleration.addRouteAsync(source ->
                 source.split()
-                        .index(1).delay((byte) 1).map(Function2.SUBTRACT, acceleration.xAxisName()).stream(null).log(null)
-                      .end();
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestAccFeedback.this) {
-                    TestAccFeedback.this.notifyAll();
-                }
-                return null;
-            }
-        });
+                    .index(1).delay((byte) 1).map(Function2.SUBTRACT, acceleration.xAxisName()).stream(null).log(null)
+                .end()
+        ).waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-            mwBoard.lookupRoute(0).remove();
+        mwBoard.lookupRoute(0).remove();
 
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -131,26 +112,12 @@ public class TestAccFeedback extends UnitTestBase {
         };
         final AccelerationDataProducer acceleration = accelerometer.acceleration();
 
-        acceleration.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.split().index(0).map(Function1.ABS_VALUE).name("x-abs")
-                        .index(1).map(Function1.ABS_VALUE).map(Function2.ADD, "x-abs");
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestAccFeedback.this) {
-                    TestAccFeedback.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        acceleration.addRouteAsync(source ->
+                source.split()
+                    .index(0).map(Function1.ABS_VALUE).name("x-abs")
+                    .index(1).map(Function1.ABS_VALUE).map(Function2.ADD, "x-abs")
+        ).waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 }

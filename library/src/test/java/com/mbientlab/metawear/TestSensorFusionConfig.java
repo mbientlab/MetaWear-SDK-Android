@@ -50,7 +50,7 @@ import static org.junit.Assert.assertArrayEquals;
 @RunWith(Parameterized.class)
 public class TestSensorFusionConfig extends UnitTestBase {
     private static final byte[] BMI160_ACC_RANGE_BITMASK= new byte[] { 0b0011, 0b0101, 0b1000, 0b1100 };
-    private static byte[][] CONFIG_MASKS;
+    private static final byte[][] CONFIG_MASKS;
     static {
         CONFIG_MASKS = new byte[][] {
                 {0x10, 0x20, 0x30, 0x40},

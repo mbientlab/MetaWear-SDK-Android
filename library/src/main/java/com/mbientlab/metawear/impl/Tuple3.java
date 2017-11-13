@@ -28,9 +28,9 @@ package com.mbientlab.metawear.impl;
  * Created by etsai on 9/4/16.
  */
 class Tuple3<T, U, V> {
-    T first;
-    U second;
-    V third;
+    final T first;
+    final U second;
+    final V third;
 
     Tuple3(T first, U second, V third) {
         this.first = first;

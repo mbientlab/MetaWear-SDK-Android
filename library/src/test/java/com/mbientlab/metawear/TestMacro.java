@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.ThresholdOutput;
 import com.mbientlab.metawear.builder.function.Function1;
@@ -37,9 +35,6 @@ import com.mbientlab.metawear.module.Switch;
 
 import org.junit.Before;
 import org.junit.Test;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 
@@ -119,22 +114,15 @@ public class TestMacro extends UnitTestBase {
         accelerometer.configure()
                 .range(16f)
                 .commit();
-        accelerometer.acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.map(Function1.RSS).average((byte) 16).filter(ThresholdOutput.BINARY, 0.3f)
-                        .multicast()
-                        .to().filter(Comparison.EQ, -1).stream(null)
-                        .to().filter(Comparison.EQ, 1).stream(null)
-                        .end();
-            }
-        }).continueWithTask(new Continuation<Route, Task<Byte>>() {
-            @Override
-            public Task<Byte> then(Task<Route> task) throws Exception {
-                accelerometer.acceleration().start();
-                accelerometer.start();
-                return macro.endRecordAsync();
-            }
+        accelerometer.acceleration().addRouteAsync(source -> source.map(Function1.RSS).lowpass((byte) 16).filter(ThresholdOutput.BINARY, 0.3f)
+                .multicast()
+                .to().filter(Comparison.EQ, -1).stream(null)
+                .to().filter(Comparison.EQ, 1).stream(null)
+                .end())
+        .continueWithTask(task -> {
+            accelerometer.acceleration().start();
+            accelerometer.start();
+            return macro.endRecordAsync();
         }).waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
@@ -168,12 +156,7 @@ public class TestMacro extends UnitTestBase {
         };
 
         macro.startRecord(false);
-        RouteCreator.createLedController(mwBoard).continueWithTask(new Continuation<Route, Task<Byte>>() {
-            @Override
-            public Task<Byte> then(Task<Route> task) throws Exception {
-                return macro.endRecordAsync();
-            }
-        }).waitForCompletion();
+        RouteCreator.createLedController(mwBoard).continueWithTask(task -> macro.endRecordAsync()).waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }

@@ -164,20 +164,20 @@ public interface AccelerometerBosch extends Accelerometer {
      */
     class LowHighResponse {
         /** True if the interrupt from from low-g motion */
-        public boolean isLow;
+        public final boolean isLow;
         /**
          * True if the interrupt from from high-g motion.  If it is not high-g motion, there is no
          * need to check the high-g variables
          */
-        public boolean isHigh;
+        public final boolean isHigh;
         /** True if the x-axis triggered high-g interrupt */
-        public boolean highGx;
+        public final boolean highGx;
         /** True if the y-axis triggered high-g interrupt */
-        public boolean highGy;
+        public final boolean highGy;
         /** True if the z-axis triggered high-g interrupt */
-        public boolean highGz;
+        public final boolean highGz;
         /** Direction of the high-g motion interrupt */
-        public Sign highSign;
+        public final Sign highSign;
 
         public LowHighResponse(boolean isHigh, boolean isLow, boolean highGx, boolean highGy, boolean highGz, Sign highSign) {
             this.isHigh = isHigh;
@@ -350,13 +350,13 @@ public interface AccelerometerBosch extends Accelerometer {
      */
     class AnyMotion {
         /** Slope sign of the triggering motion */
-        public Sign sign;
+        public final Sign sign;
         /** True if x-axis triggered the motion interrupt */
-        public boolean xAxisActive;
+        public final boolean xAxisActive;
         /** True if y-axis triggered the motion interrupt */
-        public boolean yAxisActive;
+        public final boolean yAxisActive;
         /** True if z-axis triggered the motion interrupt */
-        public boolean zAxisActive;
+        public final boolean zAxisActive;
 
         public AnyMotion(Sign sign, boolean xAxisActive, boolean yAxisActive, boolean zAxisActive) {
             this.sign = sign;
@@ -445,9 +445,9 @@ public interface AccelerometerBosch extends Accelerometer {
      */
     class Tap {
         /** Tap type of the response */
-        public TapType type;
+        public final TapType type;
         /** Sign of the triggering signal */
-        public Sign sign;
+        public final Sign sign;
 
         public Tap(TapType type, Sign sign) {
             this.type = type;

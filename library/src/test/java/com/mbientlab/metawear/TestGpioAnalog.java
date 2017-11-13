@@ -24,9 +24,7 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Gpio;
-import com.mbientlab.metawear.builder.RouteBuilder;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -36,7 +34,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -63,27 +60,14 @@ public class TestGpioAnalog extends UnitTestBase {
                 {0x05, (byte) 0x87, 0x02}
         };
 
-        final Task<Route> absRef= gpio.pin((byte) 3).analogAbsRef().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
-        final Task<Route> adc= gpio.pin((byte) 2).analogAdc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        final Task<Route> absRef= gpio.pin((byte) 3).analogAbsRef().addRouteAsync(source -> source.stream(null));
+        final Task<Route> adc= gpio.pin((byte) 2).analogAdc().addRouteAsync(source -> source.stream(null));
 
         List<Task<Route>> tasks= Arrays.asList(absRef, adc);
-        Task.whenAll(tasks).continueWith(new Continuation<Void, Void>() {
-            @Override
-            public Void then(Task<Void> task) throws Exception {
-                gpio.pin((byte) 3).analogAbsRef().read();
-                gpio.pin((byte) 2).analogAdc().read();
-                return null;
-            }
+        Task.whenAll(tasks).continueWith(task -> {
+            gpio.pin((byte) 3).analogAbsRef().read();
+            gpio.pin((byte) 2).analogAdc().read();
+            return null;
         });
 
         assertArrayEquals(expected, junitPlatform.getCommands());
@@ -115,34 +99,16 @@ public class TestGpioAnalog extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    private static final Subscriber ANALOG_ADC_SUBSCRIBER = new Subscriber() {
-        @Override
-        public void apply(Data data, Object ... env) {
-            ((Capture<Short>) env[0]).set(data.value(Short.class));
-        }
-    }, ANALOG_ABS_REF_SUBSCRIBER = new Subscriber() {
-        @Override
-        public void apply(Data data, Object ... env) {
-            ((Capture<Float>) env[0]).set(data.value(Float.class));
-        }
-    };
-
     protected Task<Route> setupAbsRef() {
-        return gpio.pin((byte) 1).analogAbsRef().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(ANALOG_ABS_REF_SUBSCRIBER);
-            }
-        });
+        return gpio.pin((byte) 1).analogAbsRef().addRouteAsync(source ->
+                source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))
+        );
     }
 
     protected Task<Route> setupAdc() {
-        return gpio.pin((byte) 1).analogAdc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(ANALOG_ADC_SUBSCRIBER);
-            }
-        });
+        return gpio.pin((byte) 1).analogAdc().addRouteAsync(source ->
+                source.stream((data, env) -> ((Capture<Short>) env[0]).set(data.value(Short.class)))
+        );
     }
 
     @Test
@@ -150,19 +116,13 @@ public class TestGpioAnalog extends UnitTestBase {
         final Capture<Float> absRef = new Capture<>();
         final Capture<Short> adc = new Capture<>();
 
-        setupAbsRef().continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, absRef);
-                return null;
-            }
+        setupAbsRef().continueWith(task -> {
+            task.getResult().setEnvironment(0, absRef);
+            return null;
         });
-        setupAdc().continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, adc);
-                return null;
-            }
+        setupAdc().continueWith(task -> {
+            task.getResult().setEnvironment(0, adc);
+            return null;
         });
 
 

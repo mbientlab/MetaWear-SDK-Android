@@ -25,15 +25,11 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.ProximityTsl2671;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -57,12 +53,7 @@ public class TestProximityTsl2671 extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x18, (byte) 0x81};
 
-        proximity.adc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        proximity.adc().addRouteAsync(source -> source.stream(null));
         proximity.adc().read();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -80,22 +71,9 @@ public class TestProximityTsl2671 extends UnitTestBase {
         short expected= 1522;
         final Capture<Short> actual= new Capture<>();
 
-        proximity.adc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((Capture<Short>) env[0]).set(data.value(Short.class));
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        proximity.adc().addRouteAsync(source -> source.stream((data, env) -> ((Capture<Short>) env[0]).set(data.value(Short.class)))).continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
         });
         sendMockResponse(new byte[] { 0x18, (byte) 0x81, (byte) 0xf2, 0x05 });
 

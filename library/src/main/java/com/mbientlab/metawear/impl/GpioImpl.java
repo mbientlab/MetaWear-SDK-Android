@@ -110,7 +110,7 @@ class GpioImpl extends ModuleImplBase implements Gpio {
     private static class GpioPinImpl implements Pin {
         private final byte pin;
         private final boolean virtual;
-        private transient MetaWearBoardPrivate mwPrivate;
+        private final transient MetaWearBoardPrivate mwPrivate;
 
         GpioPinImpl(byte pin, boolean virtual, MetaWearBoardPrivate mwPrivate) {
             this.pin= pin;

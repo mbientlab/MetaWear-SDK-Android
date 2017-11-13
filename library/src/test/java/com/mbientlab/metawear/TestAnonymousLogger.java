@@ -90,12 +90,7 @@ public class TestAnonymousLogger {
 
             Acceleration expected = new Acceleration(Float.intBitsToFloat(1031077888), Float.intBitsToFloat(1033797632), Float.intBitsToFloat(1065209856));
             final Capture<Acceleration> actual = new Capture<>();
-            task.getResult()[0].subscribe(new Subscriber() {
-                @Override
-                public void apply(Data data, Object... env) {
-                    actual.set(data.value(Acceleration.class));
-                }
-            });
+            task.getResult()[0].subscribe((data, env) -> actual.set(data.value(Acceleration.class)));
 
             sendMockResponse(new byte[] {11,7,-96,-26,66,0,0,-11,0,61,1,-95,-26,66,0,0,-35,15,0,0});
 
@@ -246,12 +241,7 @@ public class TestAnonymousLogger {
             final Capture<Float> actual = new Capture<>();
 
             AnonymousRoute[] routes = retrieveLoggers(mwBoard);
-            routes[1].subscribe(new Subscriber() {
-                @Override
-                public void apply(Data data, Object... env) {
-                    actual.set(data.value(Float.class));
-                }
-            });
+            routes[1].subscribe((data, env) -> actual.set(data.value(Float.class)));
 
             sendMockResponse(new byte[] {0x0b, 0x07, (byte) 0xc1, (byte) 0xe9, 0x06, 0x02, 0x00, (byte) 0xe3, 0x1d, (byte) 0xdc, 0x00});
 
@@ -395,21 +385,11 @@ public class TestAnonymousLogger {
 
             AngularVelocity expected = new AngularVelocity(Float.intBitsToFloat(0x4360312c), Float.intBitsToFloat(0x432ad2bc), Float.intBitsToFloat(0x4313031f));
             final Capture<AngularVelocity> actual = new Capture<>();
-            task.getResult()[1].subscribe(new Subscriber() {
-                @Override
-                public void apply(Data data, Object... env) {
-                    actual.set(data.value(AngularVelocity.class));
-                }
-            });
+            task.getResult()[1].subscribe((data, env) -> actual.set(data.value(AngularVelocity.class)));
 
             Acceleration expectedAcc = new Acceleration(Float.intBitsToFloat(1031077888), Float.intBitsToFloat(1033797632), Float.intBitsToFloat(1065209856));
             final Capture<Acceleration> actualAcc = new Capture<>();
-            task.getResult()[0].subscribe(new Subscriber() {
-                @Override
-                public void apply(Data data, Object... env) {
-                    actualAcc.set(data.value(Acceleration.class));
-                }
-            });
+            task.getResult()[0].subscribe((data, env) -> actualAcc.set(data.value(Acceleration.class)));
 
             sendMockResponse(new byte[] {11,7,0x60,-26,66,0,0,-11,0,61,1,0x62,-26,66,0,0,-35,15,0,0});
             sendMockResponse(new byte[] {0x0b, 0x07, 0x61, 0x38, (byte) 0xc2, 0x01, 0x00, (byte) 0xe6, 0x72, (byte) 0x8c, 0x57, 0x63, 0x38, (byte) 0xc2, 0x01, 0x00, 0x58, 0x4b, 0x00, 0x00});

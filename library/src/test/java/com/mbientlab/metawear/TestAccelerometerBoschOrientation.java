@@ -24,9 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.MetaWearBoard.Module;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -114,19 +111,14 @@ public class TestAccelerometerBoschOrientation extends UnitTestBase {
         final Capture<SensorOrientation[]> actual = new Capture<>();
 
         actual.set(new SensorOrientation[8]);
-        boschAcc.orientation().addRouteAsync(new RouteBuilder() {
+        boschAcc.orientation().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(SensorOrientation.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(SensorOrientation.class);
+                i++;
             }
-        });
+        }));
 
         for(byte[] it: responses) {
             sendMockResponse(it);

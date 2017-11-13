@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.data.Quaternion;
@@ -34,8 +32,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -61,26 +57,8 @@ public class TestMetaMotionDataProcessor extends UnitTestBase {
                 {0x0b, 0x02, 0x09, 0x03, 0x00, 0x6c}
         };
 
-        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.limit(20).log(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestMetaMotionDataProcessor.this) {
-                    TestMetaMotionDataProcessor.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(source -> source.limit(20).log(null)).waitForCompletion();
+        assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
     @Test
@@ -89,34 +67,14 @@ public class TestMetaMotionDataProcessor extends UnitTestBase {
                 Float.intBitsToFloat(0x3c756866), Float.intBitsToFloat(0x00000000));
         final Capture<Quaternion> actual = new Capture<>();
 
-        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.limit(20).log(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.set(data.value(Quaternion.class));
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                synchronized (TestMetaMotionDataProcessor.this) {
-                    TestMetaMotionDataProcessor.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(source ->
+                source.limit(20).log((data, env) -> actual.set(data.value(Quaternion.class)))
+        ).waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-
-            sendMockResponse(new byte[] {0x0b, 0x07, 0x60, 0x78, 0x70, 0x05, 0x00, (byte) 0xa4, 0x62, 0x6e, 0x3f,
-                    0x61, 0x78, 0x70, 0x05, 0x00, 0x01, 0x7b, (byte) 0xba, 0x3e});
-            sendMockResponse(new byte[] {0x0b, 0x07, 0x62, 0x78, 0x70, 0x05, 0x00, 0x66, 0x68, 0x75, 0x3c,
-                    0x63, 0x78, 0x70, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00});
-            assertEquals(expected, actual.get());
-        }
+        sendMockResponse(new byte[] {0x0b, 0x07, 0x60, 0x78, 0x70, 0x05, 0x00, (byte) 0xa4, 0x62, 0x6e, 0x3f,
+                0x61, 0x78, 0x70, 0x05, 0x00, 0x01, 0x7b, (byte) 0xba, 0x3e});
+        sendMockResponse(new byte[] {0x0b, 0x07, 0x62, 0x78, 0x70, 0x05, 0x00, 0x66, 0x68, 0x75, 0x3c,
+                0x63, 0x78, 0x70, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00});
+        assertEquals(expected, actual.get());
     }
 }

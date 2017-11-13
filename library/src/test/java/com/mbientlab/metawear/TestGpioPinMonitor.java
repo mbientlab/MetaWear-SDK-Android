@@ -25,14 +25,9 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Gpio;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static com.mbientlab.metawear.module.Gpio.PinChangeType.ANY;
 import static com.mbientlab.metawear.module.Gpio.PinChangeType.FALLING;
@@ -80,25 +75,17 @@ public class TestGpioPinMonitor extends UnitTestBase {
         final byte[] actual= new byte[2];
         byte[] expected= new byte[] {1, 0};
 
-        gpio.pin((byte) 0).monitor().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    private byte i= 0;
+        gpio.pin((byte) 0).monitor().addRouteAsync(source -> source.stream(new Subscriber() {
+            private byte i= 0;
 
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((byte[]) env[0])[i]= data.value(Byte.class);
-                        i++;
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
             @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
+            public void apply(Data data, Object ... env) {
+                ((byte[]) env[0])[i]= data.value(Byte.class);
+                i++;
             }
+        })).continueWith(task -> {
+            task.getResult().setEnvironment(0, (Object) actual);
+            return null;
         });
 
         sendMockResponse(new byte[] {0x05, 0x0a, 0x00, 0x01});
@@ -111,17 +98,9 @@ public class TestGpioPinMonitor extends UnitTestBase {
     public void subscribe() {
         byte[] expected= new byte[] {0x5, 0xa, 0x1};
 
-        gpio.pin((byte) 1).monitor().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().unsubscribe(0);
-                return null;
-            }
+        gpio.pin((byte) 1).monitor().addRouteAsync(source -> source.stream(null)).continueWith(task -> {
+            task.getResult().unsubscribe(0);
+            return null;
         });
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());

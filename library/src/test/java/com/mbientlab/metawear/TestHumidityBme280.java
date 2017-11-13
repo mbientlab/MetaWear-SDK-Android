@@ -24,16 +24,12 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.HumidityBme280;
-import com.mbientlab.metawear.builder.RouteBuilder;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -57,12 +53,7 @@ public class TestHumidityBme280 extends UnitTestBase {
     public void read() {
         byte[] expected= new byte[] {0x16, (byte) 0x81};
 
-        humidity.value().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        humidity.value().addRouteAsync(source -> source.stream(null));
         humidity.value().read();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -80,22 +71,9 @@ public class TestHumidityBme280 extends UnitTestBase {
         float expected= 63.1943359375f;
         final Capture<Float> actual= new Capture<>();
 
-        humidity.value().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((Capture<Float>) env[0]).set(data.value(Float.class));
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        humidity.value().addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
         });
         sendMockResponse(new byte[] { 0x16, (byte) 0x81, (byte) 0xc7, (byte) 0xfc, 0x00, 0x00 });
 

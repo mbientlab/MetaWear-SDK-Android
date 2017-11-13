@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.data.MagneticField;
 
@@ -49,17 +47,7 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
         connectToBoard();
 
         mag= mwBoard.getModule(MagnetometerBmm150.class);
-        mag.packedMagneticField().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        ((ArrayList<MagneticField>) env[0]).add(data.value(MagneticField.class));
-                    }
-                });
-            }
-        });
+        mag.packedMagneticField().addRouteAsync(source -> source.stream((data, env) -> ((ArrayList<MagneticField>) env[0]).add(data.value(MagneticField.class))));
     }
 
     @Test

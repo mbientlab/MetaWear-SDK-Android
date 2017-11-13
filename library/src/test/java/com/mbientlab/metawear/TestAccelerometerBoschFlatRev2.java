@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Passthrough;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -39,12 +37,9 @@ import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static com.mbientlab.metawear.MetaWearBoardInfo.MODULE_RESPONSE;
 import static org.junit.Assert.assertArrayEquals;
@@ -94,19 +89,14 @@ public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
         final Capture<boolean[]> actual = new Capture<>();
 
         actual.set(new boolean[2]);
-        acc.flat().addRouteAsync(new RouteBuilder() {
+        acc.flat().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Boolean.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Boolean.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }
@@ -123,38 +113,20 @@ public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
         final Capture<boolean[]> actual = new Capture<>();
 
         actual.set(new boolean[2]);
-        acc.flat().addRouteAsync(new RouteBuilder() {
+        acc.flat().addRouteAsync(source -> source.limit(Passthrough.ALL, (short) 0).stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.limit(Passthrough.ALL, (short) 0).stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Boolean.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Boolean.class);
+                i++;
             }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
+        })).waitForCompletion();
 
-                synchronized (TestAccelerometerBoschFlatRev2.this) {
-                    TestAccelerometerBoschFlatRev2.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-
-            for(byte[] it: responses) {
-                sendMockResponse(it);
-            }
-
-            assertArrayEquals(EXPECTED, actual.get());
+        for(byte[] it: responses) {
+            sendMockResponse(it);
         }
+
+        assertArrayEquals(EXPECTED, actual.get());
     }
 
     @Test
@@ -167,35 +139,17 @@ public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
         final Capture<boolean[]> actual = new Capture<>();
 
         actual.set(new boolean[2]);
-        acc.flat().addRouteAsync(new RouteBuilder() {
+        acc.flat().addRouteAsync(source -> source.log(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.log(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Boolean.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Boolean.class);
+                i++;
             }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
+        })).waitForCompletion();
 
-                synchronized (TestAccelerometerBoschFlatRev2.this) {
-                    TestAccelerometerBoschFlatRev2.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        sendMockResponse(responses);
 
-        synchronized (this) {
-            this.wait();
-
-            sendMockResponse(responses);
-
-            assertArrayEquals(EXPECTED, actual.get());
-        }
+        assertArrayEquals(EXPECTED, actual.get());
     }
 }

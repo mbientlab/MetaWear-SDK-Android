@@ -139,20 +139,12 @@ class TimerImpl extends ModuleImplBase implements Timer {
 
     @Override
     protected void init() {
-        taskTimeout= new Runnable() {
-            @Override
-            public void run() {
-                createTimerTask.setError(new TimeoutException("Creating timer timed out"));
-            }
-        };
+        taskTimeout= () -> createTimerTask.setError(new TimeoutException("Creating timer timed out"));
 
-        this.mwPrivate.addResponseHandler(new Pair<>(TIMER.id, TIMER_ENTRY), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                timeoutFuture.cancel(false);
+        this.mwPrivate.addResponseHandler(new Pair<>(TIMER.id, TIMER_ENTRY), response -> {
+            timeoutFuture.cancel(false);
 
-                createTimerTask.setResult(new UintData(TIMER, TimerImpl.NOTIFY, response[2], new DataAttributes(new byte[] {}, (byte) 0, (byte) 0, false)));
-            }
+            createTimerTask.setResult(new UintData(TIMER, TimerImpl.NOTIFY, response[2], new DataAttributes(new byte[] {}, (byte) 0, (byte) 0, false)));
         });
     }
 

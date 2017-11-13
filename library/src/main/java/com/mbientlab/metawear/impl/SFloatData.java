@@ -25,7 +25,6 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Data;
-import com.mbientlab.metawear.builder.filter.DifferentialOutput;
 
 import java.nio.ByteBuffer;
 import java.util.Calendar;

@@ -30,8 +30,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertNull;
 
@@ -63,12 +61,9 @@ public class TestSettingsRev5Unsupported extends UnitTestBase {
     public void readPowerStatusError() throws Exception {
         final Capture<Exception> result = new Capture<>();
 
-        settings.readCurrentPowerStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                result.set(task.getError());
-                return null;
-            }
+        settings.readCurrentPowerStatusAsync().continueWith(task -> {
+            result.set(task.getError());
+            return null;
         });
 
         throw result.get();
@@ -78,12 +73,9 @@ public class TestSettingsRev5Unsupported extends UnitTestBase {
     public void readChargeStatusError() throws Exception {
         final Capture<Exception> result = new Capture<>();
 
-        settings.readCurrentChargeStatusAsync().continueWith(new Continuation<Byte, Void>() {
-            @Override
-            public Void then(Task<Byte> task) throws Exception {
-                result.set(task.getError());
-                return null;
-            }
+        settings.readCurrentChargeStatusAsync().continueWith(task -> {
+            result.set(task.getError());
+            return null;
         });
 
         throw result.get();

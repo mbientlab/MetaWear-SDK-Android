@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
@@ -125,19 +123,14 @@ public class TestAccelerometerBoshTap extends UnitTestBase {
         final Capture<Tap[]> actual = new Capture<>();
 
         actual.set(new Tap[2]);
-        boschAcc.tap().addRouteAsync(new RouteBuilder() {
+        boschAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Tap.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Tap.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }
@@ -194,19 +187,14 @@ public class TestAccelerometerBoshTap extends UnitTestBase {
         final Capture<Tap[]> actual = new Capture<>();
 
         actual.set(new Tap[2]);
-        boschAcc.tap().addRouteAsync(new RouteBuilder() {
+        boschAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Tap.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Tap.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }

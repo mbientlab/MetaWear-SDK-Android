@@ -27,8 +27,6 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.Logging;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.json.JSONException;
 import org.junit.Test;
@@ -36,7 +34,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import bolts.Task;
 
@@ -51,23 +48,13 @@ public class TestLoggingData extends TestLogDataBase {
         return "bmi160_log_dl";
     }
 
-    private static final Subscriber LOG_DATA_HANDLER= new Subscriber() {
-        @Override
-        public void apply(Data data, Object ... env) {
-            ((List<Acceleration>) env[0]).add(data.value(Acceleration.class));
-        }
-    };
-
     protected Task<Route> setupLogDataRoute() {
         mwBoard.getModule(Accelerometer.class).configure()
                 .range(8f)
                 .commit();
-        return mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.log(LOG_DATA_HANDLER);
-            }
-        });
+        return mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
+                source.log((data, env) -> ((List<Acceleration>) env[0]).add(data.value(Acceleration.class)))
+        );
     }
 
     @Test
@@ -97,14 +84,11 @@ public class TestLoggingData extends TestLogDataBase {
 
     private static Data offset_handler_prev = null;
     private static int offset_handler_i = 0;
-    private static final Subscriber LOG_TIME_OFFSET_HANDLER= new Subscriber() {
-        @Override
-        public void apply(Data data, Object ... env) {
-            if (offset_handler_prev != null) {
-                ((long[]) env[0])[offset_handler_i++]= data.timestamp().getTimeInMillis() - offset_handler_prev.timestamp().getTimeInMillis();
-            }
-            offset_handler_prev = data;
+    private static final Subscriber LOG_TIME_OFFSET_HANDLER= (data, env) -> {
+        if (offset_handler_prev != null) {
+            ((long[]) env[0])[offset_handler_i++]= data.timestamp().getTimeInMillis() - offset_handler_prev.timestamp().getTimeInMillis();
         }
+        offset_handler_prev = data;
     };
     private static void resetOffsetHandlerState() {
         offset_handler_prev = null;
@@ -112,12 +96,7 @@ public class TestLoggingData extends TestLogDataBase {
     }
 
     protected Task<Route> setupLogOffsetRoute() {
-        return mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.log(LOG_TIME_OFFSET_HANDLER);
-            }
-        });
+        return mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.log(LOG_TIME_OFFSET_HANDLER));
     }
 
     @Test

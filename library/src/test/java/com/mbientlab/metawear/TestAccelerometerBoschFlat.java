@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
@@ -99,19 +97,14 @@ public class TestAccelerometerBoschFlat extends UnitTestBase {
         final Capture<boolean[]> actual = new Capture<>();
 
         actual.set(new boolean[2]);
-        boschAcc.flat().addRouteAsync(new RouteBuilder() {
+        boschAcc.flat().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Boolean.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Boolean.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }

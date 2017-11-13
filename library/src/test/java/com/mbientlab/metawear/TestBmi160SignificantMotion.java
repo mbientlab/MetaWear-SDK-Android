@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBmi160.SignificantMotionDataProducer;
 
@@ -84,17 +82,7 @@ public class TestBmi160SignificantMotion extends UnitTestBase {
         final byte expected = 0x1;
         final Capture<Byte> actual = new Capture<>();
 
-        bmi160Acc.motion(SignificantMotionDataProducer.class).addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.set(data.bytes()[0]);
-                    }
-                });
-            }
-        });
+        bmi160Acc.motion(SignificantMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])));
         sendMockResponse(new byte[] {0x03, 0x0b, 0x01});
 
         assertEquals(expected, actual.get().byteValue());

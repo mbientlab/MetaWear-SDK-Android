@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.BarometerBme280;
 import com.mbientlab.metawear.module.BarometerBmp280;
 
@@ -40,8 +38,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -67,31 +63,19 @@ public class TestBarometerBoschData extends TestBarometerBoschBase {
     public byte dataType;
 
     private Route dataRoute;
-    private Capture<Float> actualData= new Capture<>();
+    private final Capture<Float> actualData= new Capture<>();
 
     @Before
     public void setup() throws Exception {
         super.setup();
 
         AsyncDataProducer producer = dataType == PRESSURE ? baroBosch.pressure() : baroBosch.altitude();
-        producer.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((Capture<Float>) env[0]).set(data.value(Float.class));
-                    }
+        producer.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))))
+                .continueWith(task -> {
+                    dataRoute = task.getResult();
+                    dataRoute.setEnvironment(0, actualData);
+                    return null;
                 });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                dataRoute = task.getResult();
-                dataRoute.setEnvironment(0, actualData);
-                return null;
-            }
-        });
     }
 
     @Test

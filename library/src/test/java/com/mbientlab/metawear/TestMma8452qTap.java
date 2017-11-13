@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
@@ -110,19 +108,14 @@ public class TestMma8452qTap extends UnitTestBase {
         final Capture<Tap[]> actual = new Capture<>();
 
         actual.set(new Tap[4]);
-        mma8452qAcc.tap().addRouteAsync(new RouteBuilder() {
+        mma8452qAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(Tap.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(Tap.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }

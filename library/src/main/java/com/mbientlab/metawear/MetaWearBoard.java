@@ -30,7 +30,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Map;
 import java.util.UUID;
 
 import bolts.Task;
@@ -42,16 +41,16 @@ import bolts.Task;
 public interface MetaWearBoard {
     /**
      * UUID identifying the MetaWear GATT service and the advertising UUID.  This UUID can be used to remove
-     * non MetaWear devices from am Bluetooth LE scan.
+     * non MetaWear devices from a Bluetooth LE scan.
      */
     UUID METAWEAR_GATT_SERVICE = UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A");
     /**
-     * UUID identifying the characteristic under the MetaWear GATT service, defined by {@link #METAWEAR_GATT_SERVICE},
-     * that MetaWear uses to communicate with the local device.  Enable notifications on this characteristic.
+     * @deprecated Not needed by developers
      */
+    @Deprecated
     UUID METAWEAR_NOTIFY_CHAR = UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A");
     /**
-     * UUID identifying a MetaWear board in MetaBoot mode.  A MetaWear board advertising with this UUID indicates
+     * UUID identifying MetaBoot boards.  A MetaWear board advertising with this UUID indicates
      * it is in MetaBoot mode.
      */
     UUID METABOOT_SERVICE = UUID.fromString("00001530-1212-efde-1523-785feabcd123");
@@ -91,7 +90,7 @@ public interface MetaWearBoard {
     /**
      * Downloads the specific firmware release for the board to your local device.  You must be connected to the
      * board before calling this function.
-     * @param version Firmware revision to download
+     * @param version Firmware revision to download, null to retrieve the latest version
      * @return Task holding the file pointing to where the downloaded firmware resides on the local device
      */
     Task<File> downloadFirmwareAsync(String version);

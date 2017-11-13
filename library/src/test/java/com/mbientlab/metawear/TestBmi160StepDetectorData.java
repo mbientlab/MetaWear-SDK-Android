@@ -24,16 +24,12 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -57,12 +53,7 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
     public void subscribe() {
         byte[] expected = new byte[] {0x3, 0x19, 0x1};
 
-        detector.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        detector.addRouteAsync(source -> source.stream(null));
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -71,17 +62,9 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
     public void unsubscribe() {
         byte[] expected = new byte[] {0x3, 0x19, 0x0};
 
-        detector.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().unsubscribe(0);
-                return null;
-            }
+        detector.addRouteAsync(source -> source.stream(null)).continueWith(task -> {
+            task.getResult().unsubscribe(0);
+            return null;
         });
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
@@ -108,23 +91,11 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
         final Capture<Byte> actual = new Capture<>();
         byte expected = 1;
 
-        detector.addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        ((Capture<Byte>) env[0]).set(data.value(Byte.class));
-                    }
+        detector.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Byte>) env[0]).set(data.value(Byte.class))))
+                .continueWith(task -> {
+                    task.getResult().setEnvironment(0, actual);
+                    return null;
                 });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
-        });
 
         sendMockResponse(new byte[] {0x03, 0x19, 0x01});
         assertEquals(expected, actual.get().byteValue());

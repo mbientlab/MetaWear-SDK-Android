@@ -40,7 +40,7 @@ class NeoPixelImpl extends ModuleImplBase implements NeoPixel {
             ROTATE= 5,
             FREE= 6;
     private static final long serialVersionUID = -3877020058618686105L;
-    private HashMap<Byte, Byte> activeStrands= new HashMap<>();
+    private final HashMap<Byte, Byte> activeStrands= new HashMap<>();
 
     NeoPixelImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);

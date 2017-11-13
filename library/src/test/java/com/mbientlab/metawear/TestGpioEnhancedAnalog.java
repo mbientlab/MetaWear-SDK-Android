@@ -25,8 +25,6 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Gpio;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -39,8 +37,6 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -91,18 +87,9 @@ public class TestGpioEnhancedAnalog extends UnitTestBase {
     public void readEnhanced() {
         byte[] expected= new byte[] {0x05, (byte) (0x80 | mask), pin, 0x01, 0x02, 0x02, 0x15};
 
-        (absRef ? gpio.pin(pin).analogAbsRef() : gpio.pin(pin).analogAdc()).addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                (absRef ? gpio.pin(pin).analogAbsRef() : gpio.pin(pin).analogAdc()).read((byte) 1, (byte) 2, (short) 10, (byte) 0x15);
-                return null;
-            }
-        });
+        Gpio.Analog producer = absRef ? gpio.pin(pin).analogAbsRef() : gpio.pin(pin).analogAdc();
+        producer.addRouteAsync(source -> source.stream(null));
+        producer.read((byte) 1, (byte) 2, (short) 10, (byte) 0x15);
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -119,26 +106,15 @@ public class TestGpioEnhancedAnalog extends UnitTestBase {
         float expectedAbsRef = 0.728f;
         short expectedAdc = 218;
 
-        (absRef ? gpio.getVirtualPin((byte) 0x15).analogAbsRef() : gpio.getVirtualPin((byte) 0x15).analogAdc()).addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        if (absRef) {
-                            ((Capture<Float>) env[0]).set(data.value(Float.class));
-                        } else {
-                            ((Capture<Short>) env[0]).set(data.value(Short.class));
-                        }
-                    }
-                });
+        (absRef ? gpio.getVirtualPin((byte) 0x15).analogAbsRef() : gpio.getVirtualPin((byte) 0x15).analogAdc()).addRouteAsync(source -> source.stream((data, env) -> {
+            if (absRef) {
+                ((Capture<Float>) env[0]).set(data.value(Float.class));
+            } else {
+                ((Capture<Short>) env[0]).set(data.value(Short.class));
             }
-        }).continueWith(new Continuation<Route, Object>() {
-            @Override
-            public Object then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, absRef ? actualAbsRef : actualAdc);
-                return null;
-            }
+        })).continueWith(task -> {
+            task.getResult().setEnvironment(0, absRef ? actualAbsRef : actualAdc);
+            return null;
         });
 
         sendMockResponse(responses[absRef ? 0 : 1]);

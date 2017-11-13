@@ -24,7 +24,6 @@
 
 package com.mbientlab.metawear.impl;
 
-import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.Macro;
 
 import java.util.LinkedList;
@@ -57,18 +56,15 @@ class MacroImpl extends ModuleImplBase implements Macro {
 
     @Override
     protected void init() {
-        this.mwPrivate.addResponseHandler(new Pair<>(MACRO.id, BEGIN), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                while(!commands.isEmpty()) {
-                    for(byte[] converted: convertToMacroCommand(commands.poll())) {
-                        mwPrivate.sendCommand(converted);
-                    }
+        this.mwPrivate.addResponseHandler(new Pair<>(MACRO.id, BEGIN), response -> {
+            while(!commands.isEmpty()) {
+                for(byte[] converted: convertToMacroCommand(commands.poll())) {
+                    mwPrivate.sendCommand(converted);
                 }
-                mwPrivate.sendCommand(new byte[] {MACRO.id, END});
-
-                pendingMacro.first.setResult(response[2]);
             }
+            mwPrivate.sendCommand(new byte[] {MACRO.id, END});
+
+            pendingMacro.first.setResult(response[2]);
         });
     }
 
@@ -87,12 +83,7 @@ class MacroImpl extends ModuleImplBase implements Macro {
     @Override
     public Task<Byte> endRecordAsync() {
         isRecording = false;
-        mwPrivate.scheduleTask(new Runnable() {
-            @Override
-            public void run() {
-                mwPrivate.sendCommand(new byte[] {MACRO.id, BEGIN, (byte) (pendingMacro.second ? 1 : 0)});
-            }
-        }, WRITE_MACRO_DELAY);
+        mwPrivate.scheduleTask(() -> mwPrivate.sendCommand(new byte[] {MACRO.id, BEGIN, (byte) (pendingMacro.second ? 1 : 0)}), WRITE_MACRO_DELAY);
 
         return pendingMacro.first.getTask();
     }

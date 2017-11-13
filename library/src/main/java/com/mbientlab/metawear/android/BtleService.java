@@ -34,7 +34,6 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.IBinder;
 import android.util.Base64;
@@ -49,10 +48,8 @@ import com.mbientlab.metawear.impl.platform.IO;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -72,7 +69,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import bolts.Continuation;
+import bolts.Capture;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
@@ -80,8 +77,9 @@ import bolts.TaskCompletionSource;
  * Created by etsai on 10/9/16.
  */
 public class BtleService extends Service {
-    private static UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-    private static String DOWNLOAD_DIR_NAME = "download", LOG_TAG = "metawear-btle";
+    private static final UUID CHARACTERISTIC_CONFIG= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+    private static final String DOWNLOAD_DIR_NAME = "download";
+    private static final String LOG_TAG = "metawear-btle";
 
     private interface GattOp {
         AndroidPlatform owner();
@@ -99,17 +97,14 @@ public class BtleService extends Service {
     private void executeGattOperation(boolean ready) {
         if (!pendingGattOps.isEmpty() && (pendingGattOps.size() == 1 || ready)) {
             try {
-                gattTaskTimeoutFuture = taskScheduler.schedule(new Runnable() {
-                    @Override
-                    public void run() {
-                        GattOp task = pendingGattOps.peek();
-                        task.taskCompletionSource().setError(new TimeoutException("Gatt operation timed out"));
+                gattTaskTimeoutFuture = taskScheduler.schedule(() -> {
+                    GattOp task = pendingGattOps.peek();
+                    task.taskCompletionSource().setError(new TimeoutException("Gatt operation timed out"));
 
-                        task.owner().gattTaskCompleted();
+                    task.owner().gattTaskCompleted();
 
-                        pendingGattOps.poll();
-                        executeGattOperation(true);
-                    }
+                    pendingGattOps.poll();
+                    executeGattOperation(true);
                 }, 1000L, TimeUnit.MILLISECONDS);
 
                 pendingGattOps.peek().execute();
@@ -273,12 +268,9 @@ public class BtleService extends Service {
         void gattTaskCompleted() {
             int count = nGattOps.decrementAndGet();
             if (count == 0 && readyToClose.get()) {
-                taskScheduler.schedule(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (androidBtGatt != null) {
-                            androidBtGatt.disconnect();
-                        }
+                taskScheduler.schedule(() -> {
+                    if (androidBtGatt != null) {
+                        androidBtGatt.disconnect();
                     }
                 }, 1000, TimeUnit.MILLISECONDS);
             }
@@ -329,48 +321,34 @@ public class BtleService extends Service {
 
         @Override
         public Task<File> downloadFileAsync(final String srcUrl, final String dest) {
-            final TaskCompletionSource<File> downloadTask = new TaskCompletionSource<>();
+            final Capture<HttpURLConnection> urlConn = new Capture<>();
+            return Task.callInBackground(() -> {
+                URL fileUrl = new URL(srcUrl);
+                urlConn.set((HttpURLConnection) fileUrl.openConnection());
+                InputStream ins = urlConn.get().getInputStream();
 
-            new AsyncTask<String, Void, Void>() {
-                @Override
-                protected Void doInBackground(String... params) {
-                    HttpURLConnection urlConn = null;
-
-                    try {
-                        URL fileUrl = new URL(srcUrl);
-                        urlConn = (HttpURLConnection) fileUrl.openConnection();
-                        InputStream ins = urlConn.getInputStream();
-
-                        File firmwareDir = new File(getFilesDir(), DOWNLOAD_DIR_NAME);
-                        if (!firmwareDir.exists()) {
-                            firmwareDir.mkdir();
-                        }
-
-                        File location = new File(firmwareDir, dest);
-                        FileOutputStream fos = new FileOutputStream(location);
-
-                        byte data[] = new byte[1024];
-                        int count;
-                        while ((count = ins.read(data)) != -1) {
-                            fos.write(data, 0, count);
-                        }
-                        fos.close();
-
-                        downloadTask.setResult(location);
-                    } catch (MalformedURLException e) {
-                        downloadTask.setError(e);
-                    } catch (IOException e) {
-                        downloadTask.setError(e);
-                    } finally {
-                        if (urlConn != null) {
-                            urlConn.disconnect();
-                        }
-                    }
-
-                    return null;
+                File firmwareDir = new File(getFilesDir(), DOWNLOAD_DIR_NAME);
+                if (!firmwareDir.exists()) {
+                    firmwareDir.mkdir();
                 }
-            }.execute(dest);
-            return downloadTask.getTask();
+
+                File location = new File(firmwareDir, dest);
+                FileOutputStream fos = new FileOutputStream(location);
+
+                byte data[] = new byte[1024];
+                int count;
+                while ((count = ins.read(data)) != -1) {
+                    fos.write(data, 0, count);
+                }
+                fos.close();
+
+                return location;
+            }).continueWithTask(ignored -> {
+                if (urlConn.get() != null) {
+                    urlConn.get().disconnect();
+                }
+                return ignored;
+            });
         }
 
         @Override
@@ -440,12 +418,7 @@ public class BtleService extends Service {
                 }
             });
 
-            return taskSource.getTask().onSuccessTask(new Continuation<byte[], Task<Void>>() {
-                @Override
-                public Task<Void> then(Task<byte[]> task) throws Exception {
-                    return Task.forResult(null);
-                }
-            });
+            return taskSource.getTask().onSuccessTask(task -> Task.forResult(null));
         }
 
         @Override
@@ -456,16 +429,13 @@ public class BtleService extends Service {
                 tasks.add(readCharacteristicAsync(it));
             }
 
-            return Task.whenAll(tasks).onSuccessTask(new Continuation<Void, Task<byte[][]>>() {
-                @Override
-                public Task<byte[][]> then(Task<Void> task) throws Exception {
-                    byte[][] valuesArray = new byte[tasks.size()][];
-                    for (int i = 0; i < valuesArray.length; i++) {
-                        valuesArray[i] = tasks.get(i).getResult();
-                    }
-
-                    return Task.forResult(valuesArray);
+            return Task.whenAll(tasks).onSuccessTask(task -> {
+                byte[][] valuesArray = new byte[tasks.size()][];
+                for (int i = 0; i < valuesArray.length; i++) {
+                    valuesArray[i] = tasks.get(i).getResult();
                 }
+
+                return Task.forResult(valuesArray);
             });
         }
 
@@ -526,13 +496,10 @@ public class BtleService extends Service {
             if ((charProps & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
                 final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
 
-                task = taskSource.getTask().onSuccessTask(new Continuation<byte[], Task<Void>>() {
-                    @Override
-                    public Task<Void> then(Task<byte[]> task) throws Exception {
-                        // Cheat here since the only characteristic we enable notifications for is the MetaWear notify characteristic
-                        notificationListener = listener;
-                        return Task.forResult(null);
-                    }
+                task = taskSource.getTask().onSuccessTask(task1 -> {
+                    // Cheat here since the only characteristic we enable notifications for is the MetaWear notify characteristic
+                    notificationListener = listener;
+                    return Task.forResult(null);
                 });
 
                 addGattOperation(this, new GattOp() {
@@ -613,17 +580,14 @@ public class BtleService extends Service {
 
                 cancelConnectTimeout();
 
-                connectFuture.set(taskScheduler.schedule(new Runnable() {
-                    @Override
-                    public void run() {
-                        cancelConnectTimeout();
+                connectFuture.set(taskScheduler.schedule(() -> {
+                    cancelConnectTimeout();
 
-                        closeGatt();
+                    closeGatt();
 
-                        TaskCompletionSource<Void> reference = connectTask.getAndSet(null);
-                        if (reference != null) {
-                            reference.setError(new TimeoutException("Timed out establishing Bluetooth Connection"));
-                        }
+                    TaskCompletionSource<Void> reference = connectTask.getAndSet(null);
+                    if (reference != null) {
+                        reference.setError(new TimeoutException("Timed out establishing Bluetooth Connection"));
                     }
                 }, 7500L, TimeUnit.MILLISECONDS));
 
@@ -655,12 +619,7 @@ public class BtleService extends Service {
                     }
                 });
 
-                return taskSource.getTask().onSuccessTask(new Continuation<byte[], Task<Integer>>() {
-                    @Override
-                    public Task<Integer> then(Task<byte[]> task) throws Exception {
-                        return Task.forResult(ByteBuffer.wrap(task.getResult()).order(ByteOrder.LITTLE_ENDIAN).getInt(0));
-                    }
-                });
+                return taskSource.getTask().onSuccessTask(task -> Task.forResult(ByteBuffer.wrap(task.getResult()).order(ByteOrder.LITTLE_ENDIAN).getInt(0)));
             }
             return Task.forError(new IllegalStateException("No longer connected to the BTLE gatt server"));
         }

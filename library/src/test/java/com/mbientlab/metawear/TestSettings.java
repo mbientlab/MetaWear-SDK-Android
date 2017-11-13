@@ -36,7 +36,6 @@ import org.junit.runners.Parameterized.Parameters;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import static com.mbientlab.metawear.MetaWearBoardInfo.*;
 import static org.junit.Assert.assertArrayEquals;
 
 /**

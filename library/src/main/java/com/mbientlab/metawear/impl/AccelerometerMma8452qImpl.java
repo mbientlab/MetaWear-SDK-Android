@@ -33,7 +33,6 @@ import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.data.TapType;
-import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
 import java.nio.ByteBuffer;
@@ -469,13 +468,10 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
     protected void init() {
         pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
 
-        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                pullConfigTask.cancelTimeout();
-                System.arraycopy(response, 2, dataSettings, 0, dataSettings.length);
-                pullConfigTask.setResult(null);
-            }
+        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), response -> {
+            pullConfigTask.cancelTimeout();
+            System.arraycopy(response, 2, dataSettings, 0, dataSettings.length);
+            pullConfigTask.setResult(null);
         });
     }
 
@@ -603,12 +599,7 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, new Runnable() {
-            @Override
-            public void run() {
-                mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)});
-            }
-        });
+        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)}));
     }
 
     @Override
@@ -810,7 +801,7 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
                 public TapConfigEditor configure() {
                     return new TapConfigEditor() {
                         private int latency = 200, window = 300, interval = 60;
-                        private LinkedHashSet<TapType> types = new LinkedHashSet<>();
+                        private final LinkedHashSet<TapType> types = new LinkedHashSet<>();
                         private float threshold = 2f;
                         private CartesianAxis axis = CartesianAxis.Z;
 

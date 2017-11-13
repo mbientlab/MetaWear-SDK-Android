@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.Logging;
 
@@ -39,9 +37,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -51,31 +47,18 @@ import static org.junit.Assert.assertArrayEquals;
  */
 
 public class TestGyroYLogData extends TestLogDataBase {
-    private final AtomicBoolean shouldWait= new AtomicBoolean();
-
     @Override
     protected String logDataFilename() {
         return "bmi160_gyro_yaxis_dl";
     }
 
-    private static final Subscriber LOG_DATA_HANDLER= new Subscriber() {
-        @Override
-        public void apply(Data data, Object ... env) {
-            ((List<Float>) env[0]).add(data.value(Float.class));
-        }
-    };
+    private static final Subscriber LOG_DATA_HANDLER= (data, env) -> ((List<Float>) env[0]).add(data.value(Float.class));
 
     protected Task<Route> setupLogDataRoute() {
-        shouldWait.set(true);
         mwBoard.getModule(GyroBmi160.class).configure()
                 .range(GyroBmi160.Range.FSR_250)
                 .commit();
-        return mwBoard.getModule(GyroBmi160.class).angularVelocity().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.split().index(1).log(LOG_DATA_HANDLER);
-            }
-        });
+        return mwBoard.getModule(GyroBmi160.class).angularVelocity().addRouteAsync(source -> source.split().index(1).log(LOG_DATA_HANDLER));
     }
 
     @Test
@@ -99,37 +82,22 @@ public class TestGyroYLogData extends TestLogDataBase {
             }
         }
 
-        setupLogDataRoute().continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                synchronized (TestGyroYLogData.this) {
-                    TestGyroYLogData.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        setupLogDataRoute().continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
+        }).waitForCompletion();
 
-        synchronized (this) {
-            if (shouldWait.get()) {
-                this.wait();
-            }
+        mwBoard.getModule(Logging.class).downloadAsync()
+                .continueWith(task -> {
+                    Float[] actualArray= new Float[actual.size()];
+                    actual.toArray(actualArray);
 
-            mwBoard.getModule(Logging.class).downloadAsync()
-                    .continueWith(new Continuation<Void, Void>() {
-                        @Override
-                        public Void then(Task<Void> task) throws Exception {
-                            Float[] actualArray= new Float[actual.size()];
-                            actual.toArray(actualArray);
+                    assertArrayEquals(expected, actualArray);
+                    return null;
+                });
 
-                            assertArrayEquals(expected, actualArray);
-                            return null;
-                        }
-                    });
-
-            for(byte[] response: downloadResponses) {
-                sendMockResponse(response);
-            }
+        for(byte[] response: downloadResponses) {
+            sendMockResponse(response);
         }
     }
 }

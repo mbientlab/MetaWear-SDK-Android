@@ -31,10 +31,8 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Calendar;
 
 import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -123,11 +121,8 @@ public class TestLoggingDownload extends UnitTestBase {
                 {0x0b, 0x06, (byte) 0x9e, (byte) 0x01, (byte) 0x00, (byte) 0x00, 0x14, 0x00, 0x00, 0x00}
         };
 
-        logging.downloadAsync(20, new Logging.LogDownloadUpdateHandler() {
-            @Override
-            public void receivedUpdate(long nEntriesLeft, long totalEntries) {
+        logging.downloadAsync(20, (nEntriesLeft, totalEntries) -> {
 
-            }
         });
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
@@ -135,29 +130,16 @@ public class TestLoggingDownload extends UnitTestBase {
     @Test(expected = RuntimeException.class)
     public void downloadInterrupted() throws Exception {
         final Capture<Exception> actual = new Capture<>();
-        logging.downloadAsync().continueWith(new Continuation<Void, Void>() {
-            @Override
-            public Void then(Task<Void> task) throws Exception {
-                actual.set(task.getError());
-
-                synchronized (TestLoggingDownload.this) {
-                    TestLoggingDownload.this.notifyAll();
-                }
-                return null;
-            }
+        Task<Void> download = logging.downloadAsync().continueWith(task -> {
+            actual.set(task.getError());
+            return null;
         });
 
-        junitPlatform.scheduleTask(new Runnable() {
-            @Override
-            public void run() {
-                mwBoard.disconnectAsync();
-            }
-        }, 5000L);
+        junitPlatform.scheduleTask(mwBoard::disconnectAsync, 5000L);
 
-        synchronized (this) {
-            this.wait();
-            throw actual.get();
-        }
+        download.waitForCompletion();
+
+        throw actual.get();
     }
 
     @Test
@@ -165,13 +147,10 @@ public class TestLoggingDownload extends UnitTestBase {
         Object[] expected= new Object[] {Logging.DownloadError.UNKNOWN_LOG_ENTRY, (byte) 0x1, (short) 0x016c};
         final Object[] actual= new Object[3];
 
-        logging.downloadAsync(new Logging.LogDownloadErrorHandler() {
-            @Override
-            public void receivedError(Logging.DownloadError errorType, byte logId, Calendar timestamp, byte[] data) {
-                actual[0]= errorType;
-                actual[1]= logId;
-                actual[2]= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getShort(0);
-            }
+        logging.downloadAsync((errorType, logId, timestamp, data) -> {
+            actual[0]= errorType;
+            actual[1]= logId;
+            actual[2]= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getShort(0);
         });
         sendMockResponse(new byte[] {0x0b, 0x07, (byte) 0xa1, (byte) 0xcc, 0x4d, 0x00, 0x00, 0x6c, 0x01, 0x00, 0x00});
 

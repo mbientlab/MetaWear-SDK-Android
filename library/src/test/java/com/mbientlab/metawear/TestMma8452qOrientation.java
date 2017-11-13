@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
@@ -98,19 +96,14 @@ public class TestMma8452qOrientation extends UnitTestBase {
         final Capture<SensorOrientation[]> actual = new Capture<>();
 
         actual.set(new SensorOrientation[8]);
-        mma8452qAcc.orientation().addRouteAsync(new RouteBuilder() {
+        mma8452qAcc.orientation().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(SensorOrientation.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(SensorOrientation.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }

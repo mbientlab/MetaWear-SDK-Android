@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.GyroBmi160;
@@ -44,7 +42,6 @@ import java.util.Iterator;
 import java.util.concurrent.TimeoutException;
 
 import bolts.AggregateException;
-import bolts.Continuation;
 import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -322,22 +319,9 @@ public class TestMetaWearBoard {
             junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
             connectToBoard();
 
-            mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.limit(20).stream(null);
-                }
-            }).continueWithTask(new Continuation<Route, Task<Route>>() {
-                @Override
-                public Task<Route> then(Task<Route> task) throws Exception {
-                    return mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(new RouteBuilder() {
-                        @Override
-                        public void configure(RouteComponent source) {
-                            source.stream(null);
-                        }
-                    });
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(source -> source.limit(20).stream(null))
+                    .continueWithTask(task -> mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(source -> source.stream(null)))
+                    .waitForCompletion();
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
 
@@ -353,22 +337,9 @@ public class TestMetaWearBoard {
             junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
             connectToBoard();
 
-            mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(new RouteBuilder() {
-                @Override
-                public void configure(RouteComponent source) {
-                    source.limit(20).stream(null);
-                }
-            }).continueWithTask(new Continuation<Route, Task<Route>>() {
-                @Override
-                public Task<Route> then(Task<Route> task) throws Exception {
-                    return mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(new RouteBuilder() {
-                        @Override
-                        public void configure(RouteComponent source) {
-                            source.stream(null);
-                        }
-                    });
-                }
-            }).waitForCompletion();
+            mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(source -> source.limit(20).stream(null))
+                    .continueWithTask(task -> mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(source -> source.stream(null)))
+                    .waitForCompletion();
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }

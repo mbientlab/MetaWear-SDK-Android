@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
@@ -125,17 +123,7 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
         final byte[] response = new byte[] {0x03, 0x08, 0x02};
         final Capture<LowHighResponse> actual = new Capture<>();
 
-        boschAcc.lowHigh().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.set(data.value(LowHighResponse.class));
-                    }
-                });
-            }
-        });
+        boschAcc.lowHigh().addRouteAsync(source -> source.stream((data, env) -> actual.set(data.value(LowHighResponse.class))));
         sendMockResponse(response);
 
         assertEquals(expected, actual.get());
@@ -200,19 +188,14 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
         final Capture<LowHighResponse[]> actual = new Capture<>();
 
         actual.set(new LowHighResponse[6]);
-        boschAcc.lowHigh().addRouteAsync(new RouteBuilder() {
+        boschAcc.lowHigh().addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(LowHighResponse.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(LowHighResponse.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }

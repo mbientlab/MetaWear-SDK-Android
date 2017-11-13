@@ -24,9 +24,7 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
-import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.data.MagneticField;
 
 import org.junit.Before;
@@ -40,8 +38,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static com.mbientlab.metawear.TestMagnetometerBmm150Config.SLEEP_REV;
 import static org.junit.Assert.assertArrayEquals;
@@ -120,12 +116,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
     @Test
     public void bFieldSubscribe() {
         byte[] expected= new byte[] {0x15, 0x05, 0x01};
-        mag.magneticField().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        });
+        mag.magneticField().addRouteAsync(source -> source.stream(null));
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -133,17 +124,9 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
     @Test
     public void bFieldUnsubscribe() {
         byte[] expected= new byte[] {0x15, 0x05, 0x00};
-        mag.magneticField().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().unsubscribe(0);
-                return null;
-            }
+        mag.magneticField().addRouteAsync(source -> source.stream(null)).continueWith(task -> {
+            task.getResult().unsubscribe(0);
+            return null;
         });
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
@@ -154,22 +137,11 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         MagneticField expected= new MagneticField(Float.intBitsToFloat(0xb983a96d), Float.intBitsToFloat(0x392d362f), Float.intBitsToFloat(0x38958d9b));
         final Capture<MagneticField> actual= new Capture<>();
 
-        mag.magneticField().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((Capture<MagneticField>) env[0]).set(data.value(MagneticField.class));
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        mag.magneticField().addRouteAsync(source ->
+                source.stream((data, env) -> ((Capture<MagneticField>) env[0]).set(data.value(MagneticField.class)))
+        ).continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
         });
         sendMockResponse(new byte[] {0x15, 0x05, 0x4e, (byte) 0xf0, 0x53, 0x0a, 0x75, 0x04});
 
@@ -181,37 +153,15 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         float[] expected = new float[] {-0.0002511250f, 0.0001651875f, 0.0000713125f};
         final float[] actual= new float[3];
 
-        mag.magneticField().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.split()
-                        .index(0).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[0] = data.value(Float.class);
-                            }
-                        })
-                        .index(1).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[1] = data.value(Float.class);
-                            }
-                        })
-                        .index(2).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((float[]) env[0])[2] = data.value(Float.class);
-                            }
-                        });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, (Object) actual);
-                task.getResult().setEnvironment(1, (Object) actual);
-                task.getResult().setEnvironment(2, (Object) actual);
-                return null;
-            }
+        mag.magneticField().addRouteAsync(source -> source.split()
+                .index(0).stream((Subscriber) (data, env) -> ((float[]) env[0])[0] = data.value(Float.class))
+                .index(1).stream((Subscriber) (data, env) -> ((float[]) env[0])[1] = data.value(Float.class))
+                .index(2).stream((Subscriber) (data, env) -> ((float[]) env[0])[2] = data.value(Float.class))
+        ).continueWith(task -> {
+            task.getResult().setEnvironment(0, (Object) actual);
+            task.getResult().setEnvironment(1, (Object) actual);
+            task.getResult().setEnvironment(2, (Object) actual);
+            return null;
         });
         sendMockResponse(new byte[] {0x15, 0x05, 0x4e, (byte) 0xf0, 0x53, 0x0a, 0x75, 0x04});
 

@@ -25,7 +25,6 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.impl.DataProcessorImpl.ProcessorEntry;
-import com.mbientlab.metawear.impl.JseMetaWearBoard.RegisterResponseHandler;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Logging;
 
@@ -38,7 +37,6 @@ import java.util.Calendar;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -50,7 +48,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import bolts.Continuation;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
@@ -82,7 +79,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
         long tick;
         final Calendar timestamp;
 
-        public TimeReference(byte resetUid, long tick, Calendar timestamp) {
+        TimeReference(byte resetUid, long tick, Calendar timestamp) {
             this.timestamp= timestamp;
             this.tick= tick;
             this.resetUid= resetUid;
@@ -98,7 +95,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
         }
 
         void addId(byte id) {
-            logEntries.put(id, new LinkedList<byte[]>());
+            logEntries.put(id, new LinkedList<>());
         }
 
         public void remove(MetaWearBoardPrivate mwPrivate) {
@@ -282,229 +279,189 @@ class LoggingImpl extends ModuleImplBase implements Logging {
             rollbackTimestamps = new HashMap<>();
         }
 
-        queryLoggerTimeout = new Runnable() {
-            @Override
-            public void run() {
-                queryLoggerTask.setError(new TimeoutException("Querying log configuration timed out (id = " + queryLogId + ")"));
+        queryLoggerTimeout = () -> queryLoggerTask.setError(new TimeoutException("Querying log configuration timed out (id = " + queryLogId + ")"));
+        taskTimeout = () -> {
+            while(!successfulLoggers.isEmpty()) {
+                successfulLoggers.poll().remove(LoggingImpl.this.mwPrivate);
             }
-        };
-        taskTimeout = new Runnable() {
-            @Override
-            public void run() {
-                while(!successfulLoggers.isEmpty()) {
-                    successfulLoggers.poll().remove(LoggingImpl.this.mwPrivate);
-                }
-                nextLogger.remove(LoggingImpl.this.mwPrivate);
-                pendingProducers= null;
-                createLoggerTask.setError(new TimeoutException("Creating logger timed out"));
-            }
+            nextLogger.remove(LoggingImpl.this.mwPrivate);
+            pendingProducers= null;
+            createLoggerTask.setError(new TimeoutException("Creating logger timed out"));
         };
 
-        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(TRIGGER)), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(final byte[] response) {
-                queryLogFuture.cancel(false);
+        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(TRIGGER)), response -> {
+            queryLogFuture.cancel(false);
 
-                Task<Void> task;
-                if (response.length > 2) {
-                    final byte offset = (byte) (response[5] & 0x1f), length = (byte) (((response[5] >> 5) & 0x3) + 1);
-                    final DataProcessorImpl dataprocessor = (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class);
+            Task<Void> task;
+            if (response.length > 2) {
+                final byte offset = (byte) (response[5] & 0x1f), length = (byte) (((response[5] >> 5) & 0x3) + 1);
+                final DataProcessorImpl dataprocessor = (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class);
 
-                    Task<DataTypeBase> taskInner;
-                    if (response[2] == DATA_PROCESSOR.id && (response[3] == DataProcessorImpl.NOTIFY || Util.clearRead(response[3]) == DataProcessorImpl.STATE)) {
-                        taskInner = dataprocessor.pullChainAsync(response[4]).onSuccessTask(new Continuation<Deque<ProcessorEntry>, Task<DataTypeBase>>() {
-                            @Override
-                            public Task<DataTypeBase> then(Task<Deque<ProcessorEntry>> task) throws Exception {
-                                Deque<ProcessorEntry> result = task.getResult();
-                                ProcessorEntry first = result.peek();
-                                DataTypeBase type = guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(first.source[0], first.source[1], first.source[2]),
-                                        first.offset, first.length);
+                Task<DataTypeBase> taskInner;
+                if (response[2] == DATA_PROCESSOR.id && (response[3] == DataProcessorImpl.NOTIFY || Util.clearRead(response[3]) == DataProcessorImpl.STATE)) {
+                    taskInner = dataprocessor.pullChainAsync(response[4]).onSuccessTask(task13 -> {
+                        Deque<ProcessorEntry> result = task13.getResult();
+                        ProcessorEntry first = result.peek();
+                        DataTypeBase type = guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(first.source[0], first.source[1], first.source[2]),
+                                first.offset, first.length);
 
-                                while(!result.isEmpty()) {
-                                    ProcessorEntry current = result.poll();
-                                    Pair<? extends DataTypeBase, ? extends DataTypeBase> next =
-                                            type.dataProcessorTransform(DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), current.config));
+                        while(!result.isEmpty()) {
+                            ProcessorEntry current = result.poll();
+                            Pair<? extends DataTypeBase, ? extends DataTypeBase> next =
+                                    type.dataProcessorTransform(DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), current.config));
 
-                                    next.first.eventConfig[2] = current.id;
-                                    if (next.second != null) {
-                                        next.second.eventConfig[2] = current.id;
-                                    }
-                                    dataprocessor.addProcessor(current.id, next.second, type, current.config);
-                                    type = next.first;
-                                }
-                                return Task.forResult(type);
+                            next.first.eventConfig[2] = current.id;
+                            if (next.second != null) {
+                                next.second.eventConfig[2] = current.id;
                             }
-                        });
-                    } else {
-                        taskInner = Task.forResult(guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(response[2], response[3], response[4]), offset, length));
-                    }
-                    task = taskInner.onSuccessTask(new Continuation<DataTypeBase, Task<Void>>() {
-                        @Override
-                        public Task<Void> then(Task<DataTypeBase> task) throws Exception {
-                            DataTypeBase dataTypeBase = task.getResult();
-
-                            if (response[2] == DATA_PROCESSOR.id && Util.clearRead(response[3]) == DataProcessorImpl.STATE) {
-                                dataTypeBase = dataprocessor.lookupProcessor(response[4]).state;
-                            }
-
-                            if (!nRemainingLoggers.containsKey(dataTypeBase) && dataTypeBase.attributes.length() > LOG_ENTRY_SIZE) {
-                                nRemainingLoggers.put(dataTypeBase, (byte) Math.ceil((float) (dataTypeBase.attributes.length() / LOG_ENTRY_SIZE)));
-                            }
-
-                            DataLogger logger = null;
-                            for(DataLogger it: dataLoggers.values()) {
-                                if (Arrays.equals(it.source.eventConfig, dataTypeBase.eventConfig) && it.source.attributes.equals(dataTypeBase.attributes)) {
-                                    logger = it;
-                                    break;
-                                }
-                            }
-
-                            if (logger == null || (offset != 0 && !nRemainingLoggers.containsKey(dataTypeBase))) {
-                                logger = new DataLogger(dataTypeBase);
-                            }
-                            logger.addId(queryLogId);
-                            dataLoggers.put(queryLogId, logger);
-
-                            if (nRemainingLoggers.containsKey(dataTypeBase)) {
-                                byte remaining = (byte) (nRemainingLoggers.get(dataTypeBase) - 1);
-                                nRemainingLoggers.put(dataTypeBase, remaining);
-                                if (remaining < 0) {
-                                    nRemainingLoggers.remove(dataTypeBase);
-                                }
-                            }
-                            return Task.forResult(null);
+                            dataprocessor.addProcessor(current.id, next.second, type, current.config);
+                            type = next.first;
                         }
+                        return Task.forResult(type);
                     });
                 } else {
-                    task = Task.forResult(null);
+                    taskInner = Task.forResult(guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(response[2], response[3], response[4]), offset, length));
                 }
+                task = taskInner.onSuccessTask(task12 -> {
+                    DataTypeBase dataTypeBase = task12.getResult();
 
-                task.continueWith(new Continuation<Void, Void>() {
-                    @Override
-                    public Void then(Task<Void> task) throws Exception {
-                        if (task.isFaulted()) {
-                            queryLoggerTask.setError(task.getError());
-                            queryLoggerTask = null;
-                        } else if (task.isCancelled()) {
-                            queryLoggerTask.setCancelled();
-                            queryLoggerTask = null;
-                        } else {
-                            queryLogId++;
-                            if (queryLogId < mwPrivate.lookupModuleInfo(LOGGING).extra[0]) {
-                                mwPrivate.sendCommand(new byte[]{0x0b, Util.setRead(TRIGGER), queryLogId});
-                                queryLogFuture = mwPrivate.scheduleTask(queryLoggerTimeout, RESPONSE_TIMEOUT);
-                            } else {
-                                ArrayList<DataLogger> orderedLoggers = new ArrayList<>();
-                                for(Byte it: new TreeSet<>(dataLoggers.keySet())) {
-                                    if (!orderedLoggers.contains(dataLoggers.get(it))) {
-                                        orderedLoggers.add(dataLoggers.get(it));
-                                    }
-                                }
+                    if (response[2] == DATA_PROCESSOR.id && Util.clearRead(response[3]) == DataProcessorImpl.STATE) {
+                        dataTypeBase = dataprocessor.lookupProcessor(response[4]).state;
+                    }
 
-                                queryLoggerTask.setResult(orderedLoggers);
-                                queryLoggerTask = null;
+                    if (!nRemainingLoggers.containsKey(dataTypeBase) && dataTypeBase.attributes.length() > LOG_ENTRY_SIZE) {
+                        nRemainingLoggers.put(dataTypeBase, (byte) Math.ceil((float) (dataTypeBase.attributes.length() / LOG_ENTRY_SIZE)));
+                    }
+
+                    DataLogger logger = null;
+                    for(DataLogger it: dataLoggers.values()) {
+                        if (Arrays.equals(it.source.eventConfig, dataTypeBase.eventConfig) && it.source.attributes.equals(dataTypeBase.attributes)) {
+                            logger = it;
+                            break;
+                        }
+                    }
+
+                    if (logger == null || (offset != 0 && !nRemainingLoggers.containsKey(dataTypeBase))) {
+                        logger = new DataLogger(dataTypeBase);
+                    }
+                    logger.addId(queryLogId);
+                    dataLoggers.put(queryLogId, logger);
+
+                    if (nRemainingLoggers.containsKey(dataTypeBase)) {
+                        byte remaining = (byte) (nRemainingLoggers.get(dataTypeBase) - 1);
+                        nRemainingLoggers.put(dataTypeBase, remaining);
+                        if (remaining < 0) {
+                            nRemainingLoggers.remove(dataTypeBase);
+                        }
+                    }
+                    return Task.forResult(null);
+                });
+            } else {
+                task = Task.forResult(null);
+            }
+
+            task.continueWith(task1 -> {
+                if (task1.isFaulted()) {
+                    queryLoggerTask.setError(task1.getError());
+                    queryLoggerTask = null;
+                } else if (task1.isCancelled()) {
+                    queryLoggerTask.setCancelled();
+                    queryLoggerTask = null;
+                } else {
+                    queryLogId++;
+                    if (queryLogId < mwPrivate.lookupModuleInfo(LOGGING).extra[0]) {
+                        mwPrivate.sendCommand(new byte[]{0x0b, Util.setRead(TRIGGER), queryLogId});
+                        queryLogFuture = mwPrivate.scheduleTask(queryLoggerTimeout, RESPONSE_TIMEOUT);
+                    } else {
+                        ArrayList<DataLogger> orderedLoggers = new ArrayList<>();
+                        for(Byte it: new TreeSet<>(dataLoggers.keySet())) {
+                            if (!orderedLoggers.contains(dataLoggers.get(it))) {
+                                orderedLoggers.add(dataLoggers.get(it));
                             }
                         }
 
-                        return null;
-                    }
-                });
-            }
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, TRIGGER), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                nReqLogIds--;
-                nextLogger.addId(response[2]);
-
-                if (nReqLogIds == 0) {
-                    nextLogger.register(dataLoggers);
-                    successfulLoggers.add(nextLogger);
-                    timeoutFuture.cancel(false);
-                    createLogger();
-                }
-            }
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, READOUT_NOTIFY), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                processLogData(Arrays.copyOfRange(response, 2, 11));
-
-                if (response.length == 20) {
-                    processLogData(Arrays.copyOfRange(response, 11, 20));
-                }
-            }
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, READOUT_PROGRESS), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                byte[] padded= new byte[8];
-                System.arraycopy(response, 2, padded, 0, response.length - 2);
-                long nEntriesLeft= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
-
-                if (nEntriesLeft == 0) {
-                    completeDownloadTask();
-                } else if (updateHandler != null) {
-                    updateHandler.receivedUpdate(nEntriesLeft, nLogEntries);
-                }
-            }
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(TIME)), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                byte[] padded= new byte[8];
-                System.arraycopy(response, 2, padded, 0, 4);
-                final long tick= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
-                byte resetUid= (response.length > 6) ? response[6] : -1;
-
-                // if in the middle of a log download, don't update the reference
-                // rollbackTimestamps var is cleared after readout progress hits 0
-                if (rollbackTimestamps.isEmpty()) {
-                    latestReference = new TimeReference(resetUid, tick, Calendar.getInstance());
-                    if (resetUid != -1) {
-                        logReferenceTicks.put(latestReference.resetUid, latestReference);
+                        queryLoggerTask.setResult(orderedLoggers);
+                        queryLoggerTask = null;
                     }
                 }
 
-                TaskCompletionSource<Void> task = queryTimeTask.getAndSet(null);
-                if (task != null) {
-                    task.setResult(null);
-                }
+                return null;
+            });
+        });
+        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, TRIGGER), response -> {
+            nReqLogIds--;
+            nextLogger.addId(response[2]);
+
+            if (nReqLogIds == 0) {
+                nextLogger.register(dataLoggers);
+                successfulLoggers.add(nextLogger);
+                timeoutFuture.cancel(false);
+                createLogger();
             }
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(LENGTH)), new RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                int payloadSize= response.length - 2;
+        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, READOUT_NOTIFY), response -> {
+            processLogData(Arrays.copyOfRange(response, 2, 11));
 
-                byte[] padded= new byte[8];
-                System.arraycopy(response, 2, padded, 0, payloadSize);
-                nLogEntries= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong();
+            if (response.length == 20) {
+                processLogData(Arrays.copyOfRange(response, 11, 20));
+            }
+        });
+        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, READOUT_PROGRESS), response -> {
+            byte[] padded= new byte[8];
+            System.arraycopy(response, 2, padded, 0, response.length - 2);
+            long nEntriesLeft= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
 
-                if (nLogEntries == 0) {
-                    completeDownloadTask();
-                } else {
-                    if (updateHandler != null) {
-                        updateHandler.receivedUpdate(nLogEntries, nLogEntries);
-                    }
+            if (nEntriesLeft == 0) {
+                completeDownloadTask();
+            } else if (updateHandler != null) {
+                updateHandler.receivedUpdate(nEntriesLeft, nLogEntries);
+            }
+        });
+        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(TIME)), response -> {
+            byte[] padded= new byte[8];
+            System.arraycopy(response, 2, padded, 0, 4);
+            final long tick= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
+            byte resetUid= (response.length > 6) ? response[6] : -1;
 
-                    long nEntriesNotify = nUpdates == 0 ? 0 : (long) (nLogEntries * (1.0 / nUpdates));
-
-                    ///< In little endian, [A, B, 0, 0] is equal to [A, B]
-                    ByteBuffer readoutCommand = ByteBuffer.allocate(payloadSize + 4).order(ByteOrder.LITTLE_ENDIAN)
-                            .put(response, 2, payloadSize).putInt((int) nEntriesNotify);
-                    mwPrivate.sendCommand(LOGGING, READOUT, readoutCommand.array());
+            // if in the middle of a log download, don't update the reference
+            // rollbackTimestamps var is cleared after readout progress hits 0
+            if (rollbackTimestamps.isEmpty()) {
+                latestReference = new TimeReference(resetUid, tick, Calendar.getInstance());
+                if (resetUid != -1) {
+                    logReferenceTicks.put(latestReference.resetUid, latestReference);
                 }
+            }
+
+            TaskCompletionSource<Void> task = queryTimeTask.getAndSet(null);
+            if (task != null) {
+                task.setResult(null);
+            }
+        });
+        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(LENGTH)), response -> {
+            int payloadSize= response.length - 2;
+
+            byte[] padded= new byte[8];
+            System.arraycopy(response, 2, padded, 0, payloadSize);
+            nLogEntries= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong();
+
+            if (nLogEntries == 0) {
+                completeDownloadTask();
+            } else {
+                if (updateHandler != null) {
+                    updateHandler.receivedUpdate(nLogEntries, nLogEntries);
+                }
+
+                long nEntriesNotify = nUpdates == 0 ? 0 : (long) (nLogEntries * (1.0 / nUpdates));
+
+                ///< In little endian, [A, B, 0, 0] is equal to [A, B]
+                ByteBuffer readoutCommand = ByteBuffer.allocate(payloadSize + 4).order(ByteOrder.LITTLE_ENDIAN)
+                        .put(response, 2, payloadSize).putInt((int) nEntriesNotify);
+                mwPrivate.sendCommand(LOGGING, READOUT, readoutCommand.array());
             }
         });
 
         if (mwPrivate.lookupModuleInfo(LOGGING).revision >= REVISION_EXTENDED_LOGGING) {
-            this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, READOUT_PAGE_COMPLETED), new RegisterResponseHandler() {
-                @Override
-                public void onResponseReceived(byte[] response) {
-                    mwPrivate.sendCommand(new byte[] {LOGGING.id, READOUT_PAGE_CONFIRM});
-                }
-            });
+            this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, READOUT_PAGE_COMPLETED), response -> mwPrivate.sendCommand(new byte[] {LOGGING.id, READOUT_PAGE_CONFIRM}));
         }
     }
 

@@ -24,8 +24,6 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -114,17 +112,7 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         final byte expected = 0x4;
         final Capture<Byte> actual = new Capture<>();
 
-        boschAcc.motion(NoMotionDataProducer.class).addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.set(data.bytes()[0]);
-                    }
-                });
-            }
-        });
+        boschAcc.motion(NoMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])));
         sendMockResponse(new byte[] {0x03, 0x0b, 0x04});
 
         assertEquals(expected, actual.get().byteValue());
@@ -167,17 +155,7 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         final byte expected = 0x4;
         final Capture<Byte> actual = new Capture<>();
 
-        boschAcc.motion(SlowMotionDataProducer.class).addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.set(data.bytes()[0]);
-                    }
-                });
-            }
-        });
+        boschAcc.motion(SlowMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])));
         sendMockResponse(new byte[] {0x03, 0x0b, 0x04});
 
         assertEquals(expected, actual.get().byteValue());
@@ -236,19 +214,14 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         final Capture<AccelerometerBosch.AnyMotion[]> actual = new Capture<>();
 
         actual.set(new AccelerometerBosch.AnyMotion[6]);
-        boschAcc.motion(AnyMotionDataProducer.class).addRouteAsync(new RouteBuilder() {
+        boschAcc.motion(AnyMotionDataProducer.class).addRouteAsync(source -> source.stream(new Subscriber() {
+            int i = 0;
             @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    int i = 0;
-                    @Override
-                    public void apply(Data data, Object... env) {
-                        actual.get()[i] = data.value(AccelerometerBosch.AnyMotion.class);
-                        i++;
-                    }
-                });
+            public void apply(Data data, Object... env) {
+                actual.get()[i] = data.value(AccelerometerBosch.AnyMotion.class);
+                i++;
             }
-        });
+        }));
         for(byte[] it: responses) {
             sendMockResponse(it);
         }

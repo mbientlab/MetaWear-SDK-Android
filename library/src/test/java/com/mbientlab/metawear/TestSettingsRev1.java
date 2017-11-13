@@ -30,8 +30,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertNull;
@@ -67,12 +65,9 @@ public class TestSettingsRev1 extends UnitTestBase {
     public void disconnectEvent() throws Exception {
         final Capture<Exception> actual= new Capture<>();
 
-        settings.onDisconnectAsync(null).continueWith(new Continuation<Observer, Void>() {
-            @Override
-            public Void then(Task<Observer> task) throws Exception {
-                actual.set(task.getError());
-                return null;
-            }
+        settings.onDisconnectAsync(null).continueWith(task -> {
+            actual.set(task.getError());
+            return null;
         });
 
         throw actual.get();

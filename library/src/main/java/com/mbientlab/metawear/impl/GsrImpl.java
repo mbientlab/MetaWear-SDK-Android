@@ -77,7 +77,7 @@ class GsrImpl extends ModuleImplBase implements Gsr {
         }
     }
 
-    private Channel[] conductanceChannels;
+    private final Channel[] conductanceChannels;
     GsrImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 

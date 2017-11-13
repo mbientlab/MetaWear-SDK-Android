@@ -55,52 +55,34 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
     protected void init() {
         readConfigTasks = new AsyncTaskManager<>(mwPrivate, "Reading IBeacon configuration timed out");
 
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(AD_UUID)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                readConfig = new Configuration();
-                readConfig.uuid = new UUID(ByteBuffer.wrap(response, 10, 8).order(ByteOrder.LITTLE_ENDIAN).getLong(),
-                        ByteBuffer.wrap(response, 2, 8).order(ByteOrder.LITTLE_ENDIAN).getLong());
-                IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MAJOR)});
-            }
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(AD_UUID)), response -> {
+            readConfig = new Configuration();
+            readConfig.uuid = new UUID(ByteBuffer.wrap(response, 10, 8).order(ByteOrder.LITTLE_ENDIAN).getLong(),
+                    ByteBuffer.wrap(response, 2, 8).order(ByteOrder.LITTLE_ENDIAN).getLong());
+            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MAJOR)});
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MAJOR)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                readConfig.major = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MINOR)});
-            }
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MAJOR)), response -> {
+            readConfig.major = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MINOR)});
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MINOR)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                readConfig.minor = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(RX)});
-            }
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MINOR)), response -> {
+            readConfig.minor = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(RX)});
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(RX)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                readConfig.rxPower = response[2];
-                IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(TX)});
-            }
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(RX)), response -> {
+            readConfig.rxPower = response[2];
+            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(TX)});
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(TX)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                readConfig.txPower = response[2];
-                IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(PERIOD)});
-            }
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(TX)), response -> {
+            readConfig.txPower = response[2];
+            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(PERIOD)});
         });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(PERIOD)), new JseMetaWearBoard.RegisterResponseHandler() {
-            @Override
-            public void onResponseReceived(byte[] response) {
-                readConfigTasks.cancelTimeout();
+        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(PERIOD)), response -> {
+            readConfigTasks.cancelTimeout();
 
-                readConfig.period = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-                readConfigTasks.setResult(readConfig);
-                readConfig = null;
-            }
+            readConfig.period = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+            readConfigTasks.setResult(readConfig);
+            readConfig = null;
         });
     }
 
@@ -221,11 +203,6 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
 
     @Override
     public Task<Configuration> readConfigAsync() {
-        return readConfigTasks.queueTask(7 * RESPONSE_TIMEOUT, new Runnable() {
-            @Override
-            public void run() {
-                mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(AD_UUID)});
-            }
-        });
+        return readConfigTasks.queueTask(7 * RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(AD_UUID)}));
     }
 }

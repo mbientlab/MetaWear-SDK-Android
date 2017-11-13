@@ -27,15 +27,11 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.module.Haptic;
 import com.mbientlab.metawear.module.Settings;
 import com.mbientlab.metawear.module.Settings.BatteryState;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import bolts.Capture;
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -64,24 +60,7 @@ public class TestSettingsRev3 extends UnitTestBase {
         };
         final Haptic haptic= mwBoard.getModule(Haptic.class);
 
-        settings.onDisconnectAsync(new CodeBlock() {
-            @Override
-            public void program() {
-                haptic.startMotor(100f, (short) 3000);
-            }
-        }).continueWith(new Continuation<Observer, Void>() {
-            @Override
-            public Void then(Task<Observer> task) throws Exception {
-                synchronized (TestSettingsRev3.this) {
-                    TestSettingsRev3.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-        }
+        settings.onDisconnectAsync(() -> haptic.startMotor(100f, (short) 3000)).waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
@@ -99,22 +78,9 @@ public class TestSettingsRev3 extends UnitTestBase {
         BatteryState expected= new BatteryState((byte) 99,  Float.intBitsToFloat(0x4084bc6a));
         final Capture<BatteryState> actual= new Capture<>();
 
-        settings.battery().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.stream(new Subscriber() {
-                    @Override
-                    public void apply(Data data, Object ... env) {
-                        ((Capture<BatteryState>) env[0]).set(data.value(BatteryState.class));
-                    }
-                });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actual);
-                return null;
-            }
+        settings.battery().addRouteAsync(source -> source.stream((data, env) -> ((Capture<BatteryState>) env[0]).set(data.value(BatteryState.class)))).continueWith(task -> {
+            task.getResult().setEnvironment(0, actual);
+            return null;
         });
         sendMockResponse(new byte[] {0x11, (byte) 0x8c, 0x63, 0x34, 0x10});
 
@@ -129,30 +95,13 @@ public class TestSettingsRev3 extends UnitTestBase {
         short expectedCharge =  99;
         float expectedVoltage = Float.intBitsToFloat(0x4084bc6a);
 
-        settings.battery().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.split()
-                        .index(0).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((Capture<Byte>) env[0]).set(data.value(Byte.class));
-                            }
-                        })
-                        .index(1).stream(new Subscriber() {
-                            @Override
-                            public void apply(Data data, Object... env) {
-                                ((Capture<Float>) env[0]).set(data.value(Float.class));
-                            }
-                        });
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                task.getResult().setEnvironment(0, actualCharge);
-                task.getResult().setEnvironment(1, actualVoltage);
-                return null;
-            }
+        settings.battery().addRouteAsync(source -> source.split()
+                .index(0).stream((Subscriber) (data, env) -> ((Capture<Byte>) env[0]).set(data.value(Byte.class)))
+                .index(1).stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))
+        ).continueWith(task -> {
+            task.getResult().setEnvironment(0, actualCharge);
+            task.getResult().setEnvironment(1, actualVoltage);
+            return null;
         });
         sendMockResponse(new byte[] {0x11, (byte) 0x8c, 0x63, 0x34, 0x10});
 

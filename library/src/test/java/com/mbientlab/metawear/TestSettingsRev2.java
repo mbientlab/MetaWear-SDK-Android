@@ -32,9 +32,6 @@ import org.junit.Test;
 
 import java.io.IOException;
 
-import bolts.Continuation;
-import bolts.Task;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertNull;
 
@@ -64,34 +61,19 @@ public class TestSettingsRev2 extends UnitTestBase {
 
         final Led led= mwBoard.getModule(Led.class);
 
-        settings.onDisconnectAsync(new CodeBlock() {
-            @Override
-            public void program() {
-                led.editPattern(Led.Color.BLUE)
-                        .highTime((short) 50)
-                        .pulseDuration((short) 500)
-                        .highIntensity((byte) 31)
-                        .repeatCount((byte) 10)
-                        .commit();
-                led.play();
-            }
-        }).continueWith(new Continuation<Observer, Void>() {
-            @Override
-            public Void then(Task<Observer> task) throws Exception {
-                synchronized (TestSettingsRev2.this) {
-                    TestSettingsRev2.this.notifyAll();
-                }
-                return null;
-            }
-        });
+        settings.onDisconnectAsync(() -> {
+            led.editPattern(Led.Color.BLUE)
+                    .highTime((short) 50)
+                    .pulseDuration((short) 500)
+                    .highIntensity((byte) 31)
+                    .repeatCount((byte) 10)
+                    .commit();
+            led.play();
+        }).waitForCompletion();
 
-        synchronized (this) {
-            this.wait();
-
-            // check observers properly serialize
-            junitPlatform.boardStateSuffix = "dc_observer";
-            mwBoard.serialize();
-        }
+        // check observers properly serialize
+        junitPlatform.boardStateSuffix = "dc_observer";
+        mwBoard.serialize();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }

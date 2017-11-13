@@ -27,16 +27,11 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Logging;
-import com.mbientlab.metawear.builder.RouteBuilder;
-import com.mbientlab.metawear.builder.RouteComponent;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.TimeoutException;
-
-import bolts.Continuation;
-import bolts.Task;
 
 import static org.junit.Assert.assertArrayEquals;
 
@@ -97,26 +92,11 @@ public class TestLogging extends UnitTestBase {
         final Exception[] actual= new Exception[1];
 
         junitPlatform.maxLoggers= 0;
-        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.log(null);
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                actual[0]= task.getError();
+        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.log(null)).continueWith(task -> {
+            actual[0]= task.getError();
+            return null;
+        }).waitForCompletion();
 
-                synchronized (TestLogging.this) {
-                    TestLogging.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-            throw actual[0];
-        }
+        throw actual[0];
     }
 }
