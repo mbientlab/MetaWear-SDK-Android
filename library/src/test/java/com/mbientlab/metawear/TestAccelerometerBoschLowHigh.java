@@ -113,8 +113,8 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
     @Test
     public void handleLowResponse() {
         final LowHighResponse expected = new LowHighResponse(
-                true,
                 false,
+                true,
                 false,
                 false,
                 false,
@@ -170,12 +170,12 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
     @Test
     public void handleHighResponse() {
         final LowHighResponse[] expected = new LowHighResponse[] {
-                new LowHighResponse(false, true, false, true, false, NEGATIVE),
-                new LowHighResponse(false, true, false, true, false, POSITIVE),
-                new LowHighResponse(false, true, false, false, true, NEGATIVE),
-                new LowHighResponse(false, true, false, false, true, POSITIVE),
-                new LowHighResponse(false, true, true, false, false, POSITIVE),
-                new LowHighResponse(false, true, true, false, false, NEGATIVE),
+                new LowHighResponse(true, false, false, true, false, NEGATIVE),
+                new LowHighResponse(true, false, false, true, false, POSITIVE),
+                new LowHighResponse(true, false, false, false, true, NEGATIVE),
+                new LowHighResponse(true, false, false, false, true, POSITIVE),
+                new LowHighResponse(true, false, true, false, false, POSITIVE),
+                new LowHighResponse(true, false, true, false, false, NEGATIVE),
         };
         final byte[][] responses = new byte[][] {
                 {0x03, 0x08, 0x29},

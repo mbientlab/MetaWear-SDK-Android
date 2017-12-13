@@ -24,13 +24,13 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Macro;
 
 import java.util.LinkedList;
 import java.util.Queue;
 
 import bolts.Task;
-import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.MACRO;
 
@@ -48,7 +48,8 @@ class MacroImpl extends ModuleImplBase implements Macro {
 
     private transient boolean isRecording= false;
     private transient Queue<byte[]> commands;
-    private transient Pair<TaskCompletionSource<Byte>, Boolean> pendingMacro;
+    private transient boolean execOnBoot;
+    private transient TimedTask<Byte> startMacroTask;
 
     MacroImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -56,16 +57,8 @@ class MacroImpl extends ModuleImplBase implements Macro {
 
     @Override
     protected void init() {
-        this.mwPrivate.addResponseHandler(new Pair<>(MACRO.id, BEGIN), response -> {
-            while(!commands.isEmpty()) {
-                for(byte[] converted: convertToMacroCommand(commands.poll())) {
-                    mwPrivate.sendCommand(converted);
-                }
-            }
-            mwPrivate.sendCommand(new byte[] {MACRO.id, END});
-
-            pendingMacro.first.setResult(response[2]);
-        });
+        startMacroTask = new TimedTask<>();
+        this.mwPrivate.addResponseHandler(new Pair<>(MACRO.id, BEGIN), response -> startMacroTask.setResult(response[2]));
     }
 
     @Override
@@ -77,15 +70,26 @@ class MacroImpl extends ModuleImplBase implements Macro {
     public void startRecord(boolean execOnBoot) {
         isRecording = true;
         commands = new LinkedList<>();
-        pendingMacro = new Pair<>(new TaskCompletionSource<Byte>(), execOnBoot);
+        this.execOnBoot = execOnBoot;
     }
 
     @Override
     public Task<Byte> endRecordAsync() {
         isRecording = false;
-        mwPrivate.scheduleTask(() -> mwPrivate.sendCommand(new byte[] {MACRO.id, BEGIN, (byte) (pendingMacro.second ? 1 : 0)}), WRITE_MACRO_DELAY);
+        return Task.delay(WRITE_MACRO_DELAY).onSuccessTask(ignored ->
+                startMacroTask.execute("Did not received macro id within %dms", Constant.RESPONSE_TIMEOUT,
+                        () -> mwPrivate.sendCommand(new byte[] {MACRO.id, BEGIN, (byte) (this.execOnBoot ? 1 : 0)})
+                )
+        ).onSuccessTask(task -> {
+            while(!commands.isEmpty()) {
+                for(byte[] converted: convertToMacroCommand(commands.poll())) {
+                    mwPrivate.sendCommand(converted);
+                }
+            }
+            mwPrivate.sendCommand(new byte[] {MACRO.id, END});
 
-        return pendingMacro.first.getTask();
+            return task;
+        });
     }
 
     @Override

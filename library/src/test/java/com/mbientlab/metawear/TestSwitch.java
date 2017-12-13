@@ -29,6 +29,8 @@ import com.mbientlab.metawear.module.Switch;
 import org.junit.Before;
 import org.junit.Test;
 
+import bolts.Task;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
@@ -36,17 +38,20 @@ import static org.junit.Assert.assertEquals;
  * Created by etsai on 9/4/16.
  */
 public class TestSwitch extends UnitTestBase {
+    private Switch switchModule;
+
     @Before
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class);
         connectToBoard();
+        switchModule = mwBoard.getModule(Switch.class);
     }
 
     @Test
     public void subscribe() {
         byte[] expected= new byte[] {0x1, 0x1, 0x1};
 
-        mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.stream(null));
+        switchModule.state().addRouteAsync(source -> source.stream(null));
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
@@ -55,7 +60,7 @@ public class TestSwitch extends UnitTestBase {
     public void unsubscribe() {
         byte[] expected= new byte[] {0x1, 0x1, 0x0};
 
-        mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.stream(null)).continueWith(task -> {
+        switchModule.state().addRouteAsync(source -> source.stream(null)).continueWith(task -> {
             task.getResult().unsubscribe(0);
             return null;
         });
@@ -68,7 +73,7 @@ public class TestSwitch extends UnitTestBase {
         final long expected= 1;
         final long[] actual= new long[1];
 
-        mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.stream((data, env) -> ((long[]) env[0])[0]= data.value(Long.class))).continueWith(task -> {
+        switchModule.state().addRouteAsync(source -> source.stream((data, env) -> ((long[]) env[0])[0]= data.value(Long.class))).continueWith(task -> {
             task.getResult().setEnvironment(0, (Object) actual);
             return null;
         });
@@ -82,7 +87,7 @@ public class TestSwitch extends UnitTestBase {
         final long expected= 0;
         final long[] actual= new long[1];
 
-        mwBoard.getModule(Switch.class).state().addRouteAsync(source -> source.stream((data, env) -> ((long[]) env[0])[0]= data.value(Long.class))).continueWith(task -> {
+        switchModule.state().addRouteAsync(source -> source.stream((data, env) -> ((long[]) env[0])[0]= data.value(Long.class))).continueWith(task -> {
             task.getResult().setEnvironment(0, (Object) actual);
             return null;
         });
@@ -95,27 +100,29 @@ public class TestSwitch extends UnitTestBase {
     public void readCurrentState() {
         byte[] expected = new byte[] {0x01, (byte) 0x81};
 
-        mwBoard.getModule(Switch.class).readCurrentStateAsync();
+        switchModule.readCurrentStateAsync();
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
     @Test
-    public void readCurrentStateData() {
+    public void readCurrentStateData() throws InterruptedException {
         byte[] expected = new byte[] {0x01, 0x00};
         final byte[] actual = new byte[2];
 
-        mwBoard.getModule(Switch.class).readCurrentStateAsync().continueWith(task -> {
+        Task<Void> readTaskChain = switchModule.readCurrentStateAsync().continueWithTask(task -> {
             actual[0] = task.getResult();
-            return null;
-        });
-        mwBoard.getModule(Switch.class).readCurrentStateAsync().continueWith(task -> {
+            return switchModule.readCurrentStateAsync();
+        }).continueWith(task -> {
             actual[1] = task.getResult();
             return null;
         });
 
         sendMockResponse(new byte[] {0x01, (byte) 0x81, 0x1});
         sendMockResponse(new byte[] {0x01, (byte) 0x81, 0x0});
+
+        readTaskChain.waitForCompletion();
+
         assertArrayEquals(expected, actual);
     }
 }

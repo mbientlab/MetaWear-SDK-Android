@@ -27,6 +27,7 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 
 import java.util.Arrays;
@@ -46,7 +47,7 @@ class AccelerometerBma255Impl extends AccelerometerBoschImpl implements Accelero
     private final byte[] accDataConfig= new byte[] {0x0b, 0x03};
 
     private transient AsyncDataProducer flat, lowhigh, noMotion, slowMotion, anyMotion;
-    private transient AsyncTaskManager<Void> pullConfigTask;
+    private transient TimedTask<byte[]> pullConfigTask;
 
     AccelerometerBma255Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -54,13 +55,9 @@ class AccelerometerBma255Impl extends AccelerometerBoschImpl implements Accelero
 
     @Override
     protected void init() {
-        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
+        pullConfigTask = new TimedTask<>();
 
-        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), response -> {
-            pullConfigTask.cancelTimeout();
-            System.arraycopy(response, 2, accDataConfig, 0, accDataConfig.length);
-            pullConfigTask.setResult(null);
-        });
+        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), response -> pullConfigTask.setResult(response));
     }
 
     @Override
@@ -137,7 +134,12 @@ class AccelerometerBma255Impl extends AccelerometerBoschImpl implements Accelero
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)}));
+        return pullConfigTask.execute("Did not receive BMA255 acc config within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)})
+        ).onSuccessTask(task -> {
+            System.arraycopy(task.getResult(), 2, accDataConfig, 0, accDataConfig.length);
+            return Task.forResult(null);
+        });
     }
 
     private class Bma255FlatDataProducer extends BoschFlatDataProducer implements AccelerometerBma255.FlatDataProducer {

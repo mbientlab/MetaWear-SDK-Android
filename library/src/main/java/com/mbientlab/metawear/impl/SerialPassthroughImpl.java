@@ -26,6 +26,7 @@ package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.SerialPassthrough;
 
 import java.io.Serializable;
@@ -37,7 +38,6 @@ import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 import static com.mbientlab.metawear.impl.Constant.Module.SERIAL_PASSTHROUGH;
-import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 10/3/16.
@@ -244,7 +244,7 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
 
     private final Map<Byte, I2C> i2cDataProducers= new ConcurrentHashMap<>();
     private final Map<Byte, SPI> spiDataProducers = new ConcurrentHashMap<>();
-    private transient AsyncTaskManager<byte[]> i2cDataTaskSource, spiDataTaskSources;
+    private transient TimedTask<byte[]> readI2cDataTask, readSpiDataTask;
 
     SerialPassthroughImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -265,34 +265,14 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
 
     @Override
     protected void init() {
-        i2cDataTaskSource = new AsyncTaskManager<>(mwPrivate, "Reading i2c data timed out");
-        spiDataTaskSources = new AsyncTaskManager<>(mwPrivate, "Reading spi data timed out");
+        readI2cDataTask = new TimedTask<>();
+        readSpiDataTask = new TimedTask<>();
 
         mwPrivate.addDataIdHeader(new Pair<>(SERIAL_PASSTHROUGH.id, Util.setRead(I2C_RW)));
-        mwPrivate.addDataHandler(new Tuple3<>(SERIAL_PASSTHROUGH.id, Util.setRead(I2C_RW), DIRECT_I2C_READ_ID), response -> {
-            i2cDataTaskSource.cancelTimeout();
-
-            if (response.length > 3) {
-                byte[] data = new byte[response.length - 3];
-                System.arraycopy(response, 3, data, 0, response.length - 3);
-                i2cDataTaskSource.setResult(data);
-            } else {
-                i2cDataTaskSource.setError(new RuntimeException("Error reading I2C data from device or register address.  Response: " + Util.arrayToHexString(response)));
-            }
-        });
+        mwPrivate.addDataHandler(new Tuple3<>(SERIAL_PASSTHROUGH.id, Util.setRead(I2C_RW), DIRECT_I2C_READ_ID), response -> readI2cDataTask.setResult(response));
 
         mwPrivate.addDataIdHeader(new Pair<>(SERIAL_PASSTHROUGH.id, Util.setRead(SPI_RW)));
-        mwPrivate.addDataHandler(new Tuple3<>(SERIAL_PASSTHROUGH.id, Util.setRead(SPI_RW), DIRECT_SPI_READ_ID), response -> {
-            spiDataTaskSources.cancelTimeout();
-
-            if (response.length > 3) {
-                byte[] data = new byte[response.length - 3];
-                System.arraycopy(response, 3, data, 0, response.length - 3);
-                spiDataTaskSources.setResult(data);
-            } else {
-                spiDataTaskSources.setError(new RuntimeException("Error reading SPI data from device or register address.  Response: " + Util.arrayToHexString(response)));
-            }
-        });
+        mwPrivate.addDataHandler(new Tuple3<>(SERIAL_PASSTHROUGH.id, Util.setRead(SPI_RW), DIRECT_SPI_READ_ID), response -> readSpiDataTask.setResult(response));
     }
 
     @Override
@@ -318,7 +298,18 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
 
     @Override
     public Task<byte[]> readI2cAsync(final byte deviceAddr, final byte registerAddr, final byte length) {
-        return i2cDataTaskSource.queueTask(RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {SERIAL_PASSTHROUGH.id, Util.setRead(I2C_RW), deviceAddr, registerAddr, DIRECT_I2C_READ_ID, length}));
+        return readI2cDataTask.execute("Did not receive I2C data within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {SERIAL_PASSTHROUGH.id, Util.setRead(I2C_RW), deviceAddr, registerAddr, DIRECT_I2C_READ_ID, length})
+        ).onSuccessTask(task -> {
+            byte[] response = task.getResult();
+
+            if (response.length > 3) {
+                byte[] data = new byte[response.length - 3];
+                System.arraycopy(response, 3, data, 0, response.length - 3);
+                return Task.forResult(data);
+            }
+            return Task.forError(new RuntimeException("Error reading I2C data from device or register address.  Response: " + Util.arrayToHexString(response)));
+        });
     }
 
     @Override
@@ -352,7 +343,18 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
         return new SpiParameterBuilderInner<Task<byte[]>>((byte) ((length - 1) | (DIRECT_SPI_READ_ID << 4))) {
             @Override
             public Task<byte[]> commit() {
-                return spiDataTaskSources.queueTask(RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(SERIAL_PASSTHROUGH, Util.setRead(SPI_RW), config));
+                return readSpiDataTask.execute("Did not received SPI data within %dms", Constant.RESPONSE_TIMEOUT,
+                        () -> mwPrivate.sendCommand(SERIAL_PASSTHROUGH, Util.setRead(SPI_RW), config)
+                ).onSuccessTask(task -> {
+                    byte[] response = task.getResult();
+
+                    if (response.length > 3) {
+                        byte[] data = new byte[response.length - 3];
+                        System.arraycopy(response, 3, data, 0, response.length - 3);
+                        return Task.forResult(data);
+                    }
+                    return Task.forError(new RuntimeException("Error reading SPI data from device or register address.  Response: " + Util.arrayToHexString(response)));
+                });
             }
         };
     }

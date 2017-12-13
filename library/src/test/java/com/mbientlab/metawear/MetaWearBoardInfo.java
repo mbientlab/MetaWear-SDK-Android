@@ -72,16 +72,6 @@ public class MetaWearBoardInfo {
         return responses;
     }
 
-    private static Map<Byte, byte[]> createModuleResponses(byte[][] customResponses) {
-        Map<Byte, byte[]> responses = createModuleResponses();
-
-        for(byte[] it: customResponses) {
-            responses.put(it[0], Arrays.copyOf(it, it.length));
-        }
-
-        return responses;
-    }
-
     static {
         MODULE_RESPONSE = new HashMap<>();
         MODULE_RESPONSE.put(Switch.class, new byte[] {0x01, (byte) 0x80, 0x00, 0x00});

@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Debug;
 
 import java.nio.ByteBuffer;
@@ -32,7 +33,6 @@ import java.nio.ByteOrder;
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DEBUG;
-import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 10/11/16.
@@ -43,24 +43,21 @@ class DebugImpl extends ModuleImplBase implements Debug {
 
     private static final byte TMP_VALUE = 0x4;
 
-    private transient AsyncTaskManager<Integer> readTmpValueTask;
+    private transient TimedTask<byte[]> readTmpValueTask;
 
     DebugImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
     }
 
     protected void init() {
-        readTmpValueTask = new AsyncTaskManager<>(mwPrivate, "Reading tmp value timed out");
-        this.mwPrivate.addResponseHandler(new Pair<>(DEBUG.id, Util.setRead(TMP_VALUE)), response -> {
-            readTmpValueTask.cancelTimeout();
-            readTmpValueTask.setResult(ByteBuffer.wrap(response, 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt());
-        });
+        readTmpValueTask = new TimedTask<>();
+        this.mwPrivate.addResponseHandler(new Pair<>(DEBUG.id, Util.setRead(TMP_VALUE)), response -> readTmpValueTask.setResult(response));
     }
 
     @Override
     public Task<Void> resetAsync() {
         EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
-        Task<Void> task= (event != null && event.getEventConfig() != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
+        Task<Void> task= (event != null && event.activeDataType != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
 
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x1});
         return task;
@@ -69,7 +66,7 @@ class DebugImpl extends ModuleImplBase implements Debug {
     @Override
     public Task<Void> disconnectAsync() {
         EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
-        Task<Void> task= (event != null && event.getEventConfig() != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
+        Task<Void> task= (event != null && event.activeDataType != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
 
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x6});
         return task;
@@ -78,7 +75,7 @@ class DebugImpl extends ModuleImplBase implements Debug {
     @Override
     public Task<Void> jumpToBootloaderAsync() {
         EventImpl event = (EventImpl) mwPrivate.getModules().get(EventImpl.class);
-        Task<Void> task= (event != null && event.getEventConfig() != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
+        Task<Void> task= (event != null && event.activeDataType != null) ? Task.cancelled() : mwPrivate.boardDisconnect();
 
         mwPrivate.sendCommand(new byte[] {DEBUG.id, 0x2});
         return task;
@@ -100,7 +97,9 @@ class DebugImpl extends ModuleImplBase implements Debug {
 
     @Override
     public Task<Integer> readTmpValueAsync() {
-        return readTmpValueTask.queueTask(RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {DEBUG.id, Util.setRead(TMP_VALUE)}));
+        return readTmpValueTask.execute("Did not received response from tmp register within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {DEBUG.id, Util.setRead(TMP_VALUE)})
+        ).onSuccessTask(task -> Task.forResult(ByteBuffer.wrap(task.getResult(), 2, 4).order(ByteOrder.LITTLE_ENDIAN).getInt()));
     }
 
     @Override

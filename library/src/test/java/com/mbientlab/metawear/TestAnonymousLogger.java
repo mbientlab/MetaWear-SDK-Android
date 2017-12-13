@@ -426,4 +426,39 @@ public class TestAnonymousLogger {
             assertEquals(2, retrieveLoggers(mwBoard).length);
         }
     }
+    public static class TestBmi160StepCounter extends TestBase {
+        public TestBmi160StepCounter() {
+            super();
+
+            junitPlatform.addCustomResponse(new byte[] { 0xb, (byte) 0x82, 0x00 },
+                    new byte[] { 0x0b, (byte) 0x82, 0x03, (byte) 0xda, (byte) 0xff, 0x20 });
+            junitPlatform.addCustomResponse(new byte[] { 0xb, (byte) 0x82, 0x01 },
+                    new byte[] { 0x0b, (byte) 0x82});
+            junitPlatform.addCustomResponse(new byte[] { 0xb, (byte) 0x82, 0x02 },
+                    new byte[] { 0x0b, (byte) 0x82});
+            junitPlatform.addCustomResponse(new byte[] { 0xb, (byte) 0x82, 0x03 },
+                    new byte[] { 0x0b, (byte) 0x82});
+            junitPlatform.addCustomResponse(new byte[] { 0xb, (byte) 0x82, 0x04 },
+                    new byte[] { 0x0b, (byte) 0x82});
+            junitPlatform.addCustomResponse(new byte[] { 0xb, (byte) 0x82, 0x05 },
+                    new byte[] { 0x0b, (byte) 0x82});
+            junitPlatform.addCustomResponse(new byte[] { 0xb, (byte) 0x82, 0x06 },
+                    new byte[] { 0x0b, (byte) 0x82});
+            junitPlatform.addCustomResponse(new byte[] { 0xb, (byte) 0x82, 0x07 },
+                    new byte[] { 0x0b, (byte) 0x82});
+        }
+
+        @Test
+        public void SyncLoggers() throws Exception {
+            connectToBoard();
+            assertEquals(1, retrieveLoggers(mwBoard).length);
+        }
+
+        @Test
+        public void CheckIdentifier() throws Exception {
+            connectToBoard();
+
+            assertEquals("step-counter", retrieveLoggers(mwBoard)[0].identifier());
+        }
+    }
 }

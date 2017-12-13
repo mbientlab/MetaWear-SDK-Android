@@ -334,11 +334,14 @@ class RouteComponentImpl implements RouteComponent {
         if (source.attributes.length() <= 0) {
             throw new IllegalRouteOperationException("Cannot delay null data");
         }
-        if (source.attributes.length() > 4) {
-            throw new IllegalRouteOperationException("Cannot delay data longer than 4 bytes");
+
+        boolean expanded = persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision >= DataProcessorImpl.EXPANDED_DELAY;
+        int maxLength = expanded ? 16 : 4;
+        if (source.attributes.length() > maxLength) {
+            throw new IllegalRouteOperationException(String.format(Locale.US, "Firmware does not support delayed data longer than %d bytes", maxLength));
         }
 
-        DataProcessorConfig config = new DataProcessorConfig.Delay(source.attributes.length(), samples);
+        DataProcessorConfig config = new DataProcessorConfig.Delay(expanded, source.attributes.length(), samples);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
         return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));

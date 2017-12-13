@@ -34,7 +34,6 @@ import com.mbientlab.metawear.module.Timer;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.ScheduledFuture;
 
 import bolts.Task;
 
@@ -61,7 +60,6 @@ interface MetaWearBoardPrivate {
     void addResponseHandler(Pair<Byte, Byte> key, RegisterResponseHandler handler);
     void removeDataHandler(Tuple3<Byte, Byte, Byte> key, RegisterResponseHandler handler);
     int numDataHandlers(Tuple3<Byte, Byte, Byte> key);
-    ScheduledFuture<?> scheduleTask(Runnable r, long delay);
 
     void removeProcessor(boolean sync, byte id);
     void removeRoute(int id);

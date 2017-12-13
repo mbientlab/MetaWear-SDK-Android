@@ -108,6 +108,32 @@ public class TestMetaWearBoard {
             assertEquals(expected, junitPlatform.nDisconnects);
         }
 
+        @Test()
+        public void serviceDiscoveryRetry() throws InterruptedException {
+            junitPlatform.addCustomModuleInfo(new byte[]{0xf, (byte) 0xff});
+            mwBoard.connectAsync().waitForCompletion();
+
+            byte[][] checkpoint1 = {
+                    {0x01, (byte) (byte) 0x80}, {0x02, (byte) 0x80}, {0x03, (byte) 0x80}, {0x04, (byte) 0x80},
+                    {0x05, (byte) 0x80}, {0x06, (byte) 0x80}, {0x07, (byte) 0x80}, {0x08, (byte) 0x80},
+                    {0x09, (byte) 0x80}, {0x0a, (byte) 0x80}, {0x0b, (byte) 0x80}, {0x0c, (byte) 0x80},
+                    {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}
+            };
+            assertArrayEquals(checkpoint1, junitPlatform.getConnectCommands());
+
+            junitPlatform.removeCustomModuleInfo((byte) 0xf);
+            junitPlatform.connectCmds.clear();
+            mwBoard.connectAsync().waitForCompletion();
+
+            byte[][] checkpoint2 = {
+                {0x0f, (byte) 0x80}, {0x10, (byte) 0x80}, {0x11, (byte) 0x80},
+                {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
+                {0x16, (byte) 0x80}, {0x17, (byte) 0x80}, {0x18, (byte) 0x80}, {0x19, (byte) 0x80},
+                {(byte) 0xfe, (byte) 0x80}, {0x0b, (byte) 0x84}
+            };
+            assertArrayEquals(checkpoint2, junitPlatform.getConnectCommands());
+        }
+
         @Test
         public void longFirmwareString() throws Exception {
             junitPlatform.firmware = "1.3.90";

@@ -59,7 +59,6 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
@@ -72,19 +71,12 @@ import java.util.LinkedList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
-import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
 
+import bolts.CancellationTokenSource;
 import bolts.Capture;
-import bolts.Continuation;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
@@ -105,7 +97,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
             UUID.fromString("326A9006-85CB-9195-D9DD-464CFBBAE75A")
     );
 
-    private static final ScheduledExecutorService SCHEDULED_TASK_THREADPOOL = Executors.newScheduledThreadPool(4);
     private static final long RELEASE_INFO_TTL = 1800000L;
     private static final byte READ_INFO_REGISTER= Util.setRead((byte) 0x0);
     private final static String FIRMWARE_BUILD= "vanilla", LOG_TAG = "metawear";
@@ -167,39 +158,16 @@ public class JseMetaWearBoard implements MetaWearBoard {
     private final BtleGatt gatt;
 
     // module discovery
-    private Queue<Constant.Module> moduleQueries;
-    private TaskCompletionSource<JSONObject> diagnosticTaskSource;
-    private Map<String, JSONObject> diagnosticResult;
+    private TimedTask<byte[]> readModuleInfoTask;
 
     // Device Information
     private String serialNumber, manufacturer;
 
     // Connection
-    private ScheduledFuture<?> serviceDiscoveryFuture;
+    private CancellationTokenSource connectCts = null;
     private UnexpectedDisconnectHandler unexpectedDcHandler;
-    private final AtomicReference<TaskCompletionSource<Void>> connectTaskSource = new AtomicReference<>();
+    private Task<Void> connectTask = null;
     private boolean connected;
-    private final Continuation<Void, Void> timeReadContinuation = new Continuation<Void, Void>() {
-        @Override
-        public Void then(Task<Void> task) throws Exception {
-            serviceDiscoveryFuture.cancel(false);
-            try {
-                ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
-                ObjectOutputStream oos = new ObjectOutputStream(buffer);
-                oos.writeObject(persist.boardInfo);
-                oos.close();
-
-                io.localSave(BOARD_INFO, buffer.toByteArray());
-            } catch (IOException e) {
-                io.logWarn(LOG_TAG, "Cannot serialize MetaWear module info", e);
-            } finally {
-                connected= true;
-                connectTaskSource.getAndSet(null).setResult(null);
-            }
-
-            return null;
-        }
-    };
 
     private final MetaWearBoardPrivate mwPrivate = new MetaWearBoardPrivate() {
         @Override
@@ -209,7 +177,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
         @Override
         public void sendCommand(byte[] command) {
-            if (event.getEventConfig() != null) {
+            if (event.activeDataType != null) {
                 event.convertToEventCommand(command);
             } else {
                 gatt.writeCharacteristicAsync(
@@ -334,11 +302,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
         }
 
         @Override
-        public ScheduledFuture<?> scheduleTask(Runnable r, long delay) {
-            return SCHEDULED_TASK_THREADPOOL.schedule(r, delay, TimeUnit.MILLISECONDS);
-        }
-
-        @Override
         public Task<Route> queueRouteBuilder(RouteBuilder builder, String producerTag) {
             TaskCompletionSource<Route> taskSrc= new TaskCompletionSource<>();
             if (persist.taggedProducers.containsKey(producerTag)) {
@@ -391,6 +354,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
         this.gatt = gatt;
         this.macAddress = macAddress;
 
+        readModuleInfoTask = new TimedTask<>();
         gatt.onDisconnect(new BtleGatt.DisconnectHandler() {
             @Override
             public void onDisconnect() {
@@ -636,10 +600,46 @@ public class JseMetaWearBoard implements MetaWearBoard {
         throw new IllegalStateException("No information available for this board");
     }
 
-    private void handleConnectContinuation(Task<Void> connectTask) {
+    private Task<Queue<ModuleInfo>> discoverModules(Collection<Constant.Module> ignore) {
+        final Queue<ModuleInfo> info = new LinkedList<>();
+        final Queue<Constant.Module> modules = new LinkedList<>();
+        final Capture<Boolean> terminate = new Capture<>(false);
+
+        for(Constant.Module it: Constant.Module.values()) {
+            if (!ignore.contains(it)) {
+                modules.add(it);
+            }
+        }
+
+        return Task.forResult(null).continueWhile(() -> !terminate.get() && !modules.isEmpty(), ignored -> {
+            final Constant.Module next = modules.poll();
+            return readModuleInfoTask.execute("Did not receive info for module (" + next.friendlyName + ") within %dms", Constant.RESPONSE_TIMEOUT,
+                    () -> gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] { next.id, READ_INFO_REGISTER })
+            ).continueWithTask(task -> {
+                if (task.isFaulted()) {
+                    terminate.set(true);
+                    return Task.<Void>forError(task.getError());
+                } else {
+                    info.add(new ModuleInfo(task.getResult()));
+                    return Task.<Void>forResult(null);
+                }
+            });
+        }).continueWithTask(task -> task.isFaulted() ? Task.forError(new TaskTimeoutException(task.getError(), info)) : Task.forResult(info));
+    }
+    @Override
+    public Task<Void> connectAsync() {
+        if (connectTask != null && !connectTask.isCompleted()) {
+            return connectTask;
+        }
+
+        connectCts = new CancellationTokenSource();
         final Capture<Boolean> serviceDiscoveryRefresh = new Capture<>();
 
-        connectTask.onSuccessTask(task -> {
+        connectTask = gatt.connectAsync().onSuccessTask(task -> {
+            if (connectCts.isCancellationRequested()) {
+                return Task.cancelled();
+            }
+
             if (persist.boardInfo == null) {
                 InputStream ins = io.localRetrieve(BOARD_INFO);
                 if (ins != null) {
@@ -661,6 +661,10 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
             return gatt.readCharacteristicAsync(DeviceInformationService.FIRMWARE_REVISION);
         }).onSuccessTask(task -> {
+            if (connectCts.isCancellationRequested()) {
+                return Task.cancelled();
+            }
+
             Version readFirmware = new Version(new String(task.getResult()));
             if (persist.boardInfo.firmware.compareTo(readFirmware) != 0) {
                 persist.boardInfo.firmware = readFirmware;
@@ -677,6 +681,10 @@ public class JseMetaWearBoard implements MetaWearBoard {
             }
             return Task.forResult(null);
         }).onSuccessTask(task -> {
+            if (connectCts.isCancellationRequested()) {
+                return Task.cancelled();
+            }
+
             if (task.getResult() != null) {
                 persist.boardInfo.modelNumber = new String(task.getResult()[0]);
                 persist.boardInfo.hardwareRevision = new String(task.getResult()[1]);
@@ -693,93 +701,77 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 } else if (registerResponseHandlers.containsKey(header)) {
                     registerResponseHandlers.get(header).onResponseReceived(value);
                 } else if (value[1] == READ_INFO_REGISTER) {
-                    ModuleInfo current= new ModuleInfo(value);
-                    if (diagnosticTaskSource == null) {
-                        persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(value[0]), current);
-
-                        instantiateModule(current);
-
-                        if (moduleQueries.isEmpty()) {
-                            logger.queryTime().continueWith(timeReadContinuation);
-                        } else {
-                            JseMetaWearBoard.this.gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
-                        }
-                    } else {
-                        diagnosticResult.put(Constant.Module.lookupEnum(value[0]).friendlyName, current.toJSON());
-                        if (moduleQueries.isEmpty()) {
-                            serviceDiscoveryFuture.cancel(false);
-
-                            TaskCompletionSource<JSONObject> temp = diagnosticTaskSource;
-                            diagnosticTaskSource = null;
-
-                            Map<String, JSONObject> temp2 = diagnosticResult;
-                            diagnosticResult = null;
-
-                            temp.setResult(new JSONObject(temp2));
-                        } else {
-                            JseMetaWearBoard.this.gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
-                        }
-                    }
+                    readModuleInfoTask.setResult(value);
                 }
             });
-        }).continueWith(task -> {
+        }).onSuccessTask(task -> {
+            if (connectCts.isCancellationRequested()) {
+                return Task.cancelled();
+            }
+
+            Collection<Constant.Module> ignore = new HashSet<>();
+            if (serviceDiscoveryRefresh.get()) {
+                persist.routeIdCounter= 0;
+                persist.taggedProducers.clear();
+                persist.activeEventManagers.clear();
+                persist.activeRoutes.clear();
+                persist.boardInfo.moduleInfo.clear();
+                persist.modules.clear();
+            }
+            ignore.addAll(persist.boardInfo.moduleInfo.keySet());
+
+            return discoverModules(ignore);
+        }).onSuccessTask(task -> {
+            if (connectCts.isCancellationRequested()) {
+                return Task.cancelled();
+            }
+
+            for(ModuleInfo it: task.getResult()) {
+                persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(it.id), it);
+                instantiateModule(it);
+            }
+
+            return logger == null ? Task.forResult(null) : logger.queryTime();
+        }).continueWithTask(task -> {
+            if (task.isCancelled()) {
+                return task;
+            }
+
             if (task.isFaulted()) {
-                TaskCompletionSource<Void> taskSource = connectTaskSource.getAndSet(null);
-                if (taskSource != null) {
-                    if (!inMetaBootMode()) {
-                        taskSource.setError(task.getError());
-                    } else {
-                        connected = true;
-                        taskSource.setResult(null);
-                    }
-                }
-            } else if (task.isCancelled()) {
-                TaskCompletionSource<Void> taskSource = connectTaskSource.getAndSet(null);
-                if (taskSource != null) {
-                    taskSource.setCancelled();
-                }
-            } else {
-                if (serviceDiscoveryRefresh.get()) {
-                    persist.routeIdCounter= 0;
-                    persist.taggedProducers.clear();
-                    persist.activeEventManagers.clear();
-                    persist.activeRoutes.clear();
-                    persist.boardInfo.moduleInfo.clear();
-                    persist.modules.clear();
-                }
-
-                Constant.Module[] modules = Constant.Module.values();
-                moduleQueries= new LinkedList<>();
-                for(Constant.Module it: modules) {
-                    if (serviceDiscoveryRefresh.get() || !persist.boardInfo.moduleInfo.containsKey(it)) {
-                        moduleQueries.add(it);
-                    }
-                }
-
-                serviceDiscoveryFuture = mwPrivate.scheduleTask(() -> {
-                    gatt.localDisconnectAsync();
-                    connectTaskSource.getAndSet(null).setError(new TimeoutException("Service discovery timed out"));
-                }, 7500L);
-
-                if (moduleQueries.isEmpty()) {
-                    logger.queryTime().continueWith(timeReadContinuation);
+                if (inMetaBootMode()) {
+                    return Task.forResult(null);
                 } else {
-                    gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[]{moduleQueries.poll().id, READ_INFO_REGISTER});
+                    if (task.getError() instanceof TaskTimeoutException) {
+                        Queue<ModuleInfo> partial = (Queue<ModuleInfo>) ((TaskTimeoutException) task.getError()).partial;
+                        for(ModuleInfo it: partial) {
+                            persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(it.id), it);
+                            instantiateModule(it);
+                        }
+                    }
+
+                    return gatt.localDisconnectAsync().continueWithTask(ignored ->
+                            task.getError() instanceof TaskTimeoutException ? Task.forError((Exception) task.getError().getCause()) : task
+                    );
                 }
             }
-            return null;
-        });
-    }
-    @Override
-    public Task<Void> connectAsync() {
-        TaskCompletionSource<Void> taskSource = connectTaskSource.get();
-        if (taskSource == null) {
-            taskSource = new TaskCompletionSource<>();
-            connectTaskSource.set(taskSource);
-            handleConnectContinuation(gatt.connectAsync());
-        }
 
-        return taskSource.getTask();
+            try {
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
+                ObjectOutputStream oos = new ObjectOutputStream(buffer);
+                oos.writeObject(persist.boardInfo);
+                oos.close();
+
+                io.localSave(BOARD_INFO, buffer.toByteArray());
+            } catch (IOException e) {
+                io.logWarn(LOG_TAG, "Cannot serialize MetaWear module info", e);
+            } finally {
+                connected= true;
+            }
+
+            return Task.forResult(null);
+        });
+
+        return connectTask;
     }
 
     @Override
@@ -789,10 +781,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Task<Void> disconnectAsync() {
-        TaskCompletionSource<Void> taskSource = connectTaskSource.getAndSet(null);
-        if (taskSource != null) {
-            taskSource.setCancelled();
-        }
+        connectCts.cancel();
 
         return gatt.localDisconnectAsync();
     }
@@ -920,40 +909,38 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Task<JSONObject> dumpModuleInfo(JSONObject partial) {
-        if (diagnosticTaskSource == null) {
-            diagnosticResult = new TreeMap<>();
-            diagnosticTaskSource = new TaskCompletionSource<>();
-            if (partial == null) {
-                moduleQueries = new LinkedList<>(Arrays.asList(Constant.Module.values()));
-            } else {
-                {
-                    Iterator<String> it = partial.keys();
-                    while (it.hasNext()) {
-                        String current = it.next();
-                        diagnosticResult.put(current, partial.optJSONObject(current));
-                    }
-                }
+        final Map<String, JSONObject> diagnosticResult = new HashMap<>();
+        Collection<Constant.Module> ignore = new HashSet<>();
 
-                for(Constant.Module it: Constant.Module.values()) {
-                    if (!partial.has(it.friendlyName)) {
-                        moduleQueries.add(it);
-                    }
+        if (partial != null) {
+            {
+                Iterator<String> it = partial.keys();
+                while (it.hasNext()) {
+                    String current = it.next();
+                    diagnosticResult.put(current, partial.optJSONObject(current));
                 }
             }
 
-            serviceDiscoveryFuture = mwPrivate.scheduleTask(() -> {
-                JSONObject temp = new JSONObject(diagnosticResult);
-                diagnosticResult = null;
-
-                TaskCompletionSource<JSONObject> temp2 = diagnosticTaskSource;
-                diagnosticTaskSource = null;
-
-                temp2.setError(new TaskTimeoutException("Querying module info timed out", temp));
-            }, 7500L);
-            gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] {moduleQueries.poll().id, READ_INFO_REGISTER});
+            for(Constant.Module it: Constant.Module.values()) {
+                if (partial.has(it.friendlyName)) {
+                    ignore.add(it);
+                }
+            }
         }
 
-        return diagnosticTaskSource.getTask();
+        return discoverModules(ignore).continueWithTask(task -> {
+            Queue<ModuleInfo> result = task.isFaulted() ?
+                    (Queue<ModuleInfo>) ((TaskTimeoutException) task.getError()).partial :
+                    task.getResult();
+
+            while(!result.isEmpty()) {
+                ModuleInfo current = result.poll();
+                diagnosticResult.put(Constant.Module.lookupEnum(current.id).friendlyName, current.toJSON());
+            }
+
+            JSONObject actual = new JSONObject(diagnosticResult);
+            return !task.isFaulted() ? Task.forResult(actual) : Task.forError(new TaskTimeoutException((Exception) task.getError().getCause(), actual));
+        });
     }
 
     private static class AnonymousRouteInner implements AnonymousRoute {

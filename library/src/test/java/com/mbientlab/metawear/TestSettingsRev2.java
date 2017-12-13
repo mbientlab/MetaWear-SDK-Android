@@ -26,13 +26,18 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Settings;
+import com.mbientlab.metawear.module.Settings.BleAdvertisementConfig;
+import com.mbientlab.metawear.module.Settings.BleConnectionParameters;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
 
+import bolts.Task;
+
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 /**
@@ -76,6 +81,37 @@ public class TestSettingsRev2 extends UnitTestBase {
         mwBoard.serialize();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
+    }
+
+    @Test
+    public void readAdConfig() throws InterruptedException {
+        junitPlatform.addCustomResponse(new byte[] {0x11, (byte) 0x81},
+                new byte[] {0x11, (byte) 0x81, 0x4d, 0x65, 0x74, 0x61, 0x57, 0x65, 0x61, 0x72});
+        junitPlatform.addCustomResponse(new byte[] {0x11, (byte) 0x82},
+                new byte[] {0x11, (byte) 0x82, (byte) 0x9c, 0x02, 0x00, 0x00});
+        junitPlatform.addCustomResponse(new byte[] {0x11, (byte) 0x83},
+                new byte[] {0x11, (byte) 0x83, 0x00});
+        junitPlatform.addCustomResponse(new byte[] {0x11, (byte) 0x87},
+                new byte[] {0x11, (byte) 0x87, 0x19, (byte) 0xff, 0x6d, 0x62, 0x74, 0x68, 0x65, 0x20, 0x53, 0x63, 0x61, 0x72, 0x6c, 0x65, 0x74, 0x74, 0x20, 0x73});
+
+        Task<BleAdvertisementConfig> task = settings.readBleAdConfigAsync();
+        task.waitForCompletion();
+
+        final BleAdvertisementConfig expected = new BleAdvertisementConfig("MetaWear", (short) 417, (byte) 0, (byte) 0,
+                new byte[] {0x19, (byte) 0xff, 0x6d, 0x62, 0x74, 0x68, 0x65, 0x20, 0x53, 0x63, 0x61, 0x72, 0x6c, 0x65, 0x74, 0x74, 0x20, 0x73});
+        assertEquals(expected, task.getResult());
+    }
+
+    @Test
+    public void readConnParam() throws InterruptedException {
+        junitPlatform.addCustomResponse(new byte[] {0x11, (byte) 0x89},
+                new byte[] {0x11, (byte) 0x89, 0x06, 0x00, 0x09, 0x00, 0x00, 0x00, 0x58, 0x02});
+
+        Task<BleConnectionParameters> task = settings.readBleConnParamsAsync();
+        task.waitForCompletion();
+
+        final BleConnectionParameters expected = new BleConnectionParameters(7.5f, 11.25f, (short) 0, (short) 6000);
+        assertEquals(expected, task.getResult());
     }
 
     @Test

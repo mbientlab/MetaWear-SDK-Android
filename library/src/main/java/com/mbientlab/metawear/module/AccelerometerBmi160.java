@@ -34,6 +34,11 @@ import com.mbientlab.metawear.ForcedDataProducer;
  * @author Eric Tsai
  */
 public interface AccelerometerBmi160 extends AccelerometerBosch {
+    enum FilterMode {
+        OSR4,
+        OSR2,
+        NORMAL
+    }
     /**
      * Operating frequencies of the BMI160 accelerometer
      * @author Eric Tsai
@@ -99,6 +104,12 @@ public interface AccelerometerBmi160 extends AccelerometerBosch {
          * @return Calling object
          */
         ConfigEditor range(AccRange fsr);
+        /**
+         * Set the filter mode.  This parameter is ignored if the data rate is less than 12.5Hz
+         * @param mode New filter mode
+         * @return Calling object
+         */
+        ConfigEditor filter(FilterMode mode);
     }
 
     /**

@@ -26,17 +26,15 @@ package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.MetaWearBoard.Module;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeoutException;
 
+import bolts.Capture;
 import bolts.Task;
-import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.EVENT;
-import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 10/26/16.
@@ -46,45 +44,18 @@ class EventImpl extends ModuleImplBase implements Module {
     private static final long serialVersionUID = 4582940681177602659L;
 
     transient Tuple3<Byte, Byte, Byte> feedbackParams= null;
-    private transient ScheduledFuture<?> eventTimeoutFuture;
-    private transient LinkedList<Byte> successfulEvents;
-    private transient Queue<Pair<? extends DataTypeBase, ? extends CodeBlock>> pendingEventCodeBlocks;
-    private transient TaskCompletionSource<LinkedList<Byte>> createEventsTask;
+    transient DataTypeBase activeDataType = null;
+
     private transient Queue<byte[]> recordedCommands;
-    private transient boolean isRecording= false;
-    private transient Runnable recordCmdTimeout;
+    private transient TimedTask<byte[]> createEventTask;
 
     EventImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
     }
 
     protected void init() {
-        recordCmdTimeout = () -> {
-            for(Byte id: successfulEvents) {
-                removeEventCommand(id);
-            }
-
-            pendingEventCodeBlocks= null;
-            recordedCommands= null;
-            createEventsTask.setError(new TimeoutException("Timed out programming commands"));
-        };
-
-        mwPrivate.addResponseHandler(new Pair<>(EVENT.id, ENTRY), response -> {
-            eventTimeoutFuture.cancel(false);
-
-            successfulEvents.add(response[2]);
-
-            if (!recordedCommands.isEmpty()) {
-                mwPrivate.sendCommand(recordedCommands.poll());
-                mwPrivate.sendCommand(recordedCommands.poll());
-
-                eventTimeoutFuture= mwPrivate.scheduleTask(recordCmdTimeout, RESPONSE_TIMEOUT);
-            } else {
-                pendingEventCodeBlocks.poll();
-
-                recordCommand();
-            }
-        });
+        createEventTask = new TimedTask<>();
+        mwPrivate.addResponseHandler(new Pair<>(EVENT.id, ENTRY), response -> createEventTask.setResult(response));
     }
 
     @Override
@@ -96,23 +67,50 @@ class EventImpl extends ModuleImplBase implements Module {
         mwPrivate.sendCommand(new byte[]{EVENT.id, EventImpl.REMOVE, id});
     }
 
-    Task<LinkedList<Byte>> queueEvents(Queue<Pair<? extends DataTypeBase, ? extends CodeBlock>> eventCodeBlocks) {
-        successfulEvents = new LinkedList<>();
-        pendingEventCodeBlocks = new LinkedList<>(eventCodeBlocks);
-        createEventsTask= new TaskCompletionSource<>();
-        recordCommand();
+    Task<LinkedList<Byte>> queueEvents(final Queue<Pair<? extends DataTypeBase, ? extends CodeBlock>> eventCodeBlocks) {
+        final LinkedList<Byte> ids = new LinkedList<>();
+        final Capture<Boolean> terminate = new Capture<>(false);
 
-        return createEventsTask.getTask();
-    }
+        return Task.forResult(null).continueWhile(() -> !terminate.get() && !eventCodeBlocks.isEmpty(), ignored -> {
+            Pair<? extends DataTypeBase, ? extends CodeBlock> current = eventCodeBlocks.poll();
 
-    byte[] getEventConfig() {
-        return isRecording ? pendingEventCodeBlocks.peek().first.eventConfig : null;
+            activeDataType= current.first;
+            recordedCommands= new LinkedList<>();
+            current.second.program();
+            activeDataType= null;
+
+            final Capture<Boolean> terminate2 = new Capture<>(false);
+            return Task.forResult(null).continueWhile(() -> !terminate2.get() && !recordedCommands.isEmpty(), ignored2 -> {
+                mwPrivate.sendCommand(recordedCommands.poll());
+                return createEventTask.execute("Did not receive event id within %dms", Constant.RESPONSE_TIMEOUT,
+                        () -> mwPrivate.sendCommand(recordedCommands.poll())
+                ).continueWithTask(task -> {
+                    if (task.isFaulted()) {
+                        terminate.set(true);
+                        terminate2.set(true);
+                        return Task.<Void>forError(task.getError());
+                    }
+
+                    ids.add(task.getResult()[2]);
+                    return Task.forResult(null);
+                });
+            });
+        }).continueWithTask(task -> {
+            if (task.isFaulted()) {
+                for(byte it: ids) {
+                    removeEventCommand(it);
+                }
+
+                return Task.forError(task.getError());
+            }
+
+            return Task.forResult(ids);
+        });
     }
 
     void convertToEventCommand(byte[] command) {
-        byte[] eventConfig= getEventConfig();
         byte[] commandEntry= new byte[] {EVENT.id, EventImpl.ENTRY,
-                eventConfig[0], eventConfig[1], eventConfig[2],
+                activeDataType.eventConfig[0], activeDataType.eventConfig[1], activeDataType.eventConfig[2],
                 command[0], command[1], (byte) (command.length - 2)};
 
         if (feedbackParams != null) {
@@ -129,20 +127,5 @@ class EventImpl extends ModuleImplBase implements Module {
         eventParameters[0]= EVENT.id;
         eventParameters[1]= EventImpl.CMD_PARAMETERS;
         recordedCommands.add(eventParameters);
-    }
-
-    private void recordCommand() {
-        if (!pendingEventCodeBlocks.isEmpty()) {
-            isRecording= true;
-            recordedCommands= new LinkedList<>();
-            pendingEventCodeBlocks.peek().second.program();
-            isRecording= false;
-
-            mwPrivate.sendCommand(recordedCommands.poll());
-            mwPrivate.sendCommand(recordedCommands.poll());
-            eventTimeoutFuture= mwPrivate.scheduleTask(recordCmdTimeout, RESPONSE_TIMEOUT);
-        } else {
-            createEventsTask.setResult(successfulEvents);
-        }
     }
 }

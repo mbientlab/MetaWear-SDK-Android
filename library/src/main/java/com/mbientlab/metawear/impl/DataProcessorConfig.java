@@ -18,7 +18,7 @@ import static com.mbientlab.metawear.impl.RouteComponentImpl.MULTI_COMPARISON_MI
  */
 
 abstract class DataProcessorConfig {
-    static DataProcessorConfig from(Version firmware, byte[] config) {
+    static DataProcessorConfig from(Version firmware, byte revision, byte[] config) {
         switch(config[0]) {
             case Passthrough.ID:
                 return new Passthrough(config);
@@ -36,7 +36,7 @@ abstract class DataProcessorConfig {
             case Maths.ID:
                 return new Maths(firmware.compareTo(MULTI_CHANNEL_MATH) >= 0, config);
             case Delay.ID:
-                return new Delay(config);
+                return new Delay(revision >= DataProcessorImpl.EXPANDED_DELAY, config);
             case Pulse.ID:
                 return new Pulse(config);
             case Differential.ID:
@@ -481,26 +481,29 @@ abstract class DataProcessorConfig {
     static class Delay extends DataProcessorConfig {
         static final byte ID = 0xa;
 
+        final boolean expanded;
         final byte input;
         final byte samples;
 
-        Delay(byte input, byte samples) {
+        Delay(boolean expanded, byte input, byte samples) {
             super(ID);
 
+            this.expanded = expanded;
             this.input = input;
             this.samples = samples;
         }
 
-        Delay(byte[] config) {
+        Delay(boolean expanded, byte[] config) {
             super(config[0]);
 
-            input = (byte) ((config[1] & 0x3) + 1);
+            this.expanded = expanded;
+            input = (byte) ((config[1] & (expanded ? 0xf : 0x3)) + 1);
             samples = config[2];
         }
 
         @Override
         byte[] build() {
-            return new byte[]{ID, (byte) ((input - 1) & 0x3), samples};
+            return new byte[]{ID, (byte) ((input - 1) & (expanded ? 0xf : 0x3)), samples};
         }
 
         @Override

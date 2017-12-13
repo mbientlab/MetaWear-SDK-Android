@@ -33,6 +33,7 @@ import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.data.TapType;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
 import java.nio.ByteBuffer;
@@ -213,11 +214,11 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
     private static class Mma8452QSFloatData extends MilliUnitsSFloatData {
         private static final long serialVersionUID = -8399682704460340788L;
 
-        public Mma8452QSFloatData(byte offset) {
+        Mma8452QSFloatData(byte offset) {
             super(ACCELEROMETER, DATA_VALUE, new DataAttributes(new byte[] {2}, (byte) 1, offset, true));
         }
 
-        public Mma8452QSFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
+        Mma8452QSFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
             super(input, module, register, id, attributes);
         }
 
@@ -446,7 +447,7 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
     private final byte[] dataSettings= new byte[] {0x00, 0x00, (byte) 0x18, 0x00, 0x00};
 
     private transient AsyncDataProducer packedAcceleration, acceleration, orientation, shake, tap, freeFall, motion;
-    private transient AsyncTaskManager<Void> pullConfigTask;
+    private transient TimedTask<byte[]> pullConfigTask;
 
     AccelerometerMma8452qImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -466,13 +467,9 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
 
     @Override
     protected void init() {
-        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
+        pullConfigTask = new TimedTask<>();
 
-        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), response -> {
-            pullConfigTask.cancelTimeout();
-            System.arraycopy(response, 2, dataSettings, 0, dataSettings.length);
-            pullConfigTask.setResult(null);
-        });
+        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), response -> pullConfigTask.setResult(response));
     }
 
     private int pwMode() {
@@ -599,7 +596,12 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)}));
+        return pullConfigTask.execute("Did not receive BMA255 acc config within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)})
+        ).onSuccessTask(task -> {
+            System.arraycopy(task.getResult(), 2, dataSettings, 0, dataSettings.length);
+            return Task.forResult(null);
+        });
     }
 
     @Override

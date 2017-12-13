@@ -277,8 +277,8 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp) {
             final byte highFirst = (byte) ((data[0] & 0x1c) >> 2);
             final LowHighResponse castedData = new LowHighResponse(
-                    (data[0] & 0x2) == 0x2,
                     (data[0] & 0x1) == 0x1,
+                    (data[0] & 0x2) == 0x2,
                     highG(CartesianAxis.X, highFirst),
                     highG(CartesianAxis.Y, highFirst),
                     highG(CartesianAxis.Z, highFirst),

@@ -25,12 +25,18 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.IBeacon;
+import com.mbientlab.metawear.module.IBeacon.Configuration;
 import com.mbientlab.metawear.module.Switch;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.UUID;
+
+import bolts.Task;
+
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 10/18/16.
@@ -64,5 +70,28 @@ public class TestIBeacon extends UnitTestBase {
 
 
         assertArrayEquals(expected, junitPlatform.getCommands());
+    }
+
+    @Test
+    public void readConfig() throws InterruptedException {
+        junitPlatform.addCustomResponse(new byte[] {0x07, (byte) 0x82},
+                new byte[] {0x07, (byte) 0x82, 0x5a, (byte) 0xe7, (byte) 0xba, (byte) 0xfb, 0x4c, 0x46, (byte) 0xdd, (byte) 0xd9, (byte) 0x95, (byte) 0x91, (byte) 0xcb, (byte) 0x85, 0x00, (byte) 0x90, 0x6a, 0x32});
+        junitPlatform.addCustomResponse(new byte[] {0x07, (byte) 0x83},
+                new byte[] {0x07, (byte) 0x83, 0x45, 0x0c});
+        junitPlatform.addCustomResponse(new byte[] {0x07, (byte) 0x84},
+                new byte[] {0x07, (byte) 0x84, (byte) 0x81, (byte) 0xe7});
+        junitPlatform.addCustomResponse(new byte[] {0x07, (byte) 0x85},
+                new byte[] {0x07, (byte) 0x85, (byte) 0xc9});
+        junitPlatform.addCustomResponse(new byte[] {0x07, (byte) 0x86},
+                new byte[] {0x07, (byte) 0x86, 0x00});
+        junitPlatform.addCustomResponse(new byte[] {0x07, (byte) 0x87},
+                new byte[] {0x07, (byte) 0x87, 0x64, 0x00});
+
+        Task<Configuration> task = ibeacon.readConfigAsync();
+        task.waitForCompletion();
+
+        final Configuration expected = new Configuration(UUID.fromString("326a9000-85cb-9195-d9dd-464cfbbae75a"),
+                (short) 3141, (short) 59265, (short)100, (byte) -55, (byte)0);
+        assertEquals(expected, task.getResult());
     }
 }

@@ -25,16 +25,17 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.DataToken;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.IBeacon;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.UUID;
 
+import bolts.Capture;
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.IBEACON;
-import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/18/16.
@@ -44,8 +45,7 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
         RX = 0x5, TX = 0x6, PERIOD = 0x7;
     private static final long serialVersionUID = 5027360264544753193L;
 
-    private transient Configuration readConfig;
-    private transient AsyncTaskManager<Configuration> readConfigTasks;
+    private transient TimedTask<byte[]> readConfigTask;
 
     IBeaconImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -53,37 +53,11 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
 
     @Override
     protected void init() {
-        readConfigTasks = new AsyncTaskManager<>(mwPrivate, "Reading IBeacon configuration timed out");
+        readConfigTask = new TimedTask<>();
 
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(AD_UUID)), response -> {
-            readConfig = new Configuration();
-            readConfig.uuid = new UUID(ByteBuffer.wrap(response, 10, 8).order(ByteOrder.LITTLE_ENDIAN).getLong(),
-                    ByteBuffer.wrap(response, 2, 8).order(ByteOrder.LITTLE_ENDIAN).getLong());
-            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MAJOR)});
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MAJOR)), response -> {
-            readConfig.major = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MINOR)});
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(MINOR)), response -> {
-            readConfig.minor = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(RX)});
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(RX)), response -> {
-            readConfig.rxPower = response[2];
-            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(TX)});
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(TX)), response -> {
-            readConfig.txPower = response[2];
-            IBeaconImpl.this.mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(PERIOD)});
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(PERIOD)), response -> {
-            readConfigTasks.cancelTimeout();
-
-            readConfig.period = ByteBuffer.wrap(response, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
-            readConfigTasks.setResult(readConfig);
-            readConfig = null;
-        });
+        for(byte id: new byte[] {AD_UUID, MAJOR, MINOR, RX, TX, PERIOD}) {
+            this.mwPrivate.addResponseHandler(new Pair<>(IBEACON.id, Util.setRead(id)), response -> readConfigTask.setResult(response));
+        }
     }
 
     @Override
@@ -203,6 +177,36 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
 
     @Override
     public Task<Configuration> readConfigAsync() {
-        return readConfigTasks.queueTask(7 * RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(AD_UUID)}));
+        final Capture<UUID> ad = new Capture<>();
+        final Capture<Short> major = new Capture<>(), minor = new Capture<>();
+        final Capture<Byte> rxPower = new Capture<>(), txPower = new Capture<>();
+
+        return readConfigTask.execute("Did not receive ibeacon ad UUID within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(AD_UUID)})
+        ).onSuccessTask(task -> {
+            ad.set(new UUID(ByteBuffer.wrap(task.getResult(), 10, 8).order(ByteOrder.LITTLE_ENDIAN).getLong(),
+                    ByteBuffer.wrap(task.getResult(), 2, 8).order(ByteOrder.LITTLE_ENDIAN).getLong()));
+            return readConfigTask.execute("Did not receive iBeacon major value within %dms",  Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MAJOR)}));
+        }).onSuccessTask(task -> {
+            major.set(ByteBuffer.wrap(task.getResult(), 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
+            return readConfigTask.execute("Did not receive iBeacon minor value within %dms",  Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(MINOR)}));
+        }).onSuccessTask(task -> {
+            minor.set(ByteBuffer.wrap(task.getResult(), 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
+            return readConfigTask.execute("Did not receive iBeacon rx value within %dms",  Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(RX)}));
+        }).onSuccessTask(task -> {
+            rxPower.set(task.getResult()[2]);
+            return readConfigTask.execute("Did not receive iBeacon tx value within %dms",  Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(TX)}));
+        }).onSuccessTask(task -> {
+            txPower.set(task.getResult()[2]);
+            return readConfigTask.execute("Did not receive iBeacon period value within %dms",  Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(new byte[] {IBEACON.id, Util.setRead(PERIOD)}));
+        }).onSuccessTask(task -> {
+            short period = ByteBuffer.wrap(task.getResult(), 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort();
+            return Task.forResult(new Configuration(ad.get(), major.get(), minor.get(), period, rxPower.get(), txPower.get()));
+        });
     }
 }

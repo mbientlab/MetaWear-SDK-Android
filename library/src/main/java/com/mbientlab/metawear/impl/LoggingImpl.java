@@ -24,7 +24,9 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.TaskTimeoutException;
 import com.mbientlab.metawear.impl.DataProcessorImpl.ProcessorEntry;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Logging;
 
@@ -44,16 +46,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.TreeSet;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import bolts.Capture;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 import static com.mbientlab.metawear.impl.Constant.Module.LOGGING;
-import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/4/16.
@@ -176,16 +176,9 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     private transient LogDownloadUpdateHandler updateHandler;
     private transient LogDownloadErrorHandler errorHandler;
 
-    private transient HashMap<DataTypeBase, Byte> nRemainingLoggers;
-    private transient byte nReqLogIds, queryLogId;
-    private transient ScheduledFuture<?> timeoutFuture, queryLogFuture;
-    private transient DataLogger nextLogger;
-    private transient Queue<DataTypeBase> pendingProducers;
-    private transient Queue<DataLogger> successfulLoggers;
-    private transient TaskCompletionSource<Queue<DataLogger>> createLoggerTask;
-    private transient AtomicReference<TaskCompletionSource<Void>> downloadTask, queryTimeTask;
-    private transient Runnable taskTimeout, queryLoggerTimeout;
-    private transient TaskCompletionSource<Collection<DataLogger>> queryLoggerTask;
+    private transient AtomicReference<TaskCompletionSource<Void>> downloadTask;
+    private transient TimedTask<byte[]> createLoggerTask, syncLoggerConfigTask;
+    private transient TimedTask<Void> queryTimeTask;
 
     LoggingImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -273,132 +266,16 @@ class LoggingImpl extends ModuleImplBase implements Logging {
 
     @Override
     protected void init() {
-        queryTimeTask = new AtomicReference<>();
+        createLoggerTask = new TimedTask<>();
+        syncLoggerConfigTask = new TimedTask<>();
+
         downloadTask = new AtomicReference<>();
         if (rollbackTimestamps == null) {
             rollbackTimestamps = new HashMap<>();
         }
 
-        queryLoggerTimeout = () -> queryLoggerTask.setError(new TimeoutException("Querying log configuration timed out (id = " + queryLogId + ")"));
-        taskTimeout = () -> {
-            while(!successfulLoggers.isEmpty()) {
-                successfulLoggers.poll().remove(LoggingImpl.this.mwPrivate);
-            }
-            nextLogger.remove(LoggingImpl.this.mwPrivate);
-            pendingProducers= null;
-            createLoggerTask.setError(new TimeoutException("Creating logger timed out"));
-        };
-
-        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(TRIGGER)), response -> {
-            queryLogFuture.cancel(false);
-
-            Task<Void> task;
-            if (response.length > 2) {
-                final byte offset = (byte) (response[5] & 0x1f), length = (byte) (((response[5] >> 5) & 0x3) + 1);
-                final DataProcessorImpl dataprocessor = (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class);
-
-                Task<DataTypeBase> taskInner;
-                if (response[2] == DATA_PROCESSOR.id && (response[3] == DataProcessorImpl.NOTIFY || Util.clearRead(response[3]) == DataProcessorImpl.STATE)) {
-                    taskInner = dataprocessor.pullChainAsync(response[4]).onSuccessTask(task13 -> {
-                        Deque<ProcessorEntry> result = task13.getResult();
-                        ProcessorEntry first = result.peek();
-                        DataTypeBase type = guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(first.source[0], first.source[1], first.source[2]),
-                                first.offset, first.length);
-
-                        while(!result.isEmpty()) {
-                            ProcessorEntry current = result.poll();
-                            Pair<? extends DataTypeBase, ? extends DataTypeBase> next =
-                                    type.dataProcessorTransform(DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), current.config));
-
-                            next.first.eventConfig[2] = current.id;
-                            if (next.second != null) {
-                                next.second.eventConfig[2] = current.id;
-                            }
-                            dataprocessor.addProcessor(current.id, next.second, type, current.config);
-                            type = next.first;
-                        }
-                        return Task.forResult(type);
-                    });
-                } else {
-                    taskInner = Task.forResult(guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(response[2], response[3], response[4]), offset, length));
-                }
-                task = taskInner.onSuccessTask(task12 -> {
-                    DataTypeBase dataTypeBase = task12.getResult();
-
-                    if (response[2] == DATA_PROCESSOR.id && Util.clearRead(response[3]) == DataProcessorImpl.STATE) {
-                        dataTypeBase = dataprocessor.lookupProcessor(response[4]).state;
-                    }
-
-                    if (!nRemainingLoggers.containsKey(dataTypeBase) && dataTypeBase.attributes.length() > LOG_ENTRY_SIZE) {
-                        nRemainingLoggers.put(dataTypeBase, (byte) Math.ceil((float) (dataTypeBase.attributes.length() / LOG_ENTRY_SIZE)));
-                    }
-
-                    DataLogger logger = null;
-                    for(DataLogger it: dataLoggers.values()) {
-                        if (Arrays.equals(it.source.eventConfig, dataTypeBase.eventConfig) && it.source.attributes.equals(dataTypeBase.attributes)) {
-                            logger = it;
-                            break;
-                        }
-                    }
-
-                    if (logger == null || (offset != 0 && !nRemainingLoggers.containsKey(dataTypeBase))) {
-                        logger = new DataLogger(dataTypeBase);
-                    }
-                    logger.addId(queryLogId);
-                    dataLoggers.put(queryLogId, logger);
-
-                    if (nRemainingLoggers.containsKey(dataTypeBase)) {
-                        byte remaining = (byte) (nRemainingLoggers.get(dataTypeBase) - 1);
-                        nRemainingLoggers.put(dataTypeBase, remaining);
-                        if (remaining < 0) {
-                            nRemainingLoggers.remove(dataTypeBase);
-                        }
-                    }
-                    return Task.forResult(null);
-                });
-            } else {
-                task = Task.forResult(null);
-            }
-
-            task.continueWith(task1 -> {
-                if (task1.isFaulted()) {
-                    queryLoggerTask.setError(task1.getError());
-                    queryLoggerTask = null;
-                } else if (task1.isCancelled()) {
-                    queryLoggerTask.setCancelled();
-                    queryLoggerTask = null;
-                } else {
-                    queryLogId++;
-                    if (queryLogId < mwPrivate.lookupModuleInfo(LOGGING).extra[0]) {
-                        mwPrivate.sendCommand(new byte[]{0x0b, Util.setRead(TRIGGER), queryLogId});
-                        queryLogFuture = mwPrivate.scheduleTask(queryLoggerTimeout, RESPONSE_TIMEOUT);
-                    } else {
-                        ArrayList<DataLogger> orderedLoggers = new ArrayList<>();
-                        for(Byte it: new TreeSet<>(dataLoggers.keySet())) {
-                            if (!orderedLoggers.contains(dataLoggers.get(it))) {
-                                orderedLoggers.add(dataLoggers.get(it));
-                            }
-                        }
-
-                        queryLoggerTask.setResult(orderedLoggers);
-                        queryLoggerTask = null;
-                    }
-                }
-
-                return null;
-            });
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, TRIGGER), response -> {
-            nReqLogIds--;
-            nextLogger.addId(response[2]);
-
-            if (nReqLogIds == 0) {
-                nextLogger.register(dataLoggers);
-                successfulLoggers.add(nextLogger);
-                timeoutFuture.cancel(false);
-                createLogger();
-            }
-        });
+        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(TRIGGER)), response -> syncLoggerConfigTask.setResult(response));
+        this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, TRIGGER), response -> createLoggerTask.setResult(response));
         this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, READOUT_NOTIFY), response -> {
             processLogData(Arrays.copyOfRange(response, 2, 11));
 
@@ -432,9 +309,9 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                 }
             }
 
-            TaskCompletionSource<Void> task = queryTimeTask.getAndSet(null);
-            if (task != null) {
-                task.setResult(null);
+            if (queryTimeTask != null) {
+                queryTimeTask.setResult(null);
+                queryTimeTask = null;
             }
         });
         this.mwPrivate.addResponseHandler(new Pair<>(LOGGING.id, Util.setRead(LENGTH)), response -> {
@@ -523,49 +400,67 @@ class LoggingImpl extends ModuleImplBase implements Logging {
     }
 
     Task<Void> queryTime() {
-        TaskCompletionSource<Void> taskSource = queryTimeTask.getAndSet(null);
-        if (taskSource != null) {
-            return taskSource.getTask();
-        }
-
-        taskSource = new TaskCompletionSource<>();
-        queryTimeTask.set(taskSource);
-        mwPrivate.sendCommand(new byte[] { Constant.Module.LOGGING.id, Util.setRead(LoggingImpl.TIME) });
-        return taskSource.getTask();
+        queryTimeTask = new TimedTask<>();
+        return queryTimeTask.execute("Did not receive log reference response within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] { Constant.Module.LOGGING.id, Util.setRead(LoggingImpl.TIME) }));
     }
 
     Task<Queue<DataLogger>> queueLoggers(Queue<DataTypeBase> producers) {
-        pendingProducers= producers;
-        createLoggerTask= new TaskCompletionSource<>();
-        successfulLoggers= new LinkedList<>();
-        createLogger();
-        return createLoggerTask.getTask();
-    }
+        final Queue<DataLogger> loggers = new LinkedList<>();
+        final Capture<Boolean> terminate = new Capture<>(false);
 
-    private void createLogger() {
-        if (!pendingProducers.isEmpty()) {
-            nextLogger = new DataLogger(pendingProducers.poll());
-            final byte[] eventConfig= nextLogger.source.eventConfig;
+        return Task.forResult(null).continueWhile(() -> !terminate.get() && !producers.isEmpty(), ignored -> {
+            final DataLogger next = new DataLogger(producers.poll());
+            final byte[] eventConfig= next.source.eventConfig;
 
-            nReqLogIds= (byte) ((nextLogger.source.attributes.length() - 1) / LOG_ENTRY_SIZE + 1);
-            int remainder= nextLogger.source.attributes.length();
+            final byte nReqLogIds= (byte) ((next.source.attributes.length() - 1) / LOG_ENTRY_SIZE + 1);
+            final Capture<Byte> remainder= new Capture<>(next.source.attributes.length());
+            final Capture<Byte> i = new Capture<>((byte) 0);
 
-            for(byte i= 0; i < nReqLogIds; i++, remainder-= LOG_ENTRY_SIZE) {
-                final int entrySize= Math.min(remainder, LOG_ENTRY_SIZE), entryOffset= LOG_ENTRY_SIZE * i + nextLogger.source.attributes.offset;
+            return Task.forResult(null).continueWhile(() -> !terminate.get() && i.get() < nReqLogIds, ignored2 -> {
+                final int entrySize= Math.min(remainder.get(), LOG_ENTRY_SIZE), entryOffset= LOG_ENTRY_SIZE * i.get() + next.source.attributes.offset;
 
-                byte[] command= new byte[6];
+                final byte[] command= new byte[6];
                 command[0]= LOGGING.id;
                 command[1]= TRIGGER;
                 System.arraycopy(eventConfig, 0, command, 2, eventConfig.length);
                 command[5]= (byte) (((entrySize - 1) << 5) | entryOffset);
 
-                mwPrivate.sendCommand(command);
+                return createLoggerTask.execute("Did not receive log id within %dms", Constant.RESPONSE_TIMEOUT,
+                        () -> mwPrivate.sendCommand(command)
+                ).continueWithTask(task -> {
+                    if (task.isFaulted()) {
+                        terminate.set(true);
+                        return Task.<Void>forError(new TaskTimeoutException(task.getError(), next));
+                    }
+
+                    next.addId(task.getResult()[2]);
+                    i.set((byte) (i.get() + 1));
+                    remainder.set((byte) (remainder.get() - LOG_ENTRY_SIZE));
+
+                    return Task.forResult(null);
+                });
+            }).onSuccessTask(ignored2 -> {
+                loggers.add(next);
+                next.register(dataLoggers);
+                return Task.forResult(null);
+            });
+        }).continueWithTask(task -> {
+            if (task.isFaulted()) {
+                boolean taskTimeout = task.getError() instanceof TaskTimeoutException;
+                if (taskTimeout) {
+                    loggers.add((DataLogger) ((TaskTimeoutException) task.getError()).partial);
+                }
+                while(!loggers.isEmpty()) {
+                    loggers.poll().remove(LoggingImpl.this.mwPrivate);
+                }
+                return Task.forError(taskTimeout ? (Exception) task.getError().getCause() : task.getError());
             }
-            timeoutFuture= mwPrivate.scheduleTask(taskTimeout, nReqLogIds * RESPONSE_TIMEOUT);
-        } else {
-            createLoggerTask.setResult(successfulLoggers);
-        }
+
+            return Task.forResult(loggers);
+        });
     }
+
 
     private void processLogData(byte[] logEntry) {
         final byte logId= (byte) (logEntry[0] & 0x1f), resetUid = (byte) (((logEntry[0] & ~0x1f) >> 5) & 0x7);
@@ -608,17 +503,100 @@ class LoggingImpl extends ModuleImplBase implements Logging {
         return timestamp;
     }
 
-    Task<Collection<DataLogger>> queryActiveLoggersAsync() {
-        if (queryLoggerTask != null) {
-            return queryLoggerTask.getTask();
-        }
+    private Task<Collection<DataLogger>> queryActiveLoggersInnerAsync(final byte id) {
+        final Map<DataTypeBase, Byte> nRemainingLoggers = new HashMap<>();
+        final Capture<Byte> offset = new Capture<>();
+        final Capture<byte[]> response = new Capture<>();
+        final DataProcessorImpl dataprocessor = (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class);
 
-        queryLoggerTask = new TaskCompletionSource<>();
+        return syncLoggerConfigTask.execute("Did not receive logger config for id=" + id + " within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {0x0b, Util.setRead(TRIGGER), id})
+        ).onSuccessTask(task -> {
+            response.set(task.getResult());
+            if (response.get().length > 2) {
+                offset.set((byte) (response.get()[5] & 0x1f));
+                byte length = (byte) (((response.get()[5] >> 5) & 0x3) + 1);
+
+                if (response.get()[2] == DATA_PROCESSOR.id && (response.get()[3] == DataProcessorImpl.NOTIFY || Util.clearRead(response.get()[3]) == DataProcessorImpl.STATE)) {
+                    return dataprocessor.pullChainAsync(response.get()[4]).onSuccessTask(task13 -> {
+                        Deque<ProcessorEntry> result = task13.getResult();
+                        ProcessorEntry first = result.peek();
+                        DataTypeBase type = guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(first.source[0], first.source[1], first.source[2]),
+                                first.offset, first.length);
+
+                        byte revision = mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision;
+                        while(!result.isEmpty()) {
+                            ProcessorEntry current = result.poll();
+                            Pair<? extends DataTypeBase, ? extends DataTypeBase> next =
+                                    type.dataProcessorTransform(DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), revision, current.config));
+
+                            next.first.eventConfig[2] = current.id;
+                            if (next.second != null) {
+                                next.second.eventConfig[2] = current.id;
+                            }
+                            dataprocessor.addProcessor(current.id, next.second, type, current.config);
+                            type = next.first;
+                        }
+                        return Task.forResult(type);
+                    });
+                } else {
+                    return Task.forResult(guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(response.get()[2], response.get()[3], response.get()[4]), offset.get(), length));
+                }
+            } else {
+                return Task.cancelled();
+            }
+        }).onSuccessTask(task -> {
+            DataTypeBase dataTypeBase = task.getResult();
+
+            if (response.get()[2] == DATA_PROCESSOR.id && Util.clearRead(response.get()[3]) == DataProcessorImpl.STATE) {
+                dataTypeBase = dataprocessor.lookupProcessor(response.get()[4]).state;
+            }
+
+            if (!nRemainingLoggers.containsKey(dataTypeBase) && dataTypeBase.attributes.length() > LOG_ENTRY_SIZE) {
+                nRemainingLoggers.put(dataTypeBase, (byte) Math.ceil((float) (dataTypeBase.attributes.length() / LOG_ENTRY_SIZE)));
+            }
+
+            DataLogger logger = null;
+            for(DataLogger it: dataLoggers.values()) {
+                if (Arrays.equals(it.source.eventConfig, dataTypeBase.eventConfig) && it.source.attributes.equals(dataTypeBase.attributes)) {
+                    logger = it;
+                    break;
+                }
+            }
+
+            if (logger == null || (offset.get() != 0 && !nRemainingLoggers.containsKey(dataTypeBase))) {
+                logger = new DataLogger(dataTypeBase);
+            }
+            logger.addId(id);
+            dataLoggers.put(id, logger);
+
+            if (nRemainingLoggers.containsKey(dataTypeBase)) {
+                byte remaining = (byte) (nRemainingLoggers.get(dataTypeBase) - 1);
+                nRemainingLoggers.put(dataTypeBase, remaining);
+                if (remaining < 0) {
+                    nRemainingLoggers.remove(dataTypeBase);
+                }
+            }
+            return Task.forResult(null);
+        }).continueWithTask(task -> {
+            if (!task.isFaulted()) {
+                byte nextId = (byte) (id + 1);
+                if (nextId < mwPrivate.lookupModuleInfo(LOGGING).extra[0]) {
+                    return queryActiveLoggersInnerAsync(nextId);
+                }
+                Collection<DataLogger> orderedLoggers = new ArrayList<>();
+                for(Byte it: new TreeSet<>(dataLoggers.keySet())) {
+                    if (!orderedLoggers.contains(dataLoggers.get(it))) {
+                        orderedLoggers.add(dataLoggers.get(it));
+                    }
+                }
+                return Task.forResult(orderedLoggers);
+            }
+            return Task.forError(task.getError());
+        });
+    }
+    Task<Collection<DataLogger>> queryActiveLoggersAsync() {
         placeholder = new HashMap<>();
-        nRemainingLoggers = new HashMap<>();
-        queryLogId = 0;
-        mwPrivate.sendCommand(new byte[] {0x0b, Util.setRead(TRIGGER), queryLogId});
-        queryLogFuture = mwPrivate.scheduleTask(queryLoggerTimeout, RESPONSE_TIMEOUT);
-        return queryLoggerTask.getTask();
+        return queryActiveLoggersInnerAsync((byte) 0);
     }
 }

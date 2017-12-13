@@ -35,6 +35,7 @@ import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.BarometerBmp280;
 import com.mbientlab.metawear.module.BarometerBosch;
 import com.mbientlab.metawear.module.DataProcessor;
+import com.mbientlab.metawear.module.DataProcessor.PassthroughEditor;
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
@@ -682,6 +683,32 @@ public class TestDataProcessor {
         public void checkScheme() {
             assertEquals("acceleration:rms?id=0:accumulate?id=1:time?id=2", activityRoute.generateIdentifier(0));
             assertEquals("acceleration:rms?id=0:accumulate?id=1:buffer-state?id=3", bufferStateRoute.generateIdentifier(0));
+        }
+    }
+
+    public static class TestSampleDelay extends TestBase {
+        @Test
+        public void createHistory() throws InterruptedException {
+            byte[][] expected = new byte[][] {
+                    { 0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x0a, 0x05, 0x10 },
+                    { 0x09, 0x02, 0x09, 0x03, 0x00, (byte) 0xa0, 0x01, 0x02, 0x00, 0x00 },
+                    { 0x0a, 0x02, 0x03, 0x08, (byte) 0xff, 0x09, 0x04, 0x03 },
+                    { 0x0a, 0x03, 0x01, 0x20, 0x00 }
+            };
+
+            final byte samples = 16;
+
+            AccelerometerBmi160 accelerometer = mwBoard.getModule(AccelerometerBmi160.class);
+            accelerometer.acceleration().addRouteAsync(source ->
+                    source.delay(samples).limit(Passthrough.COUNT, (short) 0).name("history")
+            ).waitForCompletion();
+
+            final DataProcessor dataprocessor = mwBoard.getModule(DataProcessor.class);
+            accelerometer.lowHigh().addRouteAsync(source ->
+                    source.react(token -> dataprocessor.edit("history", PassthroughEditor.class).set((short) (samples * 2)))
+            ).waitForCompletion();
+
+            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 }

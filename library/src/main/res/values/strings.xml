@@ -22,6 +22,4 @@
   ~ hello@mbientlab.com.
   -->
 
-<resources>
-    <string name="app_name">MetaWear</string>
-</resources>
+<resources />

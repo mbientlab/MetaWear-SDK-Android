@@ -67,7 +67,8 @@ abstract class DataTypeBase implements Serializable, DataToken {
                 uri = GpioImpl.createUri(dataType);
                 break;
             case DATA_PROCESSOR:
-                uri = DataProcessorImpl.createUri(dataType, (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), mwPrivate.getFirmwareVersion());
+                uri = DataProcessorImpl.createUri(dataType, (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), mwPrivate.getFirmwareVersion(),
+                        mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision);
                 break;
             case SERIAL_PASSTHROUGH:
                 uri = SerialPassthroughImpl.createUri(dataType);

@@ -87,6 +87,9 @@ class JunitPlatform implements IO, BtleGatt {
     public void addCustomModuleInfo(byte[] info) {
         customModuleInfo.put(info[0], info);
     }
+    public void removeCustomModuleInfo(byte id) {
+        customModuleInfo.remove(id);
+    }
     public void addCustomResponse(byte[] command, byte[] response) {
         customResponses.put(Arrays.hashCode(command), response);
     }
@@ -297,8 +300,12 @@ class JunitPlatform implements IO, BtleGatt {
     }
 
     byte[][] getCommands() {
-        byte[][] cmdArray= new byte[commandHistory.size()][];
-        for(int i= 0; i < commandHistory.size(); i++) {
+        return getCommands(0, commandHistory.size());
+    }
+
+    byte[][] getCommands(int start, int end) {
+        byte[][] cmdArray= new byte[end - start][];
+        for(int i= start; i < end; i++) {
             cmdArray[i]= commandHistory.get(i);
         }
 

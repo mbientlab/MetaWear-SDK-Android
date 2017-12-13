@@ -14,12 +14,21 @@ public class TaskTimeoutException extends TimeoutException {
 
     /**
      * Creates an exception with the given message and partial result
-     * @param message    Message to accompany the exception
-     * @param partial    Partial result of the task
+     * @param message   Message to accompany the exception
+     * @param partial   Partial result of the task
      */
     public TaskTimeoutException(String message, Object partial) {
         super(message);
 
+        this.partial = partial;
+    }
+    /**
+     * Creates an exception with the given reason and partial result
+     * @param cause     Reason for throwing this exception
+     * @param partial   Partial result of the task
+     */
+    public TaskTimeoutException(Exception cause, Object partial) {
+        initCause(cause);
         this.partial = partial;
     }
 }

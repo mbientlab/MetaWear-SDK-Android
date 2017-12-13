@@ -29,7 +29,6 @@ import com.mbientlab.metawear.module.SerialPassthrough;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
@@ -67,14 +66,19 @@ public class TestI2C extends UnitTestBase {
     }
 
     @Test
-    public void whoAmIData() throws IOException {
+    public void whoAmIData() throws Exception {
         byte[] expected= new byte[] {0x2a};
         final Capture<byte[]> actual= new Capture<>();
 
-        setupI2cRoute().continueWith(task -> {
+        Task<Route> routeTask = setupI2cRoute().onSuccess(task -> {
             task.getResult().setEnvironment(0, actual);
             return null;
         });
+        routeTask.waitForCompletion();
+        if (routeTask.isFaulted()) {
+            throw routeTask.getError();
+        }
+
         sendMockResponse(new byte[] {0x0d, (byte) 0x81, 0x0a, 0x2a});
 
         // For TestDeserializedI2C

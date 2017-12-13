@@ -27,6 +27,7 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.DataProcessor;
 
 import java.io.Serializable;
@@ -36,26 +37,23 @@ import java.util.LinkedList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeoutException;
 
+import bolts.Capture;
 import bolts.Task;
-import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
-import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/5/16.
  */
 class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
-    static String createUri(DataTypeBase dataType, DataProcessorImpl dataprocessor, Version firmware) {
+    static String createUri(DataTypeBase dataType, DataProcessorImpl dataprocessor, Version firmware, byte revision) {
         byte register = Util.clearRead(dataType.eventConfig[1]);
         switch (register) {
             case NOTIFY:
             case STATE:
                 Processor processor = dataprocessor.lookupProcessor(dataType.eventConfig[2]);
-                DataProcessorConfig config = DataProcessorConfig.from(firmware, processor.editor.config);
+                DataProcessorConfig config = DataProcessorConfig.from(firmware, revision, processor.editor.config);
 
                 return config.createUri(register == STATE, dataType.eventConfig[2]);
             default:
@@ -64,7 +62,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     }
 
     private static final long serialVersionUID = -7439066046235167486L;
-    static final byte TIME_PASSTHROUGH_REVISION = 1, ENHANCED_STREAMING_REVISION = 2, HPF_REVISION = 2;
+    static final byte TIME_PASSTHROUGH_REVISION = 1, ENHANCED_STREAMING_REVISION = 2, HPF_REVISION = 2, EXPANDED_DELAY = 2;
     static final byte TYPE_ACCOUNTER = 0x11, TYPE_PACKER = 0x10;
 
     static abstract class EditorImplBase implements Editor, Serializable {
@@ -122,14 +120,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     private final Map<Byte, Processor> activeProcessors= new HashMap<>();
     private final Map<String, Byte> nameToIdMapping = new HashMap<>();
 
-    private transient Queue<Processor> pendingDataProcessors;
-    private transient Queue<Byte> successfulProcessors;
-    private transient TaskCompletionSource<Queue<Byte>> createProcessorsTask;
-    private transient ScheduledFuture<?> timeoutFuture;
-    private transient Runnable taskTimeout;
-    private transient Deque<ProcessorEntry> pullChainResult;
-    private transient AsyncTaskManager<Deque<ProcessorEntry>> pullProcessorConfigTask;
-    private transient byte readId;
+    private transient TimedTask<byte[]> pullProcessorConfigTask, createProcessorTask;
 
     DataProcessorImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -145,52 +136,11 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     }
 
     protected void init() {
-        pullProcessorConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading data processor config timed out");
-        taskTimeout = () -> {
-            pendingDataProcessors= null;
-            for(byte it: successfulProcessors) {
-                removeProcessor(true, it);
-            }
-            createProcessorsTask.setError(new TimeoutException("Creating data processor timed out"));
-        };
+        pullProcessorConfigTask = new TimedTask<>();
+        createProcessorTask = new TimedTask<>();
 
-        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, Util.setRead(ADD)), response -> {
-            pullProcessorConfigTask.cancelTimeout();
-
-            ProcessorEntry entry = new ProcessorEntry();
-            entry.id = readId;
-            entry.offset = (byte) (response[5] & 0x1f);
-            entry.length = (byte) (((response[5] >> 5) & 0x7) + 1);
-
-            entry.source = new byte[3];
-            System.arraycopy(response, 2, entry.source, 0, entry.source.length);
-
-            entry.config = new byte[response.length - 6];
-            System.arraycopy(response, 6, entry.config, 0, entry.config.length);
-
-            pullChainResult.push(entry);
-
-            if (response[2] == DATA_PROCESSOR.id && response[3] == NOTIFY) {
-                readId = response[4];
-                mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, Util.setRead(ADD), response[4]});
-                pullProcessorConfigTask.restartTimeout(Constant.RESPONSE_TIMEOUT);
-            } else {
-                pullProcessorConfigTask.setResult(pullChainResult);
-            }
-        });
-        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, ADD), response -> {
-            timeoutFuture.cancel(false);
-
-            Processor current = pendingDataProcessors.poll();
-            current.editor.source.eventConfig[2]= response[2];
-            if (current.state != null) {
-                current.state.eventConfig[2] = response[2];
-            }
-            activeProcessors.put(response[2], current);
-            successfulProcessors.add(response[2]);
-
-            createProcessor();
-        });
+        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, Util.setRead(ADD)), response -> pullProcessorConfigTask.setResult(response));
+        this.mwPrivate.addResponseHandler(new Pair<>(DATA_PROCESSOR.id, ADD), response -> createProcessorTask.setResult(response));
     }
 
     void removeProcessor(boolean sync, byte id) {
@@ -208,16 +158,11 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     }
 
     Task<Queue<Byte>> queueDataProcessors(Queue<Processor> pendingProcessors) {
-        successfulProcessors = new LinkedList<>();
-        this.pendingDataProcessors= pendingProcessors;
-        createProcessorsTask= new TaskCompletionSource<>();
-        createProcessor();
-        return createProcessorsTask.getTask();
-    }
+        final Queue<Byte> ids = new LinkedList<>();
+        final Capture<Boolean> terminate = new Capture<>(false);
 
-    private void createProcessor() {
-        if (!pendingDataProcessors.isEmpty()) {
-            Processor current= pendingDataProcessors.peek();
+        return Task.forResult(null).continueWhile(() -> !terminate.get() && !pendingProcessors.isEmpty(), ignored -> {
+            final Processor current= pendingProcessors.poll();
             DataTypeBase input= current.editor.source.input;
 
             final byte[] filterConfig= new byte[input.eventConfig.length + 1 + current.editor.config.length];
@@ -225,11 +170,32 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             System.arraycopy(input.eventConfig, 0, filterConfig, 0, input.eventConfig.length);
             System.arraycopy(current.editor.config, 0, filterConfig, input.eventConfig.length + 1, current.editor.config.length);
 
-            mwPrivate.sendCommand(DATA_PROCESSOR, ADD, filterConfig);
-            timeoutFuture= mwPrivate.scheduleTask(taskTimeout, RESPONSE_TIMEOUT);
-        } else {
-            createProcessorsTask.setResult(successfulProcessors);
-        }
+            return createProcessorTask.execute("Did not receive data processor id within %dms", Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(DATA_PROCESSOR, ADD, filterConfig)
+            ).continueWithTask(task -> {
+                if (task.isFaulted()) {
+                    terminate.set(true);
+                    return Task.<Void>forError(task.getError());
+                }
+                byte id = task.getResult()[2];
+                current.editor.source.eventConfig[2]= id;
+                if (current.state != null) {
+                    current.state.eventConfig[2] = id;
+                }
+                activeProcessors.put(id, current);
+                ids.add(id);
+
+                return Task.forResult(null);
+            });
+        }).continueWithTask(task -> {
+            if (task.isFaulted()) {
+                for(byte it: ids) {
+                    removeProcessor(true, it);
+                }
+                return Task.forError(task.getError());
+            }
+            return Task.forResult(ids);
+        });
     }
 
     @Override
@@ -282,11 +248,39 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         activeProcessors.put(id, new Processor(state, new NullEditor(config, source, mwPrivate)));
     }
 
-    Task<Deque<ProcessorEntry>> pullChainAsync(final byte id) {
-        return pullProcessorConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> {
-            pullChainResult = new LinkedList<>();
-            readId = id;
-            mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, Util.setRead(ADD), id});
-        });
+    Task<Deque<ProcessorEntry>> pullChainAsync(byte id) {
+        final Capture<Boolean> terminate = new Capture<>(false);
+        final Deque<ProcessorEntry> result = new LinkedList<>();
+        final Capture<Byte> nextId = new Capture<>(id);
+
+        return Task.forResult(null).continueWhile(() -> !terminate.get(), ignored ->
+            pullProcessorConfigTask.execute("Did not received data processor config within %dms", Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, Util.setRead(ADD), nextId.get()})
+        ).continueWithTask(task -> {
+            if (task.isFaulted()) {
+                terminate.set(true);
+                return Task.<Void>forError(task.getError());
+            }
+
+            byte[] response = task.getResult();
+
+            ProcessorEntry entry = new ProcessorEntry();
+            entry.id = nextId.get();
+            entry.offset = (byte) (response[5] & 0x1f);
+            entry.length = (byte) (((response[5] >> 5) & 0x7) + 1);
+
+            entry.source = new byte[3];
+            System.arraycopy(response, 2, entry.source, 0, entry.source.length);
+
+            entry.config = new byte[response.length - 6];
+            System.arraycopy(response, 6, entry.config, 0, entry.config.length);
+
+            result.push(entry);
+
+            nextId.set(response[4]);
+            terminate.set(!(response[2] == DATA_PROCESSOR.id && response[3] == NOTIFY));
+
+            return Task.forResult(null);
+        })).onSuccessTask(ignored -> Task.forResult(result));
     }
 }

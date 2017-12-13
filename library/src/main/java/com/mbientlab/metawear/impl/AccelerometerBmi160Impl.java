@@ -27,6 +27,7 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
 import java.util.Arrays;
@@ -40,7 +41,7 @@ import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
  */
 class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements AccelerometerBmi160 {
     static String createUri(DataTypeBase dataType) {
-        switch (dataType.eventConfig[1]) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
             case STEP_DETECTOR_INTERRUPT:
                 return "step-detector";
             case STEP_COUNTER_DATA:
@@ -65,7 +66,7 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
     private transient AsyncDataProducer lowhigh, noMotion, slowMotion, anyMotion, significantMotion;
     private transient StepDetectorDataProducer stepDetector;
     private transient StepCounterDataProducer stepCounter;
-    private transient AsyncTaskManager<Void> pullConfigTask;
+    private transient TimedTask<byte[]> pullConfigTask;
 
     AccelerometerBmi160Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -78,13 +79,8 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
 
     @Override
     protected void init() {
-        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
-
-        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), response -> {
-            pullConfigTask.cancelTimeout();
-            System.arraycopy(response, 2, accDataConfig, 0, accDataConfig.length);
-            pullConfigTask.setResult(null);
-        });
+        pullConfigTask = new TimedTask<>();
+        mwPrivate.addResponseHandler(new Pair<>(ACCELEROMETER.id, Util.setRead(DATA_CONFIG)), response -> pullConfigTask.setResult(response));
     }
 
     @Override
@@ -107,6 +103,7 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
         return new AccelerometerBmi160.ConfigEditor() {
             private OutputDataRate odr= OutputDataRate.ODR_100_HZ;
             private AccRange ar= AccRange.AR_2G;
+            private FilterMode mode = FilterMode.NORMAL;
 
             @Override
             public AccelerometerBmi160.ConfigEditor odr(OutputDataRate odr) {
@@ -117,6 +114,12 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
             @Override
             public AccelerometerBmi160.ConfigEditor range(AccRange ar) {
                 this.ar= ar;
+                return this;
+            }
+
+            @Override
+            public AccelerometerBmi160.ConfigEditor filter(FilterMode mode) {
+                this.mode = mode;
                 return this;
             }
 
@@ -139,7 +142,7 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
                 if (odr.frequency < 12.5f) {
                     accDataConfig[0]|= 0x80;
                 } else {
-                    accDataConfig[0]|= 0x20;
+                    accDataConfig[0]|= (mode.ordinal() << 4);
                 }
 
                 accDataConfig[1]&= 0xf0;
@@ -162,7 +165,12 @@ class AccelerometerBmi160Impl extends AccelerometerBoschImpl implements Accelero
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)}));
+        return pullConfigTask.execute("Did not receive BMI160 acc config within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)})
+        ).onSuccessTask(task -> {
+            System.arraycopy(task.getResult(), 2, accDataConfig, 0, accDataConfig.length);
+            return Task.forResult(null);
+        });
     }
 
     private class StepConfigEditorInner implements StepConfigEditor {

@@ -29,6 +29,7 @@ import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.data.AngularVelocity;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.GyroBmi160;
 
 import java.nio.ByteBuffer;
@@ -147,7 +148,7 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
     ///< ACC_CONF, ACC_RANGE
     private final byte[] gyrDataConfig= new byte[] {(byte) (0x20 | OutputDataRate.ODR_100_HZ.bitmask), Range.FSR_2000.bitmask};
     private transient AsyncDataProducer rotationalSpeed, packedRotationalSpeed;
-    private transient AsyncTaskManager<Void> pullConfigTask;
+    private transient TimedTask<byte[]> pullConfigTask;
 
     GyroBmi160Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -162,13 +163,9 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
 
     @Override
     protected void init() {
-        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading accelerometer config timed out");
+        pullConfigTask = new TimedTask<>();
 
-        mwPrivate.addResponseHandler(new Pair<>(GYRO.id, Util.setRead(CONFIG)), response -> {
-            pullConfigTask.cancelTimeout();
-            System.arraycopy(response, 2, gyrDataConfig, 0, gyrDataConfig.length);
-            pullConfigTask.setResult(null);
-        });
+        mwPrivate.addResponseHandler(new Pair<>(GYRO.id, Util.setRead(CONFIG)), response -> pullConfigTask.setResult(response));
     }
 
     private float getGyrDataScale() {
@@ -180,6 +177,7 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
         return new ConfigEditor() {
             private Range newRange= null;
             private OutputDataRate newOdr= null;
+            private FilterMode mode = null;
 
             @Override
             public ConfigEditor range(Range range) {
@@ -190,6 +188,12 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
             @Override
             public ConfigEditor odr(OutputDataRate odr) {
                 newOdr= odr;
+                return this;
+            }
+
+            @Override
+            public ConfigEditor filter(FilterMode mode) {
+                this.mode = mode;
                 return this;
             }
 
@@ -205,6 +209,11 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
                     gyrDataConfig[0] |= newOdr.bitmask;
                 }
 
+                if (mode != null) {
+                    gyrDataConfig[0] &= 0xcf;
+                    gyrDataConfig[0] |= (mode.ordinal() << 4);
+                }
+
                 mwPrivate.sendCommand(GYRO, CONFIG, gyrDataConfig);
             }
         };
@@ -212,7 +221,12 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {GYRO.id, Util.setRead(CONFIG)}));
+        return pullConfigTask.execute("Did not receive gyro config within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {GYRO.id, Util.setRead(CONFIG)})
+        ).onSuccessTask(task -> {
+            System.arraycopy(task.getResult(), 2, gyrDataConfig, 0, gyrDataConfig.length);
+            return Task.forResult(null);
+        });
     }
 
     @Override

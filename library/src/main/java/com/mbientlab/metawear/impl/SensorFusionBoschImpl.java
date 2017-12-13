@@ -31,7 +31,9 @@ import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.EulerAngles;
 import com.mbientlab.metawear.data.Quaternion;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
@@ -377,7 +379,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     private Mode mode;
     private byte dataEnableMask;
 
-    private transient AsyncTaskManager<Void> pullConfigTask;
+    private transient TimedTask<byte[]> pullConfigTask;
 
     SensorFusionBoschImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -393,13 +395,9 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     @Override
     protected void init() {
-        pullConfigTask = new AsyncTaskManager<>(mwPrivate, "Reading sensor fusion config timed out");
+        pullConfigTask = new TimedTask<>();
 
-        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MODE)), response -> {
-            pullConfigTask.cancelTimeout();
-            mode = Mode.values()[response[2]];
-            pullConfigTask.setResult(null);
-        });
+        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MODE)), response -> pullConfigTask.setResult(response));
     }
 
     @Override
@@ -408,6 +406,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             private Mode newMode = Mode.SLEEP;
             private AccRange newAccRange = AccRange.AR_16G;
             private GyroRange newGyroRange = GyroRange.GR_2000DPS;
+            private Object[] extraAcc = null, extraGyro = null;
 
             @Override
             public ConfigEditor mode(Mode mode) {
@@ -428,6 +427,35 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
             }
 
             @Override
+            public ConfigEditor accExtra(Object... settings) {
+                extraAcc = settings;
+                return this;
+            }
+
+            @Override
+            public ConfigEditor gyroExtra(Object... settings) {
+                extraGyro = settings;
+                return this;
+            }
+
+            private void addExtraAcc(AccelerometerBmi160.ConfigEditor editor) {
+                if (extraAcc == null) return;
+                for(Object it: extraAcc) {
+                    if (it instanceof AccelerometerBmi160.FilterMode) {
+                        editor.filter((AccelerometerBmi160.FilterMode) it);
+                    }
+                }
+            }
+            private void addExtraGyro(GyroBmi160.ConfigEditor editor) {
+                if (extraGyro == null) return;
+                for(Object it: extraGyro) {
+                    if (it instanceof GyroBmi160.FilterMode) {
+                        editor.filter((GyroBmi160.FilterMode) it);
+                    }
+                }
+            }
+
+            @Override
             public void commit() {
                 SensorFusionBoschImpl.this.mode = newMode;
                 mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, MODE, (byte) newMode.ordinal(),
@@ -441,47 +469,70 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                 switch(newMode) {
                     case SLEEP:
                         break;
-                    case NDOF:
-                        acc.configure()
+                    case NDOF: {
+                        Accelerometer.ConfigEditor accEditor = acc.configure()
                                 .odr(100f)
-                                .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range)
-                                .commit();
-                        gyro.configure()
+                                .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range);
+                        if (acc instanceof AccelerometerBmi160) {
+                            addExtraAcc((AccelerometerBmi160.ConfigEditor) accEditor);
+                        }
+                        accEditor.commit();
+
+                        GyroBmi160.ConfigEditor gyroEditor = gyro.configure()
                                 .odr(GyroBmi160.OutputDataRate.ODR_100_HZ)
-                                .range(GyroBmi160.Range.values()[newGyroRange.ordinal()])
-                                .commit();
+                                .range(GyroBmi160.Range.values()[newGyroRange.ordinal()]);
+                        addExtraGyro(gyroEditor);
+                        gyroEditor.commit();
+
                         mag.configure()
                                 .outputDataRate(MagnetometerBmm150.OutputDataRate.ODR_25_HZ)
                                 .commit();
                         break;
-                    case IMU_PLUS:
-                        acc.configure()
+                    }
+                    case IMU_PLUS: {
+                        Accelerometer.ConfigEditor accEditor = acc.configure()
                                 .odr(100f)
-                                .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range)
-                                .commit();
-                        gyro.configure()
+                                .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range);
+                        if (acc instanceof AccelerometerBmi160) {
+                            addExtraAcc((AccelerometerBmi160.ConfigEditor) accEditor);
+                        }
+                        accEditor.commit();
+
+                        GyroBmi160.ConfigEditor gyroEditor = gyro.configure()
                                 .odr(GyroBmi160.OutputDataRate.ODR_100_HZ)
-                                .range(GyroBmi160.Range.values()[newGyroRange.ordinal()])
-                                .commit();
+                                .range(GyroBmi160.Range.values()[newGyroRange.ordinal()]);
+                        addExtraGyro(gyroEditor);
+                        gyroEditor.commit();
                         break;
-                    case COMPASS:
-                        acc.configure()
+                    }
+                    case COMPASS: {
+                        Accelerometer.ConfigEditor accEditor = acc.configure()
                                 .odr(25f)
-                                .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range)
-                                .commit();
+                                .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range);
+                        if (acc instanceof AccelerometerBmi160) {
+                            addExtraAcc((AccelerometerBmi160.ConfigEditor) accEditor);
+                        }
+                        accEditor.commit();
+
                         mag.configure()
                                 .outputDataRate(MagnetometerBmm150.OutputDataRate.ODR_25_HZ)
                                 .commit();
                         break;
-                    case M4G:
-                        acc.configure()
+                    }
+                    case M4G: {
+                        Accelerometer.ConfigEditor accEditor = acc.configure()
                                 .odr(50f)
-                                .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range)
-                                .commit();
+                                .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range);
+                        if (acc instanceof AccelerometerBmi160) {
+                            addExtraAcc((AccelerometerBmi160.ConfigEditor) accEditor);
+                        }
+                        accEditor.commit();
+
                         mag.configure()
                                 .outputDataRate(MagnetometerBmm150.OutputDataRate.ODR_25_HZ)
                                 .commit();
                         break;
+                    }
                 }
             }
         };
@@ -596,6 +647,11 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.queueTask(Constant.RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MODE)}));
+        return pullConfigTask.execute("Did not receive sensor fusion config within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MODE)})
+        ).onSuccessTask(task -> {
+            mode = Mode.values()[task.getResult()[2]];
+            return Task.forResult(null);
+        });
     }
 }

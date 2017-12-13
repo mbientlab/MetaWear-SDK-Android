@@ -27,12 +27,12 @@ package com.mbientlab.metawear.impl;
 import com.mbientlab.metawear.ActiveDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Switch;
 
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.SWITCH;
-import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/4/16.
@@ -52,7 +52,7 @@ class SwitchImpl extends ModuleImplBase implements Switch {
     private static final long serialVersionUID = -6054365836900403723L;
 
     private transient ActiveDataProducer state;
-    private transient AsyncTaskManager<Byte> stateTasks;
+    private transient TimedTask<Byte> stateTasks;
 
     SwitchImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -62,11 +62,8 @@ class SwitchImpl extends ModuleImplBase implements Switch {
 
     @Override
     protected void init() {
-        stateTasks = new AsyncTaskManager<>(mwPrivate, "Reading button state timed out");
-        this.mwPrivate.addResponseHandler(new Pair<>(SWITCH.id, Util.setRead(STATE)), response -> {
-            stateTasks.cancelTimeout();
-            stateTasks.setResult(response[2]);
-        });
+        stateTasks = new TimedTask<>();
+        this.mwPrivate.addResponseHandler(new Pair<>(SWITCH.id, Util.setRead(STATE)), response -> stateTasks.setResult(response[2]));
     }
 
     @Override
@@ -89,6 +86,7 @@ class SwitchImpl extends ModuleImplBase implements Switch {
 
     @Override
     public Task<Byte> readCurrentStateAsync() {
-        return stateTasks.queueTask(RESPONSE_TIMEOUT, () -> mwPrivate.sendCommand(new byte[] {SWITCH.id, Util.setRead(STATE)}));
+        return stateTasks.execute("Did not received button state within %dms",  Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {SWITCH.id, Util.setRead(STATE)}));
     }
 }

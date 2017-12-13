@@ -246,6 +246,18 @@ public interface SensorFusionBosch extends Module, Configurable<SensorFusionBosc
          * @return Calling object
          */
         ConfigEditor gyroRange(GyroRange range);
+        /**
+         * Extra configuration settings for the accelerometer
+         * @param settings Additional accelerometer settings
+         * @return Calling object
+         */
+        ConfigEditor accExtra(Object ... settings);
+        /**
+         * Extra configuration settings for the gyroscope
+         * @param settings Additional gyroscope settings
+         * @return Calling object
+         */
+        ConfigEditor gyroExtra(Object ... settings);
     }
 
     /**

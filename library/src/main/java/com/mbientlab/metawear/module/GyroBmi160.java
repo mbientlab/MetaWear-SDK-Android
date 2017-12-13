@@ -39,6 +39,11 @@ import bolts.Task;
  * @author Eric Tsai
  */
 public interface GyroBmi160 extends Module, Configurable<GyroBmi160.ConfigEditor> {
+    enum FilterMode {
+        OSR4,
+        OSR2,
+        NORMAL
+    }
     /**
      * Operating frequency of the gyro
      * @author Eric Tsai
@@ -119,6 +124,12 @@ public interface GyroBmi160 extends Module, Configurable<GyroBmi160.ConfigEditor
          * @return Calling object
          */
         ConfigEditor odr(OutputDataRate odr);
+        /**
+         * Set the filter mode
+         * @param mode New filter mode
+         * @return Calling object
+         */
+        ConfigEditor filter(FilterMode mode);
     }
     /**
      * Pulls the current gyro output data rate and data range from the sensor

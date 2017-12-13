@@ -159,7 +159,7 @@ public class TestRouteErrorHandling extends UnitTestBase {
     }
 
     @Test
-    public void actualLoggingRemoval() throws InterruptedException {
+    public void actualLoggingRemoval() throws Exception {
         byte[][] expected= {
                 {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x07, (byte) 0xa5, 0x00},
                 {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x02, 0x07},
@@ -175,14 +175,14 @@ public class TestRouteErrorHandling extends UnitTestBase {
         };
 
         junitPlatform.maxLoggers= 3;
-        Task<Route> actual = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.multicast()
+        Task<Route> routeTask = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.multicast()
                 .to()
                     .map(Function1.RMS).log(null)
                     .accumulate().log(null)
                 .to()
                     .log(null)
                 .end());
-        actual.waitForCompletion();
+        routeTask.waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
     }

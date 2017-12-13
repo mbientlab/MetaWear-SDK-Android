@@ -44,6 +44,7 @@ import com.mbientlab.metawear.impl.JseMetaWearBoard;
 import com.mbientlab.metawear.impl.platform.BtleGatt;
 import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
 import com.mbientlab.metawear.impl.platform.IO;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -60,14 +61,8 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import bolts.Capture;
 import bolts.Task;
@@ -81,37 +76,49 @@ public class BtleService extends Service {
     private static final String DOWNLOAD_DIR_NAME = "download";
     private static final String LOG_TAG = "metawear-btle";
 
-    private interface GattOp {
-        AndroidPlatform owner();
-        void execute();
-        TaskCompletionSource<byte[]> taskCompletionSource();
-    }
+    private class GattOp {
+        final String msg;
+        final AndroidPlatform owner;
+        final Runnable task;
+        final TaskCompletionSource<byte[]> taskSource;
 
-    private ScheduledFuture<?> gattTaskTimeoutFuture;
+        private GattOp(String msg, AndroidPlatform owner, Runnable task) {
+            this.msg = msg;
+            this.owner = owner;
+            this.task = task;
+            taskSource = new TaskCompletionSource<>();
+        }
+    }
+    private final TimedTask<byte[]> gattOpTask = new TimedTask<>();
     private final Queue<GattOp> pendingGattOps = new ConcurrentLinkedQueue<>();
-    private void addGattOperation(AndroidPlatform platform, GattOp task) {
-        platform.nGattOps.incrementAndGet();
-        pendingGattOps.add(task);
+    private Task<byte[]> addGattOperation(AndroidPlatform owner, String msg, Runnable task) {
+        owner.nGattOps.incrementAndGet();
+
+        GattOp newGattOp = new GattOp(msg, owner, task);
+        pendingGattOps.add(newGattOp);
         executeGattOperation(false);
+
+        return newGattOp.taskSource.getTask();
     }
     private void executeGattOperation(boolean ready) {
         if (!pendingGattOps.isEmpty() && (pendingGattOps.size() == 1 || ready)) {
-            try {
-                gattTaskTimeoutFuture = taskScheduler.schedule(() -> {
-                    GattOp task = pendingGattOps.peek();
-                    task.taskCompletionSource().setError(new TimeoutException("Gatt operation timed out"));
+            GattOp next = pendingGattOps.peek();
+            gattOpTask.execute(next.msg, 1000, next.task).continueWith(task -> {
+                if (task.isFaulted()) {
+                    next.taskSource.setError(task.getError());
+                } else if (task.isCancelled()) {
+                    next.taskSource.setCancelled();
+                } else {
+                    next.taskSource.setResult(task.getResult());
+                }
 
-                    task.owner().gattTaskCompleted();
+                pendingGattOps.poll();
+                next.owner.gattTaskCompleted();
 
-                    pendingGattOps.poll();
-                    executeGattOperation(true);
-                }, 1000L, TimeUnit.MILLISECONDS);
-
-                pendingGattOps.peek().execute();
-            } catch (Exception e) {
-                pendingGattOps.poll().taskCompletionSource().setError(e);
                 executeGattOperation(true);
-            }
+
+                return null;
+            });
         }
     }
 
@@ -125,23 +132,21 @@ public class BtleService extends Service {
                 case BluetoothProfile.STATE_CONNECTED:
                     if (status != 0) {
                         platform.closeGatt();
-                        platform.setConnectTaskError(new IllegalStateException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
+                        platform.connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onConnectionStateChange status (%s)", status)));
                     } else {
-                        gatt.discoverServices();
+                        Task.delay(1000).continueWith(ignored -> gatt.discoverServices());
                     }
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
                     platform.closeGatt();
 
-                    if (platform.connectTask.get() != null && status != 0) {
-                        platform.setConnectTaskError(new IllegalStateException(String.format(Locale.US, "Non-zero connection changed status (%s)", status)));
+                    if (!platform.connectTask.isCompleted() && status != 0) {
+                        platform.connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onConnectionStateChange status (%s)", status)));
                     } else {
-                        TaskCompletionSource<Void> dcTaskSource = platform.disconnectTask.getAndSet(null);
-
-                        if (dcTaskSource == null) {
+                        if (platform.disconnectTaskSrc == null || platform.disconnectTaskSrc.getTask().isCompleted()) {
                             platform.dcHandler.onUnexpectedDisconnect(status);
                         } else {
-                            dcTaskSource.setResult(null);
+                            platform.disconnectTaskSrc.setResult(null);
                             platform.dcHandler.onDisconnect();
                         }
                     }
@@ -154,49 +159,28 @@ public class BtleService extends Service {
             final AndroidPlatform platform = btleDevices.get(gatt.getDevice());
             if (status != 0) {
                 platform.closeGatt();
-                platform.setConnectTaskError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
+                platform.connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onServicesDiscovered status (%d)", status)));
             } else {
-                platform.cancelConnectTimeout();
-
-                TaskCompletionSource<Void> reference = platform.connectTask.getAndSet(null);
-                if (reference != null) {
-                    reference.setResult(null);
-                }
+                platform.connectTask.setResult(null);
             }
         }
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            gattTaskTimeoutFuture.cancel(false);
-
-            GattOp task = pendingGattOps.peek();
             if (status != 0) {
-                task.taskCompletionSource().setError(new IllegalStateException(String.format(Locale.US, "Non-zero characteristic read status (%d)", status)));
+                gattOpTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onCharacteristicRead status (%d)", status)));
             } else {
-                task.taskCompletionSource().setResult(characteristic.getValue());
+                gattOpTask.setResult(characteristic.getValue());
             }
-
-            task.owner().gattTaskCompleted();
-
-            pendingGattOps.poll();
-            executeGattOperation(true);
         }
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            gattTaskTimeoutFuture.cancel(false);
-
-            GattOp task = pendingGattOps.peek();
             if (status != 0) {
-                task.taskCompletionSource().setError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
+                gattOpTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onCharacteristicWrite status (%d)", status)));
             } else {
-                task.taskCompletionSource().setResult(characteristic.getValue());
+                gattOpTask.setResult(characteristic.getValue());
             }
-
-            task.owner().gattTaskCompleted();
-
-            pendingGattOps.poll();
-            executeGattOperation(true);
         }
 
         @Override
@@ -206,36 +190,20 @@ public class BtleService extends Service {
 
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            gattTaskTimeoutFuture.cancel(false);
-
-            GattOp task = pendingGattOps.peek();
             if (status != 0) {
-                task.taskCompletionSource().setError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
+                gattOpTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onDescriptorWrite status (%d)", status)));
             } else {
-                task.taskCompletionSource().setResult(null);
+                gattOpTask.setResult(null);
             }
-
-            task.owner().gattTaskCompleted();
-
-            pendingGattOps.poll();
-            executeGattOperation(true);
         }
 
         @Override
         public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
-            gattTaskTimeoutFuture.cancel(false);
-
-            GattOp task = pendingGattOps.peek();
             if (status != 0) {
-                task.taskCompletionSource().setError(new IllegalStateException(String.format(Locale.US, "Non-zero service discovery status (%d)", status)));
+                gattOpTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onReadRemoteRssi status (%d)", status)));
             } else {
-                task.taskCompletionSource().setResult(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(rssi).array());
+                gattOpTask.setResult(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(rssi).array());
             }
-
-            task.owner().gattTaskCompleted();
-
-            pendingGattOps.poll();
-            executeGattOperation(true);
         }
     };
 
@@ -243,10 +211,9 @@ public class BtleService extends Service {
         private final AtomicBoolean readyToClose = new AtomicBoolean();
         private final AtomicInteger nGattOps = new AtomicInteger();
 
-        final AtomicReference<TaskCompletionSource<Void>> connectTask = new AtomicReference<>(),
-                disconnectTask = new AtomicReference<>();
+        private final TimedTask<Void> connectTask = new TimedTask<>();
+        private TaskCompletionSource<Void> disconnectTaskSrc = null;
         BluetoothGatt androidBtGatt;
-        private final AtomicReference<ScheduledFuture<?>> connectFuture = new AtomicReference<>();
 
         private DisconnectHandler dcHandler;
         private NotificationListener notificationListener;
@@ -258,21 +225,15 @@ public class BtleService extends Service {
             board = new JseMetaWearBoard(this, this, btDevice.getAddress());
         }
 
-        void cancelConnectTimeout() {
-            ScheduledFuture<?> futureReference = connectFuture.getAndSet(null);
-            if (futureReference != null) {
-                futureReference.cancel(false);
-            }
-        }
-
         void gattTaskCompleted() {
             int count = nGattOps.decrementAndGet();
             if (count == 0 && readyToClose.get()) {
-                taskScheduler.schedule(() -> {
+                Task.delay(1000).continueWith(ignored -> {
                     if (androidBtGatt != null) {
                         androidBtGatt.disconnect();
                     }
-                }, 1000, TimeUnit.MILLISECONDS);
+                    return null;
+                });
             }
         }
 
@@ -293,15 +254,6 @@ public class BtleService extends Service {
                 androidBtGatt.close();
                 androidBtGatt = null;
             }
-        }
-
-        void setConnectTaskError(Exception e) {
-            TaskCompletionSource<Void> reference = connectTask.getAndSet(null);
-            if (reference != null) {
-                reference.setError(e);
-            }
-
-            cancelConnectTimeout();
         }
 
         @Override
@@ -382,7 +334,7 @@ public class BtleService extends Service {
                 return Task.forError(new IllegalStateException("Not connected to the BTLE gatt server"));
             }
 
-            BluetoothGattService service = androidBtGatt.getService(characteristic.serviceUuid);
+            final BluetoothGattService service = androidBtGatt.getService(characteristic.serviceUuid);
             if (service == null) {
                 return Task.forError(new IllegalStateException("Service \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
@@ -392,33 +344,15 @@ public class BtleService extends Service {
                 return Task.forError(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
-            final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
-            addGattOperation(this, new GattOp() {
-                @Override
-                public AndroidPlatform owner() {
-                    return AndroidPlatform.this;
-                }
+            return addGattOperation(this, "onCharacteristicWrite not called within %dms", () -> {
+                androidGattChar.setWriteType(type == WriteType.WITHOUT_RESPONSE ?
+                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
+                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                );
+                androidGattChar.setValue(value);
 
-                @Override
-                public void execute() {
-                    BluetoothGattService service = androidBtGatt.getService(characteristic.serviceUuid);
-                    BluetoothGattCharacteristic androidGattChar = service.getCharacteristic(characteristic.uuid);
-                    androidGattChar.setWriteType(type == WriteType.WITHOUT_RESPONSE ?
-                            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE :
-                            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                    );
-                    androidGattChar.setValue(value);
-
-                    androidBtGatt.writeCharacteristic(androidGattChar);
-                }
-
-                @Override
-                public TaskCompletionSource<byte[]> taskCompletionSource() {
-                    return taskSource;
-                }
-            });
-
-            return taskSource.getTask().onSuccessTask(task -> Task.forResult(null));
+                androidBtGatt.writeCharacteristic(androidGattChar);
+            }).onSuccessTask(task -> Task.<Void>forResult(null));
         }
 
         @Override
@@ -455,25 +389,7 @@ public class BtleService extends Service {
                 return Task.forError(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
-            final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
-            addGattOperation(this, new GattOp() {
-                @Override
-                public AndroidPlatform owner() {
-                    return AndroidPlatform.this;
-                }
-
-                @Override
-                public void execute() {
-                    androidBtGatt.readCharacteristic(androidGattChar);
-                }
-
-                @Override
-                public TaskCompletionSource<byte[]> taskCompletionSource() {
-                    return taskSource;
-                }
-            });
-
-            return taskSource.getTask();
+            return addGattOperation(this, "onCharacteristicRead not called within %dms", () -> androidBtGatt.readCharacteristic(androidGattChar));
         }
 
         private Task<Void> editNotifications(BtleGattCharacteristic characteristic, final NotificationListener listener) {
@@ -491,41 +407,19 @@ public class BtleService extends Service {
                 return Task.forError(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
-            Task<Void> task;
             int charProps = androidGattChar.getProperties();
             if ((charProps & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
-                final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
-
-                task = taskSource.getTask().onSuccessTask(task1 -> {
-                    // Cheat here since the only characteristic we enable notifications for is the MetaWear notify characteristic
+                return addGattOperation(this, "onDescriptorWrite not called within %dms", () -> {
+                    androidBtGatt.setCharacteristicNotification(androidGattChar, true);
+                    BluetoothGattDescriptor descriptor = androidGattChar.getDescriptor(CHARACTERISTIC_CONFIG);
+                    descriptor.setValue(listener == null ? BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE : BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                    androidBtGatt.writeDescriptor(descriptor);
+                }).onSuccessTask(ignored -> {
                     notificationListener = listener;
                     return Task.forResult(null);
                 });
-
-                addGattOperation(this, new GattOp() {
-                    @Override
-                    public AndroidPlatform owner() {
-                        return AndroidPlatform.this;
-                    }
-
-                    @Override
-                    public void execute() {
-                        androidBtGatt.setCharacteristicNotification(androidGattChar, true);
-                        BluetoothGattDescriptor descriptor = androidGattChar.getDescriptor(CHARACTERISTIC_CONFIG);
-                        descriptor.setValue(listener == null ? BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE : BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                        androidBtGatt.writeDescriptor(descriptor);
-
-                    }
-
-                    @Override
-                    public TaskCompletionSource<byte[]> taskCompletionSource() {
-                        return taskSource;
-                    }
-                });
-            } else {
-                task = Task.forError(new IllegalStateException(("Characteristic does not have 'notify property' bit set")));
             }
-            return task;
+            return Task.forError(new IllegalStateException(("Characteristic does not have 'notify property' bit set")));
         }
 
         @Override
@@ -551,20 +445,14 @@ public class BtleService extends Service {
 
         @Override
         public Task<Void> remoteDisconnectAsync() {
-            TaskCompletionSource<Void> taskReference = connectTask.getAndSet(null);
-            if (taskReference != null) {
-                taskReference.setCancelled();
+            if (androidBtGatt == null) {
+                return Task.forResult(null);
             }
 
-            cancelConnectTimeout();
+            connectTask.cancel();
+            disconnectTaskSrc = new TaskCompletionSource<>();
 
-            taskReference = disconnectTask.get();
-            if (taskReference == null) {
-                taskReference = new TaskCompletionSource<>();
-                disconnectTask.set(taskReference);
-            }
-
-            return taskReference.getTask();
+            return disconnectTaskSrc.getTask();
         }
 
         @Override
@@ -573,59 +461,20 @@ public class BtleService extends Service {
                 return Task.forResult(null);
             }
 
-            TaskCompletionSource<Void> taskReference = connectTask.get();
-            if (taskReference == null) {
-                taskReference = new TaskCompletionSource<>();
-                connectTask.set(taskReference);
-
-                cancelConnectTimeout();
-
-                connectFuture.set(taskScheduler.schedule(() -> {
-                    cancelConnectTimeout();
-
-                    closeGatt();
-
-                    TaskCompletionSource<Void> reference = connectTask.getAndSet(null);
-                    if (reference != null) {
-                        reference.setError(new TimeoutException("Timed out establishing Bluetooth Connection"));
-                    }
-                }, 7500L, TimeUnit.MILLISECONDS));
-
-                androidBtGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback);
-            }
-
-            return taskReference.getTask();
+            return connectTask.execute("Failed to connect and discover services within %dms", 10000,
+                    () -> androidBtGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback)
+            );
         }
 
         @Override
         public Task<Integer> readRssiAsync() {
-            if (androidBtGatt != null) {
-                final TaskCompletionSource<byte[]> taskSource = new TaskCompletionSource<>();
-
-                addGattOperation(this, new GattOp() {
-                    @Override
-                    public AndroidPlatform owner() {
-                        return AndroidPlatform.this;
-                    }
-
-                    @Override
-                    public void execute() {
-                        androidBtGatt.readRemoteRssi();
-                    }
-
-                    @Override
-                    public TaskCompletionSource<byte[]> taskCompletionSource() {
-                        return taskSource;
-                    }
-                });
-
-                return taskSource.getTask().onSuccessTask(task -> Task.forResult(ByteBuffer.wrap(task.getResult()).order(ByteOrder.LITTLE_ENDIAN).getInt(0)));
-            }
-            return Task.forError(new IllegalStateException("No longer connected to the BTLE gatt server"));
+            return androidBtGatt != null ?
+                    addGattOperation(this, "onReadRemoteRssi not called within %dms", () -> androidBtGatt.readRemoteRssi())
+                            .onSuccessTask(task -> Task.forResult(ByteBuffer.wrap(task.getResult()).order(ByteOrder.LITTLE_ENDIAN).getInt(0))) :
+                    Task.forError(new IllegalStateException("No longer connected to the BTLE gatt server"));
         }
     }
 
-    private final ScheduledExecutorService taskScheduler = Executors.newScheduledThreadPool(4);
     private final IBinder mBinder= new LocalBinder();
 
     /**

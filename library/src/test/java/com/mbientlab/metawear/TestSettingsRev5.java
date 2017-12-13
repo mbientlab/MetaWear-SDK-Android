@@ -29,6 +29,8 @@ import com.mbientlab.metawear.module.Settings;
 import org.junit.Before;
 import org.junit.Test;
 
+import bolts.Task;
+
 import static org.junit.Assert.assertArrayEquals;
 
 /**
@@ -55,21 +57,23 @@ public class TestSettingsRev5 extends UnitTestBase {
     }
 
     @Test
-    public void readPowerStatusData() {
+    public void readPowerStatusData() throws InterruptedException {
         byte[] expected = new byte[] {0x1, 0x0};
         final byte[] actual = new byte[2];
 
-        settings.readCurrentPowerStatusAsync().continueWith(task -> {
+        Task<Void> readTaskChain = settings.readCurrentPowerStatusAsync().continueWithTask(task -> {
             actual[0] = task.getResult();
-            return null;
-        });
-        settings.readCurrentPowerStatusAsync().continueWith(task -> {
+            return settings.readCurrentPowerStatusAsync();
+        }).continueWith(task -> {
             actual[1] = task.getResult();
             return null;
         });
 
         sendMockResponse(new byte[] {0x11, (byte) 0x91, 0x1});
         sendMockResponse(new byte[] {0x11, (byte) 0x91, 0x0});
+
+        readTaskChain.waitForCompletion();
+
         assertArrayEquals(expected, actual);
     }
 
@@ -112,21 +116,23 @@ public class TestSettingsRev5 extends UnitTestBase {
     }
 
     @Test
-    public void readChargeStatusData() {
+    public void readChargeStatusData() throws InterruptedException {
         byte[] expected = new byte[] {0x1, 0x0};
         final byte[] actual = new byte[2];
 
-        settings.readCurrentChargeStatusAsync().continueWith(task -> {
+        Task<Void> readTaskChain = settings.readCurrentChargeStatusAsync().continueWithTask(task -> {
             actual[0] = task.getResult();
-            return null;
-        });
-        settings.readCurrentChargeStatusAsync().continueWith(task -> {
+            return settings.readCurrentChargeStatusAsync();
+        }).continueWith(task -> {
             actual[1] = task.getResult();
             return null;
         });
 
         sendMockResponse(new byte[] {0x11, (byte) 0x92, 0x1});
         sendMockResponse(new byte[] {0x11, (byte) 0x92, 0x0});
+
+        readTaskChain.waitForCompletion();
+
         assertArrayEquals(expected, actual);
     }
 

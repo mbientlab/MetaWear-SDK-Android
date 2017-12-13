@@ -25,6 +25,7 @@
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.CodeBlock;
+import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Timer;
 
 import java.io.Serializable;
@@ -33,14 +34,10 @@ import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeoutException;
 
 import bolts.Task;
-import bolts.TaskCompletionSource;
 
 import static com.mbientlab.metawear.impl.Constant.Module.TIMER;
-import static com.mbientlab.metawear.impl.Constant.RESPONSE_TIMEOUT;
 
 /**
  * Created by etsai on 9/17/16.
@@ -120,9 +117,7 @@ class TimerImpl extends ModuleImplBase implements Timer {
     }
 
     private final Map<Byte, ScheduledTask> activeTasks = new HashMap<>();
-    private transient TaskCompletionSource<DataTypeBase> createTimerTask;
-    private transient ScheduledFuture<?> timeoutFuture;
-    private transient Runnable taskTimeout;
+    private transient TimedTask<Byte> createTimerTask;
 
     TimerImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -139,13 +134,8 @@ class TimerImpl extends ModuleImplBase implements Timer {
 
     @Override
     protected void init() {
-        taskTimeout= () -> createTimerTask.setError(new TimeoutException("Creating timer timed out"));
-
-        this.mwPrivate.addResponseHandler(new Pair<>(TIMER.id, TIMER_ENTRY), response -> {
-            timeoutFuture.cancel(false);
-
-            createTimerTask.setResult(new UintData(TIMER, TimerImpl.NOTIFY, response[2], new DataAttributes(new byte[] {}, (byte) 0, (byte) 0, false)));
-        });
+        createTimerTask = new TimedTask<>();
+        this.mwPrivate.addResponseHandler(new Pair<>(TIMER.id, TIMER_ENTRY), response -> createTimerTask.setResult(response[2]));
     }
 
     @Override
@@ -161,11 +151,9 @@ class TimerImpl extends ModuleImplBase implements Timer {
     }
 
     Task<DataTypeBase> create(byte[] config) {
-        createTimerTask= new TaskCompletionSource<>();
-        timeoutFuture= mwPrivate.scheduleTask(taskTimeout, RESPONSE_TIMEOUT);
-        mwPrivate.sendCommand(TIMER, TIMER_ENTRY, config);
-
-        return createTimerTask.getTask();
+        return createTimerTask.execute("Did not received timer id within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(TIMER, TIMER_ENTRY, config)
+        ).onSuccessTask(task -> Task.forResult(new UintData(TIMER, TimerImpl.NOTIFY, task.getResult(), new DataAttributes(new byte[] {}, (byte) 0, (byte) 0, false))));
     }
 
     @Override
