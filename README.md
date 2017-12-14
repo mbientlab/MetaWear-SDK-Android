@@ -4,7 +4,8 @@ higher**.
 
 # Setup
 ## Adding Compile Dependency
-To add the library to your project, first, update the repositories closure to include the MbientLab Ivy Repo in the project's *build.gradle* file.
+To add the library to your project, first, update the repositories closure to include the MbientLab Ivy Repo in the project's  
+``build.gradle`` file.
 
 ```gradle
 repositories {
@@ -15,13 +16,16 @@ repositories {
 }
 ```
 
-Then, add the compile element to the dependencies closure in the module's *build.gradle* file.
+Then, add the compile element to the dependencies closure in the module's ``build.gradle`` file.
 
 ```gradle
 dependencies {
     compile 'com.mbientlab:metawear:3.3.0'
 }
 ```
+
+If you are using SDK v3.3 or newer, you will need to enable Java 8 feature support the module's ``build.gradle`` file.  See this 
+[page](https://developer.android.com/studio/write/java8-support.html) in the Android Studio user guide.
 
 ## Declaring the Service
 Once your project has synced with the updated Gradle files, declare the MetaWear Bluetooth LE service in the module's *AndroidManifest.xml* file.
