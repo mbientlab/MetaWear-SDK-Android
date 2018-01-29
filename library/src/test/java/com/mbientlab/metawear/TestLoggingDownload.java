@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Logging;
 
 import org.junit.Before;
@@ -31,10 +33,12 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Calendar;
 
 import bolts.Capture;
 import bolts.Task;
 
+import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertArrayEquals;
 
 /**
@@ -42,12 +46,15 @@ import static org.junit.Assert.assertArrayEquals;
  */
 public class TestLoggingDownload extends UnitTestBase {
     private Logging logging;
+    private long now;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Logging.class);
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Logging.class, AccelerometerBmi160.class);
+        junitPlatform.addCustomResponse(new byte[] {0x0b, (byte) 0x84}, new byte[] {0x0b, (byte) 0x84, (byte) 0xa9, 0x72, 0x04, 0x00, 0x01});
         connectToBoard();
 
+        now = Calendar.getInstance().getTimeInMillis();
         logging= mwBoard.getModule(Logging.class);
     }
 
@@ -155,5 +162,20 @@ public class TestLoggingDownload extends UnitTestBase {
         sendMockResponse(new byte[] {0x0b, 0x07, (byte) 0xa1, (byte) 0xcc, 0x4d, 0x00, 0x00, 0x6c, 0x01, 0x00, 0x00});
 
         assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void handlePastTime() throws InterruptedException {
+        final Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
+        final Capture<Long> epoch = new Capture<>();
+
+        accelerometer.acceleration().addRouteAsync(source ->
+                source.log((data, env) -> epoch.set(data.timestamp().getTimeInMillis()))
+        ).waitForCompletion();
+        sendMockResponse(new byte[] {0x0b, 0x07, 0x20, 0x75, 0x1b, 0x04, 0x00, 0x3e, 0x01, (byte) 0xcd, 0x01, 0x21, 0x76, 0x1b, 0x04, 0x00, (byte) 0xc0, 0x07, 0x00, 0x00});
+
+        System.out.printf("{epoch: %d, now: %d}%n", epoch.get(), now);
+        // should be 32701ms but leave some leeway for when `now` is assigned vs when the logger assigns its `now`
+        assertTrue(Math.abs(epoch.get() - now) <= 33701);
     }
 }

@@ -138,18 +138,7 @@ public class BtleService extends Service {
                     }
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
-                    platform.closeGatt();
-
-                    if (!platform.connectTask.isCompleted() && status != 0) {
-                        platform.connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onConnectionStateChange status (%s)", status)));
-                    } else {
-                        if (platform.disconnectTaskSrc == null || platform.disconnectTaskSrc.getTask().isCompleted()) {
-                            platform.dcHandler.onUnexpectedDisconnect(status);
-                        } else {
-                            platform.disconnectTaskSrc.setResult(null);
-                            platform.dcHandler.onDisconnect();
-                        }
-                    }
+                    platform.disconnected(status);
                     break;
             }
         }
@@ -223,6 +212,21 @@ public class BtleService extends Service {
         AndroidPlatform(BluetoothDevice btDevice) {
             this.btDevice = btDevice;
             board = new JseMetaWearBoard(this, this, btDevice.getAddress());
+        }
+
+        void disconnected(int status) {
+            closeGatt();
+
+            if (!connectTask.isCompleted() && status != 0) {
+                connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onConnectionStateChange status (%s)", status)));
+            } else {
+                if (disconnectTaskSrc == null || disconnectTaskSrc.getTask().isCompleted()) {
+                    dcHandler.onUnexpectedDisconnect(status);
+                } else {
+                    disconnectTaskSrc.setResult(null);
+                    dcHandler.onDisconnect();
+                }
+            }
         }
 
         void gattTaskCompleted() {
@@ -429,16 +433,19 @@ public class BtleService extends Service {
 
         @Override
         public Task<Void> localDisconnectAsync() {
-            if (androidBtGatt == null) {
-                return Task.forResult(null);
-            }
-
             Task<Void> task = remoteDisconnectAsync();
 
-            if (nGattOps.get() > 0) {
-                readyToClose.set(true);
-            } else {
-                androidBtGatt.disconnect();
+            if (!task.isCompleted()) {
+                if (nGattOps.get() > 0) {
+                    readyToClose.set(true);
+                } else {
+                    if (connectTask.isCompleted()) {
+                        androidBtGatt.disconnect();
+                    } else {
+                        connectTask.cancel();
+                        disconnected(0);
+                    }
+                }
             }
             return task;
         }
@@ -449,9 +456,7 @@ public class BtleService extends Service {
                 return Task.forResult(null);
             }
 
-            connectTask.cancel();
             disconnectTaskSrc = new TaskCompletionSource<>();
-
             return disconnectTaskSrc.getTask();
         }
 
@@ -463,7 +468,12 @@ public class BtleService extends Service {
 
             return connectTask.execute("Failed to connect and discover services within %dms", 10000,
                     () -> androidBtGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback)
-            );
+            ).continueWithTask(task -> {
+                if (task.isFaulted()) {
+                    closeGatt();
+                }
+                return task;
+            });
         }
 
         @Override
