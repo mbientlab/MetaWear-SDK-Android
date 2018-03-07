@@ -33,12 +33,18 @@ import java.util.Locale;
  * Created by etsai on 9/4/16.
  */
 abstract class DataPrivate implements Data {
+    interface ClassToObject {
+        Object apply(Class<?> clazz);
+    }
+
     private final Calendar timestamp;
     private final byte[] dataBytes;
+    private final ClassToObject mapper;
 
-    DataPrivate(Calendar timestamp, byte[] dataBytes) {
+    DataPrivate(Calendar timestamp, byte[] dataBytes, ClassToObject mapper) {
         this.timestamp = timestamp;
         this.dataBytes = dataBytes;
+        this.mapper = mapper;
     }
 
     @Override
@@ -64,6 +70,15 @@ abstract class DataPrivate implements Data {
     @Override
     public <T> T value(Class<T> clazz) {
         throw new ClassCastException(String.format(Locale.US, "Invalid input class: \'%s\'", clazz.toString()));
+    }
+
+    @Override
+    public <T> T extra(Class<T> clazz) {
+        Object value;
+        if (mapper == null || (value = mapper.apply(clazz)) == null) {
+            throw new ClassCastException(String.format(Locale.US, "Invalid input class: \'%s\'", clazz.toString()));
+        }
+        return clazz.cast(value);
     }
 
     @Override

@@ -129,13 +129,13 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
             final float scale= scale(mwPrivate);
             final Acceleration value= new Acceleration(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public float scale() {
                     return scale;
@@ -196,11 +196,11 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             int mask = mwPrivate.lookupModuleInfo(ACCELEROMETER).revision >= FLAT_REVISION ? 0x4 : 0x2;
             final boolean isFlat = (data[0] & mask) == mask;
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(Boolean.class)) {
@@ -233,10 +233,10 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             final SensorOrientation orientation = SensorOrientation.values()[((data[0] & 0x6) >> 1) + 4 * ((data[0] & 0x8) >> 3)];
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(SensorOrientation.class)) {
@@ -274,7 +274,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             final byte highFirst = (byte) ((data[0] & 0x1c) >> 2);
             final LowHighResponse castedData = new LowHighResponse(
                     (data[0] & 0x1) == 0x1,
@@ -284,7 +284,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
                     highG(CartesianAxis.Z, highFirst),
                     (data[0] & 0x20) == 0x20 ? Sign.NEGATIVE : Sign.POSITIVE);
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(LowHighResponse.class)) {
@@ -322,7 +322,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             final AnyMotion castedData = new AnyMotion(
                     (data[0] & 0x40) == 0x40 ? Sign.NEGATIVE : Sign.POSITIVE,
                     detected(CartesianAxis.X, data[0]),
@@ -330,7 +330,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
                     detected(CartesianAxis.Z, data[0])
             );
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(AnyMotion.class)) {
@@ -363,7 +363,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             TapType type = null;
             if ((data[0] & 0x1) == 0x1) {
                 type = TapType.DOUBLE;
@@ -372,7 +372,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
             }
 
             final Tap castedData = new Tap(type, (data[0] & 0x20) == 0x20 ? Sign.NEGATIVE : Sign.POSITIVE);
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(Tap.class)) {

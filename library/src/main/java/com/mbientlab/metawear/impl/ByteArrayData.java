@@ -58,8 +58,8 @@ class ByteArrayData extends DataTypeBase {
     }
 
     @Override
-    public Data createMessage(boolean logData, final MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
-        return new DataPrivate(timestamp, data) {
+    public Data createMessage(boolean logData, final MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
+        return new DataPrivate(timestamp, data, mapper) {
             @Override
             public Class<?>[] types() {
                 return new Class<?>[] { byte[].class };

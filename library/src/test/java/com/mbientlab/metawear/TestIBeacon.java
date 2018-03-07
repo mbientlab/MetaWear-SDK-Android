@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.IBeacon.Configuration;
 import com.mbientlab.metawear.module.Switch;
@@ -46,7 +48,7 @@ public class TestIBeacon extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, IBeacon.class);
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, IBeacon.class, AccelerometerBmi160.class);
         connectToBoard();
 
         ibeacon= mwBoard.getModule(IBeacon.class);
@@ -70,6 +72,59 @@ public class TestIBeacon extends UnitTestBase {
 
 
         assertArrayEquals(expected, junitPlatform.getCommands());
+    }
+
+    @Test
+    public void setSlicedFeedback() throws InterruptedException {
+        byte[][] expected= new byte[][] {
+                {0x0a, 0x02, 0x03, 0x04, (byte) 0xff, 0x07, 0x03, 0x02, 0x09, 0x00},
+                {0x0a, 0x03, 0x00, 0x00},
+                {0x0a, 0x02, 0x03, 0x04, (byte) 0xff, 0x07, 0x04, 0x02, 0x45, 0x00},
+                {0x0a, 0x03, 0x00, 0x00},
+                {0x07, 0x01, 0x01}
+        };
+
+        Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
+        accelerometer.acceleration().addRouteAsync(source -> source.react(token ->
+            ibeacon.configure()
+                .major(token.slice((byte) 0, (byte) 4))
+                .minor(token.slice((byte) 4, (byte) 2))
+                .commit()
+        )).waitForCompletion();
+        ibeacon.enable();
+
+
+        assertArrayEquals(expected, junitPlatform.getCommands());
+    }
+
+    @Test(expected = IndexOutOfBoundsException.class)
+    public void sliceOutOfBounds() throws Exception {
+        Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
+
+        Task<Route> task = accelerometer.acceleration().addRouteAsync(source -> source.react(token ->
+            ibeacon.configure()
+                    .major(token.slice((byte) -2, (byte) 2))
+                    .commit()
+        ));
+        task.waitForCompletion();
+
+
+        throw task.getError();
+    }
+
+    @Test(expected = IndexOutOfBoundsException.class)
+    public void sliceOutOfBounds2() throws Exception {
+        Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
+
+        Task<Route> task = accelerometer.acceleration().addRouteAsync(source -> source.react(token ->
+            ibeacon.configure()
+                    .major(token.slice((byte) 0, (byte) 7))
+                    .commit()
+        ));
+        task.waitForCompletion();
+
+
+        throw task.getError();
     }
 
     @Test

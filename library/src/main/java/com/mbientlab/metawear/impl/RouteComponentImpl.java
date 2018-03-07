@@ -196,14 +196,14 @@ class RouteComponentImpl implements RouteComponent {
 
         DataProcessorConfig config = new DataProcessorConfig.Buffer(source.attributes.length());
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
-        return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
     }
 
     private static class CounterEditorInner extends EditorImplBase implements DataProcessor.CounterEditor {
         private static final long serialVersionUID = 4873789798519714460L;
 
-        CounterEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        CounterEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -225,8 +225,8 @@ class RouteComponentImpl implements RouteComponent {
     private static class AccumulatorEditorInner extends EditorImplBase implements DataProcessor.AccumulatorEditor {
         private static final long serialVersionUID = -5044680524938752249L;
 
-        AccumulatorEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        AccumulatorEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -262,8 +262,8 @@ class RouteComponentImpl implements RouteComponent {
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
         EditorImplBase editor= counter ?
-                new CounterEditorInner(config.build(), next.first, persistantData.mwPrivate) :
-                new AccumulatorEditorInner(config.build(), next.first, persistantData.mwPrivate);
+                new CounterEditorInner(config, next.first, persistantData.mwPrivate) :
+                new AccumulatorEditorInner(config, next.first, persistantData.mwPrivate);
 
         return postCreate(next.second, editor);
     }
@@ -281,8 +281,8 @@ class RouteComponentImpl implements RouteComponent {
     private static class AverageEditorInner extends EditorImplBase implements DataProcessor.AverageEditor {
         private static final long serialVersionUID = 998301829125848762L;
 
-        AverageEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        AverageEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -311,7 +311,7 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.Average(source.attributes, nSamples, hpf, hasHpf);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new AverageEditorInner(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new AverageEditorInner(config, next.first, persistantData.mwPrivate));
     }
     @Override
     public RouteComponent highpass(byte nSamples) {
@@ -344,7 +344,7 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.Delay(expanded, source.attributes.length(), samples);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
     }
 
     private RouteComponentImpl createCombiner(DataTypeBase source, boolean rss) {
@@ -358,7 +358,7 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.Combiner(source.attributes, rss);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
     }
 
     @Override
@@ -422,8 +422,8 @@ class RouteComponentImpl implements RouteComponent {
     private static class MapEditorInner extends EditorImplBase implements DataProcessor.MapEditor {
         private static final long serialVersionUID = 8475942086629415224L;
 
-        MapEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        MapEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -482,14 +482,14 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig.Maths config = new DataProcessorConfig.Maths(source.attributes, multiChnlMath, op, scaledRhs.intValue());
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
         config.output = next.first.attributes.sizes[0];
-        return postCreate(next.second, new MapEditorInner(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new MapEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
     private static class TimeEditorInner extends EditorImplBase implements DataProcessor.TimeEditor {
         private static final long serialVersionUID = -3775715195615375018L;
 
-        TimeEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        TimeEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -514,14 +514,14 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.Time(source.attributes.length(), (byte) (hasTimePassthrough ? 2 : 0), period);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new TimeEditorInner(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new TimeEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
     private static class PassthroughEditorInner extends EditorImplBase implements DataProcessor.PassthroughEditor {
         private static final long serialVersionUID = 3157873682587128118L;
 
-        PassthroughEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        PassthroughEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -549,14 +549,14 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.Passthrough(type, value);
 
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
-        return postCreate(next.second, new PassthroughEditorInner(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new PassthroughEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
     private static class PulseEditorInner extends EditorImplBase implements DataProcessor.PulseEditor {
         private static final long serialVersionUID = -274897612921984101L;
 
-        PulseEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        PulseEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -588,7 +588,7 @@ class RouteComponentImpl implements RouteComponent {
                 source.convertToFirmwareUnits(persistantData.mwPrivate, threshold).intValue(), samples, output);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new PulseEditorInner(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new PulseEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
     @Override
@@ -623,8 +623,8 @@ class RouteComponentImpl implements RouteComponent {
     private static class SingleValueComparatorEditor extends EditorImplBase implements DataProcessor.ComparatorEditor {
         private static final long serialVersionUID = -8891137550284171832L;
 
-        SingleValueComparatorEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        SingleValueComparatorEditor(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -663,8 +663,8 @@ class RouteComponentImpl implements RouteComponent {
         }
 
 
-        MultiValueComparatorEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        MultiValueComparatorEditor(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -703,7 +703,7 @@ class RouteComponentImpl implements RouteComponent {
 
             DataProcessorConfig config = new DataProcessorConfig.SingleValueComparison(signed, op, scaledReference.intValue());
             Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
-            return postCreate(next.second, new SingleValueComparatorEditor(config.build(), next.first, persistantData.mwPrivate));
+            return postCreate(next.second, new SingleValueComparatorEditor(config, next.first, persistantData.mwPrivate));
         }
 
         boolean anySigned= false;
@@ -717,14 +717,14 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.MultiValueComparison(signed, source.attributes.length(), op, mode, scaled);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new MultiValueComparatorEditor(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new MultiValueComparatorEditor(config, next.first, persistantData.mwPrivate));
     }
 
     private static class ThresholdEditorInner extends EditorImplBase implements DataProcessor.ThresholdEditor {
         private static final long serialVersionUID = 7819456776691980008L;
 
-        ThresholdEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        ThresholdEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -762,14 +762,14 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.Threshold(source.attributes.length(), source.attributes.signed, mode,
                 firmwareValue.intValue(), firmwareHysteresis.shortValue());
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
-        return postCreate(next.second, new ThresholdEditorInner(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new ThresholdEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
     private static class DifferentialEditorInner extends EditorImplBase implements DataProcessor.DifferentialEditor {
         private static final long serialVersionUID = -1856057294039232525L;
 
-        DifferentialEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        DifferentialEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -799,14 +799,14 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.Differential(source.attributes.length(), source.attributes.signed, mode, firmwareUnits.intValue());
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new DifferentialEditorInner(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new DifferentialEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
     private static class PackerEditorInner extends EditorImplBase implements DataProcessor.PackerEditor {
         private static final long serialVersionUID = 9016863579834915719L;
 
-        PackerEditorInner(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        PackerEditorInner(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
 
         @Override
@@ -827,24 +827,29 @@ class RouteComponentImpl implements RouteComponent {
         DataProcessorConfig config = new DataProcessorConfig.Packer(source.attributes.length(), count);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new PackerEditorInner(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new PackerEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
     @Override
     public RouteComponent account() {
+        return account(AccountType.TIME);
+    }
+
+    @Override
+    public RouteComponent account(AccountType type) {
         if (persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision < DataProcessorImpl.ENHANCED_STREAMING_REVISION) {
             throw new IllegalRouteOperationException("Current firmware does not support data accounting");
         }
 
-        if (source.attributes.length() + 4 + 3 > MAX_BTLE_LENGTH) {
+        final byte size = (byte) (type == AccountType.TIME ? 4 : Math.min(4, Constant.MAX_BTLE_LENGTH - 3 - source.attributes.length()));
+        if (type == AccountType.TIME && source.attributes.length() + size + 3 > Constant.MAX_BTLE_LENGTH || type == AccountType.COUNT && size < 0) {
             throw new IllegalRouteOperationException("Not enough space left in the ble packet to add accounter information");
         }
 
-        final byte size = 4;
-        DataProcessorConfig config = new DataProcessorConfig.Accounter(size);
+        DataProcessorConfig config = new DataProcessorConfig.Accounter(size, type);
         Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
 
-        return postCreate(next.second, new NullEditor(config.build(), next.first, persistantData.mwPrivate));
+        return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
     }
 
     private RouteComponentImpl postCreate(DataTypeBase state, EditorImplBase editor) {

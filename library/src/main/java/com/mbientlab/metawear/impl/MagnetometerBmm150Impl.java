@@ -95,13 +95,13 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
             final float scale= scale(mwPrivate);
             final MagneticField value= new MagneticField(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public float scale() {
                     return scale;

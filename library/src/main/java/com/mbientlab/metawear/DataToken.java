@@ -30,4 +30,10 @@ package com.mbientlab.metawear;
  * @author Eric Tsai
  */
 public interface DataToken {
+    /**
+     * Creates a <code>DataToken</code> copy that represents a portion of the original data
+     * @param offset        Byte to start copying from
+     * @param length        Number of bytes to copy
+     */
+    DataToken slice(byte offset, byte length);
 }

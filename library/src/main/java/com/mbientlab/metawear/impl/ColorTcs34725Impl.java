@@ -85,7 +85,7 @@ class ColorTcs34725Impl extends ModuleImplBase implements ColorTcs34725 {
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             final ColorAdc wrapper= new ColorAdc(
                     buffer.getShort() & 0xffff,
@@ -94,7 +94,7 @@ class ColorTcs34725Impl extends ModuleImplBase implements ColorTcs34725 {
                     buffer.getShort() & 0xffff
             );
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public Class<?>[] types() {
                     return new Class<?>[] {ColorAdc.class};

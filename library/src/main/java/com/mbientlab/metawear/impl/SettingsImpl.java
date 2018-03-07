@@ -106,11 +106,11 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
             final float voltage= ByteBuffer.wrap(data, 1, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() / 1000f;
             final BatteryState state= new BatteryState(data[0], voltage);
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public Class<?>[] types() {
                     return new Class<?>[]{BatteryState.class};

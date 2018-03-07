@@ -72,11 +72,11 @@ class UFloatData extends DataTypeBase {
     }
 
     @Override
-    public Data createMessage(boolean logData, final MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
+    public Data createMessage(boolean logData, final MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
         final ByteBuffer buffer = Util.bytesToUIntBuffer(logData, data, attributes);
         final float scaled= buffer.getLong(0) / scale(mwPrivate);
 
-        return new DataPrivate(timestamp, data) {
+        return new DataPrivate(timestamp, data, mapper) {
             @Override
             public float scale() {
                 return UFloatData.this.scale(mwPrivate);

@@ -183,12 +183,12 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
             final float scale= scale(mwPrivate);
             final Acceleration value= new Acceleration(buffer.getShort() / scale, buffer.getShort() / scale, buffer.getShort() / scale);
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public float scale() {
                     return scale;
@@ -249,12 +249,12 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             int offset = (data[0] & 0x06) >> 1;
             int index = 4 * (data[0] & 0x01) + ((offset == 2 || offset == 3) ? offset ^ 0x1 : offset);
             final SensorOrientation orientation = SensorOrientation.values()[index];
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(SensorOrientation.class)) {
@@ -300,13 +300,13 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
             return (value & mask) == mask ? Sign.NEGATIVE : Sign.POSITIVE;
         }
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             final Movement castedData = new Movement(
                     new boolean[] {exceedsThreshold(CartesianAxis.X, data[0]), exceedsThreshold(CartesianAxis.Y, data[0]), exceedsThreshold(CartesianAxis.Z, data[0])},
                     new Sign[] {direction(CartesianAxis.X, data[0]), direction(CartesianAxis.Y, data[0]), direction(CartesianAxis.Z, data[0])}
             );
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(Movement.class)) {
@@ -357,13 +357,13 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             final Tap castedData = new Tap(
                     new boolean[] {active(CartesianAxis.X, data[0]), active(CartesianAxis.Y, data[0]), active(CartesianAxis.Z, data[0])},
                     new Sign[] {polarity(CartesianAxis.X, data[0]), polarity(CartesianAxis.Y, data[0]), polarity(CartesianAxis.Z, data[0])},
                     type(data[0])
             );
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(Tap.class)) {
@@ -411,13 +411,13 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         }
 
         @Override
-        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp) {
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
             final Movement castedData = new Movement(
                     new boolean[] {exceedsThreshold(CartesianAxis.X, data[0]), exceedsThreshold(CartesianAxis.Y, data[0]), exceedsThreshold(CartesianAxis.Z, data[0])},
                     new Sign[] {direction(CartesianAxis.X, data[0]), direction(CartesianAxis.Y, data[0]), direction(CartesianAxis.Z, data[0])}
             );
 
-            return new DataPrivate(timestamp, data) {
+            return new DataPrivate(timestamp, data, mapper) {
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(Movement.class)) {

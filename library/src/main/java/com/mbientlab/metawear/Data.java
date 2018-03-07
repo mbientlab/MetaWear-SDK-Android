@@ -58,12 +58,21 @@ public interface Data {
      * @return Array of valid classes
      */
     Class<?>[] types();
+
     /**
      * Converts the data bytes to a usable data type
-     * @param clazz     Class type to convert to
+     * @param clazz     Class type to convert the value to
      * @param <T>       Runtime type the return value is casted as
      * @return Data value as the specified type
      * @throws ClassCastException if the data cannot be casted to desired type
      */
     <T> T value(Class<T> clazz);
+    /**
+     * Extra information attached to this data sample
+     * @param clazz     Class type to convert the value to
+     * @param <T>       Runtime type the return value is casted as
+     * @return Extra data casted as the specified type
+     * @throws ClassCastException if the data cannot be casted to the desired type
+     */
+    <T> T extra(Class<T> clazz);
 }

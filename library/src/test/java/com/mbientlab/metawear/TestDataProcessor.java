@@ -437,6 +437,33 @@ public class TestDataProcessor {
 
             throw task.getError();
         }
+
+        @Test
+        public void createCountMode() throws InterruptedException {
+            byte[][] expected = new byte[][] {
+                    { 0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x11, 0x30, 0x03 }
+            };
+
+            mwBoard.getModule(Accelerometer.class).acceleration()
+                    .addRouteAsync(source -> source.account(RouteComponent.AccountType.COUNT))
+                    .waitForCompletion();
+            assertArrayEquals(expected, junitPlatform.getCommands());
+        }
+
+        @Test
+        public void countData() throws InterruptedException {
+            long expected = 492;
+            final Capture<Long> actual = new Capture<>();
+
+            mwBoard.getModule(Accelerometer.class).acceleration()
+                    .addRouteAsync(source -> source.account(RouteComponent.AccountType.COUNT).stream(
+                            (data, env) -> actual.set(data.extra(Long.class)))
+                    )
+                    .waitForCompletion();
+            sendMockResponse(new byte[] { 0x09, 0x03, 0x00, (byte) 0xec, 0x01, 0x00, 0x00, 0x01, 0x0b, (byte) 0x9a, 0x07, 0x40, 0x40 });
+
+            assertEquals(expected, actual.get().longValue());
+        }
     }
 
     public static class TestAccounterPackerChain extends TestBase {

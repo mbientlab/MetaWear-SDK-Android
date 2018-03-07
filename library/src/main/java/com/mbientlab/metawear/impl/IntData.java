@@ -56,10 +56,10 @@ class IntData extends DataTypeBase {
     }
 
     @Override
-    public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp) {
+    public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
         final ByteBuffer buffer = Util.bytesToSIntBuffer(logData, data, attributes);
 
-        return new DataPrivate(timestamp, data) {
+        return new DataPrivate(timestamp, data, mapper) {
             @Override
             public Class<?>[] types() {
                 return new Class<?>[] {Integer.class, Short.class, Byte.class, Boolean.class};

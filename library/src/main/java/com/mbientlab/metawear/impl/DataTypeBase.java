@@ -119,6 +119,13 @@ abstract class DataTypeBase implements Serializable, DataToken {
     public final DataTypeBase input;
     public final DataTypeBase[] split;
 
+    DataTypeBase(byte[] config, byte offset, byte length) {
+        eventConfig = config;
+        input = null;
+        split = null;
+        attributes = new DataAttributes(new byte[] { length }, (byte) 1, offset, false);
+    }
+
     DataTypeBase(Constant.Module module, byte register, byte id, DataAttributes attributes) {
         this(null, module, register, id, attributes);
     }
@@ -184,7 +191,7 @@ abstract class DataTypeBase implements Serializable, DataToken {
     public Number convertToFirmwareUnits(MetaWearBoardPrivate mwPrivate, Number value) {
         return value;
     }
-    public abstract Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp);
+    public abstract Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper);
     Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
         switch(config.id) {
             case DataProcessorConfig.Buffer.ID:
@@ -342,5 +349,25 @@ abstract class DataTypeBase implements Serializable, DataToken {
 
     protected DataTypeBase[] createSplits() {
         return null;
+    }
+
+    public DataToken slice(byte offset, byte length) {
+        if (offset < 0) {
+            throw new IndexOutOfBoundsException("offset must be >= 0");
+        }
+        if (offset + length > attributes.length()) {
+            throw new IndexOutOfBoundsException("offset + length is greater than data length (" + attributes.length() + ")");
+        }
+        return new DataTypeBase(eventConfig, offset, length) {
+            @Override
+            public DataTypeBase copy(DataTypeBase input, Module module, byte register, byte id, DataAttributes attributes) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper) {
+                throw new UnsupportedOperationException();
+            }
+        };
     }
 }

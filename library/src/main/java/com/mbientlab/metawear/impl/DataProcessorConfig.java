@@ -1,5 +1,6 @@
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.ComparisonOutput;
 import com.mbientlab.metawear.builder.filter.DifferentialOutput;
 import com.mbientlab.metawear.builder.filter.ThresholdOutput;
@@ -705,22 +706,25 @@ abstract class DataProcessorConfig {
         static final byte ID = 0x11;
 
         final byte length;
+        final RouteComponent.AccountType type;
 
-        Accounter(byte length) {
+        Accounter(byte length, RouteComponent.AccountType type) {
             super(ID);
 
             this.length = length;
+            this.type = type;
         }
 
         Accounter(byte[] config) {
             super(config[0]);
 
             length = (byte) (((config[1] >> 4) & 0x3) + 1);
+            type = RouteComponent.AccountType.values()[config[1] & 0xf];
         }
 
         @Override
         byte[] build() {
-            return new byte[] {ID, (byte) (0x1 | ((length - 1) << 4)), 0x3};
+            return new byte[] {ID, (byte) (type.ordinal() | ((length - 1) << 4)), 0x3};
         }
 
         @Override

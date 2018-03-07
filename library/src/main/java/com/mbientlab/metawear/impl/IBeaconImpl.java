@@ -146,7 +146,7 @@ class IBeaconImpl extends ModuleImplBase implements IBeacon {
                             .put(IBEACON.id)
                             .put(MINOR)
                             .putShort((short) 0);
-                    IBeaconImpl.this.mwPrivate.sendCommand(buffer.array(), 0, majorToken);
+                    IBeaconImpl.this.mwPrivate.sendCommand(buffer.array(), 0, newMinorDataToken);
                 }
 
                 if (newRxPower != null) {

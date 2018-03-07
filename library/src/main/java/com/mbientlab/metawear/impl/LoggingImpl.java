@@ -147,7 +147,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                     offset+= entries.get(i).length;
                 }
 
-                call(source.createMessage(true, mwPrivate, merged, timestamp));
+                call(source.createMessage(true, mwPrivate, merged, timestamp, null));
             }
         }
 
@@ -527,14 +527,14 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                         byte revision = mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision;
                         while(!result.isEmpty()) {
                             ProcessorEntry current = result.poll();
-                            Pair<? extends DataTypeBase, ? extends DataTypeBase> next =
-                                    type.dataProcessorTransform(DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), revision, current.config));
+                            DataProcessorConfig config = DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), revision, current.config);
+                            Pair<? extends DataTypeBase, ? extends DataTypeBase> next = type.dataProcessorTransform(config);
 
                             next.first.eventConfig[2] = current.id;
                             if (next.second != null) {
                                 next.second.eventConfig[2] = current.id;
                             }
-                            dataprocessor.addProcessor(current.id, next.second, type, current.config);
+                            dataprocessor.addProcessor(current.id, next.second, type, config);
                             type = next.first;
                         }
                         return Task.forResult(type);

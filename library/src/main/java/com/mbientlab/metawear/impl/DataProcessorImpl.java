@@ -70,10 +70,13 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
 
         public byte[] config;
         public final DataTypeBase source;
+
+        transient DataProcessorConfig configObj;
         protected transient MetaWearBoardPrivate mwPrivate;
 
-        EditorImplBase(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            this.config= config;
+        EditorImplBase(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            this.configObj = configObj;
+            this.config= configObj.build();
             this.source= source;
 
             restoreTransientVars(mwPrivate);
@@ -81,13 +84,14 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
 
         void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
             this.mwPrivate = mwPrivate;
+            configObj = DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), mwPrivate.lookupModuleInfo(Constant.Module.DATA_PROCESSOR).revision, config);
         }
     }
     static class NullEditor extends EditorImplBase {
         private static final long serialVersionUID = -6221412334731005999L;
 
-        NullEditor(byte[] config, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
-            super(config, source, mwPrivate);
+        NullEditor(DataProcessorConfig configObj, DataTypeBase source, MetaWearBoardPrivate mwPrivate) {
+            super(configObj, source, mwPrivate);
         }
     }
 
@@ -244,7 +248,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         return activeProcessors.get(id);
     }
 
-    void addProcessor(byte id, DataTypeBase state, DataTypeBase source, byte[] config) {
+    void addProcessor(byte id, DataTypeBase state, DataTypeBase source, DataProcessorConfig config) {
         activeProcessors.put(id, new Processor(state, new NullEditor(config, source, mwPrivate)));
     }
 

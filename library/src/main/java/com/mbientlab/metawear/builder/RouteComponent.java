@@ -25,6 +25,7 @@
 package com.mbientlab.metawear.builder;
 
 import com.mbientlab.metawear.CodeBlock;
+import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.DataToken;
 import com.mbientlab.metawear.Subscriber;
 import com.mbientlab.metawear.builder.filter.*;
@@ -269,9 +270,29 @@ public interface RouteComponent {
      * @return Object representing the output of the packer
      */
     RouteComponent pack(byte count);
+
     /**
-     * Add additional information to the payload to reconstruct timestamps from streamed data
-     * @return Object representing the output of the accounter
+     * Types of information the accounter processor can append to the data
+     * @author Eric Tsai
+     */
+    enum AccountType {
+        /**
+         * Append a looping counter to all data.
+         * The counter's value is accessed by calling {@link Data#extra(Class)} with the <code>Long</code> type
+         */
+        COUNT,
+        /** Extra information used to calculate actual timestamps for streamed data */
+        TIME
+    }
+    /**
+     * Variant of {@link #account(AccountType)} that defaults to recalculating timestamps
+     * @return Object representing the accounter output
      */
     RouteComponent account();
+    /**
+     * Add additional information to the payload to assist in checking if streamed data is lost
+     * @param type      Type of information to append to the data<
+     * @return Object representing the accounter output
+     */
+    RouteComponent account(AccountType type);
 }
