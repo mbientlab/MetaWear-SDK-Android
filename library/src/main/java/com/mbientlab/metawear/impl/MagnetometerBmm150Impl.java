@@ -48,6 +48,8 @@ class MagnetometerBmm150Impl extends ModuleImplBase implements MagnetometerBmm15
         switch (dataType.eventConfig[1]) {
             case MAG_DATA:
                 return dataType.attributes.length() > 2 ? "magnetic-field" : String.format(Locale.US, "magnetic-field[%d]", (dataType.attributes.offset >> 1));
+            case PACKED_MAG_DATA:
+                return "magnetic-field";
             default:
                 return null;
         }

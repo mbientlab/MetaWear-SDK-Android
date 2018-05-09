@@ -63,6 +63,8 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
                 return "mma8452q-tap";
             case MOVEMENT_VALUE:
                 return "mma8452q-movement";
+            case PACKED_ACC_DATA:
+                return "acceleration";
             default:
                 return null;
         }

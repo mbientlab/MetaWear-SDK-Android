@@ -49,6 +49,7 @@ import com.mbientlab.metawear.impl.platform.TimedTask;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -223,8 +224,8 @@ public class BtleService extends Service {
                 if (disconnectTaskSrc == null || disconnectTaskSrc.getTask().isCompleted()) {
                     dcHandler.onUnexpectedDisconnect(status);
                 } else {
-                    disconnectTaskSrc.setResult(null);
                     dcHandler.onDisconnect();
+                    disconnectTaskSrc.setResult(null);
                 }
             }
         }
@@ -283,22 +284,26 @@ public class BtleService extends Service {
                 urlConn.set((HttpURLConnection) fileUrl.openConnection());
                 InputStream ins = urlConn.get().getInputStream();
 
-                File firmwareDir = new File(getFilesDir(), DOWNLOAD_DIR_NAME);
-                if (!firmwareDir.exists()) {
-                    firmwareDir.mkdir();
+                int code = urlConn.get().getResponseCode();
+                if (code == HttpURLConnection.HTTP_OK) {
+                    File firmwareDir = new File(getFilesDir(), DOWNLOAD_DIR_NAME);
+                    if (!firmwareDir.exists()) {
+                        firmwareDir.mkdir();
+                    }
+
+                    File location = new File(firmwareDir, dest);
+                    FileOutputStream fos = new FileOutputStream(location);
+
+                    byte data[] = new byte[1024];
+                    int count;
+                    while ((count = ins.read(data)) != -1) {
+                        fos.write(data, 0, count);
+                    }
+                    fos.close();
+
+                    return location;
                 }
-
-                File location = new File(firmwareDir, dest);
-                FileOutputStream fos = new FileOutputStream(location);
-
-                byte data[] = new byte[1024];
-                int count;
-                while ((count = ins.read(data)) != -1) {
-                    fos.write(data, 0, count);
-                }
-                fos.close();
-
-                return location;
+                throw new IOException(String.format("Could not retrieve resource (response = %d, msg = %s)", code, urlConn.get().getResponseMessage()));
             }).continueWithTask(ignored -> {
                 if (urlConn.get() != null) {
                     urlConn.get().disconnect();

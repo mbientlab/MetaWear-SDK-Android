@@ -49,6 +49,8 @@ class GyroBmi160Impl extends ModuleImplBase implements GyroBmi160 {
         switch (dataType.eventConfig[1]) {
             case DATA:
                 return dataType.attributes.length() > 2 ? "angular-velocity" : String.format(Locale.US, "angular-velocity[%d]", (dataType.attributes.offset >> 1));
+            case PACKED_DATA:
+                return "angular-velocity";
             default:
                 return null;
         }

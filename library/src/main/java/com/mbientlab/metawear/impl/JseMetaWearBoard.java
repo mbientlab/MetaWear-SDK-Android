@@ -99,7 +99,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     private static final long RELEASE_INFO_TTL = 1800000L;
     private static final byte READ_INFO_REGISTER= Util.setRead((byte) 0x0);
-    private final static String FIRMWARE_BUILD= "vanilla", LOG_TAG = "metawear";
+    private final static String FIRMWARE_BUILD= "vanilla", LOG_TAG = "metawear", RELEASES_URL = "https://mbientlab.com/releases";
     private final static String BOARD_INFO= "com.mbientlab.metawear.impl.JseMetaWearBoard.BOARD_INFO",
             BOARD_STATE = "com.mbientlab.metawear.impl.JseMetaWearBoard.BOARD_STATE";
 
@@ -375,6 +375,14 @@ public class JseMetaWearBoard implements MetaWearBoard {
         });
     }
 
+    public String getFirmware() {
+        return persist.boardInfo.firmware.toString();
+    }
+
+    public String getModelNumber() {
+        return persist.boardInfo.modelNumber;
+    }
+    
     @Override
     public Model getModel() {
         if (persist.boardInfo.modelNumber == null) {
@@ -503,7 +511,8 @@ public class JseMetaWearBoard implements MetaWearBoard {
     }
 
     private Task<File> downloadFirmware(Pair<Version, String> latest) {
-        String dlUrl = String.format(Locale.US, "https://releases.mbientlab.com/metawear/%s/%s/%s/%s/%s",
+        String dlUrl = String.format(Locale.US, "%s/metawear/%s/%s/%s/%s/%s",
+                RELEASES_URL,
                 persist.boardInfo.hardwareRevision,
                 persist.boardInfo.modelNumber,
                 FIRMWARE_BUILD, latest.first.toString(), latest.second
@@ -518,7 +527,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
             if (version == null) {
                 File info1Json = io.findDownloadedFile("info1.json");
                 if (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL) {
-                    return io.downloadFileAsync("https://releases.mbientlab.com/metawear/info1.json", "info1.json")
+                    return io.downloadFileAsync(String.format(Locale.US, "%s/metawear/info1.json", RELEASES_URL), "info1.json")
                             .onSuccessTask(task -> downloadFirmware(findRelease(task.getResult())));
                 } else {
                     try {
@@ -600,6 +609,27 @@ public class JseMetaWearBoard implements MetaWearBoard {
         throw new IllegalStateException("No information available for this board");
     }
 
+    public void loadBoardAttributes() throws IOException, ClassNotFoundException {
+        if (persist.boardInfo == null) {
+            InputStream ins = io.localRetrieve(BOARD_INFO);
+            if (ins != null) {
+                ObjectInputStream ois = new ObjectInputStream(ins);
+                BoardInfo boardInfoState = (BoardInfo) ois.readObject();
+
+                if (boardInfoState != null) {
+                    persist.boardInfo = boardInfoState;
+                    for (ModuleInfo it : boardInfoState.moduleInfo.values()) {
+                        instantiateModule(it);
+                    }
+                } else {
+                    persist.boardInfo = new BoardInfo();
+                }
+            } else {
+                persist.boardInfo = new BoardInfo();
+            }
+        }
+    }
+
     private Task<Queue<ModuleInfo>> discoverModules(Collection<Constant.Module> ignore) {
         final Queue<ModuleInfo> info = new LinkedList<>();
         final Queue<Constant.Module> modules = new LinkedList<>();
@@ -640,24 +670,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 return Task.cancelled();
             }
 
-            if (persist.boardInfo == null) {
-                InputStream ins = io.localRetrieve(BOARD_INFO);
-                if (ins != null) {
-                    ObjectInputStream ois = new ObjectInputStream(ins);
-                    BoardInfo boardInfoState = (BoardInfo) ois.readObject();
-
-                    if (boardInfoState != null) {
-                        persist.boardInfo = boardInfoState;
-                        for (ModuleInfo it : boardInfoState.moduleInfo.values()) {
-                            instantiateModule(it);
-                        }
-                    } else {
-                        persist.boardInfo = new BoardInfo();
-                    }
-                } else {
-                    persist.boardInfo = new BoardInfo();
-                }
-            }
+            loadBoardAttributes();
 
             return gatt.readCharacteristicAsync(DeviceInformationService.FIRMWARE_REVISION);
         }).onSuccessTask(task -> {

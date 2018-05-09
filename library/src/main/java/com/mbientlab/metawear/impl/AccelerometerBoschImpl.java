@@ -64,6 +64,8 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
                 return "bosch-motion";
             case TAP_INTERRUPT:
                 return "bosch-tap";
+            case PACKED_ACC_DATA:
+                return "acceleration";
             default:
                 return null;
         }
