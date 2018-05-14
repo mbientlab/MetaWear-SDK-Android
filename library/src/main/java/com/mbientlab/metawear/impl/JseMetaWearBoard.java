@@ -523,29 +523,32 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Task<File> downloadFirmwareAsync(final String version) {
-        if (connected) {
-            if (version == null) {
-                File info1Json = io.findDownloadedFile("info1.json");
-                if (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL) {
-                    return io.downloadFileAsync(String.format(Locale.US, "%s/metawear/info1.json", RELEASES_URL), "info1.json")
-                            .onSuccessTask(task -> downloadFirmware(findRelease(task.getResult())));
-                } else {
-                    try {
-                        Pair<Version, String> latest = findRelease(info1Json);
-                        File firmware = io.findDownloadedFile(buildFirmwareFileName(latest));
-                        return !firmware.exists() ? downloadFirmware(latest) : Task.forResult(firmware);
-                    } catch (Exception e) {
-                        return Task.forError(e);
-                    }
-                }
-            } else {
-                final Version versionObj = new Version(version);
-                return downloadFirmware(new Pair<>(versionObj, "firmware.zip"))
-                        .continueWithTask(task -> task.isFaulted() ? downloadFirmware(new Pair<>(versionObj, "firmware.bin")) : task)
-                        .continueWithTask(task -> task.isFaulted() ? Task.forError(new RuntimeException("Firmware version \'" + version + "\' not available for this board", task.getError())) : task);
-            }
+        if (persist.boardInfo.hardwareRevision == null) {
+            return Task.forError(new IllegalStateException("Hardware revision unavailable"));
         }
-        return Task.forError(new IllegalStateException("No active BLE connection"));
+        if (persist.boardInfo.modelNumber == null) {
+            return Task.forError(new IllegalStateException("Model number unavailable"));
+        }
+        if (version == null) {
+            File info1Json = io.findDownloadedFile("info1.json");
+            if (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL) {
+                return io.downloadFileAsync(String.format(Locale.US, "%s/metawear/info1.json", RELEASES_URL), "info1.json")
+                        .onSuccessTask(task -> downloadFirmware(findRelease(task.getResult())));
+            } else {
+                try {
+                    Pair<Version, String> latest = findRelease(info1Json);
+                    File firmware = io.findDownloadedFile(buildFirmwareFileName(latest));
+                    return !firmware.exists() ? downloadFirmware(latest) : Task.forResult(firmware);
+                } catch (Exception e) {
+                    return Task.forError(e);
+                }
+            }
+        } else {
+            final Version versionObj = new Version(version);
+            return downloadFirmware(new Pair<>(versionObj, "firmware.zip"))
+                    .continueWithTask(task -> task.isFaulted() ? downloadFirmware(new Pair<>(versionObj, "firmware.bin")) : task)
+                    .continueWithTask(task -> task.isFaulted() ? Task.forError(new RuntimeException("Firmware version \'" + version + "\' not available for this board", task.getError())) : task);
+        }
     }
     @Override
     public Task<File> downloadLatestFirmwareAsync() {
@@ -752,6 +755,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
             if (task.isFaulted()) {
                 if (inMetaBootMode()) {
+                    connected = true;
                     return Task.forResult(null);
                 } else {
                     if (task.getError() instanceof TaskTimeoutException) {
