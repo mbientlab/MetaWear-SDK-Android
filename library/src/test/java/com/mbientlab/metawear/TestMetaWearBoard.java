@@ -34,11 +34,19 @@ import com.mbientlab.metawear.impl.platform.DeviceInformationService;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
 import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
+import java.io.File;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 import bolts.AggregateException;
@@ -367,6 +375,154 @@ public class TestMetaWearBoard {
                     .continueWithTask(task -> mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(source -> source.stream(null)))
                     .waitForCompletion();
             assertArrayEquals(expected, junitPlatform.getCommands());
+        }
+    }
+
+    @RunWith(Parameterized.class)
+    public static class TestFirmwareRetrieval extends UnitTestBase {
+        @Parameters
+        public static Collection<Object[]> data() {
+            return Arrays.asList(new Object[][]{
+                    { false, new String[] {"1.2.5", "1.4.0", "1.5.0"} },
+                    { true, new String[] {"0.2.1", "0.3.1", "0.3.1" } }
+            });
+        }
+
+        @Parameter
+        public boolean enableMetaboot;
+
+        @Parameter(value = 1)
+        public String[] firmwareRevisions;
+
+        private String[] fileToNames(List<File> files) {
+            String[] names = new String[files.size()];
+            int i = 0;
+            for(File f: files) {
+                names[i] = f.getName();
+                i++;
+            }
+
+            return names;
+        }
+
+        @Before
+        public void setup() {
+            junitPlatform.enableMetaBootState = enableMetaboot;
+            junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        }
+
+        @Test
+        public void updateFromOldBootLoader() throws Exception {
+            junitPlatform.firmware = firmwareRevisions[0];
+            connectToBoard();
+
+            Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync("1.4.0");
+            filesTask.waitForCompletion();
+
+            // Firmware prior to v1.4.0 will need to upload 3 files with the Nordic DFU lib
+            final String[] expected = new String[] {
+                    "0.1_5_bootloader_0.2.2_bl.zip",
+                    "0.1_5_bootloader_0.3.1_sd_bl.zip",
+                    "0.1_5_vanilla_1.4.0_firmware.zip",
+            };
+            assertArrayEquals(expected, fileToNames(filesTask.getResult()));
+        }
+
+        @Test(expected = UnsupportedOperationException.class)
+        public void updateWithOldDfuFn() throws Exception {
+            junitPlatform.firmware = firmwareRevisions[0];
+            connectToBoard();
+
+            //  Updating from older firmware to v1.4.0 requires 3 files, old dfu function only returns 1
+            Task<File> filesTask = mwBoard.downloadFirmwareAsync("1.4.0");
+            filesTask.waitForCompletion();
+
+            throw filesTask.getError();
+        }
+
+        @Test
+        public void updateFromNewBootLoader() throws Exception {
+            junitPlatform.firmware = firmwareRevisions[1];
+            connectToBoard();
+
+            Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync();
+            filesTask.waitForCompletion();
+
+            // Firmware v1.4.0+ can just upload the next firmware image
+            final String[] expected = new String[] {
+                    "0.1_5_vanilla_1.5.0_firmware.zip",
+            };
+            assertArrayEquals(expected, fileToNames(filesTask.getResult()));
+        }
+
+        @Test(expected = IllegalFirmwareFile.class)
+        public void downgradeToOldBootloader() throws Exception {
+            junitPlatform.firmware = firmwareRevisions[2];
+            connectToBoard();
+
+            // Firmware v1.4.0+ cannot downgrade below v1.4.0
+            Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync("1.2.5");
+            filesTask.waitForCompletion();
+
+            throw filesTask.getError();
+        }
+    }
+
+    @RunWith(Parameterized.class)
+    public static class TestFirmwareCheck extends UnitTestBase {
+        @Parameters
+        public static Collection<Object[]> data() {
+            return Arrays.asList(new Object[][]{
+                    { "1.5.0", "1.2.5" },
+                    { null, "1.5.0" }
+            });
+        }
+
+        @Parameter
+        public String expected;
+
+        @Parameter(value = 1)
+        public String firmwareRevision;
+
+        @Before
+        public void setup() throws Exception {
+            junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+            junitPlatform.firmware = firmwareRevision;
+            connectToBoard();
+        }
+
+        @Test
+        public void versionString() throws Exception {
+            Task<String> stringTask = mwBoard.findLatestAvailableFirmwareAsync();
+            stringTask.waitForCompletion();
+
+            assertEquals(expected, stringTask.getResult());
+        }
+
+        @Test
+        public void versionBoolean() throws Exception {
+            Task<Boolean> boolTask = mwBoard.checkForFirmwareUpdateAsync();
+            boolTask.waitForCompletion();
+
+            assertEquals(expected != null, boolTask.getResult());
+        }
+    }
+
+    public static class TestApiCheckFail extends UnitTestBase {
+        public TestApiCheckFail() {
+            super("3.4.7");
+        }
+
+        @Test(expected = UnsupportedOperationException.class)
+        public void updateToLatest() throws Exception {
+            junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+            connectToBoard();
+
+            // Don't let older SDKs download v1.4.0+
+            Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync();
+            filesTask.waitForCompletion();
+
+            throw filesTask.getError();
         }
     }
 }

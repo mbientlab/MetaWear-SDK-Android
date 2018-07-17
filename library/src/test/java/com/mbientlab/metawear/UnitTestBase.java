@@ -33,8 +33,17 @@ import bolts.Task;
  * Created by etsai on 9/1/16.
  */
 public abstract class UnitTestBase implements MwBridge {
-    protected final JunitPlatform junitPlatform = new JunitPlatform(this);
-    protected final MetaWearBoard mwBoard= new JseMetaWearBoard(junitPlatform, junitPlatform, "CB:B7:49:BF:27:33");
+    protected final JunitPlatform junitPlatform;
+    protected final MetaWearBoard mwBoard;
+
+    protected UnitTestBase(String libVersion) {
+        junitPlatform  = new JunitPlatform(this);
+        this.mwBoard = new JseMetaWearBoard(junitPlatform, junitPlatform, "CB:B7:49:BF:27:33", libVersion);
+    }
+
+    UnitTestBase() {
+        this("3.5.0");
+    }
 
     protected void connectToBoard() throws Exception {
         Task<Void> task = mwBoard.connectAsync();

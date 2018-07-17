@@ -54,6 +54,7 @@ import bolts.TaskCompletionSource;
  * Created by etsai on 8/31/16.
  */
 class JunitPlatform implements IO, BtleGatt {
+    private static final File RES_PATH = new File(new File("src", "test"), "res");
     private static final ScheduledExecutorService SCHEDULED_TASK_THREADPOOL = Executors.newSingleThreadScheduledExecutor();
 
     interface MwBridge {
@@ -116,10 +117,10 @@ class JunitPlatform implements IO, BtleGatt {
     public InputStream localRetrieve(String key) throws IOException {
         String prefix = key.substring(key.lastIndexOf(".") + 1).toLowerCase();
         if (prefix.equals("board_info") && deserializeModuleInfo) {
-            return new FileInputStream("src/test/res/board_module_info");
+            return new FileInputStream(new File(RES_PATH, "board_module_info"));
         }
         return boardStateSuffix != null ?
-                new FileInputStream(String.format(Locale.US, "src/test/res/board_state_%s", boardStateSuffix)) :
+                new FileInputStream(new File(RES_PATH, String.format(Locale.US, "board_state_%s", boardStateSuffix))) :
                 null;
     }
 
@@ -268,12 +269,18 @@ class JunitPlatform implements IO, BtleGatt {
 
     @Override
     public Task<File> downloadFileAsync(String srcUrl, String dest) {
+        if (srcUrl.endsWith("firmware.zip") || srcUrl.endsWith("bl.zip") || srcUrl.endsWith("sd_bl.zip")) {
+            return Task.forResult(new File(dest));
+        } else if (srcUrl.endsWith("info2.json")) {
+            return Task.forResult(new File(RES_PATH, "info2.json"));
+        }
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
     @Override
     public File findDownloadedFile(String filename) {
-        throw new UnsupportedOperationException("Not yet implemented");
+        // create a dummy File object
+        return new File(RES_PATH, filename);
     }
 
     @Override

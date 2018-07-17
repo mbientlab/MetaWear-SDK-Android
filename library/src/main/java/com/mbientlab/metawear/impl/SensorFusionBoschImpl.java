@@ -76,7 +76,8 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     private static final byte ENABLE = 1, MODE = 2, OUTPUT_ENABLE = 3,
             CORRECTED_ACC = 4, CORRECTED_ROT = 5, CORRECTED_MAG = 6,
-            QUATERNION = 7, EULER_ANGLES = 8, GRAVITY_VECTOR = 9, LINEAR_ACC = 0xa;
+            QUATERNION = 7, EULER_ANGLES = 8, GRAVITY_VECTOR = 9, LINEAR_ACC = 0xa,
+            CALIB_STATUS = 0xb;
     private final static String QUATERNION_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.QUATERNION_PRODUCER",
             EULER_ANGLES_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.EULER_ANGLES_PRODUCER",
             GRAVITY_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.GRAVITY_PRODUCER",
@@ -379,7 +380,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     private Mode mode;
     private byte dataEnableMask;
 
-    private transient TimedTask<byte[]> pullConfigTask;
+    private transient TimedTask<byte[]> readRegisterTask;
 
     SensorFusionBoschImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -395,9 +396,10 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     @Override
     protected void init() {
-        pullConfigTask = new TimedTask<>();
+        readRegisterTask = new TimedTask<>();
 
-        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MODE)), response -> pullConfigTask.setResult(response));
+        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MODE)), response -> readRegisterTask.setResult(response));
+        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(CALIB_STATUS)), response -> readRegisterTask.setResult(response));
     }
 
     @Override
@@ -647,11 +649,25 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     @Override
     public Task<Void> pullConfigAsync() {
-        return pullConfigTask.execute("Did not receive sensor fusion config within %dms", Constant.RESPONSE_TIMEOUT,
+        return readRegisterTask.execute("Did not receive sensor fusion config within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MODE)})
         ).onSuccessTask(task -> {
             mode = Mode.values()[task.getResult()[2]];
             return Task.forResult(null);
+        });
+    }
+
+    @Override
+    public Task<CalibrationState> readCalibrationStateAsync() {
+        return readRegisterTask.execute("Did not receive sensor fusion calibration status within %dms", Constant.RESPONSE_TIMEOUT,
+                () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(CALIB_STATUS)})
+        ).onSuccessTask(task -> {
+            CalibrationAccuracy values[] = CalibrationAccuracy.values();
+            return Task.forResult(new CalibrationState(
+                    values[task.getResult()[2]],
+                    values[task.getResult()[3]],
+                    values[task.getResult()[4]]
+            ));
         });
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015 MbientLab Inc. All rights reserved.
+ * Copyright 2014-2018 MbientLab Inc. All rights reserved.
  *
  * IMPORTANT: Your use of this Software is limited to those specific rights granted under the terms of a software
  * license agreement between the user who downloaded the software, his/her employer (which must be your
@@ -21,34 +21,16 @@
  * Should you have any questions regarding your right to use this Software, contact MbientLab via email:
  * hello@mbientlab.com.
  */
+package com.mbientlab.metawear;
 
-apply plugin: 'com.android.library'
+/**
+ * Exception indicating that an invalid firmware file was attempted to be paired with the board
+ * @author Eric Tsai
+ */
+public class IllegalFirmwareFile extends Exception {
+    private static final long serialVersionUID = -6711055411857745594L;
 
-android {
-    compileSdkVersion 27
-    buildToolsVersion "27.0.3"
-
-    defaultConfig {
-        minSdkVersion 18
-        targetSdkVersion 27
-        versionCode 58
-        versionName "3.5.0"
+    public IllegalFirmwareFile(String message) {
+        super(message);
     }
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-}
-
-dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    api 'com.parse.bolts:bolts-tasks:1.4.0'
-    testImplementation 'org.json:json:20160810'
-    testImplementation 'junit:junit:4.12'
 }

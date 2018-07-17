@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015 MbientLab Inc. All rights reserved.
+ * Copyright 2014-2018 MbientLab Inc. All rights reserved.
  *
  * IMPORTANT: Your use of this Software is limited to those specific rights granted under the terms of a software
  * license agreement between the user who downloaded the software, his/her employer (which must be your
@@ -21,34 +21,47 @@
  * Should you have any questions regarding your right to use this Software, contact MbientLab via email:
  * hello@mbientlab.com.
  */
+package com.mbientlab.metawear;
 
-apply plugin: 'com.android.library'
+import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.MagnetometerBmm150;
+import com.mbientlab.metawear.module.SensorFusionBosch;
+import com.mbientlab.metawear.module.SensorFusionBosch.CalibrationState;
 
-android {
-    compileSdkVersion 27
-    buildToolsVersion "27.0.3"
+import org.junit.Before;
+import org.junit.Test;
 
-    defaultConfig {
-        minSdkVersion 18
-        targetSdkVersion 27
-        versionCode 58
-        versionName "3.5.0"
-    }
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+import bolts.Task;
+
+import static com.mbientlab.metawear.module.SensorFusionBosch.CalibrationAccuracy.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+
+public class TestSensorFusion {
+    static class TestBase extends UnitTestBase {
+        @Before
+        public void setup() throws Exception {
+            junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
+            junitPlatform.firmware= "1.2.5";
+            connectToBoard();
         }
     }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-}
 
-dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    api 'com.parse.bolts:bolts-tasks:1.4.0'
-    testImplementation 'org.json:json:20160810'
-    testImplementation 'junit:junit:4.12'
+    public static class TestCalibration extends TestBase {
+        @Test
+        public void readCalibrationState() throws InterruptedException {
+            byte[][] expectedCmds= new byte[][] {
+                    {0x19, (byte) 0x8b},
+            };
+            CalibrationState expectedState = new CalibrationState(UNRELIABLE, LOW_ACCURACY, MEDIUM_ACCURACY);
+
+            Task<CalibrationState> readTask = mwBoard.getModule(SensorFusionBosch.class).readCalibrationStateAsync();
+            sendMockResponse(new byte[] {0x19, (byte) 0x8b, 0x00, 0x01, 0x02});
+            readTask.waitForCompletion();
+
+            assertArrayEquals(expectedCmds, junitPlatform.getCommands());
+            assertEquals(expectedState, readTask.getResult());
+        }
+    }
 }

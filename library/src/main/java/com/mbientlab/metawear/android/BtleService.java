@@ -39,6 +39,7 @@ import android.os.IBinder;
 import android.util.Base64;
 import android.util.Log;
 
+import com.mbientlab.metawear.BuildConfig;
 import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.impl.JseMetaWearBoard;
 import com.mbientlab.metawear.impl.platform.BtleGatt;
@@ -212,7 +213,7 @@ public class BtleService extends Service {
 
         AndroidPlatform(BluetoothDevice btDevice) {
             this.btDevice = btDevice;
-            board = new JseMetaWearBoard(this, this, btDevice.getAddress());
+            board = new JseMetaWearBoard(this, this, btDevice.getAddress(), BuildConfig.VERSION_NAME);
         }
 
         void disconnected(int status) {

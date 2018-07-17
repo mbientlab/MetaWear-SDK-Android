@@ -573,7 +573,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
         public void commit() {
             if (count != null) {
                 motionConfig[0]&= 0xfc;
-                motionConfig[0]|= count - 1;
+                motionConfig[0]|= (count - 1) & 0x3;
             }
 
             if (threshold != null) {

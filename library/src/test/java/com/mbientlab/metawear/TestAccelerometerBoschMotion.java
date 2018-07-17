@@ -180,8 +180,8 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
     @Test
     public void configureAnyMotion() {
         byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
-                new byte[] {0x03, 0x0a, 0x09, 0x2f, 0x14, 0x14} :
-                new byte[] {0x03, 0x0a, 0x09, 0x2f, 0x14};
+                new byte[] {0x03, 0x0a, 0x01, 0x2f, 0x14, 0x14} :
+                new byte[] {0x03, 0x0a, 0x01, 0x2f, 0x14};
 
         boschAcc.configure()
                 .range(8f)

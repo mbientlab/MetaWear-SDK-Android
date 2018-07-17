@@ -28,6 +28,7 @@ import com.mbientlab.metawear.AnonymousRoute;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.DataToken;
 import com.mbientlab.metawear.DeviceInformation;
+import com.mbientlab.metawear.IllegalFirmwareFile;
 import com.mbientlab.metawear.IllegalRouteOperationException;
 import com.mbientlab.metawear.Model;
 import com.mbientlab.metawear.Observer;
@@ -68,6 +69,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
@@ -99,7 +101,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     private static final long RELEASE_INFO_TTL = 1800000L;
     private static final byte READ_INFO_REGISTER= Util.setRead((byte) 0x0);
-    private final static String FIRMWARE_BUILD= "vanilla", LOG_TAG = "metawear", RELEASES_URL = "https://mbientlab.com/releases";
+    private final static String FIRMWARE_BUILD= "vanilla", LOG_TAG = "metawear", RELEASES_URL = "https://mbientlab.com/releases", INFO_JSON = "info2.json";
     private final static String BOARD_INFO= "com.mbientlab.metawear.impl.JseMetaWearBoard.BOARD_INFO",
             BOARD_STATE = "com.mbientlab.metawear.impl.JseMetaWearBoard.BOARD_STATE";
 
@@ -153,7 +155,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
     private final Map<Tuple3<Byte, Byte, Byte>, LinkedHashSet<RegisterResponseHandler>> dataHandlers= new HashMap<>();
     private final Map<Pair<Byte, Byte>, RegisterResponseHandler> registerResponseHandlers= new HashMap<>();
 
-    private final String macAddress;
+    private final String macAddress, libVersion;
     private final IO io;
     private final BtleGatt gatt;
 
@@ -349,10 +351,11 @@ public class JseMetaWearBoard implements MetaWearBoard {
      * @param io            Object for handling IO operations
      * @param macAddress    Device's MAC address
      */
-    public JseMetaWearBoard(BtleGatt gatt, IO io, String macAddress) {
+    public JseMetaWearBoard(BtleGatt gatt, IO io, String macAddress, String libVersion) {
         this.io = io;
         this.gatt = gatt;
         this.macAddress = macAddress;
+        this.libVersion = libVersion;
 
         readModuleInfoTask = new TimedTask<>();
         gatt.onDisconnect(new BtleGatt.DisconnectHandler() {
@@ -502,54 +505,177 @@ public class JseMetaWearBoard implements MetaWearBoard {
         });
     }
 
-    private String buildFirmwareFileName(Pair<Version, String> latest) {
+    private String generateFileName(String build, Version version, String filename) {
         return String.format(Locale.US, "%s_%s_%s_%s_%s",
                 persist.boardInfo.hardwareRevision,
                 persist.boardInfo.modelNumber,
-                FIRMWARE_BUILD, latest.first.toString(), latest.second
+                build, version.toString(), filename
         );
     }
 
-    private Task<File> downloadFirmware(Pair<Version, String> latest) {
+    private Task<File> downloadFirmwareFile(String build, Version version, String filename) {
         String dlUrl = String.format(Locale.US, "%s/metawear/%s/%s/%s/%s/%s",
                 RELEASES_URL,
                 persist.boardInfo.hardwareRevision,
                 persist.boardInfo.modelNumber,
-                FIRMWARE_BUILD, latest.first.toString(), latest.second
+                build, version.toString(), filename
         );
 
-        return io.downloadFileAsync(dlUrl, buildFirmwareFileName(latest));
+        return io.downloadFileAsync(dlUrl, generateFileName(build, version, filename));
+    }
+
+    private Task<JSONObject> retrieveInfoJson() {
+        File info1Json = io.findDownloadedFile(INFO_JSON);
+        return (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL ?
+                io.downloadFileAsync(String.format(Locale.US, "%s/metawear/%s", RELEASES_URL, INFO_JSON), INFO_JSON) :
+                Task.forResult(info1Json)).onSuccessTask(task -> {
+                    StringBuilder builder = new StringBuilder();
+                    InputStream ins = new FileInputStream(task.getResult());
+
+                    byte data[] = new byte[1024];
+                    int count;
+                    while ((count = ins.read(data)) != -1) {
+                        builder.append(new String(data, 0, count));
+                    }
+
+                    return Task.forResult(new JSONObject(builder.toString()));
+                });
+    }
+
+    private static final Version BOOTLOADER_CUTOFF = new Version("1.4.0"),
+            OLD_BOOTLOADER = new Version("0.2.1"), NEW_BOOTLOADER = new Version("0.3.1");
+    private List<Tuple3<String, Version, String>> traverseBlDeps(JSONObject bootloader, Version target, Version current) throws JSONException {
+        JSONObject value = bootloader.getJSONObject(target.toString());
+        Version required = new Version(value.getString("required-bootloader"));
+
+        List<Tuple3<String, Version, String>> files = (required.compareTo(current) == 0) ?
+                new ArrayList<>() : traverseBlDeps(bootloader, required, current);
+        files.add(new Tuple3<>("bootloader", target, value.getString("filename")));
+        return files;
     }
 
     @Override
-    public Task<File> downloadFirmwareAsync(final String version) {
+    public Task<List<File>> downloadFirmwareUpdateFilesAsync(final String version) {
         if (persist.boardInfo.hardwareRevision == null) {
             return Task.forError(new IllegalStateException("Hardware revision unavailable"));
         }
         if (persist.boardInfo.modelNumber == null) {
             return Task.forError(new IllegalStateException("Model number unavailable"));
         }
-        if (version == null) {
-            File info1Json = io.findDownloadedFile("info1.json");
-            if (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL) {
-                return io.downloadFileAsync(String.format(Locale.US, "%s/metawear/info1.json", RELEASES_URL), "info1.json")
-                        .onSuccessTask(task -> downloadFirmware(findRelease(task.getResult())));
-            } else {
-                try {
-                    Pair<Version, String> latest = findRelease(info1Json);
-                    File firmware = io.findDownloadedFile(buildFirmwareFileName(latest));
-                    return !firmware.exists() ? downloadFirmware(latest) : Task.forResult(firmware);
-                } catch (Exception e) {
-                    return Task.forError(e);
+        if (!connected) {
+            return Task.forError(new IllegalStateException("Android device not connected to the board"));
+        }
+
+        return retrieveInfoJson().onSuccessTask(task -> {
+            JSONObject models= task.getResult().getJSONObject(persist.boardInfo.hardwareRevision);
+            JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
+            Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(FIRMWARE_BUILD), version);
+
+            {
+                String minLibVersion = result.first.getString("min-android-version");
+                if (new Version(minLibVersion).compareTo(new Version(libVersion)) > 0) {
+                    throw new UnsupportedOperationException(String.format(Locale.US, "You must use Android SDK >= v'%s' with firmware v'%s'", minLibVersion, result.second.toString()));
                 }
             }
-        } else {
-            final Version versionObj = new Version(version);
-            return downloadFirmware(new Pair<>(versionObj, "firmware.zip"))
-                    .continueWithTask(task -> task.isFaulted() ? downloadFirmware(new Pair<>(versionObj, "firmware.bin")) : task)
-                    .continueWithTask(task -> task.isFaulted() ? Task.forError(new RuntimeException("Firmware version \'" + version + "\' not available for this board", task.getError())) : task);
-        }
+
+            Version reqBl = new Version(result.first.getString("required-bootloader"));
+            final Version currBl = !inMetaBootMode() ? (persist.boardInfo.firmware.compareTo(BOOTLOADER_CUTOFF) < 0 ? OLD_BOOTLOADER : NEW_BOOTLOADER) : persist.boardInfo.firmware;
+            if (currBl.compareTo(reqBl) > 0) {
+                throw new IllegalFirmwareFile(String.format(Locale.US, "Cannot use firmware v'%s' with this board", result.second.toString()));
+            }
+
+            List<Tuple3<String, Version, String>> files = currBl.compareTo(reqBl) < 0 ?
+                    traverseBlDeps(builds.getJSONObject("bootloader"), reqBl, currBl) :
+                    new ArrayList<>();
+            files.add(new Tuple3<>(FIRMWARE_BUILD, result.second, result.first.getString("filename")));
+
+            final List<File> dests = new ArrayList<>();
+            Task<Void> task2 = Task.forResult(null);
+            for(Tuple3<String, Version, String> info: files) {
+                final String destName = generateFileName(info.first, info.second, info.third);
+                final File dest = io.findDownloadedFile(destName);
+
+                task2 = task2.onSuccessTask(ignored ->
+                    !dest.exists() ? downloadFirmwareFile(info.first, info.second, info.third) : Task.forResult(dest)
+                ).onSuccessTask(fileTask -> {
+                    dests.add(fileTask.getResult());
+                    return Task.forResult(null);
+                });
+            }
+
+            return task2.onSuccessTask(ignored -> Task.forResult(dests));
+        });
     }
+
+
+    @Override
+    public Task<List<File>> downloadFirmwareUpdateFilesAsync() {
+        return downloadFirmwareUpdateFilesAsync(null);
+    }
+
+    private Pair<JSONObject, Version> findFirmwareAttrs(JSONObject firmwareVersions, String version) throws JSONException, IllegalFirmwareFile {
+        final JSONObject attrs;
+        final Version target;
+        if (version != null) {
+            try {
+                attrs = firmwareVersions.getJSONObject(version);
+                target = new Version(version);
+            } catch (JSONException ignored) {
+                throw new IllegalFirmwareFile(String.format(Locale.US, "Firmware v'%s' does not exist for this board", version));
+            }
+        } else {
+            Iterator<String> versionKeys = firmwareVersions.keys();
+            TreeSet<Version> versions = new TreeSet<>();
+            while (versionKeys.hasNext()) {
+                versions.add(new Version(versionKeys.next()));
+            }
+
+            Iterator<Version> it = versions.descendingIterator();
+            if (it.hasNext()) {
+                target = it.next();
+                attrs = firmwareVersions.getJSONObject(target.toString());
+            } else {
+                throw new IllegalStateException("No information available for this board");
+            }
+        }
+
+        return new Pair<>(attrs, target);
+    }
+    @Override
+    public Task<String> findLatestAvailableFirmwareAsync() {
+        if (persist.boardInfo.hardwareRevision == null) {
+            return Task.forError(new IllegalStateException("Hardware revision unavailable"));
+        }
+        if (persist.boardInfo.modelNumber == null) {
+            return Task.forError(new IllegalStateException("Model number unavailable"));
+        }
+
+        if (!connected) {
+            return Task.forError(new IllegalStateException("Android device not connected to the board"));
+        }
+        if (inMetaBootMode()) {
+            return Task.forError(new IllegalStateException("Cannot determine if newer firmware is available for MetaBoot boards"));
+        }
+        return retrieveInfoJson().onSuccessTask(task -> {
+            JSONObject models= task.getResult().getJSONObject(persist.boardInfo.hardwareRevision);
+            JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
+
+            Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(FIRMWARE_BUILD), null);
+            return Task.forResult(result.second.compareTo(persist.boardInfo.firmware) > 0 ? result.second.toString() : null);
+        });
+    }
+
+    @Override
+    public Task<File> downloadFirmwareAsync(final String version) {
+        return downloadFirmwareUpdateFilesAsync(version).onSuccessTask(task -> {
+            if (task.getResult().size() > 1) {
+                throw new UnsupportedOperationException(String.format(Locale.US, "Updating to firmware v'%s' requires multiple files, use 'downloadFirmwareUpdateFilesAsync' instead", version));
+            } else {
+                return Task.forResult(task.getResult().get(0));
+            }
+        });
+    }
+
     @Override
     public Task<File> downloadLatestFirmwareAsync() {
         return downloadFirmwareAsync(null);
@@ -557,59 +683,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Task<Boolean> checkForFirmwareUpdateAsync() {
-        if (connected) {
-            Task<Boolean> task;
-            File info1Json = io.findDownloadedFile("info1.json");
-            if (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL) {
-                task = io.downloadFileAsync("https://releases.mbientlab.com/metawear/info1.json", "info1.json")
-                        .onSuccessTask(dlTask -> Task.forResult(persist.boardInfo.firmware.compareTo(findRelease(dlTask.getResult()).first) < 0));
-            } else {
-                try {
-                    task = Task.forResult(persist.boardInfo.firmware.compareTo(findRelease(info1Json).first) < 0);
-                } catch (Exception e) {
-                    task = Task.forError(e);
-                }
-            }
-
-            return task;
-        }
-        return Task.forError(new IllegalStateException("No active BLE connection"));
-    }
-
-    private Pair<Version, String> findRelease(File releaseInfo) throws JSONException, IOException {
-        String info1Json;
-
-        {
-            InputStream ins = new FileInputStream(releaseInfo);
-            StringBuilder builder = new StringBuilder();
-
-            byte data[] = new byte[1024];
-            int count;
-            while ((count = ins.read(data)) != -1) {
-                builder.append(new String(data, 0, count));
-            }
-
-            info1Json = builder.toString();
-        }
-
-        JSONObject root = new JSONObject(info1Json);
-        JSONObject models= root.getJSONObject(persist.boardInfo.hardwareRevision);
-        JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
-        JSONObject availableVersions = builds.getJSONObject(FIRMWARE_BUILD);
-
-        Iterator<String> versionKeys = availableVersions.keys();
-        TreeSet<Version> versions = new TreeSet<>();
-        while (versionKeys.hasNext()) {
-            versions.add(new Version(versionKeys.next()));
-        }
-
-        Iterator<Version> it = versions.descendingIterator();
-        if (it.hasNext()) {
-            Version latest = it.next();
-            return new Pair<>(latest, availableVersions.getJSONObject(latest.toString()).getString("filename"));
-        }
-
-        throw new IllegalStateException("No information available for this board");
+        return findLatestAvailableFirmwareAsync().onSuccessTask(task -> Task.forResult(task.getResult() != null));
     }
 
     public void loadBoardAttributes() throws IOException, ClassNotFoundException {

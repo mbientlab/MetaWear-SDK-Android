@@ -30,6 +30,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 import java.util.UUID;
 
 import bolts.Task;
@@ -88,17 +89,43 @@ public interface MetaWearBoard {
     Task<DeviceInformation> readDeviceInformationAsync();
 
     /**
+     * Retrieves the files needed to update the board to the specific firmware version.
+     * A connection must be first established before calling this function.
+     *
+     * When uploading the files, ensure that they are uploaded in the same order as the returned list
+     * @param version Firmware revision to download, null to retrieve the latest version
+     * @return Task containing the list of files to upload
+     */
+    Task<List<File>> downloadFirmwareUpdateFilesAsync(String version);
+    /**
+     * Retrieves the files needed to update the board to the latest available firmware.
+     * A connection must be first established before calling this function.
+     * @return Task containing the list of files to upload
+     */
+    Task<List<File>> downloadFirmwareUpdateFilesAsync();
+    /**
+     * Checks if a newer firmware version is available for the current board.
+     * A connection must be first established before calling this function.
+     * @return Task containing the version string, contains null if no update is available
+     */
+    Task<String> findLatestAvailableFirmwareAsync();
+
+    /**
      * Downloads the specific firmware release for the board to your local device.  You must be connected to the
      * board before calling this function.
      * @param version Firmware revision to download, null to retrieve the latest version
      * @return Task holding the file pointing to where the downloaded firmware resides on the local device
+     * @deprecated Since v3.5.0, use {@link #downloadFirmwareUpdateFilesAsync(String)} instead
      */
+    @Deprecated
     Task<File> downloadFirmwareAsync(String version);
     /**
      * Downloads the latest firmware release for the board to your local device.  You must be connected to the
      * board before calling this function.
      * @return Task holding the file pointing to where the downloaded firmware resides on the local device
+     * @deprecated Since v3.5.0, use {@link #downloadFirmwareUpdateFilesAsync()} instead
      */
+    @Deprecated
     Task<File> downloadLatestFirmwareAsync();
     /**
      * Checks if there is a newer version of the firmware available for your board.  The firmware check requires

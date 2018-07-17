@@ -172,7 +172,46 @@ public interface SensorFusionBosch extends Module, Configurable<SensorFusionBosc
             return result;
         }
     }
+    /**
+     * Tuple wrapping the calibration state of the IMU sensors
+     * @author Eric Tsai
+     */
+    final class CalibrationState {
+        /**
+         * Current calibration accuracy for the accelerometer, gyroscope, and magnetometer
+         */
+        public final CalibrationAccuracy accelerometer, gyroscope, magnetometer;
 
+        public CalibrationState(CalibrationAccuracy accelerometer, CalibrationAccuracy gyroscope, CalibrationAccuracy magnetometer) {
+            this.accelerometer = accelerometer;
+            this.gyroscope = gyroscope;
+            this.magnetometer = magnetometer;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            CalibrationState that = (CalibrationState) o;
+            return accelerometer == that.accelerometer &&
+                    gyroscope == that.gyroscope &&
+                    magnetometer == that.magnetometer;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = accelerometer.hashCode();
+            result = 31 * result + gyroscope.hashCode();
+            result = 31 * result + magnetometer.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return String.format(Locale.US, "CalibrationState: {accelerometer: %s, gyroscope: %s, magnetometer: %s}",
+                    accelerometer.name(), gyroscope.name(), magnetometer.name());
+        }
+    }
     /**
      * Supported data ranges for accelerometer data
      * @author Eric Tsai
@@ -317,4 +356,10 @@ public interface SensorFusionBosch extends Module, Configurable<SensorFusionBosc
      * @return Task that is completed when the settings are received
      */
     Task<Void> pullConfigAsync();
+    /**
+     * Reads the current calibration state from the sensor fusion algorithm.  This function cannot be
+     * called until the sensor fusion algorithm is running and is only available on firmware v1.4.1 and newer.
+     * @return Task containing the calibration status.
+     */
+    Task<CalibrationState> readCalibrationStateAsync();
 }
