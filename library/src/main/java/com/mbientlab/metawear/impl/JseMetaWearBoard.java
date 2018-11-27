@@ -101,7 +101,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     private static final long RELEASE_INFO_TTL = 1800000L;
     private static final byte READ_INFO_REGISTER= Util.setRead((byte) 0x0);
-    private final static String FIRMWARE_BUILD= "vanilla", LOG_TAG = "metawear", RELEASES_URL = "https://mbientlab.com/releases", INFO_JSON = "info2.json";
+    private final static String DEFAULT_FIRMWARE_BUILD = "vanilla", LOG_TAG = "metawear", RELEASES_URL = "https://mbientlab.com/releases", INFO_JSON = "info2.json";
     private final static String BOARD_INFO= "com.mbientlab.metawear.impl.JseMetaWearBoard.BOARD_INFO",
             BOARD_STATE = "com.mbientlab.metawear.impl.JseMetaWearBoard.BOARD_STATE";
 
@@ -569,7 +569,11 @@ public class JseMetaWearBoard implements MetaWearBoard {
         return retrieveInfoJson().onSuccessTask(task -> {
             JSONObject models= task.getResult().getJSONObject(persist.boardInfo.hardwareRevision);
             JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
-            Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(FIRMWARE_BUILD), version);
+
+            ModuleInfo mInfo = persist.boardInfo.moduleInfo.get(Constant.Module.SETTINGS);
+            String build = mInfo != null && mInfo.extra.length >= 2 ? String.format(Locale.US, "%d", ((short) mInfo.extra[1] & 0xff)) : DEFAULT_FIRMWARE_BUILD;
+
+            Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(build), version);
 
             {
                 String minLibVersion = result.first.getString("min-android-version");
@@ -587,7 +591,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
             List<Tuple3<String, Version, String>> files = currBl.compareTo(reqBl) < 0 ?
                     traverseBlDeps(builds.getJSONObject("bootloader"), reqBl, currBl) :
                     new ArrayList<>();
-            files.add(new Tuple3<>(FIRMWARE_BUILD, result.second, result.first.getString("filename")));
+            files.add(new Tuple3<>(build, result.second, result.first.getString("filename")));
 
             final List<File> dests = new ArrayList<>();
             Task<Void> task2 = Task.forResult(null);
@@ -660,7 +664,10 @@ public class JseMetaWearBoard implements MetaWearBoard {
             JSONObject models= task.getResult().getJSONObject(persist.boardInfo.hardwareRevision);
             JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
 
-            Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(FIRMWARE_BUILD), null);
+            ModuleInfo info = persist.boardInfo.moduleInfo.get(Constant.Module.SETTINGS);
+            String build = info.extra.length >= 2 ? String.format(Locale.US, "%d", info.extra[1]) : DEFAULT_FIRMWARE_BUILD;
+
+            Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(build), null);
             return Task.forResult(result.second.compareTo(persist.boardInfo.firmware) > 0 ? result.second.toString() : null);
         });
     }

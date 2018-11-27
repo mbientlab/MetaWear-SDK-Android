@@ -117,7 +117,7 @@ class ColorTcs34725Impl extends ModuleImplBase implements ColorTcs34725 {
         }
 
         @Override
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config, DataProcessorImpl dpModule) {
             switch(config.id) {
                 case DataProcessorConfig.Combiner.ID: {
                     DataAttributes attributes= new DataAttributes(new byte[] {this.attributes.sizes[0]}, (byte) 1, (byte) 0, false);
@@ -125,7 +125,7 @@ class ColorTcs34725Impl extends ModuleImplBase implements ColorTcs34725 {
                 }
             }
 
-            return super.dataProcessorTransform(config);
+            return super.dataProcessorTransform(config, dpModule);
         }
     }
 

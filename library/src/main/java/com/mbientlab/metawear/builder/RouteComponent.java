@@ -113,6 +113,13 @@ public interface RouteComponent {
      * @return Object for continuing the route
      */
     RouteComponent buffer();
+    /**
+     * Combines data from multiple sources into 1 packet.  The additional data you want to combine must first be
+     * stored into a named buffer.
+     * @param bufferNames   Named buffer components holding the extra data to combine
+     * @return Object for continuing the route
+     */
+    RouteComponent fuse(String... bufferNames);
 
     /**
      * Counts the number of data samples that have passed through this component and outputs the current count

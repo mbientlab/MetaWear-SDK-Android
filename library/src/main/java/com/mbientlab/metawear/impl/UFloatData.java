@@ -98,7 +98,7 @@ class UFloatData extends DataTypeBase {
     }
 
     @Override
-    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config, DataProcessorImpl dpModule) {
         switch(config.id) {
             case DataProcessorConfig.Maths.ID: {
                 DataProcessorConfig.Maths casted = (DataProcessorConfig.Maths) config;
@@ -145,6 +145,6 @@ class UFloatData extends DataTypeBase {
                 }
             }
         }
-        return super.dataProcessorTransform(config);
+        return super.dataProcessorTransform(config, dpModule);
     }
 }

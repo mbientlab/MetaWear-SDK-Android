@@ -378,6 +378,17 @@ public class TestMetaWearBoard {
         }
     }
 
+    private static String[] fileToNames(List<File> files) {
+        String[] names = new String[files.size()];
+        int i = 0;
+        for(File f: files) {
+            names[i] = f.getName();
+            i++;
+        }
+
+        return names;
+    }
+
     @RunWith(Parameterized.class)
     public static class TestFirmwareRetrieval extends UnitTestBase {
         @Parameters
@@ -393,17 +404,6 @@ public class TestMetaWearBoard {
 
         @Parameter(value = 1)
         public String[] firmwareRevisions;
-
-        private String[] fileToNames(List<File> files) {
-            String[] names = new String[files.size()];
-            int i = 0;
-            for(File f: files) {
-                names[i] = f.getName();
-                i++;
-            }
-
-            return names;
-        }
 
         @Before
         public void setup() {
@@ -523,6 +523,29 @@ public class TestMetaWearBoard {
             filesTask.waitForCompletion();
 
             throw filesTask.getError();
+        }
+    }
+
+    public static class TestFirmwareBuildCheck extends UnitTestBase {
+        @Before
+        public void setup() throws Exception {
+            junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+            junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x08, 0x03, (byte) 0x80});
+            junitPlatform.firmware = "1.4.2";
+            connectToBoard();
+        }
+
+
+        @Test
+        public void checkFilename() throws Exception {
+            Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync();
+            filesTask.waitForCompletion();
+
+            // Firmware v1.4.0+ can just upload the next firmware image
+            final String[] expected = new String[] {
+                    "0.1_5_128_1.4.4_firmware.zip",
+            };
+            assertArrayEquals(expected, fileToNames(filesTask.getResult()));
         }
     }
 }

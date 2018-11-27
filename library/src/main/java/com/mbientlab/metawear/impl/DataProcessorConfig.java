@@ -1,5 +1,6 @@
 package com.mbientlab.metawear.impl;
 
+import com.mbientlab.metawear.IllegalRouteOperationException;
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.ComparisonOutput;
 import com.mbientlab.metawear.builder.filter.DifferentialOutput;
@@ -50,6 +51,8 @@ abstract class DataProcessorConfig {
                 return new Packer(config);
             case Accounter.ID:
                 return new Accounter(config);
+            case Fuser.ID:
+                return new Fuser(config);
         }
         throw new InvalidParameterException("Unrecognized config id: " + config[0]);
     }
@@ -730,6 +733,60 @@ abstract class DataProcessorConfig {
         @Override
         String createUri(boolean state, byte procId) {
             return String.format(Locale.US, "account?id=%d", procId);
+        }
+    }
+
+    static class Fuser extends DataProcessorConfig {
+        static final byte ID = 0x1b;
+
+        final String[] names;
+        final byte[] filterIds;
+
+        Fuser(String[] names) {
+            super(ID);
+
+            this.filterIds = new byte[names.length];
+            this.names = names;
+        }
+
+        Fuser(byte[] config) {
+            super(config[0]);
+
+            names = null;
+            filterIds = new byte[config[1] & 0x1f];
+            System.arraycopy(config, 2, filterIds, 0, filterIds.length);
+        }
+
+        void syncFilterIds(DataProcessorImpl dpModule) {
+            int i = 0;
+            for(String it: names) {
+                if (!dpModule.nameToIdMapping.containsKey(it)) {
+                    throw new IllegalRouteOperationException("No processor named \"" + it + "\" found");
+                }
+
+                byte id = dpModule.nameToIdMapping.get(it);
+                DataProcessorImpl.Processor value = dpModule.activeProcessors.get(id);
+                if (!(value.editor.configObj instanceof DataProcessorConfig.Buffer)) {
+                    throw new IllegalRouteOperationException("Can only use buffer processors as inputs to the fuser");
+                }
+
+                filterIds[i] = id;
+                i++;
+            }
+        }
+
+        @Override
+        byte[] build() {
+            return ByteBuffer.allocate(2 + filterIds.length).order(ByteOrder.LITTLE_ENDIAN)
+                    .put(ID)
+                    .put((byte)(filterIds.length))
+                    .put(filterIds)
+                    .array();
+        }
+
+        @Override
+        String createUri(boolean state, byte procId) {
+            return String.format(Locale.US, "fuser?id=%d", procId);
         }
     }
 }

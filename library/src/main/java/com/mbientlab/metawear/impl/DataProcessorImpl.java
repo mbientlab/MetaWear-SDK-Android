@@ -62,7 +62,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
     }
 
     private static final long serialVersionUID = -7439066046235167486L;
-    static final byte TIME_PASSTHROUGH_REVISION = 1, ENHANCED_STREAMING_REVISION = 2, HPF_REVISION = 2, EXPANDED_DELAY = 2;
+    static final byte TIME_PASSTHROUGH_REVISION = 1, ENHANCED_STREAMING_REVISION = 2, HPF_REVISION = 2, EXPANDED_DELAY = 2, FUSE_REVISION = 3;
     static final byte TYPE_ACCOUNTER = 0x11, TYPE_PACKER = 0x10;
 
     static abstract class EditorImplBase implements Editor, Serializable {
@@ -78,8 +78,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             this.configObj = configObj;
             this.config= configObj.build();
             this.source= source;
-
-            restoreTransientVars(mwPrivate);
+            this.mwPrivate = mwPrivate;
         }
 
         void restoreTransientVars(MetaWearBoardPrivate mwPrivate) {
@@ -121,8 +120,8 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         NOTIFY_ENABLE = 7,
         REMOVE_ALL = 8;
 
-    private final Map<Byte, Processor> activeProcessors= new HashMap<>();
-    private final Map<String, Byte> nameToIdMapping = new HashMap<>();
+    final Map<Byte, Processor> activeProcessors= new HashMap<>();
+    final Map<String, Byte> nameToIdMapping = new HashMap<>();
 
     private transient TimedTask<byte[]> pullProcessorConfigTask, createProcessorTask;
 
@@ -168,6 +167,10 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         return Task.forResult(null).continueWhile(() -> !terminate.get() && !pendingProcessors.isEmpty(), ignored -> {
             final Processor current= pendingProcessors.poll();
             DataTypeBase input= current.editor.source.input;
+
+            if (current.editor.configObj instanceof DataProcessorConfig.Fuser) {
+                ((DataProcessorConfig.Fuser) current.editor.configObj).syncFilterIds(this);
+            }
 
             final byte[] filterConfig= new byte[input.eventConfig.length + 1 + current.editor.config.length];
             filterConfig[input.eventConfig.length]= (byte) (((input.attributes.length() - 1) << 5) | input.attributes.offset);

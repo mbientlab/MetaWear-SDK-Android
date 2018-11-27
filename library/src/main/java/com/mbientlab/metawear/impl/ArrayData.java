@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015 MbientLab Inc. All rights reserved.
+ * Copyright 2014-2018 MbientLab Inc. All rights reserved.
  *
  * IMPORTANT: Your use of this Software is limited to those specific rights granted under the terms of a software
  * license agreement between the user who downloaded the software, his/her employer (which must be your
@@ -19,35 +19,34 @@
  * SERVICES, OR ANY CLAIMS BY THIRD PARTIES (INCLUDING BUT NOT LIMITED TO ANY DEFENSE THEREOF), OR OTHER SIMILAR COSTS.
  *
  * Should you have any questions regarding your right to use this Software, contact MbientLab via email:
- * hello@mbientlab.com.
+ *   hello@mbientlab.com.
  */
 
 package com.mbientlab.metawear.impl;
 
 import com.mbientlab.metawear.Data;
+import com.mbientlab.metawear.module.DataProcessor;
 
-import java.nio.ByteBuffer;
 import java.util.Calendar;
 
-import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+public class ArrayData extends DataTypeBase {
+    private static final long serialVersionUID = 4427138245810712009L;
 
-/**
- * Created by etsai on 9/5/16.
- */
-class IntData extends DataTypeBase {
-    private static final long serialVersionUID = 8405131177286992908L;
-
-    private IntData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
-        super(input, module, register, id, attributes);
+    ArrayData(Constant.Module module, byte register, byte id, DataAttributes attributes) {
+        super(module, register, id, attributes);
     }
 
-    IntData(DataTypeBase input, Constant.Module module, byte register, DataAttributes attributes) {
+    ArrayData(DataTypeBase input, Constant.Module module, byte register, DataAttributes attributes) {
         super(input, module, register, attributes);
+    }
+
+    ArrayData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
+        super(input, module, register, id, attributes);
     }
 
     @Override
     public DataTypeBase copy(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
-        return new IntData(input, module, register, id, attributes);
+        return new ArrayData(input, module, register, id, attributes);
     }
 
     @Override
@@ -56,46 +55,49 @@ class IntData extends DataTypeBase {
     }
 
     @Override
-    public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
-        final ByteBuffer buffer = Util.bytesToSIntBuffer(logData, data, attributes);
+    public Data createMessage(boolean logData, final MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
+        DataProcessorImpl dpModules = (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class);
+        DataProcessorImpl.Processor fuser = dpModules.activeProcessors.get(eventConfig[2]);
+
+        while(!(fuser.editor.configObj instanceof DataProcessorConfig.Fuser)) {
+            fuser = dpModules.activeProcessors.get(fuser.editor.source.input.eventConfig[2]);
+        }
+
+        int offset = 0;
+        final Data[] unwrappedData = new Data[fuser.editor.config.length + 1];
+        unwrappedData[0] = fuser.editor.source.input.createMessage(logData, mwPrivate, data, timestamp, mapper);
+        offset+= fuser.editor.source.input.attributes.length();
+
+        for(int i = 2; i < fuser.editor.config.length; i++) {
+            DataProcessorImpl.Processor value = dpModules.activeProcessors.get(fuser.editor.config[i]);
+            // buffer state holds the actual data type
+            byte[] portion = new byte[value.state.attributes.length()];
+
+            System.arraycopy(data, offset, portion, 0, portion.length);
+            unwrappedData[i - 1] = value.state.createMessage(logData, mwPrivate, portion, timestamp, mapper);
+
+            offset+= value.state.attributes.length();
+            i++;
+        }
 
         return new DataPrivate(timestamp, data, mapper) {
             @Override
             public Class<?>[] types() {
-                return new Class<?>[] {Integer.class, Short.class, Byte.class, Boolean.class};
+                return new Class<?>[] { Data[].class };
+            }
+
+            @Override
+            public float scale() {
+                return ArrayData.this.scale(mwPrivate);
             }
 
             @Override
             public <T> T value(Class<T> clazz) {
-                if (clazz == Boolean.class) {
-                    return clazz.cast(buffer.get(0) != 0);
-                }
-                if (clazz == Integer.class) {
-                    return clazz.cast(buffer.getInt(0));
-                }
-                if (clazz == Short.class) {
-                    return clazz.cast(buffer.getShort(0));
-                }
-                if (clazz == Byte.class) {
-                    return clazz.cast(buffer.get(0));
+                if (clazz.equals(Data[].class)) {
+                    return clazz.cast(unwrappedData);
                 }
                 return super.value(clazz);
             }
         };
-    }
-
-    @Override
-    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config, DataProcessorImpl dpModule) {
-        switch(config.id) {
-            case DataProcessorConfig.Maths.ID: {
-                DataProcessorConfig.Maths casted = (DataProcessorConfig.Maths) config;
-                switch(casted.op) {
-                    case ABS_VALUE:
-                        return new Pair<>(new UintData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, attributes.dataProcessorCopySigned(false)), null);
-                }
-                break;
-            }
-        }
-        return super.dataProcessorTransform(config, dpModule);
     }
 }

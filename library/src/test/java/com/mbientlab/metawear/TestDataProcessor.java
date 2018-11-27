@@ -30,6 +30,7 @@ import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.builder.predicate.PulseOutput;
 import com.mbientlab.metawear.data.Acceleration;
+import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.BarometerBmp280;
@@ -37,6 +38,7 @@ import com.mbientlab.metawear.module.BarometerBosch;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.DataProcessor.PassthroughEditor;
 import com.mbientlab.metawear.module.Gpio;
+import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
 import com.mbientlab.metawear.module.Temperature;
@@ -47,6 +49,7 @@ import org.junit.experimental.runners.Enclosed;
 import org.junit.runner.RunWith;
 
 import java.io.IOException;
+import java.util.concurrent.CancellationException;
 
 import bolts.Capture;
 import bolts.Task;
@@ -62,7 +65,7 @@ public class TestDataProcessor {
     static class TestBase extends UnitTestBase {
         @Before
         public void setup() throws Exception {
-            junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, Gpio.class, Temperature.class);
+            junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, GyroBmi160.class, Gpio.class, Temperature.class);
             junitPlatform.firmware= "1.2.5";
             connectToBoard();
         }
@@ -146,7 +149,7 @@ public class TestDataProcessor {
         }
 
         @Test
-        public void create() throws InterruptedException {
+        public void create() {
             byte[][] expected= new byte[][] {
                     {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x07, (byte) 0xa5, 0x01},
                     {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x03, 0x05, 0x04},
@@ -161,7 +164,7 @@ public class TestDataProcessor {
         }
 
         @Test
-        public void checkIdentifier() throws InterruptedException {
+        public void checkIdentifier() {
             assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=3", mwBoard.lookupRoute(0).generateIdentifier(0));
             assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=4", mwBoard.lookupRoute(0).generateIdentifier(1));
         }
@@ -476,6 +479,16 @@ public class TestDataProcessor {
         }
 
         @Test
+        public void createAccChain() throws InterruptedException {
+            Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(
+                source -> source.pack((byte) 2).account(RouteComponent.AccountType.COUNT).stream(null)
+            );
+            task.waitForCompletion();
+
+            System.out.println("temperature[0]".split("[:|\\[]")[0]);
+            System.out.println(task.getResult().generateIdentifier(0));
+        }
+        @Test
         public void createChain() throws InterruptedException {
             byte[][] expected = new byte[][] {
                     {0x9, 0x2, 0x4, (byte) 0xc1, 0x1, 0x20, 0x11, 0x31, 0x3},
@@ -736,6 +749,75 @@ public class TestDataProcessor {
             ).waitForCompletion();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
+        }
+    }
+
+    public static class TestFuser extends TestBase {
+        @Before
+        public void setup() throws Exception {
+            super.setup();
+
+            final Accelerometer acc = mwBoard.getModule(Accelerometer.class);
+            final GyroBmi160 gyro = mwBoard.getModule(GyroBmi160.class);
+
+            Task<Route> task = gyro.angularVelocity().addRouteAsync(source ->
+                    source.buffer().name("gyro-buffer")
+            ).onSuccessTask(ignored ->acc.acceleration().addRouteAsync(source ->
+                    source.fuse("gyro-buffer").limit(20).stream(null)
+            ));
+            task.waitForCompletion();
+
+            if (task.isFaulted()) {
+                throw task.getError();
+            }
+            if (task.isCancelled()) {
+                throw new CancellationException("Task cancelled");
+            }
+        }
+
+        @Test
+        public void createAccGyroFusion() {
+            byte[][] expected = new byte[][] {
+                    {0x09, 0x02, 0x13, 0x05, (byte) 0xff, (byte) 0xa0, 0x0f, 0x05},
+                    {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x1b, 0x01, 0x00},
+                    {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x08, 0x13, 0x14, 0x00, 0x00, 0x00},
+                    {0x09, 0x03, 0x01},
+                    {0x09, 0x07, 0x02, 0x01}
+            };
+
+            assertArrayEquals(expected, junitPlatform.getCommands());
+        }
+
+        @Test
+        public void handleData() throws InterruptedException {
+            final Capture<Acceleration> accData = new Capture<>();
+            final Capture<AngularVelocity> gyroData = new Capture<>();
+
+            Route fuserRoute = mwBoard.lookupRoute(1);
+            fuserRoute.resubscribe(0, ((data, env) -> {
+                Data[] values = data.value(Data[].class);
+                accData.set(values[0].value(Acceleration.class));
+                gyroData.set(values[1].value(AngularVelocity.class));
+            }));
+
+            final Capture<Acceleration> rawAccData = new Capture<>();
+            final Capture<AngularVelocity> rawGyroData = new Capture<>();
+            final Accelerometer acc = mwBoard.getModule(Accelerometer.class);
+            final GyroBmi160 gyro = mwBoard.getModule(GyroBmi160.class);
+
+            Task<Route> task = gyro.angularVelocity().addRouteAsync(source ->
+                    source.stream((data, env) -> rawGyroData.set(data.value(AngularVelocity.class)))
+            ).onSuccessTask(ignored ->acc.acceleration().addRouteAsync(source ->
+                    source.stream((data, env) -> rawAccData.set(data.value(Acceleration.class)))
+            ));
+            task.waitForCompletion();
+
+            sendMockResponse(new byte[] {0x09, 0x03, 0x02, (byte) 0xf4, 0x0d, 0x3c, 0x39, (byte) 0x99, 0x11, 0x01, (byte) 0x80, (byte) 0xd6, (byte) 0x91, (byte) 0xd3, 0x67});
+            sendMockResponse(new byte[] {0x03, 0x04, (byte) 0xf4, 0x0d, 0x3c, 0x39, (byte) 0x99, 0x11});
+            sendMockResponse(new byte[] {0x13, 0x05, 0x01, (byte) 0x80, (byte) 0xd6, (byte) 0x91, (byte) 0xd3, 0x67});
+
+            assertEquals(rawAccData.get(), accData.get());
+            assertEquals(rawGyroData.get(), gyroData.get());
         }
     }
 }

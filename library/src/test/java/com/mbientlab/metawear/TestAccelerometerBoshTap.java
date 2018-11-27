@@ -140,7 +140,7 @@ public class TestAccelerometerBoshTap extends UnitTestBase {
 
     @Test
     public void configureDouble() {
-        byte[] expected = new byte[] {0x03, 0x0d, (byte) 0xc4, 0x04};
+        byte[] expected = new byte[] {0x03, 0x0d, (byte) 0xc0, 0x04};
 
         boschAcc.configure()
                 .range(8f)

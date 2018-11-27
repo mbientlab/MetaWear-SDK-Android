@@ -46,7 +46,7 @@ abstract class FloatVectorData extends DataTypeBase {
     }
 
     @Override
-    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config, DataProcessorImpl dpModule) {
         switch(config.id) {
             case DataProcessorConfig.Combiner.ID: {
                 DataAttributes attributes= new DataAttributes(new byte[] {this.attributes.sizes[0]}, (byte) 1, (byte) 0, false);
@@ -54,6 +54,6 @@ abstract class FloatVectorData extends DataTypeBase {
             }
         }
 
-        return super.dataProcessorTransform(config);
+        return super.dataProcessorTransform(config, dpModule);
     }
 }

@@ -879,6 +879,7 @@ abstract class AccelerometerBoschImpl extends ModuleImplBase implements Accelero
                             }
 
                             if (newWindow != null) {
+                                tapConfig[0]&= 0xf8;
                                 tapConfig[0]|= newWindow.ordinal();
                             }
 

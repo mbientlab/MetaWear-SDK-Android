@@ -192,7 +192,7 @@ abstract class DataTypeBase implements Serializable, DataToken {
         return value;
     }
     public abstract Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp, DataPrivate.ClassToObject mapper);
-    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config) {
+    Pair<? extends DataTypeBase, ? extends DataTypeBase> dataProcessorTransform(DataProcessorConfig config, DataProcessorImpl dpModule) {
         switch(config.id) {
             case DataProcessorConfig.Buffer.ID:
                 return new Pair<>(
@@ -342,6 +342,16 @@ abstract class DataTypeBase implements Serializable, DataToken {
             case DataProcessorConfig.Accounter.ID: {
                 DataProcessorConfig.Accounter casted = (DataProcessorConfig.Accounter) config;
                 return new Pair<>(dataProcessorCopy(this, new DataAttributes(new byte[] {casted.length, attributes.length()}, (byte) 1, (byte) 0, attributes.signed)), null);
+            }
+            case DataProcessorConfig.Fuser.ID: {
+                byte fusedLength = attributes.length();
+                DataProcessorConfig.Fuser casted = (DataProcessorConfig.Fuser) config;
+
+                for(byte id: casted.filterIds) {
+                    fusedLength+= dpModule.activeProcessors.get(id).state.attributes.length();
+                }
+
+                return new Pair<>(new ArrayData(this, DATA_PROCESSOR, DataProcessorImpl.NOTIFY, new DataAttributes(new byte[] {fusedLength}, (byte) 1, (byte) 0, false)), null);
             }
         }
         throw new IllegalStateException("Unable to determine the DataTypeBase object for config: " + Util.arrayToHexString(config.build()));

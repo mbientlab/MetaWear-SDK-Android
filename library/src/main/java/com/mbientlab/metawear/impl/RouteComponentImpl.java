@@ -195,7 +195,8 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         DataProcessorConfig config = new DataProcessorConfig.Buffer(source.attributes.length());
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
         return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
     }
 
@@ -259,7 +260,8 @@ class RouteComponentImpl implements RouteComponent {
 
         final byte output= 4;
         DataProcessorConfig config = new DataProcessorConfig.Accumulator(counter, output, source.attributes.length());
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         EditorImplBase editor= counter ?
                 new CounterEditorInner(config, next.first, persistantData.mwPrivate) :
@@ -309,7 +311,8 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         DataProcessorConfig config = new DataProcessorConfig.Average(source.attributes, nSamples, hpf, hasHpf);
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new AverageEditorInner(config, next.first, persistantData.mwPrivate));
     }
@@ -342,7 +345,8 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         DataProcessorConfig config = new DataProcessorConfig.Delay(expanded, source.attributes.length(), samples);
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
     }
@@ -356,7 +360,8 @@ class RouteComponentImpl implements RouteComponent {
 
         // assume sizes array is filled with the same value
         DataProcessorConfig config = new DataProcessorConfig.Combiner(source.attributes, rss);
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
     }
@@ -480,7 +485,8 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         DataProcessorConfig.Maths config = new DataProcessorConfig.Maths(source.attributes, multiChnlMath, op, scaledRhs.intValue());
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
         config.output = next.first.attributes.sizes[0];
         return postCreate(next.second, new MapEditorInner(config, next.first, persistantData.mwPrivate));
     }
@@ -512,7 +518,8 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         DataProcessorConfig config = new DataProcessorConfig.Time(source.attributes.length(), (byte) (hasTimePassthrough ? 2 : 0), period);
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new TimeEditorInner(config, next.first, persistantData.mwPrivate));
     }
@@ -548,7 +555,8 @@ class RouteComponentImpl implements RouteComponent {
 
         DataProcessorConfig config = new DataProcessorConfig.Passthrough(type, value);
 
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
         return postCreate(next.second, new PassthroughEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
@@ -586,7 +594,8 @@ class RouteComponentImpl implements RouteComponent {
 
         DataProcessorConfig config = new DataProcessorConfig.Pulse(source.attributes.length(),
                 source.convertToFirmwareUnits(persistantData.mwPrivate, threshold).intValue(), samples, output);
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new PulseEditorInner(config, next.first, persistantData.mwPrivate));
     }
@@ -702,7 +711,8 @@ class RouteComponentImpl implements RouteComponent {
             final Number scaledReference= source.convertToFirmwareUnits(persistantData.mwPrivate, references[0]);
 
             DataProcessorConfig config = new DataProcessorConfig.SingleValueComparison(signed, op, scaledReference.intValue());
-            Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config);
+            Pair<? extends DataTypeBase, ? extends DataTypeBase> next= source.dataProcessorTransform(config,
+                    (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
             return postCreate(next.second, new SingleValueComparatorEditor(config, next.first, persistantData.mwPrivate));
         }
 
@@ -715,7 +725,8 @@ class RouteComponentImpl implements RouteComponent {
         boolean signed= source.attributes.signed || anySigned;
 
         DataProcessorConfig config = new DataProcessorConfig.MultiValueComparison(signed, source.attributes.length(), op, mode, scaled);
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new MultiValueComparatorEditor(config, next.first, persistantData.mwPrivate));
     }
@@ -761,7 +772,8 @@ class RouteComponentImpl implements RouteComponent {
                 firmwareHysteresis= source.convertToFirmwareUnits(persistantData.mwPrivate, hysteresis);
         DataProcessorConfig config = new DataProcessorConfig.Threshold(source.attributes.length(), source.attributes.signed, mode,
                 firmwareValue.intValue(), firmwareHysteresis.shortValue());
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
         return postCreate(next.second, new ThresholdEditorInner(config, next.first, persistantData.mwPrivate));
     }
 
@@ -797,7 +809,8 @@ class RouteComponentImpl implements RouteComponent {
 
         Number firmwareUnits = source.convertToFirmwareUnits(persistantData.mwPrivate, distance);
         DataProcessorConfig config = new DataProcessorConfig.Differential(source.attributes.length(), source.attributes.signed, mode, firmwareUnits.intValue());
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new DifferentialEditorInner(config, next.first, persistantData.mwPrivate));
     }
@@ -825,7 +838,8 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         DataProcessorConfig config = new DataProcessorConfig.Packer(source.attributes.length(), count);
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new PackerEditorInner(config, next.first, persistantData.mwPrivate));
     }
@@ -847,7 +861,21 @@ class RouteComponentImpl implements RouteComponent {
         }
 
         DataProcessorConfig config = new DataProcessorConfig.Accounter(size, type);
-        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
+
+        return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
+    }
+
+    @Override
+    public RouteComponent fuse(String... bufferNames) {
+        if (persistantData.mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision < DataProcessorImpl.FUSE_REVISION) {
+            throw new IllegalRouteOperationException("Current firmware does not support data fusing");
+        }
+
+        DataProcessorConfig config = new DataProcessorConfig.Fuser(bufferNames);
+        Pair<? extends DataTypeBase, ? extends DataTypeBase> next = source.dataProcessorTransform(config,
+                (DataProcessorImpl) persistantData.mwPrivate.getModules().get(DataProcessor.class));
 
         return postCreate(next.second, new NullEditor(config, next.first, persistantData.mwPrivate));
     }

@@ -528,7 +528,8 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                         while(!result.isEmpty()) {
                             ProcessorEntry current = result.poll();
                             DataProcessorConfig config = DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), revision, current.config);
-                            Pair<? extends DataTypeBase, ? extends DataTypeBase> next = type.dataProcessorTransform(config);
+                            Pair<? extends DataTypeBase, ? extends DataTypeBase> next = type.dataProcessorTransform(config,
+                                    (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class));
 
                             next.first.eventConfig[2] = current.id;
                             if (next.second != null) {

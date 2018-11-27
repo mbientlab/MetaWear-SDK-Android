@@ -84,7 +84,7 @@ public class MetaWearBoardInfo {
         MODULE_RESPONSE.put(NeoPixel.class, new byte[] {0x06, (byte) 0x80, 0x00, 0x00});
         MODULE_RESPONSE.put(IBeacon.class, new byte[] {0x07, (byte) 0x80, 0x00, 0x00});
         MODULE_RESPONSE.put(Haptic.class, new byte[] {0x08, (byte) 0x80, 0x00, 0x00});
-        MODULE_RESPONSE.put(DataProcessor.class, new byte[] {0x09, (byte) 0x80, 0x00, 0x02, 0x1c});
+        MODULE_RESPONSE.put(DataProcessor.class, new byte[] {0x09, (byte) 0x80, 0x00, 0x03, 0x1c});
         MODULE_RESPONSE.put(Logging.class, new byte[] {0x0b, (byte) 0x80, 0x00, 0x02, 0x08, (byte) 0x80, 0x2b, 0x00, 0x00});
         MODULE_RESPONSE.put(Timer.class, new byte[] {0x0c, (byte) 0x80, 0x00, 0x00, 0x08});
         MODULE_RESPONSE.put(SerialPassthrough.class, new byte[] {0x0d, (byte) 0x80, 0x00, 0x01});
