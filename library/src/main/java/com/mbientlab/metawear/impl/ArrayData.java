@@ -63,10 +63,11 @@ public class ArrayData extends DataTypeBase {
             fuser = dpModules.activeProcessors.get(fuser.editor.source.input.eventConfig[2]);
         }
 
+        DataTypeBase source = fuser.editor.source.input == null ? fuser.editor.source : fuser.editor.source.input;
         int offset = 0;
         final Data[] unwrappedData = new Data[fuser.editor.config.length + 1];
-        unwrappedData[0] = fuser.editor.source.input.createMessage(logData, mwPrivate, data, timestamp, mapper);
-        offset+= fuser.editor.source.input.attributes.length();
+        unwrappedData[0] = source.createMessage(logData, mwPrivate, data, timestamp, mapper);
+        offset+= source.attributes.length();
 
         for(int i = 2; i < fuser.editor.config.length; i++) {
             DataProcessorImpl.Processor value = dpModules.activeProcessors.get(fuser.editor.config[i]);

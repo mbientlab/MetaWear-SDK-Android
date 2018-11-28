@@ -49,6 +49,7 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
 
 import bolts.Capture;
+import bolts.Continuation;
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
@@ -509,6 +510,57 @@ class LoggingImpl extends ModuleImplBase implements Logging {
         final Capture<byte[]> response = new Capture<>();
         final DataProcessorImpl dataprocessor = (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class);
 
+        final Deque<Byte> fuserIds = new LinkedList<>();
+        final Deque<Pair<DataTypeBase, ProcessorEntry>> fuserConfigs = new LinkedList<>();
+        final Capture<Continuation<Deque<ProcessorEntry>, Task<DataTypeBase>>> onProcessorSynced = new Capture<>();
+        onProcessorSynced.set(task -> {
+            Deque<ProcessorEntry> result = task.getResult();
+            ProcessorEntry first = result.peek();
+            DataTypeBase type = guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(first.source[0], first.source[1], first.source[2]), first.offset, first.length);
+
+            byte revision = mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision;
+            while(!result.isEmpty()) {
+                ProcessorEntry current = result.poll();
+                if (current.config[0] == DataProcessorConfig.Fuser.ID) {
+                    for(int i = 0; i < (current.config[1] & 0x1f); i++) {
+                        fuserIds.push(current.config[i + 2]);
+                    }
+                    fuserConfigs.push(new Pair<>(type, current));;
+                } else {
+                    DataProcessorConfig config = DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), revision, current.config);
+                    Pair<? extends DataTypeBase, ? extends DataTypeBase> next = type.dataProcessorTransform(config,
+                            (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class));
+
+                    next.first.eventConfig[2] = current.id;
+                    if (next.second != null) {
+                        next.second.eventConfig[2] = current.id;
+                    }
+                    dataprocessor.addProcessor(current.id, next.second, type, config);
+                    type = next.first;
+                }
+            }
+
+            if (fuserIds.size() == 0) {
+                while(fuserConfigs.size() != 0) {
+                    Pair<DataTypeBase, ProcessorEntry> top = fuserConfigs.poll();
+                    DataProcessorConfig config = DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), revision, top.second.config);
+                    Pair<? extends DataTypeBase, ? extends DataTypeBase> next = top.first.dataProcessorTransform(config,
+                            (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class));
+
+                    next.first.eventConfig[2] = top.second.id;
+                    if (next.second != null) {
+                        next.second.eventConfig[2] = top.second.id;
+                    }
+                    dataprocessor.addProcessor(top.second.id, next.second, top.first, config);
+
+                    type = next.first;
+                }
+                return Task.forResult(type);
+            } else {
+                return dataprocessor.pullChainAsync(fuserIds.poll()).onSuccessTask(onProcessorSynced.get());
+            }
+        });
+
         return syncLoggerConfigTask.execute("Did not receive logger config for id=" + id + " within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {0x0b, Util.setRead(TRIGGER), id})
         ).onSuccessTask(task -> {
@@ -518,28 +570,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                 byte length = (byte) (((response.get()[5] >> 5) & 0x3) + 1);
 
                 if (response.get()[2] == DATA_PROCESSOR.id && (response.get()[3] == DataProcessorImpl.NOTIFY || Util.clearRead(response.get()[3]) == DataProcessorImpl.STATE)) {
-                    return dataprocessor.pullChainAsync(response.get()[4]).onSuccessTask(task13 -> {
-                        Deque<ProcessorEntry> result = task13.getResult();
-                        ProcessorEntry first = result.peek();
-                        DataTypeBase type = guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(first.source[0], first.source[1], first.source[2]),
-                                first.offset, first.length);
-
-                        byte revision = mwPrivate.lookupModuleInfo(DATA_PROCESSOR).revision;
-                        while(!result.isEmpty()) {
-                            ProcessorEntry current = result.poll();
-                            DataProcessorConfig config = DataProcessorConfig.from(mwPrivate.getFirmwareVersion(), revision, current.config);
-                            Pair<? extends DataTypeBase, ? extends DataTypeBase> next = type.dataProcessorTransform(config,
-                                    (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class));
-
-                            next.first.eventConfig[2] = current.id;
-                            if (next.second != null) {
-                                next.second.eventConfig[2] = current.id;
-                            }
-                            dataprocessor.addProcessor(current.id, next.second, type, config);
-                            type = next.first;
-                        }
-                        return Task.forResult(type);
-                    });
+                    return dataprocessor.pullChainAsync(response.get()[4]).onSuccessTask(onProcessorSynced.get());
                 } else {
                     return Task.forResult(guessLogSource(mwPrivate.getDataTypes(), new Tuple3<>(response.get()[2], response.get()[3], response.get()[4]), offset.get(), length));
                 }

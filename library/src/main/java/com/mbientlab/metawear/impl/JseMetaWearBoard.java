@@ -571,7 +571,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
             JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
 
             ModuleInfo mInfo = persist.boardInfo.moduleInfo.get(Constant.Module.SETTINGS);
-            String build = mInfo != null && mInfo.extra.length >= 2 ? String.format(Locale.US, "%d", ((short) mInfo.extra[1] & 0xff)) : DEFAULT_FIRMWARE_BUILD;
+            String build = mInfo != null && mInfo.extra.length >= 2 && mInfo.extra[1] != 0 ? String.format(Locale.US, "%d", ((short) mInfo.extra[1] & 0xff)) : DEFAULT_FIRMWARE_BUILD;
 
             Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(build), version);
 
@@ -665,7 +665,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
             JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
 
             ModuleInfo info = persist.boardInfo.moduleInfo.get(Constant.Module.SETTINGS);
-            String build = info.extra.length >= 2 ? String.format(Locale.US, "%d", info.extra[1]) : DEFAULT_FIRMWARE_BUILD;
+            String build = info != null && info.extra.length >= 2 && info.extra[1] != 0 ? String.format(Locale.US, "%d", info.extra[1]) : DEFAULT_FIRMWARE_BUILD;
 
             Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(build), null);
             return Task.forResult(result.second.compareTo(persist.boardInfo.firmware) > 0 ? result.second.toString() : null);

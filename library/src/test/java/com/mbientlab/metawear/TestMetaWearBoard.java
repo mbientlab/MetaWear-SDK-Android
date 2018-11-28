@@ -47,6 +47,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeoutException;
 
 import bolts.AggregateException;
@@ -526,24 +527,39 @@ public class TestMetaWearBoard {
         }
     }
 
+    @RunWith(Parameterized.class)
     public static class TestFirmwareBuildCheck extends UnitTestBase {
-        @Before
-        public void setup() throws Exception {
-            junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
-            junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x08, 0x03, (byte) 0x80});
-            junitPlatform.firmware = "1.4.2";
-            connectToBoard();
+        @Parameters
+        public static Collection<Object[]> data() {
+            return Arrays.asList(new Object[][]{
+                    { (byte) 0x80, "128" },
+                    { (byte) 0x00, "vanilla" }
+            });
         }
 
+        @Parameter
+        public byte revision;
+
+        @Parameter(value = 1)
+        public String buildName;
+
+        @Before
+        public void setup() {
+            junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+            junitPlatform.firmware = "1.4.2";
+        }
 
         @Test
         public void checkFilename() throws Exception {
+            junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x08, 0x03, revision});
+            connectToBoard();
+
             Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync();
             filesTask.waitForCompletion();
 
             // Firmware v1.4.0+ can just upload the next firmware image
             final String[] expected = new String[] {
-                    "0.1_5_128_1.4.4_firmware.zip",
+                    String.format(Locale.US, "0.1_5_%s_1.5.0_firmware.zip", buildName)
             };
             assertArrayEquals(expected, fileToNames(filesTask.getResult()));
         }
