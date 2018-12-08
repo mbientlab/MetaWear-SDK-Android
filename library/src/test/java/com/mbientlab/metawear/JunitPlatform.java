@@ -133,6 +133,7 @@ class JunitPlatform implements IO, BtleGatt {
 
                 int hash = Arrays.hashCode(prefix);
                 if (customResponses.containsKey(hash)) {
+                    commandHistory.add(value);
                     scheduleMockResponse(customResponses.get(hash));
                     return Task.forResult(null);
                 }
@@ -313,10 +314,14 @@ class JunitPlatform implements IO, BtleGatt {
     byte[][] getCommands(int start, int end) {
         byte[][] cmdArray= new byte[end - start][];
         for(int i= start; i < end; i++) {
-            cmdArray[i]= commandHistory.get(i);
+            cmdArray[i - start]= commandHistory.get(i);
         }
 
         return cmdArray;
+    }
+
+    byte[][] getCommands(int start) {
+        return getCommands(start, commandHistory.size());
     }
 
     public byte[] getLastCommand() {

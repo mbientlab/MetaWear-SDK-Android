@@ -49,6 +49,8 @@ import org.junit.experimental.runners.Enclosed;
 import org.junit.runner.RunWith;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 
 import bolts.Capture;
@@ -467,6 +469,48 @@ public class TestDataProcessor {
 
             assertEquals(expected, actual.get().longValue());
         }
+
+        @Test
+        public void countAndTime() throws Exception {
+            final BarometerBmp280 barometer = mwBoard.getModule(BarometerBmp280.class);
+            final Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
+
+            Task<Route> routeTask = accelerometer.acceleration().addRouteAsync(source ->
+                    source.pack((byte) 2).account(RouteComponent.AccountType.COUNT).stream((data, env) -> {
+                        System.out.println(data.toString());
+                    })
+            ).onSuccessTask(ignored ->
+                    barometer.pressure().addRouteAsync(source ->
+                            source.account().stream(null)
+                    )
+            );
+            routeTask.waitForCompletion();
+
+            if (routeTask.getError() != null) {
+                throw routeTask.getError();
+            }
+
+            final Capture<Long> prev = new Capture<>(null);
+            final Capture<List<Long>> offsets = new Capture<>(new ArrayList<>());
+            routeTask.getResult().resubscribe(0, (data, env) -> {
+                if (prev.get() != null) {
+                    offsets.get().add(data.timestamp().getTimeInMillis() - prev.get());
+                }
+                prev.set(data.timestamp().getTimeInMillis());
+            });
+
+            sendMockResponse(new byte[] {0x09, 0x03, 0x02, 0x72, (byte) 0xA4, 0x03, 0x00, 0x77, 0x6C, (byte) 0x84, 0x01});
+            sendMockResponse(new byte[] {0x09, 0x03, 0x01, (byte) 0x8D, 0x00, 0x00, 0x00, 0x4E, (byte) 0xFF, 0x35, (byte) 0xFD, 0x79, 0x07, 0x4D, (byte) 0xFF, 0x35, (byte) 0xFD, 0x7D, 0x07});
+            sendMockResponse(new byte[] {0x09, 0x03, 0x02, (byte) 0xA4, (byte) 0xA4, 0x03, 0x00, 0x05, 0x65, (byte) 0x84, 0x01});
+
+            Long[] actualArray= new Long[offsets.get().size()];
+            offsets.get().toArray(actualArray);
+
+            Long[] expected = new Long[] {
+                    73L
+            };
+            assertArrayEquals(expected, actualArray);
+        }
     }
 
     public static class TestAccounterPackerChain extends TestBase {
@@ -489,7 +533,7 @@ public class TestDataProcessor {
             System.out.println(task.getResult().generateIdentifier(0));
         }
         @Test
-        public void createChain() throws InterruptedException {
+        public void createChain() {
             byte[][] expected = new byte[][] {
                     {0x9, 0x2, 0x4, (byte) 0xc1, 0x1, 0x20, 0x11, 0x31, 0x3},
                     {0x9, 0x2, 0x9, 0x3, 0x0, (byte) 0xa0, 0x10, 0x5, 0x1},

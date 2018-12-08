@@ -131,7 +131,7 @@ public class TestLoggingDownload extends UnitTestBase {
         logging.downloadAsync(20, (nEntriesLeft, totalEntries) -> {
 
         });
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        assertArrayEquals(expected, junitPlatform.getCommands(1));
     }
 
     @Test(expected = RuntimeException.class)

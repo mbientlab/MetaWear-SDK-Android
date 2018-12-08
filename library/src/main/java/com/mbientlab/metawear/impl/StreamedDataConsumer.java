@@ -179,14 +179,20 @@ class StreamedDataConsumer extends DeviceDataConsumer {
         if (accounter != null) {
             DataProcessorConfig config = accounter.editor.configObj;
             if (config instanceof DataProcessorConfig.Accounter) {
-                LoggingImpl logging = (LoggingImpl) mwPrivate.getModules().get(Logging.class);
                 int size = ((DataProcessorConfig.Accounter) config).length;
-
-                byte[] padded= new byte[8];
+                byte[] padded = new byte[8];
                 System.arraycopy(response, offset, padded, 0, size);
-                long tick= ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
+                long tick = ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN).getLong(0);
 
-                return new Tuple3<>(logging.computeTimestamp((byte) -1, tick), size + offset, tick);
+                switch(((DataProcessorConfig.Accounter) config).type) {
+                    case COUNT: {
+                        return new Tuple3<>(Calendar.getInstance(), size + offset, tick);
+                    }
+                    case TIME: {
+                        LoggingImpl logging = (LoggingImpl) mwPrivate.getModules().get(Logging.class);
+                        return new Tuple3<>(logging.computeTimestamp((byte) -1, tick), size + offset, tick);
+                    }
+                }
             }
         }
         return new Tuple3<>(Calendar.getInstance(), offset, 0L);

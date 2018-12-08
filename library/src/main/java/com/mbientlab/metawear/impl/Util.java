@@ -50,7 +50,7 @@ public class Util {
     }
 
     public static String arrayToHexString(byte[] value) {
-        if (value.length == 0) {
+        if (value == null || value.length == 0) {
             return "[]";
         }
 

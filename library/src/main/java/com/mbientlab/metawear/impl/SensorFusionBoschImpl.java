@@ -41,8 +41,11 @@ import com.mbientlab.metawear.module.SensorFusionBosch;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.Calendar;
 
+import bolts.CancellationToken;
+import bolts.Capture;
 import bolts.Task;
 
 import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
@@ -74,10 +77,11 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     private static final long serialVersionUID = -7041546136871081754L;
 
+    private static final byte CALIBRATION_STATE_REV = 1, CALIBRATION_DATA_REV = 2;
     private static final byte ENABLE = 1, MODE = 2, OUTPUT_ENABLE = 3,
             CORRECTED_ACC = 4, CORRECTED_ROT = 5, CORRECTED_MAG = 6,
             QUATERNION = 7, EULER_ANGLES = 8, GRAVITY_VECTOR = 9, LINEAR_ACC = 0xa,
-            CALIB_STATUS = 0xb;
+            CALIB_STATUS = 0xb, ACC_CALIB_DATA = 0xc, GYRO_CALIB_DATA = 0xd, MAG_CALIB_DATA = 0xe;
     private final static String QUATERNION_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.QUATERNION_PRODUCER",
             EULER_ANGLES_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.EULER_ANGLES_PRODUCER",
             GRAVITY_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.GRAVITY_PRODUCER",
@@ -381,6 +385,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     private byte dataEnableMask;
 
     private transient TimedTask<byte[]> readRegisterTask;
+    private transient AsyncDataProducer correctedAccProducer, correctedAngVelProducer, correctedMagProducer, quaterionProducer, eulerAnglesProducer, gravityProducer, linearAccProducer;
 
     SensorFusionBoschImpl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
@@ -399,7 +404,14 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
         readRegisterTask = new TimedTask<>();
 
         mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MODE)), response -> readRegisterTask.setResult(response));
-        mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(CALIB_STATUS)), response -> readRegisterTask.setResult(response));
+        if (mwPrivate.lookupModuleInfo(SENSOR_FUSION).revision >= CALIBRATION_STATE_REV) {
+            mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(CALIB_STATUS)), response -> readRegisterTask.setResult(response));
+        }
+        if (mwPrivate.lookupModuleInfo(SENSOR_FUSION).revision >= CALIBRATION_DATA_REV) {
+            mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(ACC_CALIB_DATA)), response -> readRegisterTask.setResult(response));
+            mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(GYRO_CALIB_DATA)), response -> readRegisterTask.setResult(response));
+            mwPrivate.addResponseHandler(new Pair<>(SENSOR_FUSION.id, Util.setRead(MAG_CALIB_DATA)), response -> readRegisterTask.setResult(response));
+        }
     }
 
     @Override
@@ -542,37 +554,58 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     @Override
     public AsyncDataProducer correctedAcceleration() {
-        return new SensorFusionAsyncDataProducer(CORRECTED_ACC_PRODUCER, (byte) 0x01);
+        if (correctedAccProducer == null) {
+            correctedAccProducer = new SensorFusionAsyncDataProducer(CORRECTED_ACC_PRODUCER, (byte) 0x01);
+        }
+        return correctedAccProducer;
     }
 
     @Override
     public AsyncDataProducer correctedAngularVelocity() {
-        return new SensorFusionAsyncDataProducer(CORRECTED_ROT_PRODUCER, (byte) 0x02);
+        if (correctedAngVelProducer == null) {
+            correctedAngVelProducer = new SensorFusionAsyncDataProducer(CORRECTED_ROT_PRODUCER, (byte) 0x02);
+        }
+        return correctedAngVelProducer;
     }
 
     @Override
     public AsyncDataProducer correctedMagneticField() {
-        return new SensorFusionAsyncDataProducer(CORRECTED_MAG_PRODUCER, (byte) 0x04);
+        if (correctedMagProducer == null) {
+            correctedMagProducer = new SensorFusionAsyncDataProducer(CORRECTED_MAG_PRODUCER, (byte) 0x04);
+        }
+        return correctedMagProducer;
     }
 
     @Override
     public AsyncDataProducer quaternion() {
-        return new SensorFusionAsyncDataProducer(QUATERNION_PRODUCER, (byte) 0x08);
+        if (quaterionProducer == null) {
+            quaterionProducer = new SensorFusionAsyncDataProducer(QUATERNION_PRODUCER, (byte) 0x08);
+        }
+        return quaterionProducer;
     }
 
     @Override
     public AsyncDataProducer eulerAngles() {
-        return new SensorFusionAsyncDataProducer(EULER_ANGLES_PRODUCER, (byte) 0x10);
+        if (eulerAnglesProducer == null) {
+            eulerAnglesProducer = new SensorFusionAsyncDataProducer(EULER_ANGLES_PRODUCER, (byte) 0x10);
+        }
+        return eulerAnglesProducer;
     }
 
     @Override
     public AsyncDataProducer gravity() {
-        return new SensorFusionAsyncDataProducer(GRAVITY_PRODUCER, (byte) 0x20);
+        if (gravityProducer == null) {
+            gravityProducer = new SensorFusionAsyncDataProducer(GRAVITY_PRODUCER, (byte) 0x20);
+        }
+        return gravityProducer;
     }
 
     @Override
     public AsyncDataProducer linearAcceleration() {
-        return new SensorFusionAsyncDataProducer(LINEAR_ACC_PRODUCER, (byte) 0x40);
+        if (linearAccProducer == null) {
+            linearAccProducer = new SensorFusionAsyncDataProducer(LINEAR_ACC_PRODUCER, (byte) 0x40);
+        }
+        return linearAccProducer;
     }
 
     @Override
@@ -659,15 +692,113 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     @Override
     public Task<CalibrationState> readCalibrationStateAsync() {
-        return readRegisterTask.execute("Did not receive sensor fusion calibration status within %dms", Constant.RESPONSE_TIMEOUT,
-                () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(CALIB_STATUS)})
-        ).onSuccessTask(task -> {
-            CalibrationAccuracy values[] = CalibrationAccuracy.values();
-            return Task.forResult(new CalibrationState(
-                    values[task.getResult()[2]],
-                    values[task.getResult()[3]],
-                    values[task.getResult()[4]]
-            ));
-        });
+        if (mwPrivate.lookupModuleInfo(SENSOR_FUSION).revision >= CALIBRATION_STATE_REV) {
+            return readRegisterTask.execute("Did not receive sensor fusion calibration status within %dms", Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(CALIB_STATUS)})
+            ).onSuccessTask(task -> {
+                CalibrationAccuracy values[] = CalibrationAccuracy.values();
+                return Task.forResult(new CalibrationState(
+                        values[task.getResult()[2]],
+                        values[task.getResult()[3]],
+                        values[task.getResult()[4]]
+                ));
+            });
+        }
+        return Task.forError(new UnsupportedOperationException("Minimum firmware v1.4.2 required to use this function"));
+    }
+
+    @Override
+    public Task<CalibrationData> calibrate(CancellationToken ct, long pollingPeriod, CalibrationStateUpdateHandler updateHandler) {
+        if (mwPrivate.lookupModuleInfo(SENSOR_FUSION).revision >= CALIBRATION_DATA_REV) {
+            final Capture<Boolean> terminate = new Capture<>(false);
+            final Capture<byte[]> acc = new Capture<>(null),
+                    gyro = new Capture<>(null),
+                    mag = new Capture<>(null);
+
+            return Task.forResult(null).continueWhile(() -> !terminate.get(), ignored -> ct.isCancellationRequested() ? readCalibrationStateAsync().onSuccessTask(task -> {
+                if (updateHandler != null) {
+                    updateHandler.receivedUpdate(task.getResult());
+                }
+
+                switch (mode) {
+                    case NDOF:
+                        terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.getResult().gyroscope == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.getResult().magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
+                        break;
+                    case IMU_PLUS:
+                        terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.getResult().gyroscope == CalibrationAccuracy.HIGH_ACCURACY);
+                        break;
+                    case COMPASS:
+                        terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.getResult().magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
+                        break;
+                    case M4G:
+                        terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.getResult().magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
+                        break;
+                }
+
+                return !terminate.get() ? Task.delay(pollingPeriod) : Task.<Void>forResult(null);
+            }) : Task.cancelled()
+            ).onSuccessTask(ignored -> readRegisterTask.execute("Did not receive accelerometer calibration data within %dms", Constant.RESPONSE_TIMEOUT,
+                    () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(ACC_CALIB_DATA)}))
+            ).onSuccessTask(task -> {
+                byte[] result = task.getResult();
+                acc.set(Arrays.copyOfRange(result, 2, result.length));
+
+                return mode == Mode.IMU_PLUS || mode == Mode.NDOF ? readRegisterTask.execute("Did not receive gyroscope calibration data within %dms", Constant.RESPONSE_TIMEOUT,
+                        () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(GYRO_CALIB_DATA)})
+                ) : Task.forResult(null);
+            }).onSuccessTask(task -> {
+                if (task.getResult() != null) {
+                    byte[] result = task.getResult();
+                    gyro.set(Arrays.copyOfRange(result, 2, result.length));
+                }
+
+                return mode != Mode.IMU_PLUS ? readRegisterTask.execute("Did not receive magnetometer calibration data within %dms", Constant.RESPONSE_TIMEOUT,
+                        () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MAG_CALIB_DATA)})
+                ) : Task.forResult(null);
+            }).onSuccessTask(task -> {
+                if (task.getResult() != null) {
+                    byte[] result = task.getResult();
+                    mag.set(Arrays.copyOfRange(result, 2, result.length));
+                }
+
+                return Task.forResult(new CalibrationData(acc.get(), gyro.get(), mag.get()));
+            });
+        }
+        return Task.forError(new UnsupportedOperationException("Minimum firmware v1.4.4 required to use this function"));
+    }
+
+    @Override
+    public Task<CalibrationData> calibrate(CancellationToken ct, CalibrationStateUpdateHandler updateHandler) {
+        return calibrate(ct, 1000, updateHandler);
+    }
+
+    @Override
+    public Task<CalibrationData> calibrate(CancellationToken ct, long pollingPeriod) {
+        return calibrate(ct, pollingPeriod, null);
+    }
+
+    @Override
+    public Task<CalibrationData> calibrate(CancellationToken ct) {
+        return calibrate(ct, 1000, null);
+    }
+
+    @Override
+    public void writeCalibrationData(CalibrationData data) {
+        if (mwPrivate.lookupModuleInfo(SENSOR_FUSION).revision >= CALIBRATION_STATE_REV) {
+            mwPrivate.sendCommand(SENSOR_FUSION, ACC_CALIB_DATA, data.accelerometer);
+
+            if (mode == Mode.IMU_PLUS || mode == Mode.NDOF) {
+                mwPrivate.sendCommand(SENSOR_FUSION, GYRO_CALIB_DATA, data.gyroscope);
+            }
+
+            if (mode != Mode.IMU_PLUS) {
+                mwPrivate.sendCommand(SENSOR_FUSION, MAG_CALIB_DATA, data.magnetometer);
+            }
+        }
     }
 }
