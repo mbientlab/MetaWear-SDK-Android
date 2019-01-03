@@ -715,7 +715,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                     gyro = new Capture<>(null),
                     mag = new Capture<>(null);
 
-            return Task.forResult(null).continueWhile(() -> !terminate.get(), ignored -> ct.isCancellationRequested() ? readCalibrationStateAsync().onSuccessTask(task -> {
+            return Task.forResult(null).continueWhile(() -> !terminate.get(), ignored -> !ct.isCancellationRequested() ? readCalibrationStateAsync().onSuccessTask(task -> {
                 if (updateHandler != null) {
                     updateHandler.receivedUpdate(task.getResult());
                 }
