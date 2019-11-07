@@ -31,8 +31,8 @@ android {
     defaultConfig {
         minSdkVersion 18
         targetSdkVersion 28
-        versionCode 61
-        versionName "3.7.1"
+        versionCode 62
+        versionName "3.8.0-b00"
     }
     buildTypes {
         release {

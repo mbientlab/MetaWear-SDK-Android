@@ -104,6 +104,21 @@ public interface MetaWearBoard {
      */
     Task<List<File>> downloadFirmwareUpdateFilesAsync();
     /**
+     * Retrieves the files needed to update the board to the latest available firmware.
+     * A connection must be first established before calling this function.
+     *
+     * Depending on how far the download proceeded, the board may be in MetaBoot mode when the task completes,
+     * check the board state with {@link #inMetaBootMode()}.
+     * @return Task containing the list of files to upload
+     */
+    Task<List<File>> downloadFirmwareUpdateFilesAsyncV2();
+    /**
+     * Variant of {@link #downloadFirmwareUpdateFilesAsyncV2()} that lets the caller specify which firmware version to download
+     * @param version Firmware revision to download, null to retrieve the latest version
+     * @return Task containing the list of files to upload
+     */
+    Task<List<File>> downloadFirmwareUpdateFilesAsyncV2(String version);
+    /**
      * Checks if a newer firmware version is available for the current board.
      * A connection must be first established before calling this function.
      * @return Task containing the version string, contains null if no update is available
@@ -139,6 +154,12 @@ public interface MetaWearBoard {
      * @return Task holding the result of the connect attempt
      */
     Task<Void> connectAsync();
+    /**
+     * Establishes a Bluetooth Low Energy connection to the MetaWear board
+     * @param retries Number of retry attempts before completing the task with an error
+     * @return Task holding the result of the connect attempt
+     */
+    Task<Void> connectWithRetryAsync(int retries);
     /**
      * Establishes a Bluetooth Low Energy connection to the MetaWear board
      * @param delay    How long to wait (in milliseconds) before attempting to connect

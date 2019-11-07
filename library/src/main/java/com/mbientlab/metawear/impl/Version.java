@@ -32,28 +32,32 @@ import java.util.regex.Pattern;
 /**
  * Created by etsai on 9/5/16.
  */
-class Version implements Comparable<Version>, Serializable {
-    private static final Pattern VERSION_STRING_PATTERN = Pattern.compile("(\\d+)\\.(\\d+)\\.(\\d+)");
+public class Version implements Comparable<Version>, Serializable {
+    private static final Pattern VERSION_STRING_PATTERN = Pattern.compile("(\\d+)\\.(\\d+)\\.(\\d+)(-([\\p{Alnum}]+))?");
     private static final long serialVersionUID = -6928626294821091652L;
 
-    private final int major, minor, step;
+    public final int major, minor, step;
+    public final String preRelease;
 
     Version(int major, int minor, int step) {
         this.major= major;
         this.minor= minor;
         this.step= step;
+        this.preRelease = null;
     }
 
-    Version(String versionString) {
+    public Version(String versionString) {
         Matcher m= VERSION_STRING_PATTERN.matcher(versionString);
 
         if (!m.matches()) {
             throw new RuntimeException("Version string: \'" + versionString + "\' does not match pattern X.Y.Z");
         }
 
+        System.out.printf("m: %s", m.toString());
         major= Integer.valueOf(m.group(1));
         minor= Integer.valueOf(m.group(2));
         step= Integer.valueOf(m.group(3));
+        preRelease = m.groupCount()>= 4 ? m.group(5) : null;
     }
 
     private int weightedCompare(int left, int right) {
@@ -79,6 +83,8 @@ class Version implements Comparable<Version>, Serializable {
 
     @Override
     public String toString() {
-        return String.format(Locale.US, "%d.%d.%d", major, minor, step);
+        return preRelease == null ?
+                String.format(Locale.US, "%d.%d.%d", major, minor, step) :
+                String.format(Locale.US, "%d.%d.%d-%s", major, minor, step, preRelease);
     }
 }

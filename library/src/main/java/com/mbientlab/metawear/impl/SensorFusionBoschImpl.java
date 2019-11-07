@@ -731,9 +731,6 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                                 task.getResult().gyroscope == CalibrationAccuracy.HIGH_ACCURACY);
                         break;
                     case COMPASS:
-                        terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
-                                task.getResult().magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
-                        break;
                     case M4G:
                         terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
                                 task.getResult().magnetometer == CalibrationAccuracy.HIGH_ACCURACY);

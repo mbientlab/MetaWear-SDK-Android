@@ -41,6 +41,8 @@ import com.mbientlab.metawear.builder.RouteComponent.Action;
 import com.mbientlab.metawear.impl.RouteComponentImpl.Cache;
 import com.mbientlab.metawear.impl.DataProcessorImpl.Processor;
 import com.mbientlab.metawear.impl.LoggingImpl.DataLogger;
+import com.mbientlab.metawear.impl.dfu.Image;
+import com.mbientlab.metawear.impl.dfu.Info2;
 import com.mbientlab.metawear.impl.platform.BtleGatt.WriteType;
 import com.mbientlab.metawear.module.*;
 import com.mbientlab.metawear.Subscriber;
@@ -611,11 +613,79 @@ public class JseMetaWearBoard implements MetaWearBoard {
         });
     }
 
-
     @Override
     public Task<List<File>> downloadFirmwareUpdateFilesAsync() {
         return downloadFirmwareUpdateFilesAsync(null);
     }
+
+    @Override
+    public Task<List<File>> downloadFirmwareUpdateFilesAsyncV2(final String version) {
+        if (persist.boardInfo.hardwareRevision == null) {
+            return Task.forError(new IllegalStateException("Hardware revision unavailable"));
+        }
+        if (persist.boardInfo.modelNumber == null) {
+            return Task.forError(new IllegalStateException("Model number unavailable"));
+        }
+        if (!connected) {
+            return Task.forError(new IllegalStateException("Android device not connected to the board"));
+        }
+
+        final Capture<Task<Void>> dcTask = new Capture<>();
+        final Capture<Image> firmware = new Capture<>();
+        final Capture<Info2> info = new Capture<>();
+        final Capture<List<File>> files = new Capture<>(new ArrayList<>());
+        return retrieveInfoJson().onSuccessTask(task -> {
+            ModuleInfo mInfo = persist.boardInfo.moduleInfo.get(Constant.Module.SETTINGS);
+            String build = mInfo != null && mInfo.extra.length >= 2 && mInfo.extra[1] != 0 ?
+                    String.format(Locale.US, "%d", ((short) mInfo.extra[1] & 0xff)) :
+                    DEFAULT_FIRMWARE_BUILD;
+
+            info.set(new Info2(task.getResult(), libVersion));
+            firmware.set(
+                    version != null ?
+                    info.get().findFirmwareImage(persist.boardInfo.hardwareRevision, persist.boardInfo.modelNumber, build, version) :
+                    info.get().findFirmwareImage(persist.boardInfo.hardwareRevision, persist.boardInfo.modelNumber, build)
+            );
+
+            return downloadFirmwareFile(build, new Version(firmware.get().version), firmware.get().filename);
+        }).onSuccessTask(task -> {
+            files.get().add(task.getResult());
+            return inMetaBootMode() ? Task.forResult(null) :
+                    getModule(Debug.class).jumpToBootloaderAsync()
+                        .onSuccessTask(ignored -> connectWithRetryAsync(3))
+                        .onSuccessTask(ignored -> !inMetaBootMode() ?
+                                Task.forError(new IllegalStateException("Board is still in MetaWear mode")) :
+                                Task.forResult(null)
+                        );
+        }).onSuccessTask(ignored -> {
+            if (!inMetaBootMode()) {
+                return Task.forError(new IllegalStateException("Board is still in MetaWear mode"));
+            }
+
+            List<Image> bootloaders = info.get().findBootloaderImages(
+                    persist.boardInfo.hardwareRevision,
+                    persist.boardInfo.modelNumber,
+                    persist.boardInfo.firmware.toString(),
+                    firmware.get().requiredBootloader
+            );
+            dcTask.set(disconnectAsync());
+
+            List<Task<File>> tasks = new ArrayList<>();
+            for(Image it: bootloaders) {
+                tasks.add(it.downloadAsync(io));
+            }
+            return Task.whenAllResult(tasks);
+        }).onSuccessTask(task -> {
+            files.get().addAll(0, task.getResult());
+            return dcTask.get();
+        }).onSuccessTask(ignored -> Task.forResult(files.get()));
+    }
+
+    @Override
+    public Task<List<File>> downloadFirmwareUpdateFilesAsyncV2() {
+        return downloadFirmwareUpdateFilesAsyncV2(null);
+    }
+
 
     private Pair<JSONObject, Version> findFirmwareAttrs(JSONObject firmwareVersions, String version) throws JSONException, IllegalFirmwareFile {
         final JSONObject attrs;
@@ -740,6 +810,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
             });
         }).continueWithTask(task -> task.isFaulted() ? Task.forError(new TaskTimeoutException(task.getError(), info)) : Task.forResult(info));
     }
+
     @Override
     public Task<Void> connectAsync() {
         if (connectTask != null && !connectTask.isCompleted()) {
@@ -870,6 +941,19 @@ public class JseMetaWearBoard implements MetaWearBoard {
         });
 
         return connectTask;
+    }
+
+    @Override
+    public Task<Void> connectWithRetryAsync(int retries) {
+        final Capture<Integer> remaining = new Capture<>(retries);
+        final Capture<Task<Void>> lastResult = new Capture<>();
+        return Task.forResult(null).continueWhile(() -> remaining.get() > 0, ignored ->
+                connectAsync().continueWithTask(task -> {
+                    lastResult.set(task);
+                    remaining.set(task.isFaulted() || task.isCancelled() ? remaining.get() - 1 : -1);
+                    return Task.forResult(null);
+                })
+        ).continueWithTask(ignored -> lastResult.get());
     }
 
     @Override

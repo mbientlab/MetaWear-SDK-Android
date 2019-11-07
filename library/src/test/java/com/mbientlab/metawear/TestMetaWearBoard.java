@@ -101,7 +101,7 @@ public class TestMetaWearBoard {
         public void serviceDiscoveryTimeout() throws Exception {
             junitPlatform.addCustomModuleInfo(new byte[]{0xf, (byte) 0xff});
 
-            Task<Void> task = mwBoard.connectAsync();
+            Task<Void> task = mwBoard.connectWithRetryAsync(3);
             task.waitForCompletion();
 
             throw task.getError();
@@ -109,12 +109,12 @@ public class TestMetaWearBoard {
 
         @Test()
         public void serviceDiscoveryTimeoutConn() throws InterruptedException {
-            int expected = 1;
+            int expected = 3;
 
             junitPlatform.addCustomModuleInfo(new byte[]{0xf, (byte) 0xff});
-            mwBoard.connectAsync().waitForCompletion();
+            mwBoard.connectWithRetryAsync(3).waitForCompletion();
 
-            assertEquals(expected, junitPlatform.nDisconnects);
+            assertEquals(expected, junitPlatform.nConnects);
         }
 
         @Test()

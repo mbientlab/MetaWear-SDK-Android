@@ -100,7 +100,7 @@ public class TestSensorFusion {
                 0x19, (byte) 0x0e, 0x19, 0x0e, 0x66, 0x00, 0x17, (byte) 0xfd, (byte) 0x8a, (byte) 0xfc, 0x7f, 0x03, 0x01, 0x00
         };
 
-        @Parameters
+        @Parameters(name = "{0}")
         public static Collection<Object[]> data() {
             byte[] ACC_READ = Arrays.copyOfRange(ACC, 0, 2);
             byte[] GYRO_READ = Arrays.copyOfRange(GYRO, 0, 2);
@@ -120,7 +120,11 @@ public class TestSensorFusion {
                             ACC,
                             GYRO,
                             MAG
-                    }},
+                    }, new SensorFusionBosch.CalibrationData(
+                            Arrays.copyOfRange(ACC, 2, ACC.length),
+                            Arrays.copyOfRange(GYRO, 2, GYRO.length),
+                            Arrays.copyOfRange(MAG, 2, MAG.length)
+                    )},
                     { Mode.IMU_PLUS, new byte[][] {
                             { 0x19, (byte) 0x8b},
                             ACC_READ,
@@ -128,7 +132,11 @@ public class TestSensorFusion {
                     }, 3, new byte[][] {
                             ACC,
                             GYRO
-                    } },
+                    }, new SensorFusionBosch.CalibrationData(
+                            Arrays.copyOfRange(ACC, 2, ACC.length),
+                            Arrays.copyOfRange(GYRO, 2, GYRO.length),
+                            null
+                    )},
                     { Mode.COMPASS, new byte[][] {
                             { 0x19, (byte) 0x8b},
                             ACC_READ,
@@ -136,7 +144,11 @@ public class TestSensorFusion {
                     }, 4, new byte[][] {
                             ACC,
                             MAG
-                    } },
+                    }, new SensorFusionBosch.CalibrationData(
+                            Arrays.copyOfRange(ACC, 2, ACC.length),
+                            null,
+                            Arrays.copyOfRange(MAG, 2, MAG.length)
+                    )},
                     { Mode.M4G, new byte[][] {
                             { 0x19, (byte) 0x8b},
                             ACC_READ,
@@ -144,7 +156,11 @@ public class TestSensorFusion {
                     }, 4, new byte[][] {
                             ACC,
                             MAG
-                    } }
+                    }, new SensorFusionBosch.CalibrationData(
+                            Arrays.copyOfRange(ACC, 2, ACC.length),
+                            null,
+                            Arrays.copyOfRange(MAG, 2, MAG.length)
+                    )}
             });
         }
 
@@ -160,16 +176,11 @@ public class TestSensorFusion {
         @Parameter(value = 3)
         public byte[][] expectedWriteCalibrateCmds;
 
-        private CalibrationData expectedData;
+        @Parameter(value = 4)
+        public CalibrationData expectedData;
 
         @Before
         public void setup() throws Exception {
-            expectedData = new SensorFusionBosch.CalibrationData(
-                    Arrays.copyOfRange(ACC, 2, ACC.length),
-                    Arrays.copyOfRange(GYRO, 2, GYRO.length),
-                    Arrays.copyOfRange(MAG, 2, MAG.length)
-            );
-
             byte[][] copy = new byte[][] {
                     Arrays.copyOf(ACC, ACC.length),
                     Arrays.copyOf(GYRO, GYRO.length),

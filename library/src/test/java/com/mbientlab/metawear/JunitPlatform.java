@@ -53,8 +53,8 @@ import bolts.TaskCompletionSource;
 /**
  * Created by etsai on 8/31/16.
  */
-class JunitPlatform implements IO, BtleGatt {
-    private static final File RES_PATH = new File(new File("src", "test"), "res");
+public class JunitPlatform implements IO, BtleGatt {
+    public static final File RES_PATH = new File(new File("src", "test"), "res");
     private static final ScheduledExecutorService SCHEDULED_TASK_THREADPOOL = Executors.newSingleThreadScheduledExecutor();
 
     interface MwBridge {
