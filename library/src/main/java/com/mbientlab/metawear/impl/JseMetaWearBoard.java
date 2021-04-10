@@ -414,6 +414,8 @@ public class JseMetaWearBoard implements MetaWearBoard {
                     return Model.METAWEAR_CPRO;
                 }
                 switch(persist.boardInfo.moduleInfo.get(Constant.Module.ACCELEROMETER).implementation) {
+                    case AccelerometerBmi270Impl.IMPLEMENTATION:
+                        return Model.METAMOTION_S;
                     case AccelerometerBmi160Impl.IMPLEMENTATION:
                         return Model.METAWEAR_C;
                     case AccelerometerBma255Impl.IMPLEMENTATION:
@@ -432,9 +434,15 @@ public class JseMetaWearBoard implements MetaWearBoard {
             case "4":
                 return Model.METATRACKER;
             case "5":
-                return Model.METAMOTION_R;
+                if (persist.boardInfo.moduleInfo.get(Constant.Module.AMBIENT_LIGHT).present()) {
+                    return Model.METAMOTION_R;
+                } else {
+                    return Model.METAMOTION_RL;
+                }
             case "6":
                 return Model.METAMOTION_C;
+            case "8":
+                return Model.METAMOTION_S;
         }
         return null;
     }
@@ -465,8 +473,12 @@ public class JseMetaWearBoard implements MetaWearBoard {
                     return "MetaTracker";
                 case METAMOTION_R:
                     return "MetaMotion R";
+                case METAMOTION_RL:
+                    return "MetaMotion RL";
                 case METAMOTION_C:
                     return "MetaMotion C";
+                case METAMOTION_S:
+                    return "MetaMotion S";
             }
             return null;
         } else {
@@ -1152,7 +1164,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
     @Override
     public Task<AnonymousRoute[]> createAnonymousRoutesAsync() {
         Accelerometer accelerometer = getModule(Accelerometer.class);
-        final GyroBmi160 gyro = getModule(GyroBmi160.class);
+        final Gyro gyro = getModule(Gyro.class);
         final SensorFusionBosch sensorFusion = getModule(SensorFusionBosch.class);
 
         return (accelerometer == null ? Task.<Void>forResult(null) : accelerometer.pullConfigAsync())
@@ -1202,6 +1214,12 @@ public class JseMetaWearBoard implements MetaWearBoard {
                         break;
                     case AccelerometerBmi160Impl.IMPLEMENTATION:
                         acc= new AccelerometerBmi160Impl(mwPrivate);
+                        persist.modules.put(Accelerometer.class, acc);
+                        persist.modules.put(AccelerometerBosch.class, acc);
+                        persist.modules.put(AccelerometerBmi160.class, acc);
+                        break;
+                    case AccelerometerBmi270Impl.IMPLEMENTATION:
+                        acc= new AccelerometerBmi270Impl(mwPrivate);
                         persist.modules.put(Accelerometer.class, acc);
                         persist.modules.put(AccelerometerBosch.class, acc);
                         persist.modules.put(AccelerometerBmi160.class, acc);
@@ -1274,7 +1292,19 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 }
                 break;
             case GYRO:
-                persist.modules.put(GyroBmi160.class, new GyroBmi160Impl(mwPrivate));
+                Gyro gyro;
+                switch(info.implementation) {
+                    case GyroBmi160Impl.IMPLEMENTATION:
+                        gyro= new GyroBmi160Impl(mwPrivate);
+                        persist.modules.put(Gyro.class, gyro);
+                        persist.modules.put(GyroBmi160.class, gyro);
+                        break;
+                    case GyroBmi270Impl.IMPLEMENTATION:
+                        gyro= new GyroBmi270Impl(mwPrivate);
+                        persist.modules.put(Gyro.class, gyro);
+                        persist.modules.put(GyroBmi270.class, gyro);
+                        break;
+                }
                 break;
             case AMBIENT_LIGHT:
                 persist.modules.put(AmbientLightLtr329.class, new AmbientLightLtr329Impl(mwPrivate));

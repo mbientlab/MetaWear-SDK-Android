@@ -455,4 +455,10 @@ public interface SensorFusionBosch extends Module, Configurable<SensorFusionBosc
      * @param data      Calibration data returned from the {@link #calibrate(CancellationToken, long, CalibrationStateUpdateHandler) calibrate} function
      */
     void writeCalibrationData(CalibrationData data);
+    /**
+     * Reset the default orientation of the board.
+     * Works while sensor fusion is running or off. Works for NDOF and IMUPLUS only.
+     * @return True if feature is supported, false if not supported
+     */
+    boolean resetOrientation();
 }

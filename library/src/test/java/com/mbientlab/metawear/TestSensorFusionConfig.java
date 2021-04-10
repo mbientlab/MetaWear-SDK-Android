@@ -25,7 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.AccelerometerBmi160;
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.SensorFusionBosch.AccRange;
@@ -83,15 +83,15 @@ public class TestSensorFusionConfig extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         connectToBoard();
 
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
     }
 
     private byte[] gyroConfig() {
-        return new byte[] {0x13, 0x03, (byte) (0x20 | TestGyroBmi160Config.ODR_BITMASK[GyroBmi160.OutputDataRate.ODR_100_HZ.ordinal()]),
-                TestGyroBmi160Config.RANGE_BITMASK[GyroBmi160.Range.values()[gyroRange.ordinal()].ordinal()]};
+        return new byte[] {0x13, 0x03, (byte) (0x20 | TestGyro160Config.ODR_BITMASK[Gyro.OutputDataRate.ODR_100_HZ.ordinal()]),
+                TestGyro160Config.RANGE_BITMASK[Gyro.Range.values()[gyroRange.ordinal()].ordinal()]};
     }
 
     @Test

@@ -31,6 +31,7 @@ import com.mbientlab.metawear.Observer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.impl.platform.TimedTask;
+import com.mbientlab.metawear.module.NeoPixel;
 import com.mbientlab.metawear.module.Settings;
 
 import java.io.UnsupportedEncodingException;
@@ -41,6 +42,8 @@ import java.util.Calendar;
 import bolts.Capture;
 import bolts.Task;
 
+import static com.mbientlab.metawear.impl.Constant.Module.DEBUG;
+import static com.mbientlab.metawear.impl.Constant.Module.NEO_PIXEL;
 import static com.mbientlab.metawear.impl.Constant.Module.SETTINGS;
 
 /**
@@ -73,7 +76,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
             POWER_STATUS_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.POWER_STATUS_PRODUCER",
             CHARGE_STATUS_PRODUCER= "com.mbientlab.metawear.impl.SettingsImpl.CHARGE_STATUS_PRODUCER";
 
-    private static final byte CONN_PARAMS_REVISION= 1, DISCONNECTED_EVENT_REVISION= 2, BATTERY_REVISION= 3, CHARGE_STATUS_REVISION = 5, WHITELIST_REVISION = 6;
+    private static final byte CONN_PARAMS_REVISION= 1, DISCONNECTED_EVENT_REVISION= 2, BATTERY_REVISION= 3, CHARGE_STATUS_REVISION = 5, WHITELIST_REVISION = 6, MMS_REVISION = 9;
     private static final float AD_INTERVAL_STEP= 0.625f, CONN_INTERVAL_STEP= 1.25f, SUPERVISOR_TIMEOUT_STEP= 10f;
     private static final byte DEVICE_NAME = 1, AD_PARAM = 2, TX_POWER = 3,
         START_ADVERTISING = 5,
@@ -82,7 +85,8 @@ class SettingsImpl extends ModuleImplBase implements Settings {
         DISCONNECT_EVENT = 0xa,
         BATTERY_STATE= 0xc,
         POWER_STATUS = 0x11,
-        CHARGE_STATUS = 0x12;
+        CHARGE_STATUS = 0x12,
+        THREE_VOLT_POWER = 0x1c;
 
     private static class BatteryStateData extends DataTypeBase {
         private static final long serialVersionUID = -1080271339658673808L;
@@ -471,5 +475,18 @@ class SettingsImpl extends ModuleImplBase implements Settings {
             return Task.forError(new UnsupportedOperationException("Responding to disconnect events on-board is not supported on this firmware"));
         }
         return mwPrivate.queueEvent(disconnectDummyProducer, codeBlock);
+    }
+
+    @Override
+    public boolean enable3VRegulator(boolean enable) {
+        if (mwPrivate.lookupModuleInfo(SETTINGS).revision >= MMS_REVISION) {
+            if (enable) {
+                mwPrivate.sendCommand(new byte[] {SETTINGS.id, THREE_VOLT_POWER, 0x01});
+            } else {
+                mwPrivate.sendCommand(new byte[] {SETTINGS.id, THREE_VOLT_POWER, 0x00});
+            }
+            return true;
+        }
+        return false;
     }
 }

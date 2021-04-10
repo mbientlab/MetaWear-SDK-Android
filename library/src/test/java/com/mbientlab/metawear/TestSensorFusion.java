@@ -24,7 +24,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.AccelerometerBmi160;
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.SensorFusionBosch.CalibrationState;
@@ -54,11 +54,28 @@ public class TestSensorFusion {
 
         @Before
         public void setup() throws Exception {
-            junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
-            junitPlatform.firmware= "1.2.5";
+            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
+            junitPlatform.firmware = "1.2.5";
             connectToBoard();
 
             sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
+        }
+    }
+
+    public static class TestRev3 extends TestBase {
+        @Before
+        @Override
+        public void setup() throws Exception {
+            junitPlatform.addCustomModuleInfo(new byte[] {0x19, (byte) 0x80, 0x00, 0x03, 0x03, 0x00, 0x06, 0x00, 0x02, 0x00, 0x01, 0x00});
+            super.setup();
+        }
+
+        @Test
+        public void resetOrientation() {
+            byte[] expected= new byte[] {0x19, 0x0f, 0x01};
+
+            sensorFusion.resetOrientation();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
         }
     }
 

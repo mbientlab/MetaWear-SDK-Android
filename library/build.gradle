@@ -25,14 +25,14 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 28
-    buildToolsVersion "28.0.3"
+    compileSdkVersion 30
+    buildToolsVersion '29.0.2'
 
     defaultConfig {
-        minSdkVersion 18
-        targetSdkVersion 28
-        versionCode 62
-        versionName "3.8.0-b00"
+        minSdkVersion 24
+        targetSdkVersion 29
+        versionCode 63
+        versionName "3.8.1"
     }
     buildTypes {
         release {
@@ -49,6 +49,6 @@ android {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     api 'com.parse.bolts:bolts-tasks:1.4.0'
-    testImplementation 'org.json:json:20160810'
-    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.json:json:20210307'
+    testImplementation 'junit:junit:4.13.2'
 }

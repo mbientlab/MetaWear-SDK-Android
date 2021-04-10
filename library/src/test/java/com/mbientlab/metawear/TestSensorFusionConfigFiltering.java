@@ -1,7 +1,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.AccelerometerBmi160;
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 
@@ -31,7 +31,7 @@ public class TestSensorFusionConfigFiltering extends UnitTestBase {
         ArrayList<Object[]> tests = new ArrayList<>();
 
         for(AccelerometerBmi160.FilterMode accF: AccelerometerBmi160.FilterMode.values()) {
-            for(GyroBmi160.FilterMode gyrF: GyroBmi160.FilterMode.values()) {
+            for(Gyro.FilterMode gyrF: Gyro.FilterMode.values()) {
                 tests.add(new Object[]{accF, gyrF});
             }
         }
@@ -43,13 +43,13 @@ public class TestSensorFusionConfigFiltering extends UnitTestBase {
     public AccelerometerBmi160.FilterMode accFilter;
 
     @Parameter(value = 1)
-    public GyroBmi160.FilterMode gyroFilter;
+    public Gyro.FilterMode gyroFilter;
 
     private SensorFusionBosch sensorFusion;
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         connectToBoard();
 
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);

@@ -62,7 +62,7 @@ import static com.mbientlab.metawear.impl.Constant.Module.LOGGING;
 class LoggingImpl extends ModuleImplBase implements Logging {
     private static final long serialVersionUID = 5585806147100904291L;
     private final static double TICK_TIME_STEP= (48.0 / 32768.0) * 1000.0;
-    private static final byte LOG_ENTRY_SIZE= 4, REVISION_EXTENDED_LOGGING = 2;
+    private static final byte LOG_ENTRY_SIZE= 4, REVISION_EXTENDED_LOGGING = 2, MMS_REVISION = 3;
     private static final byte ENABLE = 1,
             TRIGGER = 2,
             REMOVE = 3,
@@ -71,7 +71,8 @@ class LoggingImpl extends ModuleImplBase implements Logging {
             READOUT = 6, READOUT_NOTIFY = 7, READOUT_PROGRESS = 8,
             REMOVE_ENTRIES = 9, REMOVE_ALL = 0xa,
             CIRCULAR_BUFFER = 0xb,
-            READOUT_PAGE_COMPLETED = 0xd, READOUT_PAGE_CONFIRM = 0xe;
+            READOUT_PAGE_COMPLETED = 0xd, READOUT_PAGE_CONFIRM = 0xe,
+            PAGE_FLUSH = 0x10;
 
     private static class TimeReference implements Serializable {
         private static final long serialVersionUID = -4058532490858952714L;
@@ -398,6 +399,13 @@ class LoggingImpl extends ModuleImplBase implements Logging {
             mwPrivate.sendCommand(new byte[] {LOGGING.id, READOUT_PAGE_COMPLETED, (byte) 1});
         }
         mwPrivate.sendCommand(new byte[] {LOGGING.id, REMOVE_ENTRIES, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff});
+    }
+
+    @Override
+    public void flushPage() {
+        if (mwPrivate.lookupModuleInfo(LOGGING).revision >= MMS_REVISION) {
+            mwPrivate.sendCommand(new byte[] {LOGGING.id, PAGE_FLUSH, (byte) 1});
+        }
     }
 
     Task<Void> queryTime() {

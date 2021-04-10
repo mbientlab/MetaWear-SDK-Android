@@ -37,7 +37,11 @@ import com.mbientlab.metawear.impl.Constant.Module;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
+import com.mbientlab.metawear.module.Gyro;
+import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.GyroBmi270;
 import com.mbientlab.metawear.module.DataProcessor;
 
 /**
@@ -51,12 +55,14 @@ abstract class DataTypeBase implements Serializable, DataToken {
                 uri = SwitchImpl.createUri(dataType);
                 break;
             case ACCELEROMETER:
-                Object module = mwPrivate.getModules().get(Accelerometer.class);
-                if (module instanceof AccelerometerMma8452q) {
+                Object accModule = mwPrivate.getModules().get(Accelerometer.class);
+                if (accModule instanceof AccelerometerMma8452q) {
                     uri = AccelerometerMma8452qImpl.createUri(dataType);
-                } else if (module instanceof AccelerometerBmi160) {
+                } else if (accModule instanceof AccelerometerBmi270) {
+                    uri = AccelerometerBmi270Impl.createUri(dataType);
+                } else if (accModule instanceof AccelerometerBmi160) {
                     uri = AccelerometerBmi160Impl.createUri(dataType);
-                } else if (module instanceof AccelerometerBma255) {
+                } else if (accModule instanceof AccelerometerBma255) {
                     uri = AccelerometerBoschImpl.createUri(dataType);
                 }
                 break;
@@ -80,8 +86,15 @@ abstract class DataTypeBase implements Serializable, DataToken {
                 uri = BarometerBoschImpl.createUri(dataType);
                 break;
             case GYRO:
-                uri = GyroBmi160Impl.createUri(dataType);
+                Object gyroModule = mwPrivate.getModules().get(Gyro.class);
+                if (gyroModule instanceof GyroBmi270) {
+                    uri = GyroBmi270Impl.createUri(dataType);
+                } else if (gyroModule instanceof GyroBmi160) {
+                    uri = GyroBmi160Impl.createUri(dataType);
+                }
                 break;
+                //uri = GyroImpl.createUri(dataType);
+                //break;
             case AMBIENT_LIGHT:
                 uri = AmbientLightLtr329Impl.createUri(dataType);
                 break;

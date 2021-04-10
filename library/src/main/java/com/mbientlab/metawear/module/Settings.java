@@ -39,7 +39,7 @@ import bolts.Task;
 
 /**
  * Configures Bluetooth settings and auxiliary hardware and firmware features
- * @author Eric Tsai
+ * @author Laura Kassovic
  */
 public interface Settings extends Module {
     /**
@@ -150,7 +150,6 @@ public interface Settings extends Module {
      * @return Task that is completed once the advertising config has been received
      */
     Task<BleAdvertisementConfig> readBleAdConfigAsync();
-
     /**
      * Wrapper class containing the connection parameters
      * @author Eric Tsai
@@ -240,7 +239,6 @@ public interface Settings extends Module {
      * @return Task that is completed once the connection parameters have been received
      */
     Task<BleConnectionParameters> readBleConnParamsAsync();
-
     /**
      * Wrapper class encapsulating the battery state data
      * @author Eric Tsai
@@ -299,7 +297,6 @@ public interface Settings extends Module {
      * @return Object representing battery data, null if battery data is not supported
      */
     BatteryDataProducer battery();
-
     /**
      * Gets an object to control power status notifications
      * @return Object representing power status notifications, null if power status not supported
@@ -310,7 +307,6 @@ public interface Settings extends Module {
      * @return Task holding the power status; 1 if power source is attached, 0 otherwise
      */
     Task<Byte> readCurrentPowerStatusAsync();
-
     /**
      * Gets an object to control charging status notifications
      * @return Object representing charging status notifications, null if charging status not supported
@@ -321,11 +317,17 @@ public interface Settings extends Module {
      * @return Task holding the charge status; 1 if battery is charging, 0 otherwise
      */
     Task<Byte> readCurrentChargeStatusAsync();
-
     /**
      * Programs a task that will be execute on-board when a disconnect occurs
      * @param codeBlock    MetaWear commands composing the task
      * @return Task holding the result of the program request
      */
     Task<Observer> onDisconnectAsync(CodeBlock codeBlock);
+    /**
+     * Turns on the 3V regulator
+     * Needed if IOs / peripherals need 3V power from the MetaSensor. MMS Only.
+     * @param enable    True to enable (turn on) the 3V power, False to disable
+     * @return True if feature is supported, false if regulator cannot be enabled (if not MMS)
+     */
+    boolean enable3VRegulator(boolean enable);
 }

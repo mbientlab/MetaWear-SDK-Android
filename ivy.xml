@@ -1,0 +1,22 @@
+<ivy-module version="2.2" xmlns:m="http://ant.apache.org/ivy/maven">
+    <info organisation="com.mbientlab" module="metawear"/>
+    <configurations defaultconf="default">
+        <conf name="default" description="Android archive of the Java API"/>
+        <conf name="default-sources" description="Library source code"/>
+<!--
+        <conf name="javadoc" description="Library documentation"/>
+-->
+
+    </configurations>
+    <publications>
+        <artifact conf="default" type="aar" />
+        <artifact conf="default-sources" type="sources" ext="jar" m:classifier="sources" />
+<!--
+        <artifact conf="default,javadoc" type="javadoc" ext="jar" m:classifier="javadoc"/>
+-->
+    </publications>
+    <dependencies>
+        <dependency org="com.parse.bolts" name="bolts-tasks" rev="1.4.0" conf="default->default">
+        </dependency>
+    </dependencies>
+</ivy-module>

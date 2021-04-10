@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
@@ -351,7 +351,7 @@ public class TestMetaWearBoard {
                     {0x03, 0x1c, 0x01}
             };
 
-            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
+            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
             connectToBoard();
 
             mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(source -> source.limit(20).stream(null))
@@ -369,7 +369,7 @@ public class TestMetaWearBoard {
                     {0x03, 0x1c, 0x01}
             };
 
-            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
+            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
             connectToBoard();
 
             mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(source -> source.limit(20).stream(null))

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:ivy="antlib:org.apache.ivy.ant" name="MetaWearAPI" default="publish" basedir="." >
+    <property name="dist.dir" value="dist" />
+    <property name="aar.dir" value="library/build/outputs/aar" />
+    <property name="aar.file" value="library-release.aar" />
+    <property name="artifact.file" value="metawear.aar" />
+    <property name="artifact.source.file" value="metawear-sources.jar" />
+
+    <target name="clean">
+        <delete dir="${dist.dir}" />
+    </target>
+    <target name="setup">
+        <mkdir dir="${dist.dir}" />
+        <jar destfile="${dist.dir}/${artifact.source.file}" basedir="library/src/main/java"/>
+        <copy file="${aar.dir}/${aar.file}" toFile="${dist.dir}/${artifact.file}"/>
+    </target>
+    <target name="ivy-resolve">
+        <ivy:resolve file="ivy.xml" />
+    </target>
+    <target name="publish" depends="ivy-resolve,setup" description="Publish this build into repository">
+        <ivy:publish pubrevision="${version}" resolver="publish-server" >
+            <artifacts pattern="${dist.dir}/[artifact](-[classifier]).[ext]"/>
+        </ivy:publish>
+    </target>
+</project>

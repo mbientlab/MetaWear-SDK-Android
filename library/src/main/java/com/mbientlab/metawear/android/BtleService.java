@@ -213,7 +213,7 @@ public class BtleService extends Service {
 
         AndroidPlatform(BluetoothDevice btDevice) {
             this.btDevice = btDevice;
-            board = new JseMetaWearBoard(this, this, btDevice.getAddress(), BuildConfig.VERSION_NAME);
+            board = new JseMetaWearBoard(this, this, btDevice.getAddress(), BuildConfig.LIBRARY_PACKAGE_NAME); //TODO .VERSION_NAME);
         }
 
         void disconnected(int status) {

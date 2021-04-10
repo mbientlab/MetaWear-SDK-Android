@@ -59,7 +59,7 @@ public class TestModule extends UnitTestBase {
         assertNull(mwBoard.getModule(Settings.class));
         assertNull(mwBoard.getModule(BarometerBme280.class));
         assertNull(mwBoard.getModule(BarometerBmp280.class));
-        assertNull(mwBoard.getModule(GyroBmi160.class));
+        assertNull(mwBoard.getModule(Gyro.class));
         assertNull(mwBoard.getModule(AmbientLightLtr329.class));
         assertNull(mwBoard.getModule(MagnetometerBmm150.class));
         assertNull(mwBoard.getModule(HumidityBme280.class));
@@ -228,10 +228,10 @@ public class TestModule extends UnitTestBase {
 
     @Test
     public void lookupGyroBmi160() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(GyroBmi160.class);
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Gyro.class);
         connectToBoard();
 
-        assertNotNull(mwBoard.getModule(GyroBmi160.class));
+        assertNotNull(mwBoard.getModule(Gyro.class));
     }
 
     @Test

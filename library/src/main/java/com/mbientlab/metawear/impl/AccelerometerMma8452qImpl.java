@@ -911,7 +911,6 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
         return (TapDataProducer) tap;
     }
 
-
     /**
      * Detectable movement types on the sensor
      * @author Eric Tsai
@@ -994,6 +993,7 @@ class AccelerometerMma8452qImpl extends ModuleImplBase implements AccelerometerM
             mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, MOVEMENT_ENABLE, 0x0});
         }
     }
+
     @Override
     public MovementDataProducer freeFall() {
         if (freeFall == null) {

@@ -24,7 +24,7 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Logging;
 
 import org.json.JSONArray;
@@ -55,10 +55,10 @@ public class TestGyroYLogData extends TestLogDataBase {
     private static final Subscriber LOG_DATA_HANDLER= (data, env) -> ((List<Float>) env[0]).add(data.value(Float.class));
 
     protected Task<Route> setupLogDataRoute() {
-        mwBoard.getModule(GyroBmi160.class).configure()
-                .range(GyroBmi160.Range.FSR_250)
+        mwBoard.getModule(Gyro.class).configure()
+                .range(Gyro.Range.FSR_250)
                 .commit();
-        return mwBoard.getModule(GyroBmi160.class).angularVelocity().addRouteAsync(source -> source.split().index(1).log(LOG_DATA_HANDLER));
+        return mwBoard.getModule(Gyro.class).angularVelocity().addRouteAsync(source -> source.split().index(1).log(LOG_DATA_HANDLER));
     }
 
     @Test

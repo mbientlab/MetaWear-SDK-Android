@@ -1,6 +1,5 @@
 # MetaWear Android API
-The MetaWear Android API is a library for interacting with [MbientLab's sensor boards](https://mbientlab.com/sensors/) on an Android device.  A minimum of Android 4.3 (SDK 18) is required to use this library, however for the best results, it is recommended that users be on **Android 4.4 (SDK 19) or 
-higher**.  
+The MetaWear Android API is a library for interacting with [MbientLab's sensor boards](https://mbientlab.com/sensors/) on an Android device.  A minimum of Android 7.0 (SDK 24) is required to use this library, however for the best results, it is recommended that users be on **Android 10 (SDK 29) or higher**.  
 
 # Setup
 ## Adding Compile Dependency
@@ -20,7 +19,7 @@ Then, add the compile element to the dependencies closure in the module's ``buil
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:3.4.0'
+    compile 'com.mbientlab:metawear:3.8.1'
 }
 ```
 

@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 /**
  * Available MetaWear models
- * @author Eric Tsai
+ * @author Eric Tsai, Laura Kassovic
  */
 public enum Model {
     METAWEAR_R,
@@ -39,5 +39,7 @@ public enum Model {
     METAHEALTH,
     METATRACKER,
     METAMOTION_R,
-    METAMOTION_C
+    METAMOTION_C,
+    METAMOTION_RL,
+    METAMOTION_S
 }

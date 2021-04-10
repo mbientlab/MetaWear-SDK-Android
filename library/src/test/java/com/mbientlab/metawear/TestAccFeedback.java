@@ -30,6 +30,7 @@ import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.Accelerometer.AccelerationDataProducer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
 import org.junit.Before;
@@ -53,6 +54,7 @@ public class TestAccFeedback extends UnitTestBase {
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
                 { AccelerometerBmi160.class },
+                { AccelerometerBmi270.class },
                 { AccelerometerMma8452q.class },
                 { AccelerometerBma255.class },
         });

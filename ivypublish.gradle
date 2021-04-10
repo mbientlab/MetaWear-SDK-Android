@@ -1,0 +1,5 @@
+['ivy-2.3.0.jar', 'jsch-0.1.55.jar'].each {
+    org.apache.tools.ant.Project.class.classLoader.addURL( new URL("file:${System.env.GRADLE_HOME}/lib/plugins/$it") )
+}
+
+ant.importBuild 'build.xml'

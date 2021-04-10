@@ -39,13 +39,14 @@ import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 12/21/16.
+ * Updated by lkasso
  */
 @RunWith(Parameterized.class)
 public class TestModel extends UnitTestBase {
     @Parameters(name = "board: {0}")
     public static Collection<Object[]> data() {
         ArrayList<Object[]> parameters= new ArrayList<>();
-        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {C, CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R, TRACKER}) {
+        for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {C, CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R, MOTION_RL, MOTION_S, TRACKER}) {
             parameters.add(new Object[] {info});
         }
 

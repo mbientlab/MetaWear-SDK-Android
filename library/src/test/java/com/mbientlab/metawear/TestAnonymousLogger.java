@@ -3,7 +3,7 @@ package com.mbientlab.metawear;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 
@@ -42,7 +42,7 @@ public class TestAnonymousLogger {
         }
 
         TestBase(byte accRange, byte gyroRange) {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
+            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
 
             junitPlatform.addCustomResponse(new byte[]{0x3, (byte) 0x83},
                     new byte[]{0x03, (byte) 0x83, 40, accRange});
@@ -293,7 +293,7 @@ public class TestAnonymousLogger {
     }
     public static class TestTimeout extends UnitTestBase {
         public TestTimeout() {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, MagnetometerBmm150.class, SensorFusionBosch.class);
+            junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         }
 
         @Before

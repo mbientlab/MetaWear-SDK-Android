@@ -34,8 +34,9 @@ import com.mbientlab.metawear.data.Quaternion;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.AccelerometerBosch;
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 
@@ -77,11 +78,11 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
 
     private static final long serialVersionUID = -7041546136871081754L;
 
-    private static final byte CALIBRATION_STATE_REV = 1, CALIBRATION_DATA_REV = 2;
+    private static final byte CALIBRATION_STATE_REV = 1, CALIBRATION_DATA_REV = 2, RESET_ORIENTATION_REV = 3;
     private static final byte ENABLE = 1, MODE = 2, OUTPUT_ENABLE = 3,
             CORRECTED_ACC = 4, CORRECTED_ROT = 5, CORRECTED_MAG = 6,
             QUATERNION = 7, EULER_ANGLES = 8, GRAVITY_VECTOR = 9, LINEAR_ACC = 0xa,
-            CALIB_STATUS = 0xb, ACC_CALIB_DATA = 0xc, GYRO_CALIB_DATA = 0xd, MAG_CALIB_DATA = 0xe;
+            CALIB_STATUS = 0xb, ACC_CALIB_DATA = 0xc, GYRO_CALIB_DATA = 0xd, MAG_CALIB_DATA = 0xe, RESET_ORIENTATION = 0xf;
     private final static String QUATERNION_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.QUATERNION_PRODUCER",
             EULER_ANGLES_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.EULER_ANGLES_PRODUCER",
             GRAVITY_PRODUCER= "com.mbientlab.metawear.impl.SensorFusionBoschImpl.GRAVITY_PRODUCER",
@@ -451,8 +452,8 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                 extraGyro = settings;
                 return this;
             }
-
-            private void addExtraAcc(AccelerometerBmi160.ConfigEditor editor) {
+            //TODO
+            private void addExtraAccBmi160(AccelerometerBmi160.ConfigEditor editor) {
                 if (extraAcc == null) return;
                 for(Object it: extraAcc) {
                     if (it instanceof AccelerometerBmi160.FilterMode) {
@@ -460,11 +461,19 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                     }
                 }
             }
-            private void addExtraGyro(GyroBmi160.ConfigEditor editor) {
+            private void addExtraAccBmi270(AccelerometerBmi270.ConfigEditor editor) {
+                if (extraAcc == null) return;
+                for(Object it: extraAcc) {
+                    if (it instanceof AccelerometerBmi270.FilterMode) {
+                        editor.filter((AccelerometerBmi270.FilterMode) it);
+                    }
+                }
+            }
+            private void addExtraGyro(Gyro.ConfigEditor editor) {
                 if (extraGyro == null) return;
                 for(Object it: extraGyro) {
-                    if (it instanceof GyroBmi160.FilterMode) {
-                        editor.filter((GyroBmi160.FilterMode) it);
+                    if (it instanceof Gyro.FilterMode) {
+                        editor.filter((Gyro.FilterMode) it);
                     }
                 }
             }
@@ -477,7 +486,8 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                 });
 
                 Accelerometer acc = (Accelerometer) mwPrivate.getModules().get(Accelerometer.class);
-                GyroBmi160 gyro = (GyroBmi160) mwPrivate.getModules().get(GyroBmi160.class);
+                Gyro gyro = (Gyro) mwPrivate.getModules().get(Gyro.class);
+
                 MagnetometerBmm150 mag = (MagnetometerBmm150) mwPrivate.getModules().get(MagnetometerBmm150.class);
 
                 switch(newMode) {
@@ -488,13 +498,15 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                                 .odr(100f)
                                 .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range);
                         if (acc instanceof AccelerometerBmi160) {
-                            addExtraAcc((AccelerometerBmi160.ConfigEditor) accEditor);
+                            addExtraAccBmi160((AccelerometerBmi160.ConfigEditor) accEditor);
+                        } else {
+                            addExtraAccBmi270((AccelerometerBmi270.ConfigEditor) accEditor);
                         }
                         accEditor.commit();
 
-                        GyroBmi160.ConfigEditor gyroEditor = gyro.configure()
-                                .odr(GyroBmi160.OutputDataRate.ODR_100_HZ)
-                                .range(GyroBmi160.Range.values()[newGyroRange.ordinal()]);
+                        Gyro.ConfigEditor gyroEditor = gyro.configure()
+                                .odr(Gyro.OutputDataRate.ODR_100_HZ)
+                                .range(Gyro.Range.values()[newGyroRange.ordinal()]);
                         addExtraGyro(gyroEditor);
                         gyroEditor.commit();
 
@@ -508,13 +520,15 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                                 .odr(100f)
                                 .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range);
                         if (acc instanceof AccelerometerBmi160) {
-                            addExtraAcc((AccelerometerBmi160.ConfigEditor) accEditor);
+                            addExtraAccBmi160((AccelerometerBmi160.ConfigEditor) accEditor);
+                        } else {
+                            addExtraAccBmi270((AccelerometerBmi270.ConfigEditor) accEditor);
                         }
                         accEditor.commit();
 
-                        GyroBmi160.ConfigEditor gyroEditor = gyro.configure()
-                                .odr(GyroBmi160.OutputDataRate.ODR_100_HZ)
-                                .range(GyroBmi160.Range.values()[newGyroRange.ordinal()]);
+                        Gyro.ConfigEditor gyroEditor = gyro.configure()
+                                .odr(Gyro.OutputDataRate.ODR_100_HZ)
+                                .range(Gyro.Range.values()[newGyroRange.ordinal()]);
                         addExtraGyro(gyroEditor);
                         gyroEditor.commit();
                         break;
@@ -524,7 +538,9 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                                 .odr(25f)
                                 .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range);
                         if (acc instanceof AccelerometerBmi160) {
-                            addExtraAcc((AccelerometerBmi160.ConfigEditor) accEditor);
+                            addExtraAccBmi160((AccelerometerBmi160.ConfigEditor) accEditor);
+                        } else {
+                            addExtraAccBmi270((AccelerometerBmi270.ConfigEditor) accEditor);
                         }
                         accEditor.commit();
 
@@ -538,7 +554,9 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                                 .odr(50f)
                                 .range(AccelerometerBosch.AccRange.values()[newAccRange.ordinal()].range);
                         if (acc instanceof AccelerometerBmi160) {
-                            addExtraAcc((AccelerometerBmi160.ConfigEditor) accEditor);
+                            addExtraAccBmi160((AccelerometerBmi160.ConfigEditor) accEditor);
+                        } else {
+                            addExtraAccBmi270((AccelerometerBmi270.ConfigEditor) accEditor);
                         }
                         accEditor.commit();
 
@@ -611,7 +629,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     @Override
     public void start() {
         Accelerometer acc = (Accelerometer) mwPrivate.getModules().get(Accelerometer.class);
-        GyroBmi160 gyro = (GyroBmi160) mwPrivate.getModules().get(GyroBmi160.class);
+        Gyro gyro = (Gyro) mwPrivate.getModules().get(Gyro.class);
         MagnetometerBmm150 mag = (MagnetometerBmm150) mwPrivate.getModules().get(MagnetometerBmm150.class);
 
         switch(mode) {
@@ -647,7 +665,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     @Override
     public void stop() {
         Accelerometer acc = (Accelerometer) mwPrivate.getModules().get(Accelerometer.class);
-        GyroBmi160 gyro = (GyroBmi160) mwPrivate.getModules().get(GyroBmi160.class);
+        Gyro gyro = (Gyro) mwPrivate.getModules().get(Gyro.class);
         MagnetometerBmm150 mag = (MagnetometerBmm150) mwPrivate.getModules().get(MagnetometerBmm150.class);
 
         mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, ENABLE, 0x0});
@@ -782,6 +800,15 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     @Override
     public Task<CalibrationData> calibrate(CancellationToken ct) {
         return calibrate(ct, 1000, null);
+    }
+
+    @Override
+    public boolean resetOrientation() {
+        if (mwPrivate.lookupModuleInfo(SENSOR_FUSION).revision >= RESET_ORIENTATION_REV) {
+            mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, RESET_ORIENTATION, 0x01});
+            return true;
+        }
+        return false;
     }
 
     @Override

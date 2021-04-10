@@ -28,7 +28,7 @@ import java.util.Locale;
 
 /**
  * Encapsulates acceleration data, values are in units of g's
- * @author Eric Tsai
+ * @author Laura Kassovic
  */
 public class Acceleration extends FloatVector {
     public Acceleration(float x, float y, float z) {

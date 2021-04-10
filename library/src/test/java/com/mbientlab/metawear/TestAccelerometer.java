@@ -28,6 +28,7 @@ import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
 import org.junit.Before;
@@ -54,6 +55,7 @@ public class TestAccelerometer extends UnitTestBase {
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
                 { AccelerometerBmi160.class },
+                { AccelerometerBmi270.class },
                 { AccelerometerMma8452q.class },
                 { AccelerometerBma255.class },
         });
@@ -91,6 +93,11 @@ public class TestAccelerometer extends UnitTestBase {
             accelerometer.configure()
                     .odr(50.f)
                     .commit();
+        } else if (accelClass.equals(AccelerometerBmi270.class)) {
+            expected = new byte[]{0x03, 0x03, (byte) 0xa7, 0x02};
+            accelerometer.configure()
+                    .odr(55.f)
+                    .commit();
         }
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
@@ -114,6 +121,11 @@ public class TestAccelerometer extends UnitTestBase {
             expected= 62.5f;
             accelerometer.configure()
                     .odr(50.f)
+                    .commit();
+        } else if (accelClass.equals(AccelerometerBmi270.class)) {
+            expected = 50f;
+            accelerometer.configure()
+                    .odr(55.f)
                     .commit();
         }
         actual= accelerometer.getOdr();
@@ -140,6 +152,11 @@ public class TestAccelerometer extends UnitTestBase {
             accelerometer.configure()
                     .range(20f)
                     .commit();
+        } else if (accelClass.equals(AccelerometerBmi270.class)) {
+            expected = new byte[] {0x03, 0x03, (byte) 0xa8, 0x03};
+            accelerometer.configure()
+                    .range(14.75f)
+                    .commit();
         }
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
@@ -163,6 +180,11 @@ public class TestAccelerometer extends UnitTestBase {
             expected= 16f;
             accelerometer.configure()
                     .range(20f)
+                    .commit();
+        } else if (accelClass.equals(AccelerometerBmi270.class)) {
+            expected = 16f;
+            accelerometer.configure()
+                    .range(14.75f)
                     .commit();
         }
         actual= accelerometer.getRange();
@@ -207,7 +229,7 @@ public class TestAccelerometer extends UnitTestBase {
     public void enableAccSampling() {
         byte[] expected= null;
 
-        if (accelClass.equals(AccelerometerBmi160.class) || accelClass.equals(AccelerometerBma255.class)) {
+        if (accelClass.equals(AccelerometerBmi270.class) ||accelClass.equals(AccelerometerBmi160.class) || accelClass.equals(AccelerometerBma255.class)) {
             expected = new byte[] {0x03, 0x02, 0x01, 0x00};
         } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected = new byte[] {0x03, 0x02, 0x01};
@@ -221,7 +243,7 @@ public class TestAccelerometer extends UnitTestBase {
     public void disableAccSampling() {
         byte[] expected = null;
 
-        if (accelClass.equals(AccelerometerBmi160.class) || accelClass.equals(AccelerometerBma255.class)) {
+        if (accelClass.equals(AccelerometerBmi270.class) || accelClass.equals(AccelerometerBmi160.class) || accelClass.equals(AccelerometerBma255.class)) {
             expected = new byte[] {0x03, 0x02, 0x00, 0x01};
         } else if (accelClass.equals(AccelerometerMma8452q.class)) {
             expected = new byte[] {0x03, 0x02, 0x00};
@@ -237,7 +259,6 @@ public class TestAccelerometer extends UnitTestBase {
         byte[] response= null;
         final Capture<Acceleration> actual= new Capture<>();
 
-
         if (accelClass.equals(AccelerometerBma255.class)) {
             // (-4.7576f, 2.2893f, 2.9182f)
             expected = new Acceleration(Float.intBitsToFloat(0xc0983e00), Float.intBitsToFloat(0x40128400), Float.intBitsToFloat(0x403ac400));
@@ -246,6 +267,13 @@ public class TestAccelerometer extends UnitTestBase {
                     .range(8f)
                     .commit();
         } else if (accelClass.equals(AccelerometerBmi160.class)) {
+            // (-1.872f, -2.919f, -1.495f)
+            expected= new Acceleration(Float.intBitsToFloat(0xbfefa800), Float.intBitsToFloat(0xc03ad800), Float.intBitsToFloat(0xbfbf5800));
+            response= new byte[] {0x03, 0x04, 0x16, (byte) 0xc4, (byte) 0x94, (byte) 0xa2, 0x2a, (byte) 0xd0};
+            accelerometer.configure()
+                    .range(4f)
+                    .commit();
+        } else if (accelClass.equals(AccelerometerBmi270.class)) {
             // (-1.872f, -2.919f, -1.495f)
             expected= new Acceleration(Float.intBitsToFloat(0xbfefa800), Float.intBitsToFloat(0xc03ad800), Float.intBitsToFloat(0xbfbf5800));
             response= new byte[] {0x03, 0x04, 0x16, (byte) 0xc4, (byte) 0x94, (byte) 0xa2, 0x2a, (byte) 0xd0};
@@ -287,6 +315,13 @@ public class TestAccelerometer extends UnitTestBase {
             // (-1.872f, -2.919f, -1.495f)
             expected = new float[] { -1.872f, -2.919f, -1.495f };
             response= new byte[] {0x03, 0x04, 0x16, (byte) 0xc4, (byte) 0x94, (byte) 0xa2, 0x2a, (byte) 0xd0};
+            accelerometer.configure()
+                    .range(4f)
+                    .commit();
+        } else if (accelClass.equals(AccelerometerBmi270.class)) {
+            // (-1.872f, -2.919f, -1.495f)
+            expected = new float[]{-1.872f, -2.919f, -1.495f};
+            response = new byte[]{0x03, 0x04, 0x16, (byte) 0xc4, (byte) 0x94, (byte) 0xa2, 0x2a, (byte) 0xd0};
             accelerometer.configure()
                     .range(4f)
                     .commit();
@@ -335,6 +370,17 @@ public class TestAccelerometer extends UnitTestBase {
                     new Acceleration(Float.intBitsToFloat(0xbcec0000), Float.intBitsToFloat(0x3eb42000), Float.intBitsToFloat(0x3d850000))
             };
             response= new byte[] {0x03, 0x1c, 0x62, (byte) 0xb7, 0x53, 0x0d, (byte) 0xe9, (byte) 0xfd, 0x16, (byte) 0xd0, 0x4d,
+                    0x0e, 0x57, 0x02, (byte) 0x8a, (byte) 0xff, (byte) 0xa1, 0x05, 0x0a, 0x01};
+            accelerometer.configure()
+                    .range(8f)
+                    .commit();
+        } else if (accelClass.equals(AccelerometerBmi270.class)) {
+            expected = new Acceleration[] {
+                    new Acceleration(Float.intBitsToFloat(0xc0913c00), Float.intBitsToFloat(0x3f553000), Float.intBitsToFloat(0xbe05c000)),
+                    new Acceleration(Float.intBitsToFloat(0xc03fa800), Float.intBitsToFloat(0x3f64d000), Float.intBitsToFloat(0x3e15c000)),
+                    new Acceleration(Float.intBitsToFloat(0xbcec0000), Float.intBitsToFloat(0x3eb42000), Float.intBitsToFloat(0x3d850000))
+            };
+            response= new byte[] {0x03, 0x05, 0x62, (byte) 0xb7, 0x53, 0x0d, (byte) 0xe9, (byte) 0xfd, 0x16, (byte) 0xd0, 0x4d,
                     0x0e, 0x57, 0x02, (byte) 0x8a, (byte) 0xff, (byte) 0xa1, 0x05, 0x0a, 0x01};
             accelerometer.configure()
                     .range(8f)

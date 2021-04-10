@@ -267,7 +267,7 @@ abstract class DataProcessorConfig {
             super(config[0]);
 
             isSigned = (config[1] & 0x1) == 0x1;
-            input = (byte) (((input >> 1) & 0x3) + 1);
+            input = (byte) (((config[1] >> 1) & 0x3) + 1);
             op = com.mbientlab.metawear.builder.filter.Comparison.values()[(config[1] >> 3) & 0x7];
             mode = ComparisonOutput.values()[(config[1] >> 6) & 0x3];
 

@@ -104,10 +104,14 @@ public interface Logging extends Module {
      * @return Task that will complete when the download has finished
      */
     Task<Void> downloadAsync();
-
     /**
      * Clear all stored logged data from the board.  The erase operation will not be performed until
      * you disconnect from the board.
      */
     void clearEntries();
+    /**
+     * Flushes logging data (pending writes) to the MMS memory. For MMS only.
+     * Should be called for the MMS when done with logging and ready to download data
+     */
+    void flushPage();
 }

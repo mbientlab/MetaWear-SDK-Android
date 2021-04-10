@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Logging;
 
 import org.json.JSONArray;
@@ -86,7 +86,7 @@ abstract class TestLogDataBase extends UnitTestBase {
 
     @Before
     public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class, GyroBmi160.class, Logging.class);
+        junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, Logging.class);
         connectToBoard();
 
         downloadResponses= new ArrayList<>();

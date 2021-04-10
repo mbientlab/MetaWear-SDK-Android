@@ -36,9 +36,10 @@ import bolts.Task;
  * Measures sources of acceleration, such as gravity or motion.  This interface is provides general
  * access to an accelerometer. If you know specifically which accelerometer is on your board, use the
  * appropriate subclass instead.
- * @author Eric Tsai
+ * @author Laura Kassovic
  * @see AccelerometerBma255
  * @see AccelerometerBmi160
+ * @see AccelerometerBmi270
  * @see AccelerometerMma8452q
  */
 public interface Accelerometer extends Module, Configurable<Accelerometer.ConfigEditor<? extends Accelerometer.ConfigEditor>> {

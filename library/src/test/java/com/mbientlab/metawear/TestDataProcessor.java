@@ -38,7 +38,7 @@ import com.mbientlab.metawear.module.BarometerBosch;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.DataProcessor.PassthroughEditor;
 import com.mbientlab.metawear.module.Gpio;
-import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
 import com.mbientlab.metawear.module.Temperature;
@@ -67,7 +67,7 @@ public class TestDataProcessor {
     static class TestBase extends UnitTestBase {
         @Before
         public void setup() throws Exception {
-            junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, GyroBmi160.class, Gpio.class, Temperature.class);
+            junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, Gyro.class, Gpio.class, Temperature.class);
             junitPlatform.firmware= "1.2.5";
             connectToBoard();
         }
@@ -802,7 +802,7 @@ public class TestDataProcessor {
             super.setup();
 
             final Accelerometer acc = mwBoard.getModule(Accelerometer.class);
-            final GyroBmi160 gyro = mwBoard.getModule(GyroBmi160.class);
+            final Gyro gyro = mwBoard.getModule(Gyro.class);
 
             Task<Route> task = gyro.angularVelocity().addRouteAsync(source ->
                     source.buffer().name("gyro-buffer")
@@ -847,7 +847,7 @@ public class TestDataProcessor {
             final Capture<Acceleration> rawAccData = new Capture<>();
             final Capture<AngularVelocity> rawGyroData = new Capture<>();
             final Accelerometer acc = mwBoard.getModule(Accelerometer.class);
-            final GyroBmi160 gyro = mwBoard.getModule(GyroBmi160.class);
+            final Gyro gyro = mwBoard.getModule(Gyro.class);
 
             Task<Route> task = gyro.angularVelocity().addRouteAsync(source ->
                     source.stream((data, env) -> rawGyroData.set(data.value(AngularVelocity.class)))
