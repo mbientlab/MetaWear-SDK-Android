@@ -30,12 +30,19 @@ android {
 
     defaultConfig {
         minSdkVersion 24
-        targetSdkVersion 29
-        versionCode 63
-        versionName "3.8.1"
+        targetSdkVersion 30
+        versionCode 64
+        versionName "3.8.2"
     }
+
     buildTypes {
+        debug{
+            buildConfigField("int", "VERSION_CODE", "${defaultConfig.versionCode}")
+            buildConfigField("String","VERSION_NAME","\"${defaultConfig.versionName}\"")
+        }
         release {
+            buildConfigField("int", "VERSION_CODE", "${defaultConfig.versionCode}")
+            buildConfigField("String","VERSION_NAME","\"${defaultConfig.versionName}\"")
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
