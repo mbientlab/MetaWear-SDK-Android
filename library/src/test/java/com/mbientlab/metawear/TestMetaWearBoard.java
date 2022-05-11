@@ -435,7 +435,7 @@ public class TestMetaWearBoard {
             connectToBoard();
 
             //  Updating from older firmware to v1.4.0 requires 3 files, old dfu function only returns 1
-            Task<File> filesTask = mwBoard.downloadFirmwareAsync("1.4.0");
+            @SuppressWarnings("deprecation") Task<File> filesTask = mwBoard.downloadFirmwareAsync("1.4.0");
             filesTask.waitForCompletion();
 
             throw filesTask.getError();
