@@ -22,40 +22,43 @@
  * hello@mbientlab.com.
  */
 
-apply plugin: 'com.android.library'
+package com.mbientlab.metawear;
 
-android {
-    compileSdkVersion 32
-    buildToolsVersion '30.0.3'
+import static org.junit.Assert.assertArrayEquals;
 
-    defaultConfig {
-        minSdkVersion 24
-        targetSdkVersion 32
-        versionCode 65
-        versionName "3.9.0"
+import com.mbientlab.metawear.module.Settings;
+
+import org.junit.Before;
+import org.junit.Test;
+
+/**
+ * Created by lkasso on 04/01/2021.
+ */
+
+public class TestSettingsRev10 extends UnitTestBase {
+    private Settings settings;
+
+    @Before
+    public void setup() throws Exception {
+        junitPlatform.addCustomModuleInfo(new byte[]{0x11, (byte) 0x80, 0x00, 0x0a, 0x07, 0x00});
+        connectToBoard();
+
+        settings = mwBoard.getModule(Settings.class);
     }
 
-    buildTypes {
-        debug{
-            buildConfigField("int", "VERSION_CODE", "${defaultConfig.versionCode}")
-            buildConfigField("String","VERSION_NAME","\"${defaultConfig.versionName}\"")
-        }
-        release {
-            buildConfigField("int", "VERSION_CODE", "${defaultConfig.versionCode}")
-            buildConfigField("String","VERSION_NAME","\"${defaultConfig.versionName}\"")
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-}
+    @Test
+    public void enableForce1MPhy() {
+        byte[] expected = new byte[]{0x11, (byte) 0x1d, 0x01};
 
-dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    api 'com.parse.bolts:bolts-tasks:1.4.0'
-    testImplementation 'org.json:json:20210307'
-    testImplementation 'junit:junit:4.13.2'
+        settings.enableForce1MPhy(true);
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    }
+
+    @Test
+    public void disableForce1MPhy() {
+        byte[] expected = new byte[]{0x11, (byte) 0x1d, 0x00};
+
+        settings.enableForce1MPhy(false);
+        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    }
 }

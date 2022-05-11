@@ -330,4 +330,11 @@ public interface Settings extends Module {
      * @return True if feature is supported, false if regulator cannot be enabled (if not MMS)
      */
     boolean enable3VRegulator(boolean enable);
+    /**
+     * Disables 2Mhz PHY support
+     * For compatibility or link settings optimization. Connection must be re-established for effect.
+     * @param enable    True to force 1Mhz, False to allow 2Mhz.
+     * @return True if feature is supported, false if unsupported.
+     */
+    boolean enableForce1MPhy(boolean enable);
 }

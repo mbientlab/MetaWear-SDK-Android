@@ -149,3 +149,15 @@ However, if you have an external peripheral on the IOs that needs 3V power (such
 And to turn it off: ::
 
     settings.enable3VRegulator(false);
+
+Forcing 1MHz PHY
+---------------------
+BTLE 5 adds 2MHz radio band support, which may affect performance. This endpoint forces 1Mhz for compatibility or testing purposes.
+
+To force the 1MHz PHY: ::
+
+    settings.enableForce1MPhy(true);
+
+To allow the 2MHz PHY: ::
+
+    settings.enableForce1MPhy(false);
