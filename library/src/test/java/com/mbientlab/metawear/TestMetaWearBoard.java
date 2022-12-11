@@ -41,6 +41,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
+import org.skyscreamer.jsonassert.JSONAssert;
 
 import java.io.File;
 import java.util.Arrays;
@@ -276,7 +277,7 @@ public class TestMetaWearBoard {
                     assertFalse(task.getResult().has(current));
                     assertFalse(EXPECTED_MODULE_DUMP.has(current));
                 } else {
-                    assertEquals(EXPECTED_MODULE_DUMP.get(current).toString(), task.getResult().get(current).toString());
+                    JSONAssert.assertEquals(EXPECTED_MODULE_DUMP.get(current).toString(), task.getResult().get(current).toString(), false);
                 }
             }
         }
@@ -333,7 +334,7 @@ public class TestMetaWearBoard {
                     assertFalse(current, partial.has(current));
                     assertFalse(expectedPartial.has(current));
                 } else {
-                    assertEquals(expectedPartial.get(current).toString(), partial.get(current).toString());
+                    JSONAssert.assertEquals(expectedPartial.getJSONObject(current).toString(), partial.getJSONObject(current).toString(), false);
                 }
             }
 
