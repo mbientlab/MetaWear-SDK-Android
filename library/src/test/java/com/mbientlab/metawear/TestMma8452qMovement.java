@@ -24,18 +24,19 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.data.Sign.NEGATIVE;
+import static com.mbientlab.metawear.data.Sign.POSITIVE;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 import com.mbientlab.metawear.module.AccelerometerMma8452q.Movement;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static com.mbientlab.metawear.data.Sign.*;
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 12/20/16.
@@ -44,7 +45,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestMma8452qMovement extends UnitTestBase {
     private AccelerometerMma8452q mma8452qAcc;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
         connectToBoard();

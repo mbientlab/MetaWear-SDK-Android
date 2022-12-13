@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.mbientlab.metawear.module.Switch;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 9/4/16.
@@ -40,7 +40,7 @@ import static org.junit.Assert.assertEquals;
 public class TestSwitch extends UnitTestBase {
     private Switch switchModule;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class);
         connectToBoard();

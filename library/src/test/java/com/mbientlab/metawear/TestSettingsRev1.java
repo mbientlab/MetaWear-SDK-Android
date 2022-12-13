@@ -24,15 +24,16 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
 import com.mbientlab.metawear.module.Settings;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertNull;
 
 /**
  * Created by etsai on 10/3/16.
@@ -40,7 +41,7 @@ import static org.junit.Assert.assertNull;
 public class TestSettingsRev1 extends UnitTestBase {
     private Settings settings;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x01 });
         connectToBoard();
@@ -61,7 +62,7 @@ public class TestSettingsRev1 extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void disconnectEvent() throws Exception {
         final Capture<Exception> actual= new Capture<>();
 
@@ -70,7 +71,7 @@ public class TestSettingsRev1 extends UnitTestBase {
             return null;
         });
 
-        throw actual.get();
+        assertInstanceOf(UnsupportedOperationException.class, actual.get());
     }
 
     @Test

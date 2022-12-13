@@ -24,54 +24,44 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
+import com.mbientlab.metawear.module.BarometerBme280;
 import com.mbientlab.metawear.module.ColorTcs34725;
 import com.mbientlab.metawear.module.ColorTcs34725.Gain;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestColorTsc34725Config extends UnitTestBase {
     private final float[] INTEGRATION_TIMES= new float[] {4.8f, 612f};
     private final byte[] INTEGRATION_BITMASKS= new byte[] {(byte) 0xfe, 0x1};
 
-    @Parameters(name = "gain: {0}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        for(Gain g: Gain.values()) {
-            for(int i= 0; i < 2; i++) {
-                parameters.add(new Object[] { g, i, true });
-                parameters.add(new Object[] { g, i, false });
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        for(BarometerBme280.StandbyTime entry: BarometerBme280.StandbyTime.values()) {
+            for(Gain g: Gain.values()) {
+                for(int i= 0; i < 2; i++) {
+                    parameters.add(Arguments.of(g, i, true));
+                    parameters.add(Arguments.of(g, i, false));
+                }
             }
         }
-
-        return parameters;
+        return parameters.stream();
     }
-
-    @Parameter
-    public Gain gain;
-
-    @Parameter(value = 1)
-    public int integrationIdx;
-
-    @Parameter(value = 2)
-    public boolean illuminate;
 
     private ColorTcs34725 colorTcs34725;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(ColorTcs34725.class);
         connectToBoard();
@@ -79,8 +69,9 @@ public class TestColorTsc34725Config extends UnitTestBase {
         colorTcs34725= mwBoard.getModule(ColorTcs34725.class);
     }
 
-    @Test
-    public void configure() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configure(Gain gain, int integrationIdx, boolean illuminate) {
         byte[] expected= new byte[] {0x17, 0x02, INTEGRATION_BITMASKS[integrationIdx], (byte) gain.ordinal(), (byte) (illuminate ? 0x1 : 0x0)};
 
         ColorTcs34725.ConfigEditor editor = colorTcs34725.configure()

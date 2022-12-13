@@ -24,46 +24,47 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
+import com.mbientlab.metawear.impl.platform.DeviceInformationService;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
-import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
-import com.mbientlab.metawear.impl.platform.DeviceInformationService;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.runners.Enclosed;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.skyscreamer.jsonassert.JSONAssert;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 
 import bolts.AggregateException;
 import bolts.Task;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 /**
  * Created by etsai on 9/18/16.
  */
-@RunWith(Enclosed.class)
 public class TestMetaWearBoard {
     public static class TestConnect extends UnitTestBase {
         @Test
@@ -98,14 +99,14 @@ public class TestMetaWearBoard {
             assertArrayEquals(expected, junitPlatform.getConnectCommands());
         }
 
-        @Test(expected = TimeoutException.class)
+        @Test
         public void serviceDiscoveryTimeout() throws Exception {
             junitPlatform.addCustomModuleInfo(new byte[]{0xf, (byte) 0xff});
 
             Task<Void> task = mwBoard.connectWithRetryAsync(3);
             task.waitForCompletion();
 
-            throw task.getError();
+            assertInstanceOf(TimeoutException.class, task.getError());
         }
 
         @Test()
@@ -181,13 +182,13 @@ public class TestMetaWearBoard {
             assertArrayEquals(expected, junitPlatform.getGattCharReadHistory());
         }
 
-        @Test(expected = UnsupportedModuleException.class)
+        @Test
         public void metabootGetModule() throws Exception {
             junitPlatform.boardInfo = new MetaWearBoardInfo(Accelerometer.class);
             junitPlatform.enableMetaBootState = true;
             connectToBoard();
 
-            mwBoard.getModuleOrThrow(Accelerometer.class);
+            assertThrows(com.mbientlab.metawear.UnsupportedModuleException.class, () -> mwBoard.getModuleOrThrow(Accelerometer.class));
         }
     }
 
@@ -204,7 +205,7 @@ public class TestMetaWearBoard {
             assertEquals(expected, task.getResult());
         }
 
-        @Test(expected = TimeoutException.class)
+        @Test
         public void readDeviceInfoTimeout() throws Throwable {
             connectToBoard();
 
@@ -214,7 +215,7 @@ public class TestMetaWearBoard {
 
             AggregateException exception = (AggregateException) task.getError();
             assertEquals(2, exception.getInnerThrowables().size());
-            throw exception.getInnerThrowables().get(1);
+            assertInstanceOf(TimeoutException.class, exception.getInnerThrowables().get(1));
         }
 
         @Test
@@ -308,7 +309,7 @@ public class TestMetaWearBoard {
             assertArrayEquals(expected, junitPlatform.getConnectCommands());
         }
 
-        @Test(expected = TaskTimeoutException.class)
+        @Test
         public void moduleInfoDumpTimeout() throws Exception {
             junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
             connectToBoard();
@@ -331,14 +332,14 @@ public class TestMetaWearBoard {
             while(it.hasNext()) {
                 current = it.next();
                 if (!expectedPartial.has(current) || !partial.has(current)) {
-                    assertFalse(current, partial.has(current));
+                    assertFalse(partial.has(current), current);
                     assertFalse(expectedPartial.has(current));
                 } else {
                     JSONAssert.assertEquals(expectedPartial.getJSONObject(current).toString(), partial.getJSONObject(current).toString(), false);
                 }
             }
 
-            throw exception;
+            assertInstanceOf(TaskTimeoutException.class, exception);
         }
     }
 
@@ -391,31 +392,36 @@ public class TestMetaWearBoard {
         return names;
     }
 
-    @RunWith(Parameterized.class)
     public static class TestFirmwareRetrieval extends UnitTestBase {
-        @Parameters
-        public static Collection<Object[]> data() {
-            return Arrays.asList(new Object[][]{
-                    { false, new String[] {"1.2.5", "1.4.0", "1.5.0"} },
-                    { true, new String[] {"0.2.1", "0.3.1", "0.3.1" } }
-            });
+        private static Stream<Arguments> data() {
+            List<Arguments> parameters = new LinkedList<>();
+            List<String> arg1 = new ArrayList<>();
+            arg1.add("1.2.5");
+            arg1.add("1.4.0");
+            arg1.add("1.5.0");
+            parameters.add(Arguments.of(false, arg1));
+            List<String> arg2= new ArrayList<>();
+            arg2.add("0.2.1");
+            arg2.add("0.3.1");
+            arg2.add("0.3.1");
+            parameters.add(Arguments.of(true, arg2));
+            return parameters.stream();
         }
 
-        @Parameter
-        public boolean enableMetaboot;
-
-        @Parameter(value = 1)
-        public String[] firmwareRevisions;
-
-        @Before
-        public void setup() {
-            junitPlatform.enableMetaBootState = enableMetaboot;
-            junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+        public void setup(boolean enableMetaboot) {
+            try {
+                junitPlatform.enableMetaBootState = enableMetaboot;
+                junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+            } catch (Exception e) {
+                fail(e);
+            }
         }
 
-        @Test
-        public void updateFromOldBootLoader() throws Exception {
-            junitPlatform.firmware = firmwareRevisions[0];
+        @ParameterizedTest
+        @MethodSource("data")
+        public void updateFromOldBootLoader(boolean enableMetaboot, List<String> firmwareRevisions) throws Exception {
+            setup(enableMetaboot);
+            junitPlatform.firmware = firmwareRevisions.get(0);
             connectToBoard();
 
             Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync("1.4.0");
@@ -430,21 +436,25 @@ public class TestMetaWearBoard {
             assertArrayEquals(expected, fileToNames(filesTask.getResult()));
         }
 
-        @Test(expected = UnsupportedOperationException.class)
-        public void updateWithOldDfuFn() throws Exception {
-            junitPlatform.firmware = firmwareRevisions[0];
+        @ParameterizedTest
+        @MethodSource("data")
+        public void updateWithOldDfuFn(boolean enableMetaboot, List<String> firmwareRevisions) throws Exception {
+            setup(enableMetaboot);
+            junitPlatform.firmware = firmwareRevisions.get(0);
             connectToBoard();
 
             //  Updating from older firmware to v1.4.0 requires 3 files, old dfu function only returns 1
             @SuppressWarnings("deprecation") Task<File> filesTask = mwBoard.downloadFirmwareAsync("1.4.0");
             filesTask.waitForCompletion();
 
-            throw filesTask.getError();
+            assertInstanceOf(UnsupportedOperationException.class, filesTask.getError());
         }
 
-        @Test
-        public void updateFromNewBootLoader() throws Exception {
-            junitPlatform.firmware = firmwareRevisions[1];
+        @ParameterizedTest
+        @MethodSource("data")
+        public void updateFromNewBootLoader(boolean enableMetaboot, List<String> firmwareRevisions) throws Exception {
+            setup(enableMetaboot);
+            junitPlatform.firmware = firmwareRevisions.get(1);
             connectToBoard();
 
             Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync();
@@ -457,52 +467,53 @@ public class TestMetaWearBoard {
             assertArrayEquals(expected, fileToNames(filesTask.getResult()));
         }
 
-        @Test(expected = IllegalFirmwareFile.class)
-        public void downgradeToOldBootloader() throws Exception {
-            junitPlatform.firmware = firmwareRevisions[2];
+        @ParameterizedTest
+        @MethodSource("data")
+        public void downgradeToOldBootloader(boolean enableMetaboot, List<String> firmwareRevisions) throws Exception {
+            setup(enableMetaboot);
+            junitPlatform.firmware = firmwareRevisions.get(2);
             connectToBoard();
 
             // Firmware v1.4.0+ cannot downgrade below v1.4.0
             Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync("1.2.5");
             filesTask.waitForCompletion();
 
-            throw filesTask.getError();
+            assertInstanceOf(IllegalFirmwareFile.class, filesTask.getError());
         }
     }
 
-    @RunWith(Parameterized.class)
     public static class TestFirmwareCheck extends UnitTestBase {
-        @Parameters
-        public static Collection<Object[]> data() {
-            return Arrays.asList(new Object[][]{
-                    { "1.5.0", "1.2.5" },
-                    { null, "1.5.0" }
-            });
+        private static Stream<Arguments> data() {
+            List<Arguments> params = new LinkedList<>();
+            params.add(Arguments.of("1.5.0", "1.2.5"));
+            params.add(Arguments.of(null, "1.5.0"));
+            return params.stream();
         }
 
-        @Parameter
-        public String expected;
-
-        @Parameter(value = 1)
-        public String firmwareRevision;
-
-        @Before
-        public void setup() throws Exception {
-            junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
-            junitPlatform.firmware = firmwareRevision;
-            connectToBoard();
+        public void setup(String firmwareRevision) {
+            try {
+                junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
+                junitPlatform.firmware = firmwareRevision;
+                connectToBoard();
+            } catch (Exception e) {
+                fail(e);
+            }
         }
 
-        @Test
-        public void versionString() throws Exception {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void versionString(String expected, String firmwareRevision) throws Exception {
+            setup(firmwareRevision);
             Task<String> stringTask = mwBoard.findLatestAvailableFirmwareAsync();
             stringTask.waitForCompletion();
 
             assertEquals(expected, stringTask.getResult());
         }
 
-        @Test
-        public void versionBoolean() throws Exception {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void versionBoolean(String expected, String firmwareRevision) throws Exception {
+            setup(firmwareRevision);
             Task<Boolean> boolTask = mwBoard.checkForFirmwareUpdateAsync();
             boolTask.waitForCompletion();
 
@@ -515,7 +526,7 @@ public class TestMetaWearBoard {
             super("3.4.7");
         }
 
-        @Test(expected = UnsupportedOperationException.class)
+        @Test
         public void updateToLatest() throws Exception {
             junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
             connectToBoard();
@@ -524,34 +535,27 @@ public class TestMetaWearBoard {
             Task<List<File>> filesTask = mwBoard.downloadFirmwareUpdateFilesAsync();
             filesTask.waitForCompletion();
 
-            throw filesTask.getError();
+            assertInstanceOf(UnsupportedOperationException.class, filesTask.getError());
         }
     }
 
-    @RunWith(Parameterized.class)
     public static class TestFirmwareBuildCheck extends UnitTestBase {
-        @Parameters
-        public static Collection<Object[]> data() {
-            return Arrays.asList(new Object[][]{
-                    { (byte) 0x80, "128" },
-                    { (byte) 0x00, "vanilla" }
-            });
+        private static Stream<Arguments> data() {
+            List<Arguments> params = new LinkedList<>();
+            params.add(Arguments.of((byte) 0x80, "128"));
+            params.add(Arguments.of((byte) 0x00, "vanilla"));
+            return params.stream();
         }
 
-        @Parameter
-        public byte revision;
-
-        @Parameter(value = 1)
-        public String buildName;
-
-        @Before
+        @BeforeEach
         public void setup() {
             junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
             junitPlatform.firmware = "1.4.2";
         }
 
-        @Test
-        public void checkFilename() throws Exception {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void checkFilename(byte revision, String buildName) throws Exception {
             junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x08, 0x03, revision});
             connectToBoard();
 

@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.ThresholdOutput;
 import com.mbientlab.metawear.builder.function.Function1;
@@ -33,10 +35,8 @@ import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Macro;
 import com.mbientlab.metawear.module.Switch;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import static org.junit.Assert.assertArrayEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 11/30/16.
@@ -45,7 +45,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestMacro extends UnitTestBase {
     private Macro macro;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.firmware = "1.2.3";
         junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});

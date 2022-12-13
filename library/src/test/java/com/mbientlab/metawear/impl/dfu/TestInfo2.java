@@ -24,13 +24,18 @@
 
 package com.mbientlab.metawear.impl.dfu;
 
+import static com.mbientlab.metawear.JunitPlatform.RES_PATH;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.mbientlab.metawear.IllegalFirmwareFile;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -40,14 +45,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
-import static com.mbientlab.metawear.JunitPlatform.RES_PATH;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 public class TestInfo2 {
     private static JSONObject root;
 
-    @BeforeClass
+    @BeforeAll
     public static void classSetup() throws IOException, JSONException {
         InputStream is = new FileInputStream(new File(RES_PATH, "info2.json"));
         int size = is.available();
@@ -59,7 +60,7 @@ public class TestInfo2 {
 
     private Info2 info;
 
-    @Before
+    @BeforeEach
     public void setup() {
         info = new Info2(root, "3.7.1");
     }
@@ -70,7 +71,7 @@ public class TestInfo2 {
     }
 
     @Test
-    public void booloaderChain() throws JSONException {
+    public void bootloaderChain() throws JSONException {
         final String hardware = "0.2";
         final String model = "6";
         final String build = "bootloader";
@@ -94,22 +95,22 @@ public class TestInfo2 {
         assertEquals(expected, info.findFirmwareImage(hardware, model, build, "1.4.5"));
     }
 
-    @Test(expected = IllegalFirmwareFile.class)
-    public void findSpecificFirmwareWithOldApi() throws JSONException, IllegalFirmwareFile {
+    @Test
+    public void findSpecificFirmwareWithOldApi() {
         final String hardware = "0.2";
         final String model = "6";
         final String build = "vanilla";
 
-        info.findFirmwareImage(hardware, model, build, "2.7.11");
+        assertThrows(IllegalFirmwareFile.class, () -> info.findFirmwareImage(hardware, model, build, "2.7.11"));
     }
 
-    @Test(expected = IllegalFirmwareFile.class)
-    public void findNonExistentFirmware() throws JSONException, IllegalFirmwareFile {
+    @Test
+    public void findNonExistentFirmware() {
         final String hardware = "0.4";
         final String model = "5";
         final String build = "vanilla";
 
-        info.findFirmwareImage(hardware, model, build, "3.1.41");
+        assertThrows(IllegalFirmwareFile.class, () -> info.findFirmwareImage(hardware, model, build, "3.1.41"));
     }
 
     @Test
@@ -122,12 +123,12 @@ public class TestInfo2 {
         assertEquals(expected, info.findFirmwareImage(hardware, model, build));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void findLatestFirmwareWithOldApi() throws JSONException, IllegalFirmwareFile {
+    @Test
+    public void findLatestFirmwareWithOldApi() {
         final String hardware = "0.2";
         final String model = "6";
         final String build = "vanilla";
 
-        info.findFirmwareImage(hardware, model, build);
+        assertThrows(UnsupportedOperationException.class, () -> info.findFirmwareImage(hardware, model, build));
     }
 }

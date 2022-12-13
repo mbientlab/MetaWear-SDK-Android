@@ -24,21 +24,22 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.IBeacon.Configuration;
 import com.mbientlab.metawear.module.Switch;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 10/18/16.
@@ -46,7 +47,7 @@ import static org.junit.Assert.assertEquals;
 public class TestIBeacon extends UnitTestBase {
     private IBeacon ibeacon;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, IBeacon.class, AccelerometerBmi160.class);
         connectToBoard();
@@ -97,7 +98,7 @@ public class TestIBeacon extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test(expected = IndexOutOfBoundsException.class)
+    @Test
     public void sliceOutOfBounds() throws Exception {
         Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
 
@@ -109,10 +110,10 @@ public class TestIBeacon extends UnitTestBase {
         task.waitForCompletion();
 
 
-        throw task.getError();
+        assertInstanceOf(IndexOutOfBoundsException.class, task.getError());
     }
 
-    @Test(expected = IndexOutOfBoundsException.class)
+    @Test
     public void sliceOutOfBounds2() throws Exception {
         Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
 
@@ -124,7 +125,7 @@ public class TestIBeacon extends UnitTestBase {
         task.waitForCompletion();
 
 
-        throw task.getError();
+        assertInstanceOf(IndexOutOfBoundsException.class, task.getError());
     }
 
     @Test

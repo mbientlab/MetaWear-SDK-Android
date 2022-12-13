@@ -24,6 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.Accelerometer;
@@ -33,49 +36,45 @@ import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 9/15/16.
  */
-@RunWith(Parameterized.class)
 public class TestAccFeedback extends UnitTestBase {
-    @Parameters
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                { AccelerometerBmi160.class },
-                { AccelerometerBmi270.class },
-                { AccelerometerMma8452q.class },
-                { AccelerometerBma255.class },
-        });
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(AccelerometerBmi160.class));
+        parameters.add(Arguments.of(AccelerometerBmi270.class));
+        parameters.add(Arguments.of(AccelerometerMma8452q.class));
+        parameters.add(Arguments.of(AccelerometerBma255.class));
+        return parameters.stream();
     }
-
-    @Parameter
-    public Class<? extends Accelerometer> accelClass;
 
     private Accelerometer accelerometer;
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(accelClass);
-        junitPlatform.firmware= "1.1.3";
-        connectToBoard();
+    public void setup(Class<? extends Accelerometer> accelClass) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+            junitPlatform.firmware = "1.1.3";
+            connectToBoard();
 
-        accelerometer = mwBoard.getModule(Accelerometer.class);
+            accelerometer = mwBoard.getModule(Accelerometer.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void createYXFeedback() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void createYXFeedback(Class<? extends Accelerometer> accelClass) throws InterruptedException {
+        setup(accelClass);
         byte[][] expected= new byte[][] {
                 {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x22, 0x0a, 0x01, 0x01},
                 {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x09, 0x15, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -103,8 +102,10 @@ public class TestAccFeedback extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test
-    public void xyAbsAdd() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void xyAbsAdd(Class<? extends Accelerometer> accelClass) throws InterruptedException {
+        setup(accelClass);
         final byte[][] expected = new byte[][] {
                 {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x20, 0x09, 0x15, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00},
                 {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x22, 0x09, 0x15, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00},

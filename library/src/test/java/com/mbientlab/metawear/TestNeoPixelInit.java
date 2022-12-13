@@ -24,11 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.NeoPixel;
 
-import org.junit.Test;
-
-import static org.junit.Assert.assertArrayEquals;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 10/2/16.

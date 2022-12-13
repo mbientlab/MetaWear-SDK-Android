@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.mbientlab.metawear.module.ProximityTsl2671;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 10/2/16.
@@ -41,7 +41,7 @@ import static org.junit.Assert.assertEquals;
 public class TestProximityTsl2671 extends UnitTestBase {
     private ProximityTsl2671 proximity;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(ProximityTsl2671.class);
         connectToBoard();

@@ -24,59 +24,55 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.MagnetometerBmm150.Preset;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 10/6/16.
  */
-@RunWith(Parameterized.class)
 public class TestMagnetometerBmm150Config extends UnitTestBase {
     static final byte SLEEP_REV = 2;
     private static final byte[] XY_BITMASK= new byte[] { 0x01, 0x04, 0x07, 0x17 },
             Z_BITMASK= new byte[] { 0x02, 0x0e, 0x1a, 0x52 },
             ODR_BITMASK= new byte[] { 0, 0, 0, 5};
-    @Parameters(name = "preset: {0}, revision: {1}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        for(Preset preset: Preset.values()) {
-            parameters.add(new Object[] { preset, (byte) 1 });
-            parameters.add(new Object[] { preset, SLEEP_REV });
-        }
 
-        return parameters;
+    private static Stream<Arguments> data() {
+        List<Arguments> params = new LinkedList<>();
+        for(Preset preset: Preset.values()) {
+            params.add(Arguments.of(preset, (byte) 1));
+            params.add(Arguments.of(preset, SLEEP_REV));
+        }
+        return params.stream();
     }
 
     private MagnetometerBmm150 mag;
 
-    @Parameter
-    public Preset preset;
+    public void setup(byte revision) {
+        try {
+            junitPlatform.addCustomModuleInfo(new byte[]{0x15, (byte) 0x80, 0x00, revision});
+            connectToBoard();
 
-    @Parameter(value = 1)
-    public byte revision;
-
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.addCustomModuleInfo(new byte[] {0x15, (byte) 0x80, 0x00, revision});
-        connectToBoard();
-
-        mag= mwBoard.getModule(MagnetometerBmm150.class);
+            mag = mwBoard.getModule(MagnetometerBmm150.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void configure() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configure(Preset preset, byte revision) {
+        setup(revision);
         byte[][] expected= revision == SLEEP_REV ? new byte[][] {
                 { 0x15, 0x01, 0x00},
                 { 0x15, 0x04, XY_BITMASK[preset.ordinal()], Z_BITMASK[preset.ordinal()] },

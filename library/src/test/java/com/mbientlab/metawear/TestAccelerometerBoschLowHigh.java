@@ -24,56 +24,55 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.data.Sign.NEGATIVE;
+import static com.mbientlab.metawear.data.Sign.POSITIVE;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 import com.mbientlab.metawear.module.AccelerometerBosch.LowHighResponse;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static com.mbientlab.metawear.data.Sign.*;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 12/19/16.
  */
-@RunWith(Parameterized.class)
 public class TestAccelerometerBoschLowHigh extends UnitTestBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> boardsParams() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        parameters.add(new Object[] {AccelerometerBma255.class});
-        parameters.add(new Object[] {AccelerometerBmi160.class});
-
-        return parameters;
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(AccelerometerBma255.class));
+        parameters.add(Arguments.of(AccelerometerBmi160.class));
+        return parameters.stream();
     }
 
     private AccelerometerBosch boschAcc;
 
-    @Parameter
-    public Class<? extends AccelerometerBosch> accelClass;
+    public void setup(Class<? extends AccelerometerBosch> accelClass) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+            connectToBoard();
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-        connectToBoard();
-
-        boschAcc = mwBoard.getModule(AccelerometerBosch.class);
+            boschAcc = mwBoard.getModule(AccelerometerBosch.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void configureLow() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureLow(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x07, 0x07, 0x40, (byte) 0x85, 0x0b, (byte) 0xc0} :
                 new byte[] {0x03, 0x07, 0x09, 0x40, (byte) 0x85, 0x0f, (byte) 0xc0};
@@ -91,8 +90,10 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void startLow() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startLow(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x06, 0x08, 0x00};
 
         boschAcc.lowHigh().configure()
@@ -102,16 +103,20 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void stopLow() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void stopLow(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x06, 0x00, 0x0f};
 
         boschAcc.lowHigh().stop();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void handleLowResponse() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void handleLowResponse(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         final LowHighResponse expected = new LowHighResponse(
                 false,
                 true,
@@ -130,8 +135,10 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
     }
 
 
-    @Test
-    public void configureHigh() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureHigh(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x07, 0x07, 0x30, (byte) 0x81, 0x05, 0x20} :
                 new byte[] {0x03, 0x07, 0x09, 0x30, (byte) 0x81, 0x06, 0x20};
@@ -148,8 +155,10 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void startHigh() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startHigh(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x06, 0x04, 0x00};
 
         boschAcc.lowHigh().configure()
@@ -159,16 +168,20 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void stopHigh() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void stopHigh(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x06, 0x00, 0x0f};
 
         boschAcc.lowHigh().stop();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void handleHighResponse() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void handleHighResponse(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         final LowHighResponse[] expected = new LowHighResponse[] {
                 new LowHighResponse(true, false, false, true, false, NEGATIVE),
                 new LowHighResponse(true, false, false, true, false, POSITIVE),

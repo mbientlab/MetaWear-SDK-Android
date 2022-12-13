@@ -24,52 +24,50 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Temperature.Sensor;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestTemperatureMwrData extends UnitTestBase {
-    @Parameters
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-                {0},
-                {1}
-        });
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(0));
+        parameters.add(Arguments.of(1));
+        return parameters.stream();
     }
-
-    @Parameter
-    public int sourceIdx;
 
     private Sensor currentSrc;
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.addCustomModuleInfo(new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x01});
-        connectToBoard();
+    public void setup(int sourceIdx) {
+        try {
+            junitPlatform.addCustomModuleInfo(new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x01});
+            connectToBoard();
 
-        currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx];
+            currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx];
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void read() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void read(int sourceIdx) {
+        setup(sourceIdx);
         byte[] expected= new byte[] {0x4, (byte) 0x81, (byte) sourceIdx};
 
         currentSrc.addRouteAsync(source -> source.stream(null));
@@ -78,8 +76,10 @@ public class TestTemperatureMwrData extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void readSilent() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void readSilent(int sourceIdx) {
+        setup(sourceIdx);
         byte[] expected= new byte[] {0x4, (byte) 0xc1, (byte) sourceIdx};
 
         currentSrc.read();
@@ -93,8 +93,10 @@ public class TestTemperatureMwrData extends UnitTestBase {
     };
     private static final float[] EXPECTED = new float[] { 32.f, 21.5f};
 
-    @Test
-    public void interpretData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void interpretData(int sourceIdx) {
+        setup(sourceIdx);
         final Capture<Float> actual= new Capture<>();
 
         currentSrc.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(task -> {

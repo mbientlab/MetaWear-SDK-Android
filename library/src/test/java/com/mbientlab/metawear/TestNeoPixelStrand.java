@@ -24,14 +24,14 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.NeoPixel;
 import com.mbientlab.metawear.module.NeoPixel.Strand;
 import com.mbientlab.metawear.module.NeoPixel.Strand.RotationDirection;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import static org.junit.Assert.assertArrayEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 10/2/16.
@@ -39,7 +39,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestNeoPixelStrand extends TestNeoPixelBase {
     private Strand strand;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         super.setup();
 

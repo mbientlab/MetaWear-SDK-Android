@@ -24,17 +24,18 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+
 import com.mbientlab.metawear.module.SerialPassthrough;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 10/6/16.
@@ -43,7 +44,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestI2C extends UnitTestBase {
     private SerialPassthrough.I2C i2c;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(SerialPassthrough.class);
         connectToBoard();
@@ -111,7 +112,7 @@ public class TestI2C extends UnitTestBase {
         assertArrayEquals(expected, actual.get());
     }
 
-    @Test(expected = TimeoutException.class)
+    @Test
     public void directReadWhoAmITimeout() throws Exception {
         final Capture<Exception> actual= new Capture<>();
 
@@ -121,6 +122,6 @@ public class TestI2C extends UnitTestBase {
                     return null;
                 }).waitForCompletion();
 
-        throw actual.get();
+        assertInstanceOf(TimeoutException.class, actual.get());
     }
 }

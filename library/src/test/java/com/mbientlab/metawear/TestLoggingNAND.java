@@ -24,16 +24,14 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.Accelerometer;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.Logging;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import java.util.concurrent.TimeoutException;
-
-import static org.junit.Assert.assertArrayEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by lkasso on 4/1/21.
@@ -41,7 +39,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestLoggingNAND extends UnitTestBase {
     private Logging logging;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi270.class);
         connectToBoard();

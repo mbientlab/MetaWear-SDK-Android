@@ -24,54 +24,52 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.MagnetometerBmm150;
+import static com.mbientlab.metawear.TestMagnetometerBmm150Config.SLEEP_REV;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.data.MagneticField;
+import com.mbientlab.metawear.module.MagnetometerBmm150;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static com.mbientlab.metawear.TestMagnetometerBmm150Config.SLEEP_REV;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 /**
  * Created by etsai on 10/6/16.
  */
-@RunWith(Parameterized.class)
 public class TestMagnetometerBmm150 extends UnitTestBase {
-    @Parameters(name = "revision: {0}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        parameters.add(new Object[] { (byte) 1 });
-        parameters.add(new Object[] { SLEEP_REV });
-        return parameters;
+    private static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of((byte) 1),
+                Arguments.of(SLEEP_REV)
+        );
     }
-
-    @Parameter
-    public byte revision;
 
     private MagnetometerBmm150 mag;
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.addCustomModuleInfo(new byte[] {0x15, (byte) 0x80, 0x00, revision});
-        connectToBoard();
+    public void setup(byte revision) {
+        try {
+            junitPlatform.addCustomModuleInfo(new byte[] {0x15, (byte) 0x80, 0x00, revision});
+            connectToBoard();
 
-        mag= mwBoard.getModule(MagnetometerBmm150.class);
+            mag= mwBoard.getModule(MagnetometerBmm150.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void suspend() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void suspend(byte revision) {
+        setup(revision);
+
         mag.suspend();
 
         if (revision == SLEEP_REV) {
@@ -81,48 +79,61 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         }
     }
 
-    @Test
-    public void enableBFieldSampling() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void enableBFieldSampling(byte revision) {
+        setup(revision);
+
         byte[] expected= new byte[] {0x15, 0x02, 0x01, 0x00};
 
         mag.magneticField().start();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void disableBFieldSampling() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void disableBFieldSampling(byte revision) {
+        setup(revision);
         byte[] expected= new byte[] {0x15, 0x02, 0x00, 0x01};
 
         mag.magneticField().stop();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void globalStart() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void globalStart(byte revision) {
+        setup(revision);
         byte[] expected= new byte[] {0x15, 0x01, 0x01};
 
         mag.start();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void globalStop() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void globalStop(byte revision) {
+        setup(revision);
         byte[] expected= new byte[] {0x15, 0x01, 0x00};
 
         mag.stop();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void bFieldSubscribe() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void bFieldSubscribe(byte revision) {
+        setup(revision);
         byte[] expected= new byte[] {0x15, 0x05, 0x01};
         mag.magneticField().addRouteAsync(source -> source.stream(null));
 
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void bFieldUnsubscribe() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void bFieldUnsubscribe(byte revision) {
+        setup(revision);
         byte[] expected= new byte[] {0x15, 0x05, 0x00};
         mag.magneticField().addRouteAsync(source -> source.stream(null)).continueWith(task -> {
             task.getResult().unsubscribe(0);
@@ -132,8 +143,10 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void bFieldData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void bFieldData(byte revision) {
+        setup(revision);
         MagneticField expected= new MagneticField(Float.intBitsToFloat(0xb983a96d), Float.intBitsToFloat(0x392d362f), Float.intBitsToFloat(0x38958d9b));
         final Capture<MagneticField> actual= new Capture<>();
 
@@ -148,8 +161,10 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
         assertEquals(expected, actual.get());
     }
 
-    @Test
-    public void bFieldComponentData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void bFieldComponentData(byte revision) {
+        setup(revision);
         float[] expected = new float[] {-0.0002511250f, 0.0001651875f, 0.0000713125f};
         final float[] actual= new float[3];
 

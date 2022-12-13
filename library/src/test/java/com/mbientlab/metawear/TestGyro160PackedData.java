@@ -24,16 +24,16 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.Gyro;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.data.AngularVelocity;
+import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.GyroBmi160;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 11/17/16.
@@ -41,7 +41,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestGyro160PackedData extends UnitTestBase {
     private Gyro gyro;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(GyroBmi160.class);
         connectToBoard();

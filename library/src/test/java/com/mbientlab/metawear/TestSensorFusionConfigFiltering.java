@@ -1,53 +1,45 @@
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.COMPASS;
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.IMU_PLUS;
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.M4G;
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.NDOF;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.*;
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by eric on 12/7/17.
  */
 
-@RunWith(Parameterized.class)
 public class TestSensorFusionConfigFiltering extends UnitTestBase {
     private static final byte[] BMI160_FILTER_MASK = new byte[] { 0b00000000, 0b00010000, 0b00100000 };
 
-    @Parameters(name = "{0}, {1}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> tests = new ArrayList<>();
-
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
         for(AccelerometerBmi160.FilterMode accF: AccelerometerBmi160.FilterMode.values()) {
             for(Gyro.FilterMode gyrF: Gyro.FilterMode.values()) {
-                tests.add(new Object[]{accF, gyrF});
+                parameters.add(Arguments.of(accF, gyrF));
             }
         }
-
-        return tests;
+        return parameters.stream();
     }
-
-    @Parameter
-    public AccelerometerBmi160.FilterMode accFilter;
-
-    @Parameter(value = 1)
-    public Gyro.FilterMode gyroFilter;
 
     private SensorFusionBosch sensorFusion;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         connectToBoard();
@@ -55,8 +47,9 @@ public class TestSensorFusionConfigFiltering extends UnitTestBase {
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
     }
 
-    @Test
-    public void configureNdof() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureNdof(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) {
         final byte[][] expected = new byte[][] {
                 {0x19, 0x02, (byte) NDOF.ordinal(), 0x13},
                 {0x03, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
@@ -76,8 +69,9 @@ public class TestSensorFusionConfigFiltering extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test
-    public void configureImuPlus() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureImuPlus(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) {
         final byte[][] expected = new byte[][] {
                 {0x19, 0x02, (byte) IMU_PLUS.ordinal(), 0x13},
                 {0x03, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
@@ -95,8 +89,9 @@ public class TestSensorFusionConfigFiltering extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test
-    public void configureCompass() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureCompass(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) {
         final byte[][] expected = new byte[][] {
                 {0x19, 0x02, (byte) COMPASS.ordinal(), 0x13},
                 {0x03, 0x03, (byte) (0x6 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
@@ -115,8 +110,9 @@ public class TestSensorFusionConfigFiltering extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test
-    public void configureM4g() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureM4g(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) {
         final byte[][] expected = new byte[][] {
                 {0x19, 0x02, (byte) M4G.ordinal(), 0x13},
                 {0x03, 0x03, (byte) (0x7 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},

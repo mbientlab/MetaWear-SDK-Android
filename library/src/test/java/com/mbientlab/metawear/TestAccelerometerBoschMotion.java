@@ -24,6 +24,10 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -32,50 +36,45 @@ import com.mbientlab.metawear.module.AccelerometerBosch.AnyMotionDataProducer;
 import com.mbientlab.metawear.module.AccelerometerBosch.NoMotionDataProducer;
 import com.mbientlab.metawear.module.AccelerometerBosch.SlowMotionDataProducer;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 12/19/16.
  */
-@RunWith(Parameterized.class)
 public class TestAccelerometerBoschMotion extends UnitTestBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> boardsParams() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        parameters.add(new Object[] {AccelerometerBma255.class});
-        parameters.add(new Object[] {AccelerometerBmi160.class});
-
-        return parameters;
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(AccelerometerBma255.class));
+        parameters.add(Arguments.of(AccelerometerBmi160.class));
+        return parameters.stream();
     }
 
     private AccelerometerBosch boschAcc;
 
-    @Parameter
-    public Class<? extends AccelerometerBosch> accelClass;
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-        connectToBoard();
+    public void setup(Class<? extends AccelerometerBosch> accelClass) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+            connectToBoard();
 
-        boschAcc = mwBoard.getModule(AccelerometerBosch.class);
+            boschAcc = mwBoard.getModule(AccelerometerBosch.class);
+        } catch(Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void startNoMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startNoMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x09, 0x38, 0x00} :
                 new byte[] {0x03, 0x09, 0x78, 0x00};
@@ -84,8 +83,10 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void stopNoMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void stopNoMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x09, 0x00, 0x38} :
                 new byte[] {0x03, 0x09, 0x00, 0x78};
@@ -94,8 +95,10 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void configureNoMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureNoMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x0a, 0x18, 0x14, 0x7f, 0x15} :
                 new byte[] {0x03, 0x0a, 0x24, 0x14, 0x7f};
@@ -107,8 +110,10 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void noMotionData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void noMotionData(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         final byte expected = 0x4;
         final Capture<Byte> actual = new Capture<>();
 
@@ -118,24 +123,30 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         assertEquals(expected, actual.get().byteValue());
     }
 
-    @Test
-    public void startSlowMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startSlowMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x09, 0x38, 0x00};
 
         boschAcc.motion(SlowMotionDataProducer.class).start();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void stopSlowMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void stopSlowMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x09, 0x00, 0x38};
 
         boschAcc.motion(SlowMotionDataProducer.class).stop();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void configureSlowMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureSlowMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x0a, 0x10, 0x14, (byte) 0xc0, 0x14} :
                 new byte[] {0x03, 0x0a, 0x10, 0x14, (byte) 0xc0};
@@ -150,8 +161,10 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void slowMotionData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void slowMotionData(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         final byte expected = 0x4;
         final Capture<Byte> actual = new Capture<>();
 
@@ -161,24 +174,30 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         assertEquals(expected, actual.get().byteValue());
     }
 
-    @Test
-    public void startAnyMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startAnyMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x09, 0x07, 0x00};
 
         boschAcc.motion(AnyMotionDataProducer.class).start();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void stopAnyMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void stopAnyMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x09, 0x00, 0x07};
 
         boschAcc.motion(AnyMotionDataProducer.class).stop();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void configureAnyMotion() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureAnyMotion(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
                 new byte[] {0x03, 0x0a, 0x01, 0x2f, 0x14, 0x14} :
                 new byte[] {0x03, 0x0a, 0x01, 0x2f, 0x14};
@@ -193,8 +212,10 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void anyMotionData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void anyMotionData(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         final AccelerometerBosch.AnyMotion[] expected = new AccelerometerBosch.AnyMotion[] {
                 new AccelerometerBosch.AnyMotion(Sign.POSITIVE, false, false, true),
                 new AccelerometerBosch.AnyMotion(Sign.NEGATIVE, false, false, true),

@@ -24,64 +24,65 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.MetaWearBoardInfo.MODULE_RESPONSE;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.builder.filter.Passthrough;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
+import com.mbientlab.metawear.module.MagnetometerBmm150;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static com.mbientlab.metawear.MetaWearBoardInfo.MODULE_RESPONSE;
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 1/13/17.
  */
-@RunWith(Parameterized.class)
 public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
     private static final boolean[] EXPECTED = new boolean[] {
             true, false
     };
 
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> boardsParams() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        parameters.add(new Object[] {AccelerometerBma255.class});
-        parameters.add(new Object[] {AccelerometerBmi160.class});
-
-        return parameters;
+    private static Stream<Arguments> data() {
+        List<Arguments> params = new LinkedList<>();
+        for(MagnetometerBmm150.Preset preset: MagnetometerBmm150.Preset.values()) {
+            params.add(Arguments.of(AccelerometerBma255.class));
+            params.add(Arguments.of(AccelerometerBmi160.class));
+        }
+        return params.stream();
     }
-
-    @Parameter
-    public Class<? extends AccelerometerBosch> accelClass;
 
     private AccelerometerBosch acc;
 
-    @Before
-    public void setup() throws Exception {
-        byte[] original = MODULE_RESPONSE.get(accelClass);
-        byte[] moduleInfo = new byte[original.length];
-        System.arraycopy(original, 0, moduleInfo, 0, moduleInfo.length);
-        moduleInfo[3] = 0x2;
+    public void setup(Class<? extends AccelerometerBosch> accelClass) {
+        try {
+            byte[] original = MODULE_RESPONSE.get(accelClass);
+            byte[] moduleInfo = new byte[original.length];
+            System.arraycopy(original, 0, moduleInfo, 0, moduleInfo.length);
+            moduleInfo[3] = 0x2;
 
-        junitPlatform.addCustomModuleInfo(moduleInfo);
-        connectToBoard();
+            junitPlatform.addCustomModuleInfo(moduleInfo);
+            connectToBoard();
 
-        acc = mwBoard.getModule(AccelerometerBosch.class);
+            acc = mwBoard.getModule(AccelerometerBosch.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void response() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void response(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         final byte[][] responses = new byte[][] {
                 {0x03, 0x14, 0x07},
                 {0x03, 0x14, 0x03}
@@ -104,8 +105,10 @@ public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
         assertArrayEquals(EXPECTED, actual.get());
     }
 
-    @Test
-    public void dataProcessorResponse() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void dataProcessorResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        setup(accelClass);
         final byte[][] responses = new byte[][] {
                 {0x09, 0x03, 0x00, 0x07},
                 {0x09, 0x03, 0x00, 0x03}
@@ -129,8 +132,10 @@ public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
         assertArrayEquals(EXPECTED, actual.get());
     }
 
-    @Test
-    public void logResponse() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void logResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        setup(accelClass);
         final byte[] responses = new byte[] {
                 0x0b, 0x07,
                 (byte) 0xe0, (byte) 0x95, (byte) 0x99, (byte) 0x88, 0x00, 0x07, 0x00, 0x00, 0x00,

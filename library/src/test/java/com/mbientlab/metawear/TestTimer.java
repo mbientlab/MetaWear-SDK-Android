@@ -24,19 +24,20 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Timer;
 import com.mbientlab.metawear.module.Timer.ScheduledTask;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 9/18/16.
@@ -53,7 +54,7 @@ public class TestTimer extends UnitTestBase {
         });
     }
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Gpio.class, Timer.class);
         connectToBoard();
@@ -109,7 +110,7 @@ public class TestTimer extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommands(3));
     }
 
-    @Test(expected = TimeoutException.class)
+    @Test
     public void timeout() throws Exception {
         final Capture<Exception> actual= new Capture<>();
 
@@ -121,6 +122,6 @@ public class TestTimer extends UnitTestBase {
             return null;
         }).waitForCompletion();
 
-        throw actual.get();
+        assertInstanceOf(TimeoutException.class, actual.get());
     }
 }

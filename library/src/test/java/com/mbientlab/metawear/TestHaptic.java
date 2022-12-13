@@ -24,12 +24,12 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.Haptic;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import static org.junit.Assert.assertArrayEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 10/2/16.
@@ -37,7 +37,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestHaptic extends UnitTestBase {
     private Haptic haptic;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Haptic.class);
         connectToBoard();

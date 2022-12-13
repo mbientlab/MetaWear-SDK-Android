@@ -24,12 +24,16 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Logging;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -38,9 +42,6 @@ import java.util.Calendar;
 import bolts.Capture;
 import bolts.Task;
 
-import static junit.framework.TestCase.assertTrue;
-import static org.junit.Assert.assertArrayEquals;
-
 /**
  * Created by etsai on 9/3/16.
  */
@@ -48,7 +49,7 @@ public class TestLoggingDownload extends UnitTestBase {
     private Logging logging;
     private long now;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Logging.class, AccelerometerBmi160.class);
         junitPlatform.addCustomResponse(new byte[] {0x0b, (byte) 0x84}, new byte[] {0x0b, (byte) 0x84, (byte) 0xa9, 0x72, 0x04, 0x00, 0x01});
@@ -68,7 +69,7 @@ public class TestLoggingDownload extends UnitTestBase {
     
     @Test
     public void readoutProgress() {
-        long expected[]= new long[] {
+        long[] expected = new long[] {
                 0x019e,
                 0x0271, 0x0251, 0x0231, 0x0211, 0x01f1,
                 0x01d1, 0x01b1, 0x0191, 0x0171, 0x0151,
@@ -76,7 +77,7 @@ public class TestLoggingDownload extends UnitTestBase {
                 0x0091, 0x0071, 0x0051, 0x0031, 0x0011,
                 0x0000
         };
-        final long actual[]= new long[22];
+        final long[] actual = new long[22];
 
         byte[][] progress_responses= new byte[][]{
                 {0x0b, 0x08, 0x71, 0x02, 0x00, 0x00},
@@ -134,7 +135,7 @@ public class TestLoggingDownload extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands(1));
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void downloadInterrupted() throws Exception {
         final Capture<Exception> actual = new Capture<>();
         Task<Void> download = logging.downloadAsync().continueWith(task -> {
@@ -146,7 +147,7 @@ public class TestLoggingDownload extends UnitTestBase {
 
         download.waitForCompletion();
 
-        throw actual.get();
+        assertInstanceOf(RuntimeException.class, actual.get());
     }
 
     @Test

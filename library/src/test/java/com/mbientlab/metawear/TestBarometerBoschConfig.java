@@ -24,51 +24,43 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.BarometerBme280;
 import com.mbientlab.metawear.module.BarometerBmp280;
 import com.mbientlab.metawear.module.BarometerBosch.FilterCoeff;
 import com.mbientlab.metawear.module.BarometerBosch.OversamplingMode;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestBarometerBoschConfig extends TestBarometerBoschBase {
     private static final byte[] OS_BITMASK= new byte[] { 0x20, 0x24, 0x28, 0x2c, 0x30, 0x54 },
             FILTER_BITMASK= new byte[] {0x00, 0x04, 0x08, 0x0c, 0x10};
 
-    @Parameters(name = "board: {0}, filter: {1}, os: {2}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        for(Class<?> info: new Class<?>[] {BarometerBme280.class, BarometerBmp280.class}) {
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
             for(FilterCoeff filter: FilterCoeff.values()) {
                 for(OversamplingMode os: OversamplingMode.values()) {
-                    parameters.add(new Object[]{info, filter, os});
+                    parameters.add(Arguments.of(BarometerBme280.class, filter, os));
+                    parameters.add(Arguments.of( BarometerBmp280.class, filter, os));
                 }
             }
-        }
-        return parameters;
+        return parameters.stream();
     }
 
-    @Parameter(value = 1)
-    public FilterCoeff filter;
-
-    @Parameter(value = 2)
-    public OversamplingMode oversampling;
-
-    @Test
-    public void configure() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configure(Class<? extends MetaWearBoard.Module> info, FilterCoeff filter, OversamplingMode oversampling) {
+        setup(info);
         byte[] expected= new byte[] {0x12, 0x03, OS_BITMASK[oversampling.ordinal()], FILTER_BITMASK[filter.ordinal()]};
 
         baroBosch.configure()

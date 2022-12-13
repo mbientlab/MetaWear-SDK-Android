@@ -24,14 +24,14 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Temperature.ExternalThermistor;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 10/3/16.
@@ -39,7 +39,7 @@ import static org.junit.Assert.assertEquals;
 public class TestTemperatureMwRPro extends UnitTestBase {
     private Temperature temp;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Temperature.class);
         connectToBoard();

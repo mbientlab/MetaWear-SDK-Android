@@ -24,58 +24,54 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.module.Gpio;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 9/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestGpioEnhancedAnalog extends UnitTestBase {
-    @Parameters(name = "mode: {1}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-                {(byte) 3, true},
-                {(byte) 2, false}
-        });
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of((byte) 3, true));
+        parameters.add(Arguments.of((byte) 2, false));
+        return parameters.stream();
     }
 
     private Gpio gpio;
 
-    @Parameter
-    public byte pin;
-
-    @Parameter(value = 1)
-    public boolean absRef;
-
     private byte mask;
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Gpio.class);
-        junitPlatform.addCustomModuleInfo(new byte[] {0x05, (byte) 0x80, 0x00, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
-        connectToBoard();
+    public void setup(boolean absRef) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(Gpio.class);
+            junitPlatform.addCustomModuleInfo(new byte[]{0x05, (byte) 0x80, 0x00, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
+            connectToBoard();
 
-        gpio= mwBoard.getModule(Gpio.class);
-        mask= (byte) (absRef ? 6 : 7);
+            gpio = mwBoard.getModule(Gpio.class);
+            mask = (byte) (absRef ? 6 : 7);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void read() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void read(byte pin, boolean absRef) {
+        setup(absRef);
         byte[] expected= new byte[] {0x05, (byte) (0xc0 | mask), pin, (byte) 0xff, (byte) 0xff, 0x00, (byte) 0xff};
 
         (absRef ? gpio.pin(pin).analogAbsRef() : gpio.pin(pin).analogAdc()).read((byte) 0xff, (byte) 0xff, (short) 0, (byte) 0xff);
@@ -83,8 +79,10 @@ public class TestGpioEnhancedAnalog extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void readEnhanced() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void readEnhanced(byte pin, boolean absRef) {
+        setup(absRef);
         byte[] expected= new byte[] {0x05, (byte) (0x80 | mask), pin, 0x01, 0x02, 0x02, 0x15};
 
         Gpio.Analog producer = absRef ? gpio.pin(pin).analogAbsRef() : gpio.pin(pin).analogAdc();
@@ -94,8 +92,10 @@ public class TestGpioEnhancedAnalog extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void handleVirtualPinData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void handleVirtualPinData(byte pin, boolean absRef) {
+        setup(absRef);
         final Capture<Float> actualAbsRef = new Capture<>();
         final Capture<Short> actualAdc = new Capture<>();
         byte[][] responses= new byte[][] {

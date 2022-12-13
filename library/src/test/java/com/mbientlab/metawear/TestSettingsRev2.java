@@ -24,21 +24,21 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Settings;
 import com.mbientlab.metawear.module.Settings.BleAdvertisementConfig;
 import com.mbientlab.metawear.module.Settings.BleConnectionParameters;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 /**
  * Created by etsai on 10/3/16.
@@ -46,7 +46,7 @@ import static org.junit.Assert.assertNull;
 public class TestSettingsRev2 extends UnitTestBase {
     private Settings settings;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x02 });
         junitPlatform.boardInfo = new MetaWearBoardInfo(Led.class);

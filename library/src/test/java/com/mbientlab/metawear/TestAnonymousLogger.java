@@ -1,5 +1,9 @@
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -7,23 +11,18 @@ import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.runners.Enclosed;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-
 /**
  * Created by eric on 8/26/17.
  */
-@RunWith(Enclosed.class)
+@Nested
 public class TestAnonymousLogger {
     private static AnonymousRoute[] retrieveLoggers(MetaWearBoard mwBoard) throws Exception {
         Task<AnonymousRoute[]> task = mwBoard.createAnonymousRoutesAsync();
@@ -296,20 +295,20 @@ public class TestAnonymousLogger {
             junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         }
 
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             connectToBoard();
         }
 
-        @Test(expected = TimeoutException.class)
+        @Test
         public void accSyncTimeout() throws Exception {
             Task<AnonymousRoute[]> task = mwBoard.createAnonymousRoutesAsync();
             task.waitForCompletion();
 
-            throw task.getError();
+            assertInstanceOf(TimeoutException.class, task.getError());
         }
 
-        @Test(expected = TimeoutException.class)
+        @Test
         public void gyroSyncTimeout() throws Exception {
             junitPlatform.addCustomResponse(new byte[]{0x3, (byte) 0x83},
                     new byte[]{0x03, (byte) 0x83, 40, 8});
@@ -317,10 +316,10 @@ public class TestAnonymousLogger {
             Task<AnonymousRoute[]> task = mwBoard.createAnonymousRoutesAsync();
             task.waitForCompletion();
 
-            throw task.getError();
+            assertInstanceOf(TimeoutException.class, task.getError());
         }
 
-        @Test(expected = TimeoutException.class)
+        @Test
         public void logTimeout() throws Exception {
             junitPlatform.addCustomResponse(new byte[]{0x3, (byte) 0x83},
                     new byte[]{0x03, (byte) 0x83, 40, 8});
@@ -330,10 +329,10 @@ public class TestAnonymousLogger {
             Task<AnonymousRoute[]> task = mwBoard.createAnonymousRoutesAsync();
             task.waitForCompletion();
 
-            throw task.getError();
+            assertInstanceOf(TimeoutException.class, task.getError());
         }
 
-        @Test(expected = TimeoutException.class)
+        @Test
         public void dataProcTimeout() throws Exception {
             junitPlatform.addCustomResponse(new byte[]{0x3, (byte) 0x83},
                     new byte[]{0x03, (byte) 0x83, 40, 8});
@@ -345,7 +344,7 @@ public class TestAnonymousLogger {
             Task<AnonymousRoute[]> task = mwBoard.createAnonymousRoutesAsync();
             task.waitForCompletion();
 
-            throw task.getError();
+            assertInstanceOf(TimeoutException.class, task.getError());
         }
     }
     public static class TestSplitImu extends TestBase {

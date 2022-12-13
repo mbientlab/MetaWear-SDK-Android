@@ -24,16 +24,16 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 import com.mbientlab.metawear.module.Debug;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 
 /**
  * Created by etsai on 10/12/16.
@@ -41,7 +41,7 @@ import static org.junit.Assert.assertFalse;
 public class TestDebug extends UnitTestBase {
     private Debug debug;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Debug.class);
         connectToBoard();

@@ -24,58 +24,45 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.ProximityTsl2671;
 import com.mbientlab.metawear.module.ProximityTsl2671.ReceiverDiode;
 import com.mbientlab.metawear.module.ProximityTsl2671.TransmitterDriveCurrent;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestProximityTsl2671Config extends UnitTestBase {
     private final float[] INTEGRATION_TIMES= new float[] {5.44f, 693.6f};
     private final byte[] INTEGRATION_BITMASKS= new byte[] {(byte) 0xfe, 0x1},
             CURRENT_BITMASKS = new byte[] {0x00, 0x01, 0x02, 0x03},
             DIODE_BITMASKS= new byte[] {0x01, 0x02, 0x03};
 
-    @Parameters(name = "integration: {0}, receiver: {1}, current: {2}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters = new ArrayList<>();
-
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
         for(int i= 0; i < 2; i++) {
             for(ReceiverDiode diode: ReceiverDiode.values()) {
                 for(TransmitterDriveCurrent current: TransmitterDriveCurrent.values()) {
-                    parameters.add(new Object[] {i, diode, current});
+                    parameters.add(Arguments.of(i, diode, current));
                 }
             }
         }
-        return parameters;
+        return parameters.stream();
     }
-
-    @Parameter
-    public int intgrationIdx;
-
-    @Parameter(value = 1)
-    public ReceiverDiode diode;
-
-    @Parameter(value = 2)
-    public TransmitterDriveCurrent current;
 
     private ProximityTsl2671 proximity;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(ProximityTsl2671.class);
         connectToBoard();
@@ -83,8 +70,9 @@ public class TestProximityTsl2671Config extends UnitTestBase {
         proximity= mwBoard.getModule(ProximityTsl2671.class);
     }
 
-    @Test
-    public void configure() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configure(int intgrationIdx, ReceiverDiode diode, TransmitterDriveCurrent current) {
         byte[] expected= new byte[] {0x18, 0x02, INTEGRATION_BITMASKS[intgrationIdx], 0x20,
                 (byte) ((CURRENT_BITMASKS[current.ordinal()] << 6) | (DIODE_BITMASKS[diode.ordinal()] << 4))};
 

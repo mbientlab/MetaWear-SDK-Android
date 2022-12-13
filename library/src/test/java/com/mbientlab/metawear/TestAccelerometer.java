@@ -24,58 +24,58 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.Accelerometer;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.data.Acceleration;
+import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
-import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 9/1/16.
  */
-@RunWith(Parameterized.class)
 public class TestAccelerometer extends UnitTestBase {
-    @Parameters
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                { AccelerometerBmi160.class },
-                { AccelerometerBmi270.class },
-                { AccelerometerMma8452q.class },
-                { AccelerometerBma255.class },
-        });
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(AccelerometerBmi160.class));
+        parameters.add(Arguments.of(AccelerometerBmi270.class));
+        parameters.add(Arguments.of(AccelerometerMma8452q.class));
+        parameters.add(Arguments.of(AccelerometerBma255.class));
+        return parameters.stream();
     }
-
-    @Parameter
-    public Class<? extends Accelerometer> accelClass;
 
     private Accelerometer accelerometer;
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(accelClass);
-        connectToBoard();
+    public void setup(Class<? extends Accelerometer> accelClass) {
+        try {
+            junitPlatform.boardInfo= new MetaWearBoardInfo(accelClass);
+            connectToBoard();
 
-        accelerometer = mwBoard.getModule(Accelerometer.class);
+            accelerometer = mwBoard.getModule(Accelerometer.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void setOdrCommand() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setOdrCommand(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         byte[] expected= null;
 
         if (accelClass.equals(AccelerometerBmi160.class)) {
@@ -103,8 +103,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void setOdrValue() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setOdrValue(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         float expected = -1, actual;
 
         if (accelClass.equals(AccelerometerBmi160.class)) {
@@ -133,8 +135,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertEquals(expected, actual, 0.001f);
     }
 
-    @Test
-    public void setRangeCommand() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setRangeCommand(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         byte[] expected= null;
 
         if (accelClass.equals(AccelerometerBmi160.class)) {
@@ -162,8 +166,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void setRangeValue() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setRangeValue(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         float expected= -1, actual;
 
         if (accelClass.equals(AccelerometerBmi160.class)) {
@@ -192,8 +198,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertEquals(expected, actual, 0.001f);
     }
 
-    @Test
-    public void subscribeAccStream() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void subscribeAccStream(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x04, 0x01};
         accelerometer.acceleration().addRouteAsync(source -> source.multicast()
                 .to().stream(null)
@@ -205,8 +213,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void unsubscribeAccStream() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void unsubscribeAccStream(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x04, 0x00};
         accelerometer.acceleration().addRouteAsync(source -> source.multicast()
                 .to().stream(null)
@@ -225,8 +235,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void enableAccSampling() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void enableAccSampling(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         byte[] expected= null;
 
         if (accelClass.equals(AccelerometerBmi270.class) ||accelClass.equals(AccelerometerBmi160.class) || accelClass.equals(AccelerometerBma255.class)) {
@@ -239,8 +251,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void disableAccSampling() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void disableAccSampling(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         byte[] expected = null;
 
         if (accelClass.equals(AccelerometerBmi270.class) || accelClass.equals(AccelerometerBmi160.class) || accelClass.equals(AccelerometerBma255.class)) {
@@ -253,8 +267,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void receiveAccData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void receiveAccData(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         Acceleration expected= null;
         byte[] response= null;
         final Capture<Acceleration> actual= new Capture<>();
@@ -298,8 +314,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertEquals(expected, actual.get());
     }
 
-    @Test
-    public void receiveSingleAxisAccData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void receiveSingleAxisAccData(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         float[] expected= null;
         byte[] response= null;
         final float[] actual= new float[3];
@@ -347,8 +365,10 @@ public class TestAccelerometer extends UnitTestBase {
         assertArrayEquals(expected, actual, 0.001f);
     }
 
-    @Test
-    public void receivedPackedData() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void receivedPackedData(Class<? extends Accelerometer> accelClass) {
+        setup(accelClass);
         Acceleration[] expected= null;
         byte[] response= null;
 

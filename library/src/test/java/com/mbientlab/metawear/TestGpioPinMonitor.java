@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.Gpio;
-
-import org.junit.Before;
-import org.junit.Test;
-
 import static com.mbientlab.metawear.module.Gpio.PinChangeType.ANY;
 import static com.mbientlab.metawear.module.Gpio.PinChangeType.FALLING;
 import static com.mbientlab.metawear.module.Gpio.PinChangeType.RISING;
-import static org.junit.Assert.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
+import com.mbientlab.metawear.module.Gpio;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 9/2/16.
@@ -40,7 +40,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestGpioPinMonitor extends UnitTestBase {
     private Gpio gpio;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Gpio.class);
         connectToBoard();

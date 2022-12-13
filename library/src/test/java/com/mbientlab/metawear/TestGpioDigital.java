@@ -24,13 +24,15 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.module.Gpio.PullMode.NO_PULL;
+import static com.mbientlab.metawear.module.Gpio.PullMode.PULL_DOWN;
+import static com.mbientlab.metawear.module.Gpio.PullMode.PULL_UP;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.Gpio;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import static com.mbientlab.metawear.module.Gpio.PullMode.*;
-import static org.junit.Assert.assertArrayEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 9/2/16.
@@ -38,7 +40,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestGpioDigital extends UnitTestBase {
     private Gpio gpio;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Gpio.class);
         connectToBoard();
