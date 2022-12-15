@@ -39,7 +39,6 @@ class Constant {
         ACCELEROMETER(0x03, "Accelerometer"),
         TEMPERATURE(0x04, "Temperature"),
         GPIO(0x05, "Gpio"),
-        NEO_PIXEL(0x06, "NeoPixel"),
         IBEACON(0x07, "IBeacon"),
         HAPTIC(0x08, "Haptic"),
         DATA_PROCESSOR(0x09, "DataProcessor"),
