@@ -24,30 +24,68 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.Constant.Module.MACRO;
+
 import com.mbientlab.metawear.AnonymousRoute;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.DataToken;
 import com.mbientlab.metawear.DeviceInformation;
 import com.mbientlab.metawear.IllegalFirmwareFile;
 import com.mbientlab.metawear.IllegalRouteOperationException;
+import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.Model;
 import com.mbientlab.metawear.Observer;
-import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.Route;
+import com.mbientlab.metawear.Subscriber;
 import com.mbientlab.metawear.TaskTimeoutException;
-import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.UnsupportedModuleException;
+import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent.Action;
-import com.mbientlab.metawear.impl.RouteComponentImpl.Cache;
 import com.mbientlab.metawear.impl.DataProcessorImpl.Processor;
 import com.mbientlab.metawear.impl.LoggingImpl.DataLogger;
+import com.mbientlab.metawear.impl.RouteComponentImpl.Cache;
 import com.mbientlab.metawear.impl.dfu.Image;
 import com.mbientlab.metawear.impl.dfu.Info2;
+import com.mbientlab.metawear.impl.platform.BatteryService;
+import com.mbientlab.metawear.impl.platform.BtleGatt;
 import com.mbientlab.metawear.impl.platform.BtleGatt.WriteType;
-import com.mbientlab.metawear.module.*;
-import com.mbientlab.metawear.Subscriber;
+import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
+import com.mbientlab.metawear.impl.platform.DeviceInformationService;
+import com.mbientlab.metawear.impl.platform.IO;
+import com.mbientlab.metawear.impl.platform.TimedTask;
+import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBma255;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.AccelerometerBosch;
+import com.mbientlab.metawear.module.AccelerometerMma8452q;
+import com.mbientlab.metawear.module.AmbientLightLtr329;
+import com.mbientlab.metawear.module.BarometerBme280;
+import com.mbientlab.metawear.module.BarometerBmp280;
+import com.mbientlab.metawear.module.BarometerBosch;
+import com.mbientlab.metawear.module.ColorTcs34725;
+import com.mbientlab.metawear.module.DataProcessor;
+import com.mbientlab.metawear.module.Debug;
+import com.mbientlab.metawear.module.Gpio;
+import com.mbientlab.metawear.module.Gsr;
+import com.mbientlab.metawear.module.Gyro;
+import com.mbientlab.metawear.module.GyroBmi160;
+import com.mbientlab.metawear.module.GyroBmi270;
+import com.mbientlab.metawear.module.Haptic;
+import com.mbientlab.metawear.module.HumidityBme280;
+import com.mbientlab.metawear.module.IBeacon;
+import com.mbientlab.metawear.module.Led;
+import com.mbientlab.metawear.module.Logging;
+import com.mbientlab.metawear.module.Macro;
+import com.mbientlab.metawear.module.MagnetometerBmm150;
+import com.mbientlab.metawear.module.ProximityTsl2671;
+import com.mbientlab.metawear.module.SensorFusionBosch;
+import com.mbientlab.metawear.module.SerialPassthrough;
+import com.mbientlab.metawear.module.Settings;
+import com.mbientlab.metawear.module.Switch;
+import com.mbientlab.metawear.module.Temperature;
+import com.mbientlab.metawear.module.Timer;
 import com.mbientlab.metawear.module.Timer.ScheduledTask;
-import com.mbientlab.metawear.impl.platform.*;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -83,9 +121,6 @@ import bolts.CancellationTokenSource;
 import bolts.Capture;
 import bolts.Task;
 import bolts.TaskCompletionSource;
-
-import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
-import static com.mbientlab.metawear.impl.Constant.Module.MACRO;
 
 /**
  * Platform agnostic implementation of the {@link MetaWearBoard} interface using only standard Java APIs.  Platform specific functionality
@@ -779,6 +814,18 @@ public class JseMetaWearBoard implements MetaWearBoard {
         if (persist.boardInfo == null) {
             InputStream ins = io.localRetrieve(BOARD_INFO);
             if (ins != null) {
+//                try( BufferedReader br =
+//                             new BufferedReader( new InputStreamReader(ins, "UTF-8" )))
+//                {
+//                    StringBuilder sb = new StringBuilder();
+//                    String line;
+//                    while(( line = br.readLine()) != null ) {
+//                        sb.append( line );
+//                        sb.append( '\n' );
+//                    }
+//                    System.out.println(sb.toString());
+//                }
+
                 ObjectInputStream ois = new ObjectInputStream(ins);
                 BoardInfo boardInfoState = (BoardInfo) ois.readObject();
 
@@ -1237,9 +1284,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 break;
             case GPIO:
                 persist.modules.put(Gpio.class, new GpioImpl(mwPrivate));
-                break;
-            case NEO_PIXEL:
-                persist.modules.put(NeoPixel.class, new NeoPixelImpl(mwPrivate));
                 break;
             case IBEACON:
                 persist.modules.put(IBeacon.class, new IBeaconImpl(mwPrivate));
