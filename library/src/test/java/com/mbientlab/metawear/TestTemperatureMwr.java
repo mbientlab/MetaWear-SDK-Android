@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Temperature.ExternalThermistor;
 import com.mbientlab.metawear.module.Temperature.SensorType;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 10/2/16.
@@ -41,7 +41,7 @@ import static org.junit.Assert.assertEquals;
 public class TestTemperatureMwr extends UnitTestBase {
     private Temperature temp;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x01});
         connectToBoard();

@@ -24,18 +24,18 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
 import com.mbientlab.metawear.module.Haptic;
 import com.mbientlab.metawear.module.Settings;
 import com.mbientlab.metawear.module.Settings.BatteryState;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 /**
  * Created by etsai on 10/3/16.
@@ -43,7 +43,7 @@ import static org.junit.Assert.assertNull;
 public class TestSettingsRev3 extends UnitTestBase {
     private Settings settings;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x03 });
         junitPlatform.boardInfo = new MetaWearBoardInfo(Haptic.class);

@@ -24,16 +24,16 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.mbientlab.metawear.module.ColorTcs34725;
 import com.mbientlab.metawear.module.ColorTcs34725.ColorAdc;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 10/2/16.
@@ -42,7 +42,7 @@ import static org.junit.Assert.assertEquals;
 public class TestColorTcs34725 extends UnitTestBase {
     private ColorTcs34725 colorTcs34725;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(ColorTcs34725.class);
         connectToBoard();

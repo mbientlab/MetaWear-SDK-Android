@@ -24,10 +24,9 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.BarometerBosch;
+import static org.junit.jupiter.api.Assertions.fail;
 
-import org.junit.Before;
-import org.junit.runners.Parameterized.Parameter;
+import com.mbientlab.metawear.module.BarometerBosch;
 
 /**
  * Created by etsai on 10/2/16.
@@ -36,14 +35,14 @@ import org.junit.runners.Parameterized.Parameter;
 public abstract class TestBarometerBoschBase extends UnitTestBase {
     protected BarometerBosch baroBosch;
 
-    @Parameter
-    public Class<? extends MetaWearBoard.Module> moduleClass;
+    public void setup(Class<? extends MetaWearBoard.Module> moduleClass) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(moduleClass);
+            connectToBoard();
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(moduleClass);
-        connectToBoard();
-
-        baroBosch= mwBoard.getModule(BarometerBosch.class);
+            baroBosch = mwBoard.getModule(BarometerBosch.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 }

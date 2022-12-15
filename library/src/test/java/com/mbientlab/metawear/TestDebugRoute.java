@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.module.Debug;
 import com.mbientlab.metawear.module.Switch;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import static junit.framework.TestCase.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 12/14/16.
@@ -40,7 +40,7 @@ import static org.junit.Assert.assertTrue;
 public class TestDebugRoute extends UnitTestBase {
     private Debug debug;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class, Debug.class);
         connectToBoard();

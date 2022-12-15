@@ -24,14 +24,12 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.Settings;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by lkasso on 04/01/2021.
@@ -40,7 +38,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestSettingsRev9 extends UnitTestBase {
     private Settings settings;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[]{0x11, (byte) 0x80, 0x00, 0x09, 0x07, 0x00});
         connectToBoard();

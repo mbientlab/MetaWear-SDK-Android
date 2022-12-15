@@ -24,72 +24,59 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.module.AccelerometerBmi160.StepDetectorMode.NORMAL;
+import static com.mbientlab.metawear.module.AccelerometerBmi160.StepDetectorMode.ROBUST;
+import static com.mbientlab.metawear.module.AccelerometerBmi160.StepDetectorMode.SENSITIVE;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collection;
-
-import static com.mbientlab.metawear.module.AccelerometerBmi160.StepDetectorMode.*;
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 11/14/16.
  */
-@RunWith(Parameterized.class)
 public class TestBmi160StepDetectionConfig extends UnitTestBase {
-    @Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                {
-                        NORMAL,
-                        new byte[] {0x03, 0x18, 0x15, 0x0b},
-                        new byte[] {0x03, 0x18, 0x15, 0x03}
-                },
-                {
-                        SENSITIVE,
-                        new byte[] {0x03, 0x18, 0x2d, 0x08},
-                        new byte[] {0x03, 0x18, 0x2d, 0x00}
-                },
-                {
-                        ROBUST,
-                        new byte[] {0x03, 0x18, 0x1d, 0x0f},
-                        new byte[] {0x03, 0x18, 0x1d, 0x07}
-                }
-        });
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(NORMAL,
+                new byte[] {0x03, 0x18, 0x15, 0x0b},
+                new byte[] {0x03, 0x18, 0x15, 0x03}));
+        parameters.add(Arguments.of(SENSITIVE,
+                new byte[] {0x03, 0x18, 0x2d, 0x08},
+                new byte[] {0x03, 0x18, 0x2d, 0x00}));
+
+        parameters.add(Arguments.of(ROBUST,
+                new byte[] {0x03, 0x18, 0x1d, 0x0f},
+                new byte[] {0x03, 0x18, 0x1d, 0x07}));
+        return parameters.stream();
     }
 
-    @Parameter
-    public AccelerometerBmi160.StepDetectorMode mode;
-
-    @Parameter(value = 1)
-    public byte[] expectedCounter;
-
-    @Parameter(value = 2)
-    public byte[] expectedDetector;
-
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
         connectToBoard();
     }
 
-    @Test
-    public void configureDetector() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureDetector(AccelerometerBmi160.StepDetectorMode mode, byte[] expectedCounter, byte[] expectedDetector) {
         mwBoard.getModule(AccelerometerBmi160.class).stepDetector().configure()
                 .mode(mode)
                 .commit();
         assertArrayEquals(expectedDetector, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void configureCounter() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureCounter(AccelerometerBmi160.StepDetectorMode mode, byte[] expectedCounter, byte[] expectedDetector) {
         mwBoard.getModule(AccelerometerBmi160.class).stepCounter().configure()
                 .mode(mode)
                 .commit();

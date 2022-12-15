@@ -24,8 +24,14 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+
 import com.mbientlab.metawear.builder.RouteComponent;
-import com.mbientlab.metawear.builder.filter.*;
+import com.mbientlab.metawear.builder.filter.Comparison;
+import com.mbientlab.metawear.builder.filter.Passthrough;
+import com.mbientlab.metawear.builder.filter.ThresholdOutput;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.builder.predicate.PulseOutput;
@@ -43,10 +49,8 @@ import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
 import com.mbientlab.metawear.module.Temperature;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.runners.Enclosed;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -56,16 +60,12 @@ import java.util.concurrent.CancellationException;
 import bolts.Capture;
 import bolts.Task;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-
 /**
  * Created by etsai on 9/5/16.
  */
-@RunWith(Enclosed.class)
 public class TestDataProcessor {
     static class TestBase extends UnitTestBase {
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, Gyro.class, Gpio.class, Temperature.class);
             junitPlatform.firmware= "1.2.5";
@@ -136,7 +136,7 @@ public class TestDataProcessor {
     }
 
     public static class TestFreefall extends TestBase {
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
             super.setup();
@@ -300,14 +300,14 @@ public class TestDataProcessor {
     }
 
     public static class TestIllegalUsage extends TestBase {
-        @Test(expected = IllegalRouteOperationException.class)
+        @Test
         public void missingFeedbackName() throws Exception {
             Gpio.Pin pin = mwBoard.getModule(Gpio.class).pin((byte) 0);
 
             Task<Route> routeTask = pin.analogAdc().addRouteAsync(source -> source.map(Function2.ADD, "non-existent"));
             routeTask.waitForCompletion();
 
-            throw routeTask.getError() == null ? new NullPointerException("Task expected to fail") : routeTask.getError();
+            assertInstanceOf(IllegalRouteOperationException.class, routeTask.getError());
         }
     }
 
@@ -342,12 +342,12 @@ public class TestDataProcessor {
             assertArrayEquals(expected, actual, 0.001f);
         }
 
-        @Test(expected = IllegalRouteOperationException.class)
+        @Test
         public void countTooHigh() throws Exception {
             Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 5));
             task.waitForCompletion();
 
-            throw task.getError();
+            assertInstanceOf(IllegalRouteOperationException.class, task.getError());
         }
     }
 
@@ -389,8 +389,8 @@ public class TestDataProcessor {
         };
         @Test
         public void timeExtraction() throws InterruptedException {
-            long expected[] = new long[] {10, 10, 9, 10, 11};
-            final long actual[] = new long[5];
+            long[] expected = new long[] {10, 10, 9, 10, 11};
+            final long[] actual = new long[5];
 
             Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor));
             task.waitForCompletion();
@@ -413,8 +413,8 @@ public class TestDataProcessor {
 
         @Test
         public void handleRollback() throws InterruptedException {
-            long expected[] = new long[] {11, 10, 9, 10, 10};
-            final long actual[] = new long[5];
+            long[] expected = new long[] {11, 10, 9, 10, 10};
+            final long[] actual = new long[5];
 
             Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor));
             task.waitForCompletion();
@@ -435,12 +435,12 @@ public class TestDataProcessor {
             assertArrayEquals(expected, actual);
         }
 
-        @Test(expected = IllegalRouteOperationException.class)
+        @Test
         public void noSpace() throws Exception {
             Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 4).account());
             task.waitForCompletion();
 
-            throw task.getError();
+            assertInstanceOf(IllegalRouteOperationException.class, task.getError());
         }
 
         @Test
@@ -476,9 +476,8 @@ public class TestDataProcessor {
             final Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
 
             Task<Route> routeTask = accelerometer.acceleration().addRouteAsync(source ->
-                    source.pack((byte) 2).account(RouteComponent.AccountType.COUNT).stream((data, env) -> {
-                        System.out.println(data.toString());
-                    })
+                    source.pack((byte) 2).account(RouteComponent.AccountType.COUNT).stream((data, env) ->
+                            System.out.println(data.toString()))
             ).onSuccessTask(ignored ->
                     barometer.pressure().addRouteAsync(source ->
                             source.account().stream(null)
@@ -514,7 +513,7 @@ public class TestDataProcessor {
     }
 
     public static class TestAccounterPackerChain extends TestBase {
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             super.setup();
 
@@ -546,8 +545,8 @@ public class TestDataProcessor {
 
         @Test
         public void dataExtraction() {
-            float expected[] = new float[] {29.5f, 29.375f, 29.875f, 29.625f};
-            final float actual[] = new float[4];
+            float[] expected = new float[] {29.5f, 29.375f, 29.875f, 29.625f};
+            final float[] actual = new float[4];
 
             mwBoard.lookupRoute(0).resubscribe(0, new Subscriber() {
                 int i = 0;
@@ -564,8 +563,8 @@ public class TestDataProcessor {
 
         @Test
         public void timeOffsets() {
-            long expected[] = new long[] {33, 33, 33};
-            final long actual[] = new long[3];
+            long[] expected = new long[] {33, 33, 33};
+            final long[] actual = new long[3];
 
             mwBoard.lookupRoute(0).resubscribe(0, new Subscriber() {
                 int i = 0;
@@ -595,7 +594,7 @@ public class TestDataProcessor {
     }
 
     public static class TestPackerAccounterChain extends TestBase {
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             super.setup();
 
@@ -604,7 +603,7 @@ public class TestDataProcessor {
         }
 
         @Test
-        public void createChain() throws InterruptedException {
+        public void createChain() {
             byte[][] expected = new byte[][] {
                     {0x09, 0x02, 0x04, (byte) 0xc1, 0x01, 0x20, 0x10, 0x01, 0x03},
                     {0x09, 0x02, 0x09, 0x03, 0x00, (byte) 0xe0, 0x11, 0x31, 0x03},
@@ -617,8 +616,8 @@ public class TestDataProcessor {
 
         @Test
         public void dataExtraction() {
-            float expected[] = new float[] {24.5f, 24.625f, 24.5f, 24.375f, 24.25f, 24.375f, 24.5f, 24.25f};
-            final float actual[] = new float[8];
+            float[] expected = new float[] {24.5f, 24.625f, 24.5f, 24.375f, 24.25f, 24.375f, 24.5f, 24.25f};
+            final float[] actual = new float[8];
 
             mwBoard.lookupRoute(0).resubscribe(0, new Subscriber() {
                 int i = 0;
@@ -635,8 +634,8 @@ public class TestDataProcessor {
 
         @Test
         public void timeOffsets() {
-            long expected[] = new long[] {0, 0, 0, 132, 0, 0, 0, 132, 0, 0, 0, 133, 0, 0, 0};
-            final long actual[] = new long[15];
+            long[] expected = new long[] {0, 0, 0, 132, 0, 0, 0, 132, 0, 0, 0, 133, 0, 0, 0};
+            final long[] actual = new long[15];
 
             mwBoard.lookupRoute(0).resubscribe(0, new Subscriber() {
                 int i = 0;
@@ -692,7 +691,7 @@ public class TestDataProcessor {
     public static class TestActivityMonitor extends UnitTestBase {
         private Route activityRoute, bufferStateRoute;
 
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x00, 0x1c});
             junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
@@ -797,7 +796,7 @@ public class TestDataProcessor {
     }
 
     public static class TestFuser extends TestBase {
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             super.setup();
 

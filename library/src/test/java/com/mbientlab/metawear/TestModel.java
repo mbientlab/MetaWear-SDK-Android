@@ -24,47 +24,54 @@
 
 package com.mbientlab.metawear;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import static com.mbientlab.metawear.MetaWearBoardInfo.C;
+import static com.mbientlab.metawear.MetaWearBoardInfo.CPRO;
+import static com.mbientlab.metawear.MetaWearBoardInfo.DETECTOR;
+import static com.mbientlab.metawear.MetaWearBoardInfo.ENVIRONMENT;
+import static com.mbientlab.metawear.MetaWearBoardInfo.MOTION_R;
+import static com.mbientlab.metawear.MetaWearBoardInfo.MOTION_RL;
+import static com.mbientlab.metawear.MetaWearBoardInfo.MOTION_S;
+import static com.mbientlab.metawear.MetaWearBoardInfo.R;
+import static com.mbientlab.metawear.MetaWearBoardInfo.RG;
+import static com.mbientlab.metawear.MetaWearBoardInfo.RPRO;
+import static com.mbientlab.metawear.MetaWearBoardInfo.TRACKER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
-import java.util.ArrayList;
-import java.util.Collection;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import static com.mbientlab.metawear.MetaWearBoardInfo.*;
-import static org.junit.Assert.assertEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 12/21/16.
  * Updated by lkasso
  */
-@RunWith(Parameterized.class)
 public class TestModel extends UnitTestBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
         for(MetaWearBoardInfo info: new MetaWearBoardInfo[] {C, CPRO, DETECTOR, ENVIRONMENT, RPRO, R, RG, MOTION_R, MOTION_RL, MOTION_S, TRACKER}) {
-            parameters.add(new Object[] {info});
+            parameters.add(Arguments.of(info));
         }
-
-        return parameters;
+        return parameters.stream();
     }
 
-    @Parameter
-    public MetaWearBoardInfo info;
-
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo = info;
-        connectToBoard();
-
+    public void setup(MetaWearBoardInfo info) {
+        try {
+            junitPlatform.boardInfo = info;
+            connectToBoard();
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void checkModel() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void checkModel(MetaWearBoardInfo info) {
+        setup(info);
         assertEquals(info.model, mwBoard.getModel());
     }
 }

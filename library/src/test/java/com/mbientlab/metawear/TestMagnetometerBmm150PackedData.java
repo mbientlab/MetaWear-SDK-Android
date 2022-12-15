@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.MagnetometerBmm150;
-import com.mbientlab.metawear.data.MagneticField;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
-import org.junit.Before;
-import org.junit.Test;
+import com.mbientlab.metawear.data.MagneticField;
+import com.mbientlab.metawear.module.MagnetometerBmm150;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 11/17/16.
@@ -41,7 +41,7 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
 
     private MagnetometerBmm150 mag;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(MagnetometerBmm150.class);
         connectToBoard();

@@ -24,27 +24,24 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Timer;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.runners.Enclosed;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
 import bolts.Task;
 import bolts.TaskCompletionSource;
 
-import static org.junit.Assert.assertArrayEquals;
-
 /**
  * Created by etsai on 3/13/17.
  */
-@RunWith(Enclosed.class)
 public class TestDeserialization {
     public static class TestDeserializeGpioAnalog extends TestGpioAnalog {
         protected Task<Route> setupAbsRef() {
@@ -79,7 +76,7 @@ public class TestDeserialization {
     }
 
     public static class TestDeserializeGpioFeedback extends UnitTestBase {
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             junitPlatform.firmware= "1.1.3";
             junitPlatform.boardStateSuffix = "gpio_feedback";
@@ -166,7 +163,7 @@ public class TestDeserialization {
     }
 
     public static class TestDeserializeMultiComparator extends UnitTestBase {
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             junitPlatform.boardInfo = new MetaWearBoardInfo(Gpio.class);
             junitPlatform.firmware = "1.2.3";
@@ -246,7 +243,7 @@ public class TestDeserialization {
     }
 
     public static class TestDeserializeObserver extends UnitTestBase {
-        @Before
+        @BeforeEach
         public void setup() throws Exception {
             junitPlatform.boardStateSuffix = "dc_observer";
             mwBoard.deserialize();

@@ -24,18 +24,19 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+
 import com.mbientlab.metawear.module.SerialPassthrough;
 import com.mbientlab.metawear.module.SerialPassthrough.SpiParameterBuilder;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeoutException;
 
 import bolts.Capture;
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 10/6/16.
@@ -55,7 +56,7 @@ public class TestSPI extends UnitTestBase {
 
     private SerialPassthrough.SPI spi;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(SerialPassthrough.class);
         connectToBoard();
@@ -121,7 +122,6 @@ public class TestSPI extends UnitTestBase {
         assertArrayEquals(expected, actual.get());
     }
 
-    @Test(expected = TimeoutException.class)
     public void directReadBmi160Timeout() throws Exception {
         final Capture<Exception> actual= new Capture<>();
 
@@ -131,6 +131,6 @@ public class TestSPI extends UnitTestBase {
                     return null;
                 }).waitForCompletion();
 
-        throw actual.get();
+        assertInstanceOf(TimeoutException.class, actual.get());
     }
 }

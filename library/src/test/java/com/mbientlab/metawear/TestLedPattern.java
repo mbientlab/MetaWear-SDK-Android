@@ -24,117 +24,105 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.module.Led;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 8/31/16.
  */
-@RunWith(Parameterized.class)
 public class TestLedPattern extends UnitTestBase {
-    @Parameters(name = "delayed: {0}, pattern: {5}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-                {
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(
                         false,
                         (short) 5000,
                         (byte) 10,
                         new byte[] {0x02, 0x03, 0x00, 0x02, 0x1f, 0x00, 0x00, 0x00, 0x32, 0x00, 0x00, 0x00, (byte) 0xf4, 0x01, 0x00, 0x00, 0x0a},
                         Led.Color.GREEN,
                         Led.PatternPreset.BLINK
-                },
-                {
+        ));
+        parameters.add(Arguments.of(
                         true,
                         (short) 5000,
                         (byte) 10,
                         new byte[] {0x02, 0x03, 0x00, 0x02, 0x1f, 0x00, 0x00, 0x00, 0x32, 0x00, 0x00, 0x00, (byte) 0xf4, 0x01, 0x00, 0x00, 0x0a},
                         Led.Color.GREEN,
                         Led.PatternPreset.BLINK
-                },
-                {
+        ));
+        parameters.add(Arguments.of(
                         false,
                         (short) 10000,
                         (byte) 20,
                         new byte[] {0x02, 0x03, 0x01, 0x02, 0x1f, 0x1f, 0x00, 0x00, (byte) 0xf4, 0x01, 0x00, 0x00, (byte) 0xE8, 0x03, 0x00, 0x00, 0x14},
                         Led.Color.RED,
                         Led.PatternPreset.SOLID
-                },
-                {
+        ));
+        parameters.add(Arguments.of(
                         true,
                         (short) 10000,
                         (byte) 20,
                         new byte[] {0x02, 0x03, 0x01, 0x02, 0x1f, 0x1f, 0x00, 0x00, (byte) 0xf4, 0x01, 0x00, 0x00, (byte) 0xE8, 0x03, 0x00, 0x00, 0x14},
                         Led.Color.RED,
                         Led.PatternPreset.SOLID
-                },
-                {
+        ));
+        parameters.add(Arguments.of(
                         false,
                         (short) 12345,
                         (byte) 40,
                         new byte[] {0x02, 0x03, 0x02, 0x02, 0x1f, 0x00, (byte) 0xd5, 0x02, (byte) 0xf4, 0x01, (byte) 0xd5, 0x02, (byte) 0xd0, 0x07, 0x00, 0x00, 0x28},
                         Led.Color.BLUE,
                         Led.PatternPreset.PULSE
-                },
-                {
+        ));
+        parameters.add(Arguments.of(
                         true,
                         (short) 12345,
                         (byte) 40,
                         new byte[] {0x02, 0x03, 0x02, 0x02, 0x1f, 0x00, (byte) 0xd5, 0x02, (byte) 0xf4, 0x01, (byte) 0xd5, 0x02, (byte) 0xd0, 0x07, 0x00, 0x00, 0x28},
                         Led.Color.BLUE,
                         Led.PatternPreset.PULSE
-                },
-        });
+        ));
+        return parameters.stream();
     }
 
-    @Parameter
-    public boolean delaySupported;
 
-    @Parameter(value = 1)
-    public short delay;
-
-    @Parameter(value = 2)
-    public byte repeat;
-
-    @Parameter(value = 3)
-    public byte[] expectedBase;
-
-    @Parameter(value = 4)
-    public Led.Color color;
-
-    @Parameter(value = 5)
-    public Led.PatternPreset pattern;
 
     private byte[] expected;
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Led.class);
+    public void setup(boolean delaySupported, short delay, byte[] expectedBase) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(Led.class);
 
-        expected= new byte[expectedBase.length];
-        System.arraycopy(expectedBase, 0, expected, 0, expectedBase.length);
+            expected = new byte[expectedBase.length];
+            System.arraycopy(expectedBase, 0, expected, 0, expectedBase.length);
 
-        if (delaySupported) {
-            junitPlatform.addCustomModuleInfo(new byte[]{0x02, (byte) 0x80, 0x00, 0x01, 0x03, 0x00});
-            expected[15]= (byte) ((delay >> 8) & 0xff);
-            expected[14]= (byte) (delay & 0xff);
+            if (delaySupported) {
+                junitPlatform.addCustomModuleInfo(new byte[]{0x02, (byte) 0x80, 0x00, 0x01, 0x03, 0x00});
+                expected[15] = (byte) ((delay >> 8) & 0xff);
+                expected[14] = (byte) (delay & 0xff);
+            }
+
+            connectToBoard();
+        } catch (Exception e) {
+            fail(e);
         }
-
-        connectToBoard();
     }
 
-    @Test
-    public void writePresetPattern() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void writePresetPattern(boolean delaySupported, short delay, byte repeat,
+                                   byte[] expectedBase, Led.Color color, Led.PatternPreset pattern) {
+        setup(delaySupported, delay, expectedBase);
         mwBoard.getModule(Led.class).editPattern(color, pattern)
                 .delay(delay)
                 .repeatCount(repeat)

@@ -24,42 +24,45 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.BarometerBme280;
 import com.mbientlab.metawear.module.BarometerBmp280;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestBarometerBosch extends TestBarometerBoschBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-                {BarometerBme280.class},
-                {BarometerBmp280.class}
-        });
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(BarometerBme280.class));
+        parameters.add(Arguments.of(BarometerBmp280.class));
+        return parameters.stream();
     }
 
-    @Test
-    public void startNoAltitude() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startNoAltitude(Class<? extends MetaWearBoard.Module> moduleClass) {
+        setup(moduleClass);
         byte[] expected= new byte[] {0x12, 0x04, 0x01, 0x00};
 
         baroBosch.start();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void startWithAltitude() {
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startWithAltitude(Class<? extends MetaWearBoard.Module> moduleClass) {
+        setup(moduleClass);
         byte[] expected= new byte[] {0x12, 0x04, 0x01, 0x01};
 
         baroBosch.altitude().start();
@@ -67,8 +70,11 @@ public class TestBarometerBosch extends TestBarometerBoschBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void stop() {
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void stop(Class<? extends MetaWearBoard.Module> moduleClass) {
+        setup(moduleClass);
         byte[] expected= new byte[] {0x12, 0x04, 0x00, 0x00};
 
         baroBosch.stop();

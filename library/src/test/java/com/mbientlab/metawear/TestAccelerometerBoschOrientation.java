@@ -24,70 +24,73 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 12/18/16.
  */
-@RunWith(Parameterized.class)
 public class TestAccelerometerBoschOrientation extends UnitTestBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> boardsParams() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        parameters.add(new Object[] {AccelerometerBma255.class});
-        parameters.add(new Object[] {AccelerometerBmi160.class});
 
-        return parameters;
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(AccelerometerBma255.class));
+        parameters.add(Arguments.of(AccelerometerBmi160.class));
+        return parameters.stream();
     }
 
     private AccelerometerBosch boschAcc;
 
-    @Parameter
-    public Class<? extends AccelerometerBosch> moduleClass;
+    public void setup(Class<? extends AccelerometerBosch> moduleClass) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(moduleClass);
+            connectToBoard();
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(moduleClass);
-        connectToBoard();
-
-        boschAcc = mwBoard.getModule(AccelerometerBosch.class);
+            boschAcc = mwBoard.getModule(AccelerometerBosch.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void startOrientation() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startOrientation(Class<? extends AccelerometerBosch> moduleClass) {
+        setup(moduleClass);
         byte[] expected = new byte[] {0x03, 0x0f, 0x01, 0x00};
 
         boschAcc.orientation().start();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void stopOrientation() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void stopOrientation(Class<? extends AccelerometerBosch> moduleClass) {
+        setup(moduleClass);
         byte[] expected = new byte[] {0x03, 0x0f, 0x00, 0x01};
 
         boschAcc.orientation().stop();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void handleOrientationResponse() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void handleOrientationResponse(Class<? extends AccelerometerBosch> moduleClass) {
+        setup(moduleClass);
         final SensorOrientation[] expected = new SensorOrientation[] {
                 SensorOrientation.FACE_UP_LANDSCAPE_RIGHT,
                 SensorOrientation.FACE_UP_PORTRAIT_UPRIGHT,

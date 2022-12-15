@@ -24,50 +24,48 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.module.Settings;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 10/3/16.
  */
-@RunWith(Parameterized.class)
 public class TestSettings extends UnitTestBase {
-    @Parameters(name = "revision: {0}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
         for(byte i= 1; i <= 6; i++) {
-            parameters.add(new Object[] { i });
+            parameters.add(Arguments.of(i));
         }
-
-        return parameters;
+        return parameters.stream();
     }
 
     private Settings settings;
 
-    @Parameter
-    public byte revision;
+    public void setup(byte revision) {
+        try {
+            junitPlatform.addCustomModuleInfo(new byte[]{0x11, (byte) 0x80, 0x00, revision});
+            connectToBoard();
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, revision});
-        connectToBoard();
-
-        settings = mwBoard.getModule(Settings.class);
+            settings = mwBoard.getModule(Settings.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void setName() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setName(byte revision) {
+        setup(revision);
         byte[] expected= new byte[] {0x11, 0x01, 0x41, 0x6e, 0x74, 0x69, 0x57, 0x61, 0x72, 0x65};
 
         settings.editBleAdConfig()
@@ -76,8 +74,10 @@ public class TestSettings extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void setTxPower() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setTxPower(byte revision) {
+        setup(revision);
         byte[] expected= new byte[] {0x11, 0x03, (byte) 0xec};
 
         settings.editBleAdConfig()
@@ -86,8 +86,10 @@ public class TestSettings extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void setScanResponse() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setScanResponse(byte revision) {
+        setup(revision);
         byte[][] expected= new byte[][] {
                 {0x11, 0x08, 0x03, 0x03, (byte) 0xd8, (byte) 0xfe, 0x10, 0x16, (byte) 0xd8, (byte) 0xfe, 0x00, 0x12, 0x00, 0x6d, 0x62},
                 {0x11, 0x07, 0x69, 0x65, 0x6e, 0x74, 0x6c, 0x61, 0x62, 0x00}
@@ -99,8 +101,10 @@ public class TestSettings extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test
-    public void setAdParameters() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setAdParameters(byte revision) {
+        setup(revision);
         byte[] expected;
 
         if (revision >= 6) {
@@ -118,8 +122,10 @@ public class TestSettings extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void startAdvertising() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void startAdvertising(byte revision) {
+        setup(revision);
         byte[] expected= new byte[] {0x11, 0x5};
 
         settings.startBleAdvertising();

@@ -24,69 +24,69 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.stream.Stream;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 12/18/16.
  */
-@RunWith(Parameterized.class)
 public class TestAccelerometerBoschFlat extends UnitTestBase {
-    @Parameters(name = "board: {0}")
-    public static Collection<Object[]> boardsParams() {
-        ArrayList<Object[]> parameters= new ArrayList<>();
-        parameters.add(new Object[] {AccelerometerBma255.class});
-        parameters.add(new Object[] {AccelerometerBmi160.class});
-
-        return parameters;
+    private static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(AccelerometerBma255.class),
+                Arguments.of(AccelerometerBmi160.class)
+        );
     }
 
     private AccelerometerBosch boschAcc;
 
-    @Parameter
-    public Class<? extends AccelerometerBosch> accelClass;
+    public void setup(Class<? extends AccelerometerBosch> accelClass) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+            connectToBoard();
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-        connectToBoard();
-
-        boschAcc = mwBoard.getModule(AccelerometerBosch.class);
+            boschAcc = mwBoard.getModule(AccelerometerBosch.class);
+        } catch(Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void start() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void start(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x12, 0x01, 0x00};
 
         boschAcc.flat().start();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void stop() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void stop(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         byte[] expected = new byte[] {0x03, 0x12, 0x00, 0x01};
 
         boschAcc.flat().stop();
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void handleResponse() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void handleResponse(Class<? extends AccelerometerBosch> accelClass) {
+        setup(accelClass);
         final boolean[] expected = new boolean[] {
                 true, false
         };

@@ -24,16 +24,18 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.AmbientLightLtr329;
-import com.mbientlab.metawear.module.AmbientLightLtr329.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.junit.Before;
-import org.junit.Test;
+import com.mbientlab.metawear.module.AmbientLightLtr329;
+import com.mbientlab.metawear.module.AmbientLightLtr329.Gain;
+import com.mbientlab.metawear.module.AmbientLightLtr329.IntegrationTime;
+import com.mbientlab.metawear.module.AmbientLightLtr329.MeasurementRate;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 10/2/16.
@@ -42,7 +44,7 @@ import static org.junit.Assert.assertEquals;
 public class TestAmbientLightLtr329 extends UnitTestBase {
     private AmbientLightLtr329 alsLtr329;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AmbientLightLtr329.class);
         connectToBoard();

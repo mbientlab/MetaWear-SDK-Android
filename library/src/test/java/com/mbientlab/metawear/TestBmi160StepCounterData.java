@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 11/14/16.
@@ -41,7 +41,7 @@ import static org.junit.Assert.assertEquals;
 public class TestBmi160StepCounterData extends UnitTestBase {
     private AccelerometerBmi160.StepCounterDataProducer counter;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
         connectToBoard();

@@ -24,6 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.function.Function1;
@@ -38,20 +43,17 @@ import com.mbientlab.metawear.module.Switch;
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Timer;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertNull;
 
 /**
  * Created by etsai on 10/14/16.
  */
 
 public class TestRouteErrorHandling extends UnitTestBase {
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.firmware= "1.1.3";
         junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class, Gpio.class,
@@ -61,46 +63,43 @@ public class TestRouteErrorHandling extends UnitTestBase {
         connectToBoard();
     }
 
-    @Test(expected = IllegalRouteOperationException.class)
+    @Test
     public void emptyEnd() throws Exception {
         Task<Route> actual = mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(RouteComponent::end);
         actual.waitForCompletion();
 
-        throw actual.getError();
+        assertInstanceOf(IllegalRouteOperationException.class, actual.getError());
     }
 
-    @Test(expected = NullPointerException.class)
-    public void endNoMulticast() throws Exception {
-        Task<Route> actual = mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(source ->
+    @Test
+    public void endNoMulticast() {
+        assertThrows(NullPointerException.class, () -> mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(source ->
                 source.multicast()
                         .to()
                         .end()
-                        .end()
-        );
-        actual.waitForCompletion();
-
-        throw actual.getError();
+                        .end()));
     }
 
-    @Test(expected = IllegalRouteOperationException.class)
+    @Test
     public void splitIndexOob() throws Exception {
         Task<Route> actual = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.split()
                 .index(3));
         actual.waitForCompletion();
 
-        throw actual.getError();
+
+        assertInstanceOf(IllegalRouteOperationException.class, actual.getError());
     }
 
-    @Test(expected = IllegalRouteOperationException.class)
+    @Test
     public void duplicateKey1() throws Exception {
         final Accelerometer.AccelerationDataProducer accData= mwBoard.getModule(Accelerometer.class).acceleration();
         Task<Route> actual = accData.addRouteAsync(source -> source.map(Function1.RMS).name(accData.name()));
         actual.waitForCompletion();
 
-        throw actual.getError();
+        assertInstanceOf(IllegalRouteOperationException.class, actual.getError());
     }
 
-    @Test(expected = IllegalRouteOperationException.class)
+    @Test
     public void duplicateKey2() throws Exception {
         final Temperature.Sensor sensor1 = mwBoard.getModule(Temperature.class).sensors()[0],
                 sensor2 = mwBoard.getModule(Temperature.class).sensors()[1];
@@ -113,7 +112,7 @@ public class TestRouteErrorHandling extends UnitTestBase {
         );
         actual.waitForCompletion();
 
-        throw actual.getError();
+        assertInstanceOf(IllegalRouteOperationException.class, actual.getError());
     }
 
     @Test

@@ -31,7 +31,7 @@ import com.mbientlab.metawear.module.Logging;
 
 import org.json.JSONArray;
 import org.json.JSONException;
-import org.junit.Before;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -84,7 +84,7 @@ abstract class TestLogDataBase extends UnitTestBase {
 
     protected abstract String logDataFilename();
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, Logging.class);
         connectToBoard();

@@ -24,52 +24,42 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.Gyro;
-import com.mbientlab.metawear.module.Gyro.Range;
 import com.mbientlab.metawear.module.Gyro.OutputDataRate;
+import com.mbientlab.metawear.module.Gyro.Range;
 import com.mbientlab.metawear.module.GyroBmi270;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by lkasso on 04/01/21.
  */
-@RunWith(Parameterized.class)
 public class TestGyro270Config extends UnitTestBase {
     static final byte[] ODR_BITMASK= new byte[] { 0b0110, 0b0111, 0b1000, 0b1001, 0b1010, 0b1011, 0b1100, 0b1101 },
             RANGE_BITMASK= new byte[] { 0b000, 0b001, 0b010, 0b011, 0b100 };
 
-    @Parameters(name = "odr: {0}, range: {1}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters = new ArrayList<>();
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
         for(OutputDataRate odr: OutputDataRate.values()) {
             for(Range fsr: Range.values()) {
-                parameters.add(new Object[] { odr, fsr });
+                parameters.add(Arguments.of(odr, fsr));
             }
         }
-
-        return parameters;
+        return parameters.stream();
     }
-
-    @Parameter
-    public OutputDataRate odr;
-
-    @Parameter(value = 1)
-    public Range fsr;
 
     private Gyro gyro;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(GyroBmi270.class);
         connectToBoard();
@@ -77,8 +67,9 @@ public class TestGyro270Config extends UnitTestBase {
         gyro = mwBoard.getModule(GyroBmi270.class);
     }
 
-    @Test
-    public void configure() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configure(OutputDataRate odr, Range fsr) {
         byte[] expected= new byte[] {0x13, 0x03, (byte) (0x20 | ODR_BITMASK[odr.ordinal()]), RANGE_BITMASK[fsr.ordinal()]};
 
         gyro.configure()

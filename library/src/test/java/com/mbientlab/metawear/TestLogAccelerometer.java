@@ -1,53 +1,52 @@
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by eric on 5/1/17.
  */
-@RunWith(Parameterized.class)
 public class TestLogAccelerometer extends UnitTestBase {
-    @Parameters(name = "channel: {0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                { AccelerometerBmi160.class },
-                { AccelerometerBmi270.class },
-                { AccelerometerMma8452q.class },
-                { AccelerometerBma255.class },
-        });
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
+        parameters.add(Arguments.of(AccelerometerBmi160.class));
+        parameters.add(Arguments.of(AccelerometerBmi270.class));
+        parameters.add(Arguments.of(AccelerometerMma8452q.class));
+        parameters.add(Arguments.of(AccelerometerBma255.class));
+        return parameters.stream();
     }
-
-    @Parameter
-    public Class<? extends Accelerometer> accelClass;
 
     private Accelerometer accelerometer;
 
-    @Before
-    public void setup() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-        connectToBoard();
+    public void setup(Class<? extends Accelerometer> accelClass) {
+        try {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+            connectToBoard();
 
-        accelerometer = mwBoard.getModule(Accelerometer.class);
+            accelerometer = mwBoard.getModule(Accelerometer.class);
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
-    public void setupAndRemove() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setupAndRemove(Class<? extends Accelerometer> accelClass) throws InterruptedException {
+        setup(accelClass);
         byte[][] expected= new byte[][]{
                 {0x0b, 0x02, 0x03, 0x04, (byte) 0xff, 0x60},
                 {0x0b, 0x02, 0x03, 0x04, (byte) 0xff, 0x24},

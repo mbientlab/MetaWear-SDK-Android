@@ -24,6 +24,12 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.COMPASS;
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.IMU_PLUS;
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.M4G;
+import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.NDOF;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
@@ -31,23 +37,18 @@ import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.SensorFusionBosch.AccRange;
 import com.mbientlab.metawear.module.SensorFusionBosch.GyroRange;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.*;
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 11/12/16.
  */
-@RunWith(Parameterized.class)
 public class TestSensorFusionConfig extends UnitTestBase {
     private static final byte[] BMI160_ACC_RANGE_BITMASK= new byte[] { 0b0011, 0b0101, 0b1000, 0b1100 };
     private static final byte[][] CONFIG_MASKS;
@@ -60,28 +61,19 @@ public class TestSensorFusionConfig extends UnitTestBase {
         };
     }
 
-    @Parameters(name = "{0}, {1}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> tests = new ArrayList<>();
-
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
         for(AccRange ar: AccRange.values()) {
             for(GyroRange gr: GyroRange.values()) {
-                tests.add(new Object[] { ar, gr });
+                parameters.add(Arguments.of(ar, gr));
             }
         }
-
-        return tests;
+        return parameters.stream();
     }
-
-    @Parameter
-    public AccRange accRange;
-
-    @Parameter(value = 1)
-    public GyroRange gyroRange;
 
     private SensorFusionBosch sensorFusion;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
         connectToBoard();
@@ -89,17 +81,18 @@ public class TestSensorFusionConfig extends UnitTestBase {
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
     }
 
-    private byte[] gyroConfig() {
+    private byte[] gyroConfig(GyroRange gyroRange) {
         return new byte[] {0x13, 0x03, (byte) (0x20 | TestGyro160Config.ODR_BITMASK[Gyro.OutputDataRate.ODR_100_HZ.ordinal()]),
                 TestGyro160Config.RANGE_BITMASK[Gyro.Range.values()[gyroRange.ordinal()].ordinal()]};
     }
 
-    @Test
-    public void configureNdof() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureNdof(AccRange accRange, GyroRange gyroRange) {
         final byte[][] expected = new byte[][] {
                 {0x19, 0x02, (byte) NDOF.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
                 {0x03, 0x03, 0x28, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
-                gyroConfig(),
+                gyroConfig(gyroRange),
                 {0x15, 0x04, 0x04, 0x0e},
                 {0x15, 0x03, 0x6}
         };
@@ -113,12 +106,13 @@ public class TestSensorFusionConfig extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test
-    public void configureImuPlus() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureImuPlus(AccRange accRange, GyroRange gyroRange) {
         final byte[][] expected = new byte[][] {
                 {0x19, 0x02, (byte) IMU_PLUS.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
                 {0x03, 0x03, 0x28, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
-                gyroConfig()
+                gyroConfig(gyroRange)
         };
 
         sensorFusion.configure()
@@ -130,8 +124,9 @@ public class TestSensorFusionConfig extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test
-    public void configureCompass() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureCompass(AccRange accRange, GyroRange gyroRange) {
         final byte[][] expected = new byte[][] {
                 {0x19, 0x02, (byte) COMPASS.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
                 {0x03, 0x03, 0x26, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
@@ -148,8 +143,9 @@ public class TestSensorFusionConfig extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getCommands());
     }
 
-    @Test
-    public void configureM4g() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configureM4g(AccRange accRange, GyroRange gyroRange) {
         final byte[][] expected = new byte[][] {
                 {0x19, 0x02, (byte) M4G.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
                 {0x03, 0x03, 0x27, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},

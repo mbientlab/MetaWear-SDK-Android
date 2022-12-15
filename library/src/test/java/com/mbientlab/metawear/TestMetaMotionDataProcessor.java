@@ -24,24 +24,24 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.mbientlab.metawear.data.Quaternion;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.SensorFusionBosch;
-import com.mbientlab.metawear.data.Quaternion;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 /**
  * Created by etsai on 12/5/16.
  */
 
 public class TestMetaMotionDataProcessor extends UnitTestBase {
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo= new MetaWearBoardInfo(DataProcessor.class, SensorFusionBosch.class);
         connectToBoard();

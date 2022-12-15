@@ -24,15 +24,15 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import bolts.Capture;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 12/20/16.
@@ -41,7 +41,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class TestMma8452qOrientation extends UnitTestBase {
     private AccelerometerMma8452q mma8452qAcc;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
         connectToBoard();

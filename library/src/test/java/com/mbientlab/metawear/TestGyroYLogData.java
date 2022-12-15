@@ -24,12 +24,14 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Logging;
 
 import org.json.JSONArray;
 import org.json.JSONException;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -39,8 +41,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import bolts.Task;
-
-import static org.junit.Assert.assertArrayEquals;
 
 /**
  * Created by etsai on 10/30/16.

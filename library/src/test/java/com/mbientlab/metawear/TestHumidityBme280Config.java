@@ -24,44 +24,37 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.HumidityBme280;
 import com.mbientlab.metawear.module.HumidityBme280.OversamplingMode;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestHumidityBme280Config extends UnitTestBase {
     private final byte[] OVERSAMPLING_BITMASKS= new byte[] {0x1, 0x2, 0x3, 0x4, 0x5};
 
-    @Parameters(name = "os: {0}")
-    public static Collection<Object[]> data() {
-        ArrayList<Object[]> parameters = new ArrayList<>();
+    private static Stream<Arguments> data() {
+        List<Arguments> parameters = new LinkedList<>();
         for(OversamplingMode it: OversamplingMode.values()) {
-            parameters.add(new Object[] { it });
+            parameters.add(Arguments.of(it));
         }
-
-        return parameters;
+        return parameters.stream();
     }
 
     private HumidityBme280 humidity;
 
-    @Parameter
-    public OversamplingMode oversampling;
-
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(HumidityBme280.class);
         connectToBoard();
@@ -69,8 +62,9 @@ public class TestHumidityBme280Config extends UnitTestBase {
         humidity= mwBoard.getModule(HumidityBme280.class);
     }
 
-    @Test
-    public void configure() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void configure(OversamplingMode oversampling) {
         byte[] expected= new byte[] {0x16, 0x2, OVERSAMPLING_BITMASKS[oversampling.ordinal()]};
 
         humidity.setOversampling(oversampling);

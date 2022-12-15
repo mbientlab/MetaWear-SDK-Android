@@ -24,13 +24,40 @@
 
 package com.mbientlab.metawear;
 
-import com.mbientlab.metawear.module.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.Test;
+import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.AccelerometerBma255;
+import com.mbientlab.metawear.module.AccelerometerBmi160;
+import com.mbientlab.metawear.module.AccelerometerMma8452q;
+import com.mbientlab.metawear.module.AmbientLightLtr329;
+import com.mbientlab.metawear.module.BarometerBme280;
+import com.mbientlab.metawear.module.BarometerBmp280;
+import com.mbientlab.metawear.module.BarometerBosch;
+import com.mbientlab.metawear.module.ColorTcs34725;
+import com.mbientlab.metawear.module.DataProcessor;
+import com.mbientlab.metawear.module.Debug;
+import com.mbientlab.metawear.module.Gpio;
+import com.mbientlab.metawear.module.Gyro;
+import com.mbientlab.metawear.module.Haptic;
+import com.mbientlab.metawear.module.HumidityBme280;
+import com.mbientlab.metawear.module.IBeacon;
+import com.mbientlab.metawear.module.Led;
+import com.mbientlab.metawear.module.Logging;
+import com.mbientlab.metawear.module.Macro;
+import com.mbientlab.metawear.module.MagnetometerBmm150;
+import com.mbientlab.metawear.module.NeoPixel;
+import com.mbientlab.metawear.module.ProximityTsl2671;
+import com.mbientlab.metawear.module.SensorFusionBosch;
+import com.mbientlab.metawear.module.SerialPassthrough;
+import com.mbientlab.metawear.module.Settings;
+import com.mbientlab.metawear.module.Switch;
+import com.mbientlab.metawear.module.Temperature;
+import com.mbientlab.metawear.module.Timer;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.Test;
 
 /**
  * Created by etsai on 3/4/17.

@@ -26,7 +26,7 @@ package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.module.NeoPixel;
 
-import org.junit.Before;
+import org.junit.jupiter.api.BeforeEach;
 
 /**
  * Created by etsai on 10/2/16.
@@ -34,7 +34,7 @@ import org.junit.Before;
 public class TestNeoPixelBase extends UnitTestBase {
     NeoPixel neoPixel;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(NeoPixel.class);
         connectToBoard();

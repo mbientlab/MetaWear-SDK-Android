@@ -24,50 +24,39 @@
 
 package com.mbientlab.metawear;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
 import com.mbientlab.metawear.module.BarometerBmp280;
 import com.mbientlab.metawear.module.BarometerBmp280.StandbyTime;
 import com.mbientlab.metawear.module.BarometerBosch;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-import static org.junit.Assert.assertArrayEquals;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Created by etsai on 10/2/16.
  */
-@RunWith(Parameterized.class)
 public class TestBarometerBmp280Standby extends UnitTestBase {
     private final byte[] STANDBY_BITMASK= new byte[] {0x00, 0x20, 0x40, 0x60, (byte) 0x80, (byte) 0xa0, (byte) 0xc0, (byte) 0xe0};
 
     private BarometerBmp280 baroBmp280;
 
-    @Parameters(name = "standby: {0}")
-    public static Collection<Object[]> data() {
+    private static Stream<Arguments> data() {
         float[] rawStandby= new float[] {0.25f, 60.125f, 127f, 225f, 376, 1234, 2718.2818f, 3141.592653f};
-
-        ArrayList<Object[]> parameters= new ArrayList<>();
+        List<Arguments> params = new LinkedList<>();
         for(StandbyTime entry: StandbyTime.values()) {
-            parameters.add(new Object[] {entry, rawStandby[entry.ordinal()]});
+            params.add(Arguments.of(entry, rawStandby[entry.ordinal()]));
         }
-
-        return parameters;
+        return params.stream();
     }
 
-    @Parameter
-    public StandbyTime standby;
-
-    @Parameter(value = 1)
-    public float standbyLiteral;
-
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(BarometerBmp280.class);
         connectToBoard();
@@ -75,8 +64,9 @@ public class TestBarometerBmp280Standby extends UnitTestBase {
         baroBmp280= mwBoard.getModule(BarometerBmp280.class);
     }
 
-    @Test
-    public void setStandbyTime() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setStandbyTime(StandbyTime standby, float standbyLiteral) {
         byte[] expected= new byte[] {0x12, 0x03, 0x2c, STANDBY_BITMASK[standby.ordinal()]};
 
         baroBmp280.configure()
@@ -85,8 +75,9 @@ public class TestBarometerBmp280Standby extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void setStandbyTimeRaw() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setStandbyTimeRaw(StandbyTime standby, float standbyLiteral) {
         byte[] expected= new byte[] {0x12, 0x03, 0x2c, STANDBY_BITMASK[standby.ordinal()]};
 
         baroBmp280.configure()
@@ -95,8 +86,9 @@ public class TestBarometerBmp280Standby extends UnitTestBase {
         assertArrayEquals(expected, junitPlatform.getLastCommand());
     }
 
-    @Test
-    public void setAll() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void setAll(StandbyTime standby, float standbyLiteral) {
         byte[] expected= new byte[] {0x12, 0x03, 0x30, (byte) (STANDBY_BITMASK[standby.ordinal()] | 0x10)};
 
         baroBmp280.configure()
