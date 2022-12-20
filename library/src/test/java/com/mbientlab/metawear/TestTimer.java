@@ -27,7 +27,6 @@ package com.mbientlab.metawear;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Timer;
 import com.mbientlab.metawear.module.Timer.ScheduledTask;
 
@@ -49,14 +48,12 @@ public class TestTimer extends UnitTestBase {
     protected Task<ScheduledTask> setupTimer() {
         wait = true;
         return mwBoard.getModule(Timer.class).scheduleAsync(3141, (short) 59, true, () -> {
-            mwBoard.getModule(Gpio.class).pin((byte) 0).analogAbsRef().read();
-            mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().read();
         });
     }
 
     @BeforeEach
     public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Gpio.class, Timer.class);
+        junitPlatform.boardInfo= new MetaWearBoardInfo(Timer.class);
         connectToBoard();
 
         setupTimer().continueWith(task -> {
@@ -72,11 +69,7 @@ public class TestTimer extends UnitTestBase {
     @Test
     public void scheduleTasks() {
         byte[][] expected= new byte[][] {
-                {0x0c, 0x02, 0x45, 0x0c, 0x00, 0x00, 0x3B, 0x0, 0x0},
-                {0x0a, 0x02, 0x0c, 0x06, 0x00, 0x05, (byte) 0xc6, 0x05},
-                {0x0a, 0x03, 0x00, (byte) 0xff, (byte) 0xff, 0x00, (byte) 0xff},
-                {0x0a, 0x02, 0x0c, 0x06, 0x00, 0x05, (byte) 0xc7, 0x05},
-                {0x0a, 0x03, 0x00, (byte) 0xff, (byte) 0xff, 0x00, (byte) 0xff}
+                {0x0c, 0x02, 0x45, 0x0c, 0x00, 0x00, 0x3B, 0x0, 0x0}
         };
 
         assertArrayEquals(expected, junitPlatform.getCommands());
@@ -101,13 +94,11 @@ public class TestTimer extends UnitTestBase {
     @Test
     public void remove() {
         byte[][] expected= new byte[][] {
-                {0x0c, 0x05, 0x0},
-                {0x0a, 0x04, 0x0},
-                {0x0a, 0x04, 0x1}
+                {0x0c, 0x05, 0x0}
         };
 
         manager.remove();
-        assertArrayEquals(expected, junitPlatform.getLastCommands(3));
+        assertArrayEquals(expected, junitPlatform.getLastCommands(1));
     }
 
     @Test

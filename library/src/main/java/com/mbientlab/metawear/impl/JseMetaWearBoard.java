@@ -66,7 +66,6 @@ import com.mbientlab.metawear.module.BarometerBosch;
 import com.mbientlab.metawear.module.ColorTcs34725;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Debug;
-import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.GyroBmi270;
@@ -1279,9 +1278,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 break;
             case TEMPERATURE:
                 persist.modules.put(Temperature.class, new TemperatureImpl(mwPrivate));
-                break;
-            case GPIO:
-                persist.modules.put(Gpio.class, new GpioImpl(mwPrivate));
                 break;
             case HAPTIC:
                 persist.modules.put(Haptic.class, new HapticImpl(mwPrivate));

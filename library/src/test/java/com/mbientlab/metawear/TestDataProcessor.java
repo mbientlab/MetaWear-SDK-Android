@@ -34,7 +34,6 @@ import com.mbientlab.metawear.builder.filter.Passthrough;
 import com.mbientlab.metawear.builder.filter.ThresholdOutput;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
-import com.mbientlab.metawear.builder.predicate.PulseOutput;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.Accelerometer;
@@ -43,7 +42,6 @@ import com.mbientlab.metawear.module.BarometerBmp280;
 import com.mbientlab.metawear.module.BarometerBosch;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.DataProcessor.PassthroughEditor;
-import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
@@ -52,7 +50,6 @@ import com.mbientlab.metawear.module.Temperature;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -67,7 +64,7 @@ public class TestDataProcessor {
     static class TestBase extends UnitTestBase {
         @BeforeEach
         public void setup() throws Exception {
-            junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, Gyro.class, Gpio.class, Temperature.class);
+            junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, Gyro.class, Temperature.class);
             junitPlatform.firmware= "1.2.5";
             connectToBoard();
         }
@@ -194,77 +191,6 @@ public class TestDataProcessor {
         }
     }
 
-    public static class TestFeedback extends TestBase {
-        @Test
-        public void comparatorLoop() throws InterruptedException {
-            byte[][] expected = {
-                    {0x09, 0x02, 0x05, (byte) 0xc7, 0x00, 0x20, 0x06, 0x22, 0x00, 0x00},
-                    {0x0a, 0x02, 0x09, 0x03, 0x00, 0x09, 0x05, 0x05, 0x05, 0x03},
-                    {0x0a, 0x03, 0x00, 0x06, 0x22, 0x00, 0x00}
-            };
-
-            final Gpio gpio = mwBoard.getModule(Gpio.class);
-            gpio.pin((byte) 0).analogAdc().addRouteAsync(source ->
-                    source.filter(Comparison.GT, "reference").name("reference")
-            ).waitForCompletion();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
-
-        @Test
-        public void gpioLoop() throws InterruptedException, IOException {
-            byte[][] expected= {
-                    {0x09, 0x02, 0x05, (byte) 0xc6, 0x00, 0x20, 0x01, 0x02, 0x00, 0x00},
-                    {0x09, 0x02, 0x05, (byte) 0xc6, 0x00, 0x20, 0x09, 0x05, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00},
-                    {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x06, 0b00100011, 0x00, 0x00},
-                    {0x09, 0x02, 0x09, 0x03, 0x02, 0x20, 0x02, 0x17},
-                    {0x09, 0x02, 0x09, 0x03, 0x03, 0x60, 0x06, 0b00000110, 0x10, 0x00, 0x00, 0x00},
-                    {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x06, 0b00011011, 0x00, 0x00},
-                    {0x09, 0x02, 0x09, 0x03, 0x05, 0x20, 0x02, 0x17},
-                    {0x09, 0x02, 0x09, 0x03, 0x06, 0x60, 0x06, 0b00000110, 0x10, 0x00, 0x00, 0x00},
-                    {0x0a, 0x02, 0x09, 0x03, 0x00, 0x09, 0x05, 0x09, 0x05, 0x04},
-                    {0x0a, 0x03, 0x01, 0x09, 0x05, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00},
-                    {0x0a, 0x02, 0x09, 0x03, 0x00, 0x09, 0x04, 0x05},
-                    {0x0a, 0x03, 0x06, 0x00, 0x00, 0x00, 0x00},
-                    {0x0a, 0x02, 0x09, 0x03, 0x00, 0x09, 0x04, 0x05},
-                    {0x0a, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00},
-                    {0x0a, 0x02, 0x09, 0x03, 0x02, 0x09, 0x04, 0x05},
-                    {0x0a, 0x03, 0x06, 0x00, 0x00, 0x00, 0x00},
-                    {0x0a, 0x02, 0x09, 0x03, 0x04, 0x09, 0x04, 0x03},
-                    {0x0a, 0x03, 0x00, 0x01, 0x00},
-                    {0x0a, 0x02, 0x09, 0x03, 0x05, 0x09, 0x04, 0x05},
-                    {0x0a, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00},
-                    {0x0a, 0x02, 0x09, 0x03, 0x07, 0x09, 0x04, 0x03},
-                    {0x0a, 0x03, 0x00, 0x01, 0x00}
-            };
-
-            RouteCreator.createGpioFeedback(mwBoard).waitForCompletion();
-
-            // For TestDeserializeGpioFeedback
-            junitPlatform.boardStateSuffix = "gpio_feedback";
-            mwBoard.serialize();
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
-    }
-
-    public static class TestPulse extends TestBase {
-        @Test
-        public void createAdcPulse() throws InterruptedException {
-            byte[][] expected = new byte[][] {
-                    {0x09, 0x02, 0x05, (byte) 0xc7, 0x00, 0x20, 0x0b, 0x01, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x10, 0x00},
-                    {0x09, 0x03, 0x01},
-                    {0x09, 0x07, 0x00, 0x01}
-            };
-
-            Gpio.Pin pin = mwBoard.getModule(Gpio.class).pin((byte) 0);
-            pin.analogAdc().addRouteAsync(source ->
-                    source.find(PulseOutput.AREA, 512, (short) 16).stream(null)
-            ).waitForCompletion();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
-    }
-
     public static class TestMaths extends TestBase {
         @Test
         public void tempConverter() throws InterruptedException {
@@ -296,18 +222,6 @@ public class TestDataProcessor {
             thermometer.read();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
-        }
-    }
-
-    public static class TestIllegalUsage extends TestBase {
-        @Test
-        public void missingFeedbackName() throws Exception {
-            Gpio.Pin pin = mwBoard.getModule(Gpio.class).pin((byte) 0);
-
-            Task<Route> routeTask = pin.analogAdc().addRouteAsync(source -> source.map(Function2.ADD, "non-existent"));
-            routeTask.waitForCompletion();
-
-            assertInstanceOf(IllegalRouteOperationException.class, routeTask.getError());
         }
     }
 

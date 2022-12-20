@@ -34,7 +34,6 @@ import com.mbientlab.metawear.module.BarometerBmp280;
 import com.mbientlab.metawear.module.ColorTcs34725;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Debug;
-import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.GyroBmi270;
@@ -107,7 +106,6 @@ public class MetaWearBoardInfo {
         MODULE_RESPONSE.put(AccelerometerBmi270.class, new byte[] {0x03, (byte) 0x80, 0x04, 0x00});
         MODULE_RESPONSE.put(AccelerometerMma8452q.class, new byte[] {0x03, (byte) 0x80, 0x00, 0x01});
         MODULE_RESPONSE.put(Temperature.class, new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x03, 0x01, 0x02});
-        MODULE_RESPONSE.put(Gpio.class, new byte[] {0x05, (byte) 0x80, 0x00, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01});
         MODULE_RESPONSE.put(Haptic.class, new byte[] {0x08, (byte) 0x80, 0x00, 0x00});
         MODULE_RESPONSE.put(DataProcessor.class, new byte[] {0x09, (byte) 0x80, 0x00, 0x03, 0x1c});
         //MODULE_RESPONSE.put(Logging.class, new byte[] {0x0b, (byte) 0x80, 0x00, 0x02, 0x08, (byte) 0x80, 0x2b, 0x00, 0x00});
