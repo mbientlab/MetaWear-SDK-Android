@@ -38,7 +38,7 @@ class Constant {
         LED(0x02, "Led"),
         ACCELEROMETER(0x03, "Accelerometer"),
         TEMPERATURE(0x04, "Temperature"),
-        GPIO(0x05, "Gpio"),
+        // Deprecated GPIO(0x05, "Gpio"),
         // Deprecated NEO_PIXEL(0x06, "Neo_Pixel"),
         // Deprecated IBEACON(0x07, "IBeacon"),
         HAPTIC(0x08, "Haptic"),

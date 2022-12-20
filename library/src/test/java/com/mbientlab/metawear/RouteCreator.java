@@ -25,10 +25,7 @@
 package com.mbientlab.metawear;
 
 import com.mbientlab.metawear.builder.filter.Comparison;
-import com.mbientlab.metawear.builder.filter.Passthrough;
 import com.mbientlab.metawear.builder.function.Function2;
-import com.mbientlab.metawear.module.DataProcessor;
-import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
 
@@ -39,34 +36,6 @@ import bolts.Task;
  */
 
 class RouteCreator {
-    static Task<Route> createGpioFeedback(MetaWearBoard board) {
-        final DataProcessor dataprocessor= board.getModule(DataProcessor.class);
-        return board.getModule(Gpio.class).pin((byte) 0).analogAbsRef().addRouteAsync(source -> source.multicast()
-                .to()
-                    .limit(Passthrough.COUNT, (short) 0).name("adc").react(token -> {
-                        dataprocessor.edit("lte_count", DataProcessor.CounterEditor.class)
-                                .reset();
-                        dataprocessor.edit("gt_count", DataProcessor.CounterEditor.class)
-                                .reset();
-                    })
-                .to()
-                    .map(Function2.SUBTRACT, "adc").multicast()
-                    .to()
-                        .filter(Comparison.GT, 0).react(token -> dataprocessor.edit("lte_count", DataProcessor.CounterEditor.class)
-                                .reset())
-                        .count().name("gt_count")
-                        .filter(Comparison.EQ, 16).react(token -> dataprocessor.edit("adc", DataProcessor.PassthroughEditor.class)
-                                .set((short) 1))
-                    .to()
-                        .filter(Comparison.LTE, 0).name("lte").react(token -> dataprocessor.edit("gt_count", DataProcessor.CounterEditor.class)
-                                .reset())
-                        .count().name("lte_count")
-                        .filter(Comparison.EQ, 16).react(data -> dataprocessor.edit("adc", DataProcessor.PassthroughEditor.class)
-                                .set((short) 1))
-                    .end()
-                .end());
-    }
-
     static Task<Route> createLedController(MetaWearBoard board) {
         final Led led= board.getModule(Led.class);
         return board.getModule(Switch.class).state().addRouteAsync(source -> source.count().map(Function2.MODULUS, 2)

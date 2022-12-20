@@ -27,15 +27,12 @@ package com.mbientlab.metawear;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
-import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Haptic;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Settings;
@@ -56,28 +53,11 @@ public class TestRouteErrorHandling extends UnitTestBase {
     @BeforeEach
     public void setup() throws Exception {
         junitPlatform.firmware= "1.1.3";
-        junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class, Gpio.class,
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class,
                 Temperature.class, Haptic.class, Timer.class);
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x03 });
         junitPlatform.addCustomModuleInfo(new byte[] { 0x05, (byte) 0x80, 0x00, 0x00, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01 });
         connectToBoard();
-    }
-
-    @Test
-    public void emptyEnd() throws Exception {
-        Task<Route> actual = mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(RouteComponent::end);
-        actual.waitForCompletion();
-
-        assertInstanceOf(IllegalRouteOperationException.class, actual.getError());
-    }
-
-    @Test
-    public void endNoMulticast() {
-        assertThrows(NullPointerException.class, () -> mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().addRouteAsync(source ->
-                source.multicast()
-                        .to()
-                        .end()
-                        .end()));
     }
 
     @Test
@@ -137,21 +117,20 @@ public class TestRouteErrorHandling extends UnitTestBase {
     @Test
     public void routeProcessorRemoval() throws InterruptedException {
         byte[][] expected= {
-                {0x09, 0x02, 0x05, (byte) 0xc6, 0x00, 0x20, 0x01, 0x02, 0x00, 0x00},
-                {0x09, 0x02, 0x05, (byte) 0xc6, 0x00, 0x20, 0x09, 0x05, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00},
-                {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x06, 0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00},
-                {0x09, 0x02, 0x09, 0x03, 0x02, 0x20, 0x02, 0x17},
-                {0x09, 0x02, 0x09, 0x03, 0x03, 0x60, 0x06, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00},
-                {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00},
-                {0x09, 0x06, 0x00},
-                {0x09, 0x06, 0x01},
-                {0x09, 0x06, 0x02},
-                {0x09, 0x06, 0x03},
-                {0x09, 0x06, 0x04}
+                {0x09, 0x02, 0x01, 0x01, (byte) 0xff, 0x0, 0x02, 0x13},
+                {0x09, 0x02, 0x09, 0x03, 0x00, 0x60, 0x09, 0x0f, 0x04, 0x02, 0x0, 0x0, 0x0, 0x0},
+                {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00},
+                {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+                {0x0a, 0x02, 0x09, 0x03, 0x02, 0x02, 0x03, 0x0f},
+                {0x0a, 0x03, 0x02, 0x02, 0x10, 0x10, 0x00, 0x00, (byte) 0xf4, 0x01, 0x00, 0x00, (byte) 0xe8, 0x03, 0x0, 0x0, (byte) 0xff},
+                {0x0a, 0x02, 0x09, 0x03, 0x02, 0x02, 0x01, 0x01},
+                {0x0a, 0x03, 0x01},
+                {0x0a, 0x02, 0x09, 0x03, 0x03, 0x02, 0x02, 0x01},
+                {0x0a, 0x03, 0x01}
         };
 
         junitPlatform.maxProcessors= 5;
-        Task<Route> actual = RouteCreator.createGpioFeedback(mwBoard);
+        Task<Route> actual = RouteCreator.createLedController(mwBoard);
         actual.waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
@@ -227,18 +206,11 @@ public class TestRouteErrorHandling extends UnitTestBase {
     @Test
     public void timerEventRemoval() throws InterruptedException {
         byte[][] expected= new byte[][] {
-                {0x0c, 0x02, 0x45, 0x0c, 0x00, 0x00, 0x3B, 0x0, 0x0},
-                {0x0a, 0x02, 0x0c, 0x06, 0x00, 0x05, (byte) 0xc6, 0x01},
-                {0x0a, 0x03, 0x00},
-                {0x0a, 0x02, 0x0c, 0x06, 0x00, 0x05, (byte) 0xc7, 0x01},
-                {0x0a, 0x03, 0x00},
-                {0x0a, 0x04, 0x00}
+                {0x0c, 0x02, 0x45, 0x0c, 0x00, 0x00, 0x3B, 0x0, 0x0}
         };
 
         junitPlatform.maxEvents= 1;
         mwBoard.getModule(Timer.class).scheduleAsync(3141, (short) 59, true, () -> {
-            mwBoard.getModule(Gpio.class).pin((byte) 0).analogAbsRef().read();
-            mwBoard.getModule(Gpio.class).pin((byte) 0).analogAdc().read();
         }).waitForCompletion();
 
         assertArrayEquals(expected, junitPlatform.getCommands());
