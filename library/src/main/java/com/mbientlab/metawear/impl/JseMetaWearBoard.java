@@ -67,7 +67,6 @@ import com.mbientlab.metawear.module.ColorTcs34725;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Debug;
 import com.mbientlab.metawear.module.Gpio;
-import com.mbientlab.metawear.module.Gsr;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.GyroBmi270;
@@ -1309,9 +1308,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
             case MACRO:
                 macro = new MacroImpl(mwPrivate);
                 persist.modules.put(Macro.class, macro);
-                break;
-            case GSR:
-                persist.modules.put(Gsr.class, new GsrImpl(mwPrivate));
                 break;
             case SETTINGS:
                 persist.modules.put(Settings.class, new SettingsImpl(mwPrivate));

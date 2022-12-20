@@ -73,7 +73,7 @@ public class TestMetaWearBoard {
                     {0x01, (byte) (byte) 0x80}, {0x02, (byte) 0x80}, {0x03, (byte) 0x80}, {0x04, (byte) 0x80},
                     {0x05, (byte) 0x80}, {0x08, (byte) 0x80},
                     {0x09, (byte) 0x80}, {0x0a, (byte) 0x80}, {0x0b, (byte) 0x80}, {0x0c, (byte) 0x80},
-                    {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}, {0x10, (byte) 0x80}, {0x11, (byte) 0x80},
+                    {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}, {0x11, (byte) 0x80},
                     {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
                     {0x16, (byte) 0x80}, {0x17, (byte) 0x80}, {0x18, (byte) 0x80}, {0x19, (byte) 0x80},
                     {(byte) 0xfe, (byte) 0x80}, {0x0b, (byte) 0x84}
@@ -92,7 +92,7 @@ public class TestMetaWearBoard {
                     {0x01, (byte) (byte) 0x80}, {0x02, (byte) 0x80}, {0x03, (byte) 0x80}, {0x04, (byte) 0x80},
                     {0x05, (byte) 0x80}, {0x08, (byte) 0x80},
                     {0x09, (byte) 0x80}, {0x0a, (byte) 0x80}, {0x0b, (byte) 0x80}, {0x0c, (byte) 0x80},
-                    {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}, {0x10, (byte) 0x80}, {0x11, (byte) 0x80},
+                    {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}, {0x11, (byte) 0x80},
                     {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
                     {0x16, (byte) 0x80}, {0x17, (byte) 0x80}, {0x18, (byte) 0x80}, {0x19, (byte) 0x80},
                     {(byte) 0xfe, (byte) 0x80}, {0x0b, (byte) 0x84}
@@ -143,7 +143,7 @@ public class TestMetaWearBoard {
             mwBoard.connectAsync().waitForCompletion();
 
             byte[][] checkpoint2 = {
-                {0x0f, (byte) 0x80}, {0x10, (byte) 0x80}, {0x11, (byte) 0x80},
+                {0x0f, (byte) 0x80}, {0x11, (byte) 0x80},
                 {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
                 {0x16, (byte) 0x80}, {0x17, (byte) 0x80}, {0x18, (byte) 0x80}, {0x19, (byte) 0x80},
                 {(byte) 0xfe, (byte) 0x80}, {0x0b, (byte) 0x84}
@@ -249,7 +249,6 @@ public class TestMetaWearBoard {
                 EXPECTED_MODULE_DUMP.put("Timer", new JSONObject().put("implementation", 0).put("revision", 0).put("extra", "[0x08]"));
                 EXPECTED_MODULE_DUMP.put("SerialPassthrough", new JSONObject().put("implementation", 0).put("revision", 1));
                 EXPECTED_MODULE_DUMP.put("Macro", new JSONObject().put("implementation", 0).put("revision", 1).put("extra", "[0x08]"));
-                EXPECTED_MODULE_DUMP.put("Conductance", new JSONObject());
                 EXPECTED_MODULE_DUMP.put("Settings", new JSONObject().put("implementation", 0).put("revision", 5).put("extra", "[0x03]"));
                 EXPECTED_MODULE_DUMP.put("Barometer", new JSONObject().put("implementation", 0).put("revision", 0));
                 EXPECTED_MODULE_DUMP.put("Gyro", new JSONObject().put("implementation", 0).put("revision", 1));
