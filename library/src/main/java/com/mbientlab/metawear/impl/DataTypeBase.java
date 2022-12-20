@@ -24,25 +24,24 @@
 
 package com.mbientlab.metawear.impl;
 
-import com.mbientlab.metawear.DataToken;
-import com.mbientlab.metawear.Data;
-import com.mbientlab.metawear.builder.filter.ComparisonOutput;
-
-import java.io.Serializable;
-import java.util.Calendar;
-
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 
+import com.mbientlab.metawear.Data;
+import com.mbientlab.metawear.DataToken;
+import com.mbientlab.metawear.builder.filter.ComparisonOutput;
 import com.mbientlab.metawear.impl.Constant.Module;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
+import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.GyroBmi270;
-import com.mbientlab.metawear.module.DataProcessor;
+
+import java.io.Serializable;
+import java.util.Calendar;
 
 /**
  * Created by etsai on 9/4/16.
@@ -68,9 +67,6 @@ abstract class DataTypeBase implements Serializable, DataToken {
                 break;
             case TEMPERATURE:
                 uri = TemperatureImpl.createUri(dataType);
-                break;
-            case GPIO:
-                uri = GpioImpl.createUri(dataType);
                 break;
             case DATA_PROCESSOR:
                 uri = DataProcessorImpl.createUri(dataType, (DataProcessorImpl) mwPrivate.getModules().get(DataProcessor.class), mwPrivate.getFirmwareVersion(),

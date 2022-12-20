@@ -26,9 +26,6 @@ package com.mbientlab.metawear;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
-import com.mbientlab.metawear.builder.filter.Comparison;
-import com.mbientlab.metawear.module.DataProcessor;
-import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Timer;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -43,23 +40,6 @@ import bolts.TaskCompletionSource;
  * Created by etsai on 3/13/17.
  */
 public class TestDeserialization {
-    public static class TestDeserializeGpioAnalog extends TestGpioAnalog {
-        protected Task<Route> setupAbsRef() {
-            try {
-                junitPlatform.boardStateSuffix = "gpio_analog";
-                mwBoard.deserialize();
-
-                return Task.forResult(mwBoard.lookupRoute(0));
-            } catch (IOException | ClassNotFoundException e) {
-                return Task.forError(e);
-            }
-        }
-
-        protected Task<Route> setupAdc() {
-            return Task.forResult(mwBoard.lookupRoute(1));
-        }
-    }
-
     public static class TestDeserializeI2C extends TestI2C {
         @Override
         protected Task<Route> setupI2cRoute() {
@@ -72,63 +52,6 @@ public class TestDeserialization {
             }
 
 
-        }
-    }
-
-    public static class TestDeserializeGpioFeedback extends UnitTestBase {
-        @BeforeEach
-        public void setup() throws Exception {
-            junitPlatform.firmware= "1.1.3";
-            junitPlatform.boardStateSuffix = "gpio_feedback";
-            mwBoard.deserialize();
-
-            connectToBoard();
-        }
-
-        @Test
-        public void deserializeGpioFeedback() {
-            byte[][] expected= {
-                    {0x09, 0x06, 0x00},
-                    {0x09, 0x06, 0x01},
-                    {0x09, 0x06, 0x02},
-                    {0x09, 0x06, 0x03},
-                    {0x09, 0x06, 0x04},
-                    {0x09, 0x06, 0x05},
-                    {0x09, 0x06, 0x06},
-                    {0x09, 0x06, 0x07},
-                    {0x0a, 0x04, 0x00},
-                    {0x0a, 0x04, 0x01},
-                    {0x0a, 0x04, 0x02},
-                    {0x0a, 0x04, 0x03},
-                    {0x0a, 0x04, 0x04},
-                    {0x0a, 0x04, 0x05},
-                    {0x0a, 0x04, 0x06}
-            };
-
-            mwBoard.lookupRoute(0).remove();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
-
-        @Test
-        public void tearDown() {
-            byte[][] expected= {
-                    {0x09, 0x08},
-                    {0x0a, 0x05},
-                    {0x0b, 0x0a},
-                    {0x0c, 0x05, 0x00},
-                    {0x0c, 0x05, 0x01},
-                    {0x0c, 0x05, 0x02},
-                    {0x0c, 0x05, 0x03},
-                    {0x0c, 0x05, 0x04},
-                    {0x0c, 0x05, 0x05},
-                    {0x0c, 0x05, 0x06},
-                    {0x0c, 0x05, 0x07}
-            };
-
-            mwBoard.tearDown();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
         }
     }
 
@@ -159,54 +82,6 @@ public class TestDeserialization {
             } catch (IOException | ClassNotFoundException e) {
                 return Task.forError(e);
             }
-        }
-    }
-
-    public static class TestDeserializeMultiComparator extends UnitTestBase {
-        @BeforeEach
-        public void setup() throws Exception {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(Gpio.class);
-            junitPlatform.firmware = "1.2.3";
-            connectToBoard();
-
-
-        /*
-        // For editReference test
-        mwBoard.getModule(Gpio.class).getVirtualPin((byte) 0x15).analogAdc().addRouteAsync(new RouteBuilder() {
-            @Override
-            public void configure(RouteComponent source) {
-                source.filter(Comparison.GTE, ComparisonOutput.ABSOLUTE, 1024, 512, 256, 128).name("multi_comp");
-            }
-        }).continueWith(new Continuation<Route, Void>() {
-            @Override
-            public Void then(Task<Route> task) throws Exception {
-                junitPlatform.boardStateSuffix = "multi_comparator";
-                mwBoard.serialize();
-
-                synchronized (TestDeserializeMultiComparator.this) {
-                    TestDeserializeMultiComparator.this.notifyAll();
-                }
-                return null;
-            }
-        });
-
-        synchronized (this) {
-            this.wait();
-        }
-        */
-        }
-
-        @Test
-        public void editReferences() throws IOException, ClassNotFoundException {
-            byte[] expected = new byte[] {0x09, 0x05, 0x00, 0x06, 0x12, (byte) 0x80, 0x00, 0x00, 0x01};
-
-            junitPlatform.boardStateSuffix = "multi_comparator";
-            mwBoard.deserialize();
-
-            mwBoard.getModule(DataProcessor.class).edit("multi_comp", DataProcessor.ComparatorEditor.class)
-                    .modify(Comparison.LT, 128, 256);
-
-            assertArrayEquals(expected, junitPlatform.getLastCommand());
         }
     }
 

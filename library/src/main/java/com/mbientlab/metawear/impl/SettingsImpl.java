@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.impl.Constant.Module.SETTINGS;
+
 import com.mbientlab.metawear.ActiveDataProducer;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.Data;
@@ -31,7 +33,6 @@ import com.mbientlab.metawear.Observer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.impl.platform.TimedTask;
-import com.mbientlab.metawear.module.NeoPixel;
 import com.mbientlab.metawear.module.Settings;
 
 import java.io.UnsupportedEncodingException;
@@ -41,10 +42,6 @@ import java.util.Calendar;
 
 import bolts.Capture;
 import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.DEBUG;
-import static com.mbientlab.metawear.impl.Constant.Module.NEO_PIXEL;
-import static com.mbientlab.metawear.impl.Constant.Module.SETTINGS;
 
 /**
  * Created by etsai on 9/20/16.

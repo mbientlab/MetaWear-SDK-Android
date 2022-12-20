@@ -39,16 +39,13 @@ import com.mbientlab.metawear.module.BarometerBosch;
 import com.mbientlab.metawear.module.ColorTcs34725;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Debug;
-import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Haptic;
 import com.mbientlab.metawear.module.HumidityBme280;
-import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.Macro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
-import com.mbientlab.metawear.module.NeoPixel;
 import com.mbientlab.metawear.module.ProximityTsl2671;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.SerialPassthrough;
@@ -74,9 +71,6 @@ public class TestModule extends UnitTestBase {
         assertNull(mwBoard.getModule(AccelerometerMma8452q.class));
         assertNull(mwBoard.getModule(AccelerometerBma255.class));
         assertNull(mwBoard.getModule(Temperature.class));
-        assertNull(mwBoard.getModule(Gpio.class));
-        assertNull(mwBoard.getModule(NeoPixel.class));
-        assertNull(mwBoard.getModule(IBeacon.class));
         assertNull(mwBoard.getModule(Haptic.class));
         assertNotNull(mwBoard.getModule(DataProcessor.class));
         assertNotNull(mwBoard.getModule(Logging.class));
@@ -151,30 +145,6 @@ public class TestModule extends UnitTestBase {
         connectToBoard();
 
         assertNotNull(mwBoard.getModule(Temperature.class));
-    }
-
-    @Test
-    public void lookupGpio() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(Gpio.class);
-        connectToBoard();
-
-        assertNotNull(mwBoard.getModule(Gpio.class));
-    }
-
-    @Test
-    public void lookupNeoPixel() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(NeoPixel.class);
-        connectToBoard();
-
-        assertNotNull(mwBoard.getModule(NeoPixel.class));
-    }
-
-    @Test
-    public void lookupIBeacon() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(IBeacon.class);
-        connectToBoard();
-
-        assertNotNull(mwBoard.getModule(IBeacon.class));
     }
 
     @Test

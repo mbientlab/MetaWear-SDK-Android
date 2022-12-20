@@ -10,7 +10,5 @@ of the boards by using the GPIO pins to add additional sensors or devices.
 
     gpio
     haptic
-    ibeacon
     led
-    neopixel
     serial_passthrough

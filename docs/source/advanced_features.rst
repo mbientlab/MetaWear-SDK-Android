@@ -244,29 +244,6 @@ You can use the same ideas to create feedback loops by passing in the name assig
         }
     });
 
-Data Token
-^^^^^^^^^^
-The `DataToken <https://mbientlab.com/docs/metawear/android/latest/com/mbientlab/metawear/DataToken.html>`_ interface is another mechanism for forwarding 
-data.  Unlike the string keys, ``DataToken`` objects are used with the API functions that are not a part of the data route API.  
-
-::
-
-    final ActiveDataProducer switchState = mwBoard.getModule(Switch.class).state();
-    final IBeacon iBeacon = mwBoard.getModule(IBeacon.class);
-
-    switchState.addRouteAsync(new RouteBuilder() {
-        @Override
-        public void configure(RouteComponent source) {
-            source.count().react(new RouteComponent.Action() {
-                @Override
-                public void execute(DataToken token) {
-                    // Update ibeacon major number with the counter value
-                    iBeacon.configure().major(token).commit();
-                }
-            });
-        }
-    });
-
 Anonymous Routes
 ----------------
 Anonymous routes are a pared down variant of the `Route <http://mbientlab.com/docs/metawear/android/latest/com/mbientlab/metawear/Route.html>`_ interface 

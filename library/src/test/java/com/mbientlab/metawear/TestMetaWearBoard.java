@@ -71,9 +71,9 @@ public class TestMetaWearBoard {
         public void connectWithDiscovery() throws Exception {
             byte[][] expected = {
                     {0x01, (byte) (byte) 0x80}, {0x02, (byte) 0x80}, {0x03, (byte) 0x80}, {0x04, (byte) 0x80},
-                    {0x05, (byte) 0x80}, {0x06, (byte) 0x80}, {0x07, (byte) 0x80}, {0x08, (byte) 0x80},
+                    {0x08, (byte) 0x80},
                     {0x09, (byte) 0x80}, {0x0a, (byte) 0x80}, {0x0b, (byte) 0x80}, {0x0c, (byte) 0x80},
-                    {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}, {0x10, (byte) 0x80}, {0x11, (byte) 0x80},
+                    {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}, {0x11, (byte) 0x80},
                     {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
                     {0x16, (byte) 0x80}, {0x17, (byte) 0x80}, {0x18, (byte) 0x80}, {0x19, (byte) 0x80},
                     {(byte) 0xfe, (byte) 0x80}, {0x0b, (byte) 0x84}
@@ -89,7 +89,13 @@ public class TestMetaWearBoard {
         @Test
         public void connectNoDiscovery() throws Exception {
             byte[][] expected = {
-                    {0x0b, (byte) 0x84}
+                    {0x01, (byte) (byte) 0x80}, {0x02, (byte) 0x80}, {0x03, (byte) 0x80}, {0x04, (byte) 0x80},
+                    {0x08, (byte) 0x80},
+                    {0x09, (byte) 0x80}, {0x0a, (byte) 0x80}, {0x0b, (byte) 0x80}, {0x0c, (byte) 0x80},
+                    {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}, {0x11, (byte) 0x80},
+                    {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
+                    {0x16, (byte) 0x80}, {0x17, (byte) 0x80}, {0x18, (byte) 0x80}, {0x19, (byte) 0x80},
+                    {(byte) 0xfe, (byte) 0x80}, {0x0b, (byte) 0x84}
             };
 
             junitPlatform.deserializeModuleInfo = true;
@@ -126,7 +132,7 @@ public class TestMetaWearBoard {
 
             byte[][] checkpoint1 = {
                     {0x01, (byte) (byte) 0x80}, {0x02, (byte) 0x80}, {0x03, (byte) 0x80}, {0x04, (byte) 0x80},
-                    {0x05, (byte) 0x80}, {0x06, (byte) 0x80}, {0x07, (byte) 0x80}, {0x08, (byte) 0x80},
+                    {0x08, (byte) 0x80},
                     {0x09, (byte) 0x80}, {0x0a, (byte) 0x80}, {0x0b, (byte) 0x80}, {0x0c, (byte) 0x80},
                     {0x0d, (byte) 0x80}, {0x0f, (byte) 0x80}
             };
@@ -137,7 +143,7 @@ public class TestMetaWearBoard {
             mwBoard.connectAsync().waitForCompletion();
 
             byte[][] checkpoint2 = {
-                {0x0f, (byte) 0x80}, {0x10, (byte) 0x80}, {0x11, (byte) 0x80},
+                {0x0f, (byte) 0x80}, {0x11, (byte) 0x80},
                 {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
                 {0x16, (byte) 0x80}, {0x17, (byte) 0x80}, {0x18, (byte) 0x80}, {0x19, (byte) 0x80},
                 {(byte) 0xfe, (byte) 0x80}, {0x0b, (byte) 0x84}
@@ -235,9 +241,6 @@ public class TestMetaWearBoard {
                 EXPECTED_MODULE_DUMP.put("Led", new JSONObject().put("implementation", 0).put("revision", 0));
                 EXPECTED_MODULE_DUMP.put("Accelerometer", new JSONObject().put("implementation", 1).put("revision", 1));
                 EXPECTED_MODULE_DUMP.put("Temperature", new JSONObject().put("implementation", 1).put("revision", 0).put("extra", "[0x00, 0x03, 0x01, 0x02]"));
-                EXPECTED_MODULE_DUMP.put("Gpio", new JSONObject().put("implementation", 0).put("revision", 0).put("extra", "[0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01]"));
-                EXPECTED_MODULE_DUMP.put("NeoPixel", new JSONObject().put("implementation", 0).put("revision", 0));
-                EXPECTED_MODULE_DUMP.put("IBeacon", new JSONObject().put("implementation", 0).put("revision", 0));
                 EXPECTED_MODULE_DUMP.put("Haptic", new JSONObject().put("implementation", 0).put("revision", 0));
                 EXPECTED_MODULE_DUMP.put("DataProcessor", new JSONObject().put("implementation", 0).put("revision", 1).put("extra", "[0x1c]"));
                 EXPECTED_MODULE_DUMP.put("Event", new JSONObject().put("implementation", 0).put("revision", 0).put("extra", "[0x1c]"));
@@ -245,7 +248,6 @@ public class TestMetaWearBoard {
                 EXPECTED_MODULE_DUMP.put("Timer", new JSONObject().put("implementation", 0).put("revision", 0).put("extra", "[0x08]"));
                 EXPECTED_MODULE_DUMP.put("SerialPassthrough", new JSONObject().put("implementation", 0).put("revision", 1));
                 EXPECTED_MODULE_DUMP.put("Macro", new JSONObject().put("implementation", 0).put("revision", 1).put("extra", "[0x08]"));
-                EXPECTED_MODULE_DUMP.put("Conductance", new JSONObject());
                 EXPECTED_MODULE_DUMP.put("Settings", new JSONObject().put("implementation", 0).put("revision", 5).put("extra", "[0x03]"));
                 EXPECTED_MODULE_DUMP.put("Barometer", new JSONObject().put("implementation", 0).put("revision", 0));
                 EXPECTED_MODULE_DUMP.put("Gyro", new JSONObject().put("implementation", 0).put("revision", 1));
@@ -287,7 +289,7 @@ public class TestMetaWearBoard {
         public void partialModuleInfoDump() throws Exception {
             byte[][] expected = {
                     {0x01, (byte) (byte) 0x80}, {0x02, (byte) 0x80}, {0x03, (byte) 0x80}, {0x04, (byte) 0x80},
-                    {0x05, (byte) 0x80}, {0x06, (byte) 0x80}, {0x07, (byte) 0x80}, {0x08, (byte) 0x80},
+                    {0x08, (byte) 0x80},
                     {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
                     {0x16, (byte) 0x80}, {0x17, (byte) 0x80}, {0x18, (byte) 0x80}, {0x19, (byte) 0x80},
                     {(byte) 0xfe, (byte) 0x80}
@@ -322,7 +324,7 @@ public class TestMetaWearBoard {
             TaskTimeoutException exception = (TaskTimeoutException) task.getError();
             JSONObject partial = (JSONObject) exception.partial, expectedPartial = new JSONObject();
 
-            for(String it: new String[] {"Switch", "Led", "Accelerometer", "Temperature", "Gpio", "NeoPixel", "IBeacon", "Haptic"}) {
+            for(String it: new String[] {"Switch", "Led", "Accelerometer", "Temperature", "Gpio", "Haptic"}) {
                 expectedPartial.put(it, EXPECTED_MODULE_DUMP.optJSONObject(it));
             }
 
