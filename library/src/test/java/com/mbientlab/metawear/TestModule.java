@@ -43,7 +43,6 @@ import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Haptic;
 import com.mbientlab.metawear.module.HumidityBme280;
-import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.Macro;
@@ -74,7 +73,6 @@ public class TestModule extends UnitTestBase {
         assertNull(mwBoard.getModule(AccelerometerBma255.class));
         assertNull(mwBoard.getModule(Temperature.class));
         assertNull(mwBoard.getModule(Gpio.class));
-        assertNull(mwBoard.getModule(IBeacon.class));
         assertNull(mwBoard.getModule(Haptic.class));
         assertNotNull(mwBoard.getModule(DataProcessor.class));
         assertNotNull(mwBoard.getModule(Logging.class));
@@ -157,14 +155,6 @@ public class TestModule extends UnitTestBase {
         connectToBoard();
 
         assertNotNull(mwBoard.getModule(Gpio.class));
-    }
-
-    @Test
-    public void lookupIBeacon() throws Exception {
-        junitPlatform.boardInfo = new MetaWearBoardInfo(IBeacon.class);
-        connectToBoard();
-
-        assertNotNull(mwBoard.getModule(IBeacon.class));
     }
 
     @Test

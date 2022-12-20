@@ -73,7 +73,6 @@ import com.mbientlab.metawear.module.GyroBmi160;
 import com.mbientlab.metawear.module.GyroBmi270;
 import com.mbientlab.metawear.module.Haptic;
 import com.mbientlab.metawear.module.HumidityBme280;
-import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.Macro;
@@ -1284,9 +1283,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 break;
             case GPIO:
                 persist.modules.put(Gpio.class, new GpioImpl(mwPrivate));
-                break;
-            case IBEACON:
-                persist.modules.put(IBeacon.class, new IBeaconImpl(mwPrivate));
                 break;
             case HAPTIC:
                 persist.modules.put(Haptic.class, new HapticImpl(mwPrivate));
