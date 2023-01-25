@@ -1,5 +1,5 @@
 # MetaWear Android API
-The MetaWear Android API is a library for interacting with [MbientLab's sensor boards](https://mbientlab.com/sensors/) on an Android device.  A minimum of Android 7.0 (SDK 24) is required to use this library, however for the best results, it is recommended that users be on **Android 10 (SDK 29) or higher**.  
+The MetaWear Android API is a library for interacting with [MbientLab's Bluetooth sensor Development boards](https://mbientlab.com/) on an Android device.  A minimum of Android 11.0 (SDK 30) is required to use this library, however for the best results, it is recommended that users be on **Android 13 (SDK 33)**.  
 
 # Setup
 ## Adding Compile Dependency
@@ -19,12 +19,11 @@ Then, add the compile element to the dependencies closure in the module's ``buil
 
 ```gradle
 dependencies {
-    compile 'com.mbientlab:metawear:3.8.2'
+    compile 'com.mbientlab:metawear:4.0.0'
 }
 ```
 
-If you are using SDK v3.3 or newer, you will need to enable Java 8 feature support the module's ``build.gradle`` file.  See this 
-[page](https://developer.android.com/studio/write/java8-support.html) in the Android Studio user guide.
+The library was built on Java 17 but works fine with the built-in Java 11 in Android Studio Eel.
 
 ## Declaring the Service
 Once your project has synced with the updated Gradle files, declare the MetaWear Bluetooth LE service in the module's *AndroidManifest.xml* file.

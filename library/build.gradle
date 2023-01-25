@@ -29,10 +29,10 @@ android {
     buildToolsVersion '33.0.1'
 
     defaultConfig {
-        minSdkVersion 24
+        minSdkVersion 30
         targetSdkVersion 33
-        versionCode 65
-        versionName "3.9.0"
+        versionCode 66
+        versionName "4.0.0"
     }
 
     buildTypes {
@@ -56,9 +56,9 @@ android {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     api 'com.parse.bolts:bolts-tasks:1.4.0'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.1'
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.1")
-    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.9.1'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
+    testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.9.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.9.2'
     testImplementation 'org.json:json:20220924'
     testImplementation 'org.skyscreamer:jsonassert:1.5.1'
 }
