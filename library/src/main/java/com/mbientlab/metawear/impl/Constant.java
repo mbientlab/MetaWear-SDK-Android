@@ -48,7 +48,7 @@ class Constant {
         TIMER(0x0c, "Timer"),
         SERIAL_PASSTHROUGH(0x0d, "SerialPassthrough"),
         MACRO(0x0f, "Macro"),
-        // Deprecated  GSR(0x10, "Conductance"),
+        GSR(0x10, "Conductance"),
         SETTINGS(0x11, "Settings"),
         BAROMETER(0x12, "Barometer"),
         GYRO(0x13, "Gyro"),
