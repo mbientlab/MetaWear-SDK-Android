@@ -24,7 +24,14 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
+
+import com.google.android.gms.tasks.CancellationToken;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.AsyncDataProducer;
+import com.mbientlab.metawear.Capture;
 import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
@@ -44,12 +51,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Calendar;
-
-import bolts.CancellationToken;
-import bolts.Capture;
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.SENSOR_FUSION;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 11/12/16.
@@ -702,9 +704,9 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
     public Task<Void> pullConfigAsync() {
         return readRegisterTask.execute("Did not receive sensor fusion config within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MODE)})
-        ).onSuccessTask(task -> {
-            mode = Mode.values()[task.getResult()[2]];
-            return Task.forResult(null);
+        ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            mode = Mode.values()[task[2]];
+            return Tasks.forResult(null);
         });
     }
 
@@ -713,16 +715,16 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
         if (mwPrivate.lookupModuleInfo(SENSOR_FUSION).revision >= CALIBRATION_STATE_REV) {
             return readRegisterTask.execute("Did not receive sensor fusion calibration status within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(CALIB_STATUS)})
-            ).onSuccessTask(task -> {
+            ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
                 CalibrationAccuracy values[] = CalibrationAccuracy.values();
-                return Task.forResult(new CalibrationState(
-                        values[task.getResult()[2]],
-                        values[task.getResult()[3]],
-                        values[task.getResult()[4]]
+                return Tasks.forResult(new CalibrationState(
+                        values[task[2]],
+                        values[task[3]],
+                        values[task[4]]
                 ));
             });
         }
-        return Task.forError(new UnsupportedOperationException("Minimum firmware v1.4.2 required to use this function"));
+        return Tasks.forException(new UnsupportedOperationException("Minimum firmware v1.4.2 required to use this function"));
     }
 
     @Override
@@ -733,58 +735,58 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                     gyro = new Capture<>(null),
                     mag = new Capture<>(null);
 
-            return Task.forResult(null).continueWhile(() -> !terminate.get(), ignored -> !ct.isCancellationRequested() ? readCalibrationStateAsync().onSuccessTask(task -> {
+            return Tasks.whenAllSuccess(Tasks.forResult(!terminate.get())).continueWith(IMMEDIATE_EXECUTOR, ignored -> !ct.isCancellationRequested() ? readCalibrationStateAsync().onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
                 if (updateHandler != null) {
-                    updateHandler.receivedUpdate(task.getResult());
+                    updateHandler.receivedUpdate(task);
                 }
 
                 switch (mode) {
                     case NDOF:
-                        terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
-                                task.getResult().gyroscope == CalibrationAccuracy.HIGH_ACCURACY &&
-                                task.getResult().magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
+                        terminate.set(task.accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.gyroscope == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
                         break;
                     case IMU_PLUS:
-                        terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
-                                task.getResult().gyroscope == CalibrationAccuracy.HIGH_ACCURACY);
+                        terminate.set(task.accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.gyroscope == CalibrationAccuracy.HIGH_ACCURACY);
                         break;
                     case COMPASS:
                     case M4G:
-                        terminate.set(task.getResult().accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
-                                task.getResult().magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
+                        terminate.set(task.accelerometer == CalibrationAccuracy.HIGH_ACCURACY &&
+                                task.magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
                         break;
                 }
 
-                return !terminate.get() ? Task.delay(pollingPeriod) : Task.<Void>forResult(null);
-            }) : Task.cancelled()
-            ).onSuccessTask(ignored -> readRegisterTask.execute("Did not receive accelerometer calibration data within %dms", Constant.RESPONSE_TIMEOUT,
+                return !terminate.get() ? Tasks.withTimeout(Tasks.<Void>forResult(null), pollingPeriod, TimeUnit.MILLISECONDS) : Tasks.<Void>forResult(null);
+            }) : Tasks.forCanceled()
+            ).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> readRegisterTask.execute("Did not receive accelerometer calibration data within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(ACC_CALIB_DATA)}))
-            ).onSuccessTask(task -> {
-                byte[] result = task.getResult();
+            ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+                byte[] result = task;
                 acc.set(Arrays.copyOfRange(result, 2, result.length));
 
                 return mode == Mode.IMU_PLUS || mode == Mode.NDOF ? readRegisterTask.execute("Did not receive gyroscope calibration data within %dms", Constant.RESPONSE_TIMEOUT,
                         () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(GYRO_CALIB_DATA)})
-                ) : Task.forResult(null);
-            }).onSuccessTask(task -> {
-                if (task.getResult() != null) {
-                    byte[] result = task.getResult();
+                ) : Tasks.forResult(null);
+            }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+                if (task != null) {
+                    byte[] result = task;
                     gyro.set(Arrays.copyOfRange(result, 2, result.length));
                 }
 
                 return mode != Mode.IMU_PLUS ? readRegisterTask.execute("Did not receive magnetometer calibration data within %dms", Constant.RESPONSE_TIMEOUT,
                         () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(MAG_CALIB_DATA)})
-                ) : Task.forResult(null);
-            }).onSuccessTask(task -> {
-                if (task.getResult() != null) {
-                    byte[] result = task.getResult();
+                ) : Tasks.forResult(null);
+            }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+                if (task != null) {
+                    byte[] result = task;
                     mag.set(Arrays.copyOfRange(result, 2, result.length));
                 }
 
-                return Task.forResult(new CalibrationData(acc.get(), gyro.get(), mag.get()));
+                return Tasks.forResult(new CalibrationData(acc.get(), gyro.get(), mag.get()));
             });
         }
-        return Task.forError(new UnsupportedOperationException("Minimum firmware v1.4.4 required to use this function"));
+        return Tasks.forException(new UnsupportedOperationException("Minimum firmware v1.4.4 required to use this function"));
     }
 
     @Override

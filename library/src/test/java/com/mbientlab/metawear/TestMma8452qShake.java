@@ -28,15 +28,13 @@ import static com.mbientlab.metawear.data.Sign.NEGATIVE;
 import static com.mbientlab.metawear.data.Sign.POSITIVE;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 import com.mbientlab.metawear.module.AccelerometerMma8452q.Movement;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import bolts.Capture;
 
 /**
  * Created by etsai on 12/20/16.
@@ -45,38 +43,43 @@ import bolts.Capture;
 public class TestMma8452qShake extends UnitTestBase {
     private AccelerometerMma8452q mma8452qAcc;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
-        connectToBoard();
-
         mma8452qAcc = mwBoard.getModule(AccelerometerMma8452q.class);
+
+        return connectToBoardNew();
     }
 
     @Test
     public void start() {
         byte[] expected = new byte[] {0x03, 0x0e, 0x01};
 
-        mma8452qAcc.shake().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.shake().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @Test
     public void stop() {
         byte[] expected = new byte[] {0x03, 0x0e, 0x00};
 
-        mma8452qAcc.shake().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.shake().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @Test
     public void configure() {
         byte[] expected = new byte[] {0x03, 0x0f, 0x12, 0x00, 0x07, 0x05};
 
-        mma8452qAcc.shake().configure()
-                .axis(CartesianAxis.X)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.shake().configure()
+                    .axis(CartesianAxis.X)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @Test
@@ -97,21 +100,24 @@ public class TestMma8452qShake extends UnitTestBase {
                 {0x03, 0x10, 0x70},
                 {0x03, 0x10, 0x60}
         };
-        final Capture<Movement[]> actual = new Capture<>();
+        setup().addOnSuccessListener(ignored -> {
+            final Capture<Movement[]> actual = new Capture<>();
 
-        actual.set(new Movement[6]);
-        mma8452qAcc.shake().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Movement.class);
-                i++;
+            actual.set(new Movement[6]);
+            mma8452qAcc.shake().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Movement.class);
+                    i++;
+                }
+            }));
+            for (byte[] it : responses) {
+                sendMockResponse(it);
             }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
 
-        assertArrayEquals(expected, actual.get());
+            assertArrayEquals(expected, actual.get());
+        });
     }
 }

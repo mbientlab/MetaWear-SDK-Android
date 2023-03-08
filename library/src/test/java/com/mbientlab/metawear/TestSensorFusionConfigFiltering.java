@@ -1,23 +1,27 @@
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.COMPASS;
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.IMU_PLUS;
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.M4G;
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.NDOF;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -39,95 +43,117 @@ public class TestSensorFusionConfigFiltering extends UnitTestBase {
 
     private SensorFusionBosch sensorFusion;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
-        connectToBoard();
-
-        sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+                sensorFusion = mwBoard.getModule(SensorFusionBosch.class));
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureNdof(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) {
-        final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) NDOF.ordinal(), 0x13},
-                {0x03, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
-                {0x13, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[gyroFilter.ordinal()]), 0x0},
-                {0x15, 0x04, 0x04, 0x0e},
-                {0x15, 0x03, 0x6}
-        };
+    public void configureNdof(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x19, 0x02, (byte) NDOF.ordinal(), 0x13},
+                    {0x03, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
+                    {0x13, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[gyroFilter.ordinal()]), 0x0},
+                    {0x15, 0x04, 0x04, 0x0e},
+                    {0x15, 0x03, 0x6}
+            };
 
-        sensorFusion.configure()
-                .mode(NDOF)
-                .accRange(SensorFusionBosch.AccRange.AR_16G)
-                .accExtra(accFilter)
-                .gyroRange(SensorFusionBosch.GyroRange.GR_2000DPS)
-                .gyroExtra(gyroFilter)
-                .commit();
+            sensorFusion.configure()
+                    .mode(NDOF)
+                    .accRange(SensorFusionBosch.AccRange.AR_16G)
+                    .accExtra(accFilter)
+                    .gyroRange(SensorFusionBosch.GyroRange.GR_2000DPS)
+                    .gyroExtra(gyroFilter)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureImuPlus(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) {
-        final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) IMU_PLUS.ordinal(), 0x13},
-                {0x03, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
-                {0x13, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[gyroFilter.ordinal()]), 0x0},
-        };
+    public void configureImuPlus(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x19, 0x02, (byte) IMU_PLUS.ordinal(), 0x13},
+                    {0x03, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
+                    {0x13, 0x03, (byte) (0x8 | BMI160_FILTER_MASK[gyroFilter.ordinal()]), 0x0},
+            };
 
-        sensorFusion.configure()
-                .mode(IMU_PLUS)
-                .accRange(SensorFusionBosch.AccRange.AR_16G)
-                .accExtra(accFilter)
-                .gyroRange(SensorFusionBosch.GyroRange.GR_2000DPS)
-                .gyroExtra(gyroFilter)
-                .commit();
+            sensorFusion.configure()
+                    .mode(IMU_PLUS)
+                    .accRange(SensorFusionBosch.AccRange.AR_16G)
+                    .accExtra(accFilter)
+                    .gyroRange(SensorFusionBosch.GyroRange.GR_2000DPS)
+                    .gyroExtra(gyroFilter)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureCompass(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) {
-        final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) COMPASS.ordinal(), 0x13},
-                {0x03, 0x03, (byte) (0x6 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
-                {0x15, 0x04, 0x04, 0x0e},
-                {0x15, 0x03, 0x6}
-        };
+    public void configureCompass(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x19, 0x02, (byte) COMPASS.ordinal(), 0x13},
+                    {0x03, 0x03, (byte) (0x6 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
+                    {0x15, 0x04, 0x04, 0x0e},
+                    {0x15, 0x03, 0x6}
+            };
 
-        sensorFusion.configure()
-                .mode(COMPASS)
-                .accRange(SensorFusionBosch.AccRange.AR_16G)
-                .accExtra(accFilter)
-                .gyroRange(SensorFusionBosch.GyroRange.GR_2000DPS)
-                .gyroExtra(gyroFilter)
-                .commit();
+            sensorFusion.configure()
+                    .mode(COMPASS)
+                    .accRange(SensorFusionBosch.AccRange.AR_16G)
+                    .accExtra(accFilter)
+                    .gyroRange(SensorFusionBosch.GyroRange.GR_2000DPS)
+                    .gyroExtra(gyroFilter)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureM4g(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) {
-        final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) M4G.ordinal(), 0x13},
-                {0x03, 0x03, (byte) (0x7 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
-                {0x15, 0x04, 0x04, 0x0e},
-                {0x15, 0x03, 0x6}
-        };
+    public void configureM4g(AccelerometerBmi160.FilterMode accFilter, Gyro.FilterMode gyroFilter) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x19, 0x02, (byte) M4G.ordinal(), 0x13},
+                    {0x03, 0x03, (byte) (0x7 | BMI160_FILTER_MASK[accFilter.ordinal()]), 0xc},
+                    {0x15, 0x04, 0x04, 0x0e},
+                    {0x15, 0x03, 0x6}
+            };
 
-        sensorFusion.configure()
-                .mode(M4G)
-                .accRange(SensorFusionBosch.AccRange.AR_16G)
-                .accExtra(accFilter)
-                .gyroRange(SensorFusionBosch.GyroRange.GR_2000DPS)
-                .gyroExtra(gyroFilter)
-                .commit();
+            sensorFusion.configure()
+                    .mode(M4G)
+                    .accRange(SensorFusionBosch.AccRange.AR_16G)
+                    .accExtra(accFilter)
+                    .gyroRange(SensorFusionBosch.GyroRange.GR_2000DPS)
+                    .gyroExtra(gyroFilter)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

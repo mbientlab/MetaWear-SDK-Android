@@ -24,10 +24,9 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.ActiveDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
-
-import bolts.Task;
 
 /**
  * On-board push button switch

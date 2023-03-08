@@ -24,14 +24,13 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.impl.Constant.Module.HUMIDITY;
+
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.module.HumidityBme280;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.HUMIDITY;
 
 /**
  * Created by etsai on 9/19/16.

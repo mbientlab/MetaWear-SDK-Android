@@ -24,9 +24,13 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.module.Led;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,6 +39,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 
@@ -99,7 +105,7 @@ public class TestLedPattern extends UnitTestBase {
 
     private byte[] expected;
 
-    public void setup(boolean delaySupported, short delay, byte[] expectedBase) {
+    public Task<Void> setup(boolean delaySupported, short delay, byte[] expectedBase) {
         try {
             junitPlatform.boardInfo = new MetaWearBoardInfo(Led.class);
 
@@ -112,21 +118,27 @@ public class TestLedPattern extends UnitTestBase {
                 expected[14] = (byte) (delay & 0xff);
             }
 
-            connectToBoard();
+            return connectToBoardNew();
         } catch (Exception e) {
             fail(e);
+            return Tasks.forException(e);
         }
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void writePresetPattern(boolean delaySupported, short delay, byte repeat,
-                                   byte[] expectedBase, Led.Color color, Led.PatternPreset pattern) {
-        setup(delaySupported, delay, expectedBase);
-        mwBoard.getModule(Led.class).editPattern(color, pattern)
-                .delay(delay)
-                .repeatCount(repeat)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+                                   byte[] expectedBase, Led.Color color, Led.PatternPreset pattern) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(delaySupported, delay, expectedBase).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mwBoard.getModule(Led.class).editPattern(color, pattern)
+                    .delay(delay)
+                    .repeatCount(repeat)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

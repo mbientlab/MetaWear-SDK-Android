@@ -24,14 +24,17 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Settings;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Task;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 12/10/16.
@@ -40,129 +43,171 @@ import bolts.Task;
 public class TestSettingsRev5 extends UnitTestBase {
     private Settings settings;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x05, 0x03});
-        connectToBoard();
-
-        settings = mwBoard.getModule(Settings.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+                settings = mwBoard.getModule(Settings.class));
     }
 
     @Test
-    public void readPowerStatus() {
-        byte[] expected = new byte[] {0x11, (byte) 0x91};
+    public void readPowerStatus() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x11, (byte) 0x91};
 
-        settings.readCurrentPowerStatusAsync();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
-    }
-
-    @Test
-    public void readPowerStatusData() throws InterruptedException {
-        byte[] expected = new byte[] {0x1, 0x0};
-        final byte[] actual = new byte[2];
-
-        Task<Void> readTaskChain = settings.readCurrentPowerStatusAsync().continueWithTask(task -> {
-            actual[0] = task.getResult();
-            return settings.readCurrentPowerStatusAsync();
-        }).continueWith(task -> {
-            actual[1] = task.getResult();
-            return null;
+            settings.readCurrentPowerStatusAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getLastCommand());
+                doneSignal.countDown();
+            });
         });
-
-        sendMockResponse(new byte[] {0x11, (byte) 0x91, 0x1});
-        sendMockResponse(new byte[] {0x11, (byte) 0x91, 0x0});
-
-        readTaskChain.waitForCompletion();
-
-        assertArrayEquals(expected, actual);
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void powerStatus() {
-        byte[] expected = new byte[] {0x11, 0x11, 0x01};
-
-        settings.powerStatus().addRouteAsync(source -> source.stream(null));
-
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
-    }
-
-    @Test
-    public void powerStatusData() {
-        final byte[] actual = new byte[2];
-        byte[] expected = new byte[] {0x0, 0x1};
-
-        settings.powerStatus().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-
-            @Override
-            public void apply(Data data, Object... env) {
-                actual[i] = data.value(Byte.class);
-                i++;
-            }
-        }));
-
-        sendMockResponse(new byte[] {0x11, 0x11, 0x00});
-        sendMockResponse(new byte[] {0x11, 0x11, 0x01});
-
-        assertArrayEquals(expected, actual);
-    }
-
-    @Test
-    public void readChargeStatus() {
-        byte[] expected = new byte[] {0x11, (byte) 0x92};
-
-        settings.readCurrentChargeStatusAsync();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
-    }
-
-    @Test
-    public void readChargeStatusData() throws InterruptedException {
-        byte[] expected = new byte[] {0x1, 0x0};
-        final byte[] actual = new byte[2];
-
-        Task<Void> readTaskChain = settings.readCurrentChargeStatusAsync().continueWithTask(task -> {
-            actual[0] = task.getResult();
-            return settings.readCurrentChargeStatusAsync();
-        }).continueWith(task -> {
-            actual[1] = task.getResult();
-            return null;
+    public void readPowerStatusData() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().continueWith(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[] actual = new byte[2];
+            byte[] expected = new byte[] {0x1, 0x0};
+            return settings.readCurrentPowerStatusAsync()
+                .continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                    actual[0] = task.getResult();
+                    return settings.readCurrentPowerStatusAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task2 -> {
+                        actual[1] = task.getResult();
+                        sendMockResponse(new byte[] {0x11, (byte) 0x91, 0x1});
+                        sendMockResponse(new byte[] {0x11, (byte) 0x91, 0x0});
+                    }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task2 -> {
+                        assertArrayEquals(expected, actual);
+                        doneSignal.countDown();
+                    });
+                });
         });
-
-        sendMockResponse(new byte[] {0x11, (byte) 0x92, 0x1});
-        sendMockResponse(new byte[] {0x11, (byte) 0x92, 0x0});
-
-        readTaskChain.waitForCompletion();
-
-        assertArrayEquals(expected, actual);
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void chargeStatus() {
-        byte[] expected = new byte[] {0x11, 0x12, 0x01};
+    public void powerStatus() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x11, 0x11, 0x01};
 
-        settings.chargeStatus().addRouteAsync(source -> source.stream(null));
-
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            settings.powerStatus().addRouteAsync(source -> source.stream(null))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        assertArrayEquals(expected, junitPlatform.getLastCommand());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void chargeStatusData() {
-        final byte[] actual = new byte[2];
-        byte[] expected = new byte[] {0x0, 0x1};
+    public void powerStatusData() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[] actual = new byte[2];
+            byte[] expected = new byte[] {0x0, 0x1};
 
-        settings.chargeStatus().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
+            settings.powerStatus().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
 
-            @Override
-            public void apply(Data data, Object... env) {
-                actual[i] = data.value(Byte.class);
-                i++;
-            }
-        }));
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual[i] = data.value(Byte.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                sendMockResponse(new byte[] {0x11, 0x11, 0x00});
+                sendMockResponse(new byte[] {0x11, 0x11, 0x01});
 
-        sendMockResponse(new byte[] {0x11, 0x12, 0x00});
-        sendMockResponse(new byte[] {0x11, 0x12, 0x01});
+                assertArrayEquals(expected, actual);
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
 
-        assertArrayEquals(expected, actual);
+    @Test
+    public void readChargeStatus() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x11, (byte) 0x92};
+
+            settings.readCurrentChargeStatusAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getLastCommand());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
+
+    @Test
+    public void readChargeStatusData() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(ignored -> {
+            byte[] expected = new byte[] {0x1, 0x0};
+            final byte[] actual = new byte[2];
+
+            settings.readCurrentChargeStatusAsync().continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                actual[0] = task.getResult();
+                return settings.readCurrentChargeStatusAsync();
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                actual[1] = task;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                sendMockResponse(new byte[] {0x11, (byte) 0x92, 0x1});
+                sendMockResponse(new byte[] {0x11, (byte) 0x92, 0x0});
+                assertArrayEquals(expected, actual);
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
+
+    @Test
+    public void chargeStatus() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x11, 0x12, 0x01};
+
+            settings.chargeStatus().addRouteAsync(source -> source.stream(null))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        assertArrayEquals(expected, junitPlatform.getLastCommand());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
+
+    @Test
+    public void chargeStatusData() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[] actual = new byte[2];
+            byte[] expected = new byte[] {0x0, 0x1};
+
+            settings.chargeStatus().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual[i] = data.value(Byte.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                sendMockResponse(new byte[] {0x11, 0x12, 0x00});
+                sendMockResponse(new byte[] {0x11, 0x12, 0x01});
+
+                assertArrayEquals(expected, actual);
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -24,15 +24,19 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.MagneticField;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 11/17/16.
@@ -41,61 +45,101 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
 
     private MagnetometerBmm150 mag;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo= new MetaWearBoardInfo(MagnetometerBmm150.class);
-        connectToBoard();
-
-        mag= mwBoard.getModule(MagnetometerBmm150.class);
-        mag.packedMagneticField().addRouteAsync(source -> source.stream((data, env) -> ((ArrayList<MagneticField>) env[0]).add(data.value(MagneticField.class))));
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mag = mwBoard.getModule(MagnetometerBmm150.class);
+        });
     }
 
     @Test
-    public void interpretPackedData() {
-        byte[] response= new byte[] {0x15, 0x09, (byte) 0xb6, 0x0c, 0x72, (byte) 0xf7, (byte) 0x89, (byte) 0xee, (byte) 0xb6,
-                0x0b, 0x5a, (byte) 0xf8, 0x32, (byte) 0xee, (byte) 0xe6, 0x0a, (byte) 0xa2, (byte) 0xf7, 0x25, (byte) 0xef};
-        MagneticField[] expected = new MagneticField[] {
-                new MagneticField(Float.intBitsToFloat(0x39554110), Float.intBitsToFloat(0xb90f861a), Float.intBitsToFloat(0xb9928177)),
-                new MagneticField(Float.intBitsToFloat(0x39447a18), Float.intBitsToFloat(0xb90051ca), Float.intBitsToFloat(0xb9955b46)),
-                new MagneticField(Float.intBitsToFloat(0x3936d86f), Float.intBitsToFloat(0xb90c60cc), Float.intBitsToFloat(0xb98d64d8))
-        };
+    public void interpretPackedData() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] response = new byte[] {0x15, 0x09, (byte) 0xb6, 0x0c, 0x72, (byte) 0xf7, (byte) 0x89, (byte) 0xee, (byte) 0xb6,
+                    0x0b, 0x5a, (byte) 0xf8, 0x32, (byte) 0xee, (byte) 0xe6, 0x0a, (byte) 0xa2, (byte) 0xf7, 0x25, (byte) 0xef};
+            MagneticField[] expected = new MagneticField[] {
+                    new MagneticField(Float.intBitsToFloat(0x39554110), Float.intBitsToFloat(0xb90f861a), Float.intBitsToFloat(0xb9928177)),
+                    new MagneticField(Float.intBitsToFloat(0x39447a18), Float.intBitsToFloat(0xb90051ca), Float.intBitsToFloat(0xb9955b46)),
+                    new MagneticField(Float.intBitsToFloat(0x3936d86f), Float.intBitsToFloat(0xb90c60cc), Float.intBitsToFloat(0xb98d64d8))
+            };
 
-        final ArrayList<MagneticField> received = new ArrayList<>();
-        mwBoard.lookupRoute(0).setEnvironment(0, received);
 
-        sendMockResponse(response);
-        MagneticField[] actual = new MagneticField[3];
-        received.toArray(actual);
+            mag.packedMagneticField().addRouteAsync(source -> source.stream((data, env) -> ((ArrayList<MagneticField>) env[0]).add(data.value(MagneticField.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        final ArrayList<MagneticField> received = new ArrayList<>();
+                        mwBoard.lookupRoute(0).setEnvironment(0, received);
 
-        assertArrayEquals(expected, actual);
+                        sendMockResponse(response);
+                        MagneticField[] actual = new MagneticField[3];
+                        received.toArray(actual);
+
+                        assertArrayEquals(expected, actual);
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void subscribe() {
-        byte[] expected = new byte[] {0x15, 0x09, 0x01};
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    public void subscribe() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x15, 0x09, 0x01};
+
+            mag.packedMagneticField().addRouteAsync(source -> source.stream((data, env) -> ((ArrayList<MagneticField>) env[0]).add(data.value(MagneticField.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        assertArrayEquals(expected, junitPlatform.getLastCommand());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void unsubscribe() {
-        byte[] expected = new byte[] {0x15, 0x09, 0x00};
-        mwBoard.lookupRoute(0).unsubscribe(0);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    public void unsubscribe() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x15, 0x09, 0x00};
+
+            mag.packedMagneticField().addRouteAsync(source -> source.stream((data, env) -> ((ArrayList<MagneticField>) env[0]).add(data.value(MagneticField.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        mwBoard.lookupRoute(0).unsubscribe(0);
+                        assertArrayEquals(expected, junitPlatform.getLastCommand());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void enable() {
-        byte[] expected= new byte[] {0x15, 0x02, 0x01, 0x00};
+    public void enable() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x15, 0x02, 0x01, 0x00};
 
-        mag.packedMagneticField().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            mag.packedMagneticField().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void disable() {
-        byte[] expected= new byte[] {0x15, 0x02, 0x00, 0x01};
+    public void disable() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x15, 0x02, 0x00, 0x01};
 
-        mag.packedMagneticField().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            mag.packedMagneticField().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

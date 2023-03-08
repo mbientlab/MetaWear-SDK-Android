@@ -24,12 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Switch;
-
-import bolts.Task;
 
 /**
  * Created by eric on 10/14/16.

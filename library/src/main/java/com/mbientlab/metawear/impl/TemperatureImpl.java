@@ -24,6 +24,9 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.impl.Constant.Module.TEMPERATURE;
+
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.module.Temperature;
@@ -31,10 +34,6 @@ import com.mbientlab.metawear.module.Temperature;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Locale;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.TEMPERATURE;
 
 /**
  * Created by etsai on 9/18/16.

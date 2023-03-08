@@ -24,6 +24,11 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.TIMER;
+
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Timer;
@@ -34,10 +39,6 @@ import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.TIMER;
 
 /**
  * Created by etsai on 9/17/16.
@@ -153,7 +154,7 @@ class TimerImpl extends ModuleImplBase implements Timer {
     Task<DataTypeBase> create(byte[] config) {
         return createTimerTask.execute("Did not received timer id within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(TIMER, TIMER_ENTRY, config)
-        ).onSuccessTask(task -> Task.forResult(new UintData(TIMER, TimerImpl.NOTIFY, task.getResult(), new DataAttributes(new byte[] {}, (byte) 0, (byte) 0, false))));
+        ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> Tasks.forResult(new UintData(TIMER, TimerImpl.NOTIFY, task, new DataAttributes(new byte[] {}, (byte) 0, (byte) 0, false))));
     }
 
     @Override

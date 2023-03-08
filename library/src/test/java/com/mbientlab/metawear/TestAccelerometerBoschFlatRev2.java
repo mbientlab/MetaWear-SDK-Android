@@ -24,10 +24,12 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.MetaWearBoardInfo.MODULE_RESPONSE;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.builder.filter.Passthrough;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -40,9 +42,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 1/13/17.
@@ -63,98 +66,110 @@ public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
 
     private AccelerometerBosch acc;
 
-    public void setup(Class<? extends AccelerometerBosch> accelClass) {
-        try {
-            byte[] original = MODULE_RESPONSE.get(accelClass);
-            byte[] moduleInfo = new byte[original.length];
-            System.arraycopy(original, 0, moduleInfo, 0, moduleInfo.length);
-            moduleInfo[3] = 0x2;
+    public Task<Void> setup(Class<? extends AccelerometerBosch> accelClass) {
+        byte[] original = MODULE_RESPONSE.get(accelClass);
+        byte[] moduleInfo = new byte[original.length];
+        System.arraycopy(original, 0, moduleInfo, 0, moduleInfo.length);
+        moduleInfo[3] = 0x2;
 
-            junitPlatform.addCustomModuleInfo(moduleInfo);
-            connectToBoard();
-
+        junitPlatform.addCustomModuleInfo(moduleInfo);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             acc = mwBoard.getModule(AccelerometerBosch.class);
-        } catch (Exception e) {
-            fail(e);
-        }
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void response(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final byte[][] responses = new byte[][] {
-                {0x03, 0x14, 0x07},
-                {0x03, 0x14, 0x03}
-        };
-        final Capture<boolean[]> actual = new Capture<>();
+    public void response(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final byte[][] responses = new byte[][] {
+                    {0x03, 0x14, 0x07},
+                    {0x03, 0x14, 0x03}
+            };
+            final Capture<boolean[]> actual = new Capture<>();
 
-        actual.set(new boolean[2]);
-        acc.flat().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Boolean.class);
-                i++;
-            }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
+            actual.set(new boolean[2]);
+            acc.flat().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Boolean.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
 
-        assertArrayEquals(EXPECTED, actual.get());
+                assertArrayEquals(EXPECTED, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void dataProcessorResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
-        setup(accelClass);
-        final byte[][] responses = new byte[][] {
-                {0x09, 0x03, 0x00, 0x07},
-                {0x09, 0x03, 0x00, 0x03}
-        };
-        final Capture<boolean[]> actual = new Capture<>();
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final byte[][] responses = new byte[][] {
+                    {0x09, 0x03, 0x00, 0x07},
+                    {0x09, 0x03, 0x00, 0x03}
+            };
+            final Capture<boolean[]> actual = new Capture<>();
 
-        actual.set(new boolean[2]);
-        acc.flat().addRouteAsync(source -> source.limit(Passthrough.ALL, (short) 0).stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Boolean.class);
-                i++;
-            }
-        })).waitForCompletion();
+            actual.set(new boolean[2]);
+            acc.flat().addRouteAsync(source -> source.limit(Passthrough.ALL, (short) 0).stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Boolean.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
 
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
-
-        assertArrayEquals(EXPECTED, actual.get());
+                assertArrayEquals(EXPECTED, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void logResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
-        setup(accelClass);
-        final byte[] responses = new byte[] {
-                0x0b, 0x07,
-                (byte) 0xe0, (byte) 0x95, (byte) 0x99, (byte) 0x88, 0x00, 0x07, 0x00, 0x00, 0x00,
-                (byte) 0xe0, (byte) 0x81, (byte) 0xa3, (byte) 0x88, 0x00, 0x03, 0x00, 0x00, 0x00
-        };
-        final Capture<boolean[]> actual = new Capture<>();
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final byte[] responses = new byte[] {
+                    0x0b, 0x07,
+                    (byte) 0xe0, (byte) 0x95, (byte) 0x99, (byte) 0x88, 0x00, 0x07, 0x00, 0x00, 0x00,
+                    (byte) 0xe0, (byte) 0x81, (byte) 0xa3, (byte) 0x88, 0x00, 0x03, 0x00, 0x00, 0x00
+            };
+            final Capture<boolean[]> actual = new Capture<>();
 
-        actual.set(new boolean[2]);
-        acc.flat().addRouteAsync(source -> source.log(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Boolean.class);
-                i++;
-            }
-        })).waitForCompletion();
+            actual.set(new boolean[2]);
+            acc.flat().addRouteAsync(source -> source.log(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Boolean.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                sendMockResponse(responses);
 
-        sendMockResponse(responses);
-
-        assertArrayEquals(EXPECTED, actual.get());
+                assertArrayEquals(EXPECTED, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

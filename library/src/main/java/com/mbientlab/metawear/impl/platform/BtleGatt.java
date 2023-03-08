@@ -24,9 +24,9 @@
 
 package com.mbientlab.metawear.impl.platform;
 
-import java.util.UUID;
+import com.google.android.gms.tasks.Task;
 
-import bolts.Task;
+import java.util.UUID;
 
 /**
  * Bluetooth GATT operations used by the API, must be implemented by the target platform

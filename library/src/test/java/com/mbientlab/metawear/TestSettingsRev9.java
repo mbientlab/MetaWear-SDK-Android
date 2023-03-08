@@ -24,12 +24,17 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Settings;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by lkasso on 04/01/2021.
@@ -38,27 +43,38 @@ import org.junit.jupiter.api.Test;
 public class TestSettingsRev9 extends UnitTestBase {
     private Settings settings;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[]{0x11, (byte) 0x80, 0x00, 0x09, 0x07, 0x00});
-        connectToBoard();
-
-        settings = mwBoard.getModule(Settings.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            settings = mwBoard.getModule(Settings.class);
+        });
     }
 
     @Test
-    public void enable3VRegulator() {
-        byte[] expected = new byte[]{0x11, (byte) 0x1c, 0x01};
+    public void enable3VRegulator() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[]{0x11, (byte) 0x1c, 0x01};
 
-        settings.enable3VRegulator(true);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            settings.enable3VRegulator(true);
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void disable3VRegulator() {
-        byte[] expected = new byte[]{0x11, (byte) 0x1c, 0x00};
+    public void disable3VRegulator() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[]{0x11, (byte) 0x1c, 0x00};
 
-        settings.enable3VRegulator(false);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            settings.enable3VRegulator(false);
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

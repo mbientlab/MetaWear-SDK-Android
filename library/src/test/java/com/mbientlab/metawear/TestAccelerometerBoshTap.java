@@ -24,11 +24,13 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.data.Sign.NEGATIVE;
 import static com.mbientlab.metawear.data.Sign.POSITIVE;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.TapType;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -44,9 +46,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 12/19/16.
@@ -62,156 +65,194 @@ public class TestAccelerometerBoshTap extends UnitTestBase {
 
     private AccelerometerBosch boschAcc;
 
-    public void setup(Class<? extends AccelerometerBosch> accelClass) {
-        try {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-            connectToBoard();
-
+    public Task<Void> setup(Class<? extends AccelerometerBosch> accelClass) {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             boschAcc = mwBoard.getModule(AccelerometerBosch.class);
-        } catch(Exception e) {
-            fail(e);
-        }
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureSingle(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x0d, 0x04, 0x04};
+    public void configureSingle(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x0d, 0x04, 0x04};
 
-        boschAcc.configure()
-                .range(16f)
-                .commit();
-        boschAcc.tap().configure()
-                .threshold(2f)
-                .shockTime(TapShockTime.TST_50_MS)
-                .commit();
+            boschAcc.configure()
+                    .range(16f)
+                    .commit();
+            boschAcc.tap().configure()
+                    .threshold(2f)
+                    .shockTime(TapShockTime.TST_50_MS)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startSingle(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x0c, 0x02, 0x00};
+    public void startSingle(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x0c, 0x02, 0x00};
 
-        boschAcc.tap().configure()
-                .enableSingleTap()
-                .commit();
-        boschAcc.tap().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.tap().configure()
+                    .enableSingleTap()
+                    .commit();
+            boschAcc.tap().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stopSingle(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x0c, 0x00, 0x03};
+    public void stopSingle(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x0c, 0x00, 0x03};
 
-        boschAcc.tap().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.tap().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void handleSingleResponse(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final Tap[] expected = new Tap[]{
-                new Tap(TapType.SINGLE, POSITIVE),
-                new Tap(TapType.SINGLE, NEGATIVE)
-        };
-        final byte[][] responses = new byte[][] {
-                {0x03, 0x0e, 0x12},
-                {0x03, 0x0e, 0x32}
-        };
-        final Capture<Tap[]> actual = new Capture<>();
+    public void handleSingleResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final Tap[] expected = new Tap[]{
+                    new Tap(TapType.SINGLE, POSITIVE),
+                    new Tap(TapType.SINGLE, NEGATIVE)
+            };
+            final byte[][] responses = new byte[][] {
+                    {0x03, 0x0e, 0x12},
+                    {0x03, 0x0e, 0x32}
+            };
+            final Capture<Tap[]> actual = new Capture<>();
 
-        actual.set(new Tap[2]);
-        boschAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Tap.class);
-                i++;
-            }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
+            actual.set(new Tap[2]);
+            boschAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Tap.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
 
-        assertArrayEquals(expected, actual.get());
+                assertArrayEquals(expected, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureDouble(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x0d, (byte) 0xc0, 0x04};
+    public void configureDouble(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x0d, (byte) 0xc0, 0x04};
 
-        boschAcc.configure()
-                .range(8f)
-                .commit();
-        boschAcc.tap().configure()
-                .threshold(1f)
-                .doubleTapWindow(DoubleTapWindow.DTW_50_MS)
-                .quietTime(TapQuietTime.TQT_20_MS)
-                .shockTime(TapShockTime.TST_75_MS)
-                .commit();
+            boschAcc.configure()
+                    .range(8f)
+                    .commit();
+            boschAcc.tap().configure()
+                    .threshold(1f)
+                    .doubleTapWindow(DoubleTapWindow.DTW_50_MS)
+                    .quietTime(TapQuietTime.TQT_20_MS)
+                    .shockTime(TapShockTime.TST_75_MS)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startDouble(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x0c, 0x01, 0x00};
+    public void startDouble(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x0c, 0x01, 0x00};
 
-        boschAcc.tap().configure()
-                .enableDoubleTap()
-                .commit();
-        boschAcc.tap().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.tap().configure()
+                    .enableDoubleTap()
+                    .commit();
+            boschAcc.tap().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stoDouble(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x0c, 0x00, 0x03};
+    public void stoDouble(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x0c, 0x00, 0x03};
 
-        boschAcc.tap().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.tap().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void handleDoubleResponse(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final Tap[] expected = new Tap[]{
-                new Tap(TapType.DOUBLE, POSITIVE),
-                new Tap(TapType.DOUBLE, NEGATIVE)
-        };
-        final byte[][] responses = new byte[][] {
-                {0x03, 0x0e, 0x11},
-                {0x03, 0x0e, 0x31}
-        };
-        final Capture<Tap[]> actual = new Capture<>();
+    public void handleDoubleResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final Tap[] expected = new Tap[]{
+                    new Tap(TapType.DOUBLE, POSITIVE),
+                    new Tap(TapType.DOUBLE, NEGATIVE)
+            };
+            final byte[][] responses = new byte[][] {
+                    {0x03, 0x0e, 0x11},
+                    {0x03, 0x0e, 0x31}
+            };
+            final Capture<Tap[]> actual = new Capture<>();
 
-        actual.set(new Tap[2]);
-        boschAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Tap.class);
-                i++;
-            }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
+            actual.set(new Tap[2]);
+            boschAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Tap.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
 
-        assertArrayEquals(expected, actual.get());
+                assertArrayEquals(expected, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -24,15 +24,20 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.module.Debug;
 import com.mbientlab.metawear.module.Switch;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 12/14/16.
@@ -40,56 +45,91 @@ import org.junit.jupiter.api.Test;
 public class TestDebugRoute extends UnitTestBase {
     private Debug debug;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class, Debug.class);
-        connectToBoard();
-
-        debug= mwBoard.getModule(Debug.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug = mwBoard.getModule(Debug.class);
+        });
     }
 
     @Test
     public void reset() throws InterruptedException {
-        debug.resetAsync();
-        assertFalse(mwBoard.isConnected());
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug.resetAsync();
+            assertFalse(mwBoard.isConnected());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void resetRoute() throws InterruptedException {
-        mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
-                source.filter(Comparison.EQ, 1).react(token -> debug.resetAsync())
-        ).waitForCompletion();
-
-        assertTrue(mwBoard.isConnected());
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
+                    source.filter(Comparison.EQ, 1).react(token -> debug.resetAsync())
+            ).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                assertTrue(mwBoard.isConnected());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void jumpToBootloader() throws InterruptedException {
-        debug.jumpToBootloaderAsync();
-        assertFalse(mwBoard.isConnected());
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug.jumpToBootloaderAsync();
+            assertFalse(mwBoard.isConnected());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void jumpToBootloaderRoute() throws InterruptedException {
-        mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
-                source.filter(Comparison.EQ, 1).react(token -> debug.jumpToBootloaderAsync())
-        ).waitForCompletion();
-
-        assertTrue(mwBoard.isConnected());
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
+                    source.filter(Comparison.EQ, 1).react(token -> debug.jumpToBootloaderAsync())
+            ).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                assertTrue(mwBoard.isConnected());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void disconnect() throws InterruptedException {
-        debug.disconnectAsync();
-        assertFalse(mwBoard.isConnected());
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug.disconnectAsync();
+            assertFalse(mwBoard.isConnected());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void disconnectRoute() throws InterruptedException {
-        mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
-                source.filter(Comparison.EQ, 1).react(token -> debug.disconnectAsync())
-        ).waitForCompletion();
-
-        assertTrue(mwBoard.isConnected());
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mwBoard.getModule(Switch.class).state().addRouteAsync(source ->
+                    source.filter(Comparison.EQ, 1).react(token -> debug.disconnectAsync())
+            ).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                assertTrue(mwBoard.isConnected());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -28,6 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Temperature.Sensor;
 
@@ -39,7 +41,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 /**
  * Created by etsai on 10/2/16.
  */
@@ -53,38 +54,39 @@ public class TestTemperatureMwrData extends UnitTestBase {
 
     private Sensor currentSrc;
 
-    public void setup(int sourceIdx) {
+    public Task<Void> setup(int sourceIdx) {
         try {
             junitPlatform.addCustomModuleInfo(new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x01});
-            connectToBoard();
-
-            currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx];
+            return connectToBoardNew().addOnSuccessListener(ignored -> currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx]);
         } catch (Exception e) {
             fail(e);
+            return Tasks.forException(e);
         }
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void read(int sourceIdx) {
-        setup(sourceIdx);
-        byte[] expected= new byte[] {0x4, (byte) 0x81, (byte) sourceIdx};
+        setup(sourceIdx).addOnSuccessListener(ignored -> {
+            byte[] expected= new byte[] {0x4, (byte) 0x81, (byte) sourceIdx};
 
-        currentSrc.addRouteAsync(source -> source.stream(null));
-        currentSrc.read();
+            currentSrc.addRouteAsync(source -> source.stream(null));
+            currentSrc.read();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void readSilent(int sourceIdx) {
-        setup(sourceIdx);
-        byte[] expected= new byte[] {0x4, (byte) 0xc1, (byte) sourceIdx};
+        setup(sourceIdx).addOnSuccessListener(ignored -> {
+            byte[] expected= new byte[] {0x4, (byte) 0xc1, (byte) sourceIdx};
 
-        currentSrc.read();
+            currentSrc.read();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     private static final byte[][] RESPONSES = new byte[][] {
@@ -96,15 +98,16 @@ public class TestTemperatureMwrData extends UnitTestBase {
     @ParameterizedTest
     @MethodSource("data")
     public void interpretData(int sourceIdx) {
-        setup(sourceIdx);
-        final Capture<Float> actual= new Capture<>();
+        setup(sourceIdx).addOnSuccessListener(ignored -> {
+            final Capture<Float> actual = new Capture<>();
 
-        currentSrc.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(task -> {
-            task.getResult().setEnvironment(0, actual);
-            return null;
+            currentSrc.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(task -> {
+                task.getResult().setEnvironment(0, actual);
+                return null;
+            });
+            sendMockResponse(RESPONSES[sourceIdx]);
+
+            assertEquals(EXPECTED[sourceIdx], actual.get(), 0.00000001f);
         });
-        sendMockResponse(RESPONSES[sourceIdx]);
-
-        assertEquals(EXPECTED[sourceIdx], actual.get(), 0.00000001f);
     }
 }

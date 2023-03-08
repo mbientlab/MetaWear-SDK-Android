@@ -24,6 +24,10 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static org.junit.jupiter.api.Assertions.fail;
+
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Gyro;
@@ -31,7 +35,6 @@ import com.mbientlab.metawear.module.Logging;
 
 import org.json.JSONArray;
 import org.json.JSONException;
-import org.junit.jupiter.api.BeforeEach;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -84,22 +87,26 @@ abstract class TestLogDataBase extends UnitTestBase {
 
     protected abstract String logDataFilename();
 
-    @BeforeEach
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, Logging.class);
-        connectToBoard();
+    public Task<Void> setup() {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, Logging.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            downloadResponses = new ArrayList<>();
+            BufferedReader br= null;
+            try {
+                br = new BufferedReader(new FileReader(new File(rootPath, logDataFilename())));
+                String line;
+                while((line= br.readLine()) != null) {
+                    JSONArray array= new JSONArray(line);
+                    byte[] rawBytes= new byte[array.length()];
+                    for(int i= 0; i < array.length(); i++) {
+                        rawBytes[i]= (byte) array.getInt(i);
+                    }
 
-        downloadResponses= new ArrayList<>();
-        BufferedReader br= new BufferedReader(new FileReader(new File(rootPath, logDataFilename())));
-        String line;
-        while((line= br.readLine()) != null) {
-            JSONArray array= new JSONArray(line);
-            byte[] rawBytes= new byte[array.length()];
-            for(int i= 0; i < array.length(); i++) {
-                rawBytes[i]= (byte) array.getInt(i);
+                    downloadResponses.add(rawBytes);
+                }
+            } catch (JSONException | IOException e) {
+                fail(e);
             }
-
-            downloadResponses.add(rawBytes);
-        }
+        });
     }
 }

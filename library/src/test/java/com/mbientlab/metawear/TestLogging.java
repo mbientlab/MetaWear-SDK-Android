@@ -24,16 +24,20 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Logging;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -42,61 +46,90 @@ import java.util.concurrent.TimeoutException;
 public class TestLogging extends UnitTestBase {
     private Logging logging;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
-        connectToBoard();
-
-        logging= mwBoard.getModule(Logging.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            logging = mwBoard.getModule(Logging.class);
+        });
     }
 
     @Test
-    public void startOverwrite() {
+    public void startOverwrite() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[][] expected= new byte[][]{
                 {0x0b, 0x0b, 0x01},
                 {0x0b, 0x01, 0x01}
         };
 
-        logging.start(true);
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            logging.start(true);
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void startNoOverwrite() {
+    public void startNoOverwrite() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[][] expected= new byte[][]{
                 {0x0b, 0x0b, 0x00},
                 {0x0b, 0x01, 0x01}
         };
 
-        logging.start(false);
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            logging.start(false);
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void stop() {
+    public void stop() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected= new byte[] {0x0b, 0x01, 0x00};
 
-        logging.stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            logging.stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void clearEntries() {
+    public void clearEntries() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected= new byte[] {0x0b, 0x09, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff};
 
-        logging.clearEntries();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            logging.clearEntries();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     public void timeoutHandler() throws Exception {
-        final Exception[] actual= new Exception[1];
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        final Exception[] actual = new Exception[1];
 
-        junitPlatform.maxLoggers= 0;
-        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.log(null)).continueWith(task -> {
-            actual[0]= task.getError();
-            return null;
-        }).waitForCompletion();
-
-        assertInstanceOf(TimeoutException.class, actual[0]);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            junitPlatform.maxLoggers = 0;
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.log(null)).continueWith(IMMEDIATE_EXECUTOR, task2 -> {
+                actual[0]= task2.getException();
+                return null;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                assertInstanceOf(TimeoutException.class, actual[0]);
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

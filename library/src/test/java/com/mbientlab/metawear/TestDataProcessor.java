@@ -24,10 +24,13 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.Passthrough;
@@ -53,34 +56,41 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
-import bolts.Capture;
-import bolts.Task;
 
 /**
  * Created by etsai on 9/5/16.
  */
 public class TestDataProcessor {
     static class TestBase extends UnitTestBase {
-        @BeforeEach
-        public void setup() throws Exception {
-            junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, Gyro.class, Temperature.class);
-            junitPlatform.firmware= "1.2.5";
-            connectToBoard();
+        public Task<Void> setup() {
+            junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, Gyro.class, Temperature.class);
+            junitPlatform.firmware = "1.2.5";
+            return connectToBoardNew();
         }
     }
 
     public static class TestRms extends TestBase {
         @Test
         public void createLog() throws InterruptedException {
-            byte[][] expected= new byte[][] {
+            CountDownLatch doneSignal = new CountDownLatch(1);
+            byte[][] expected = new byte[][] {
                     {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x07, (byte) 0xa5, 0x00},
                     {0x0b, 0x02, 0x09, 0x03, 0x00, 0x20}
             };
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function1.RMS).log(null)).waitForCompletion();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        mwBoard.getModule(Accelerometer.class).acceleration()
+                                .addRouteAsync(source -> source.map(Function1.RMS).log(null))
+                                .addOnSuccessListener(IMMEDIATE_EXECUTOR, result -> {
+                                    assertArrayEquals(expected, junitPlatform.getCommands());
+                                    doneSignal.countDown();
+                        });
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
     }
 
@@ -92,9 +102,13 @@ public class TestDataProcessor {
                     {0x0b, 0x02, 0x09, 0x03, 0x00, 0x40}
             };
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function2.RIGHT_SHIFT, 8).log(null)).waitForCompletion();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.getModule(Accelerometer.class).acceleration()
+                        .addRouteAsync(source -> source.map(Function2.RIGHT_SHIFT, 8).log(null))
+                        .addOnSuccessListener(result -> {
+                            assertArrayEquals(expected, junitPlatform.getCommands());
+                        });
+            });
         }
 
         @Test
@@ -102,15 +116,17 @@ public class TestDataProcessor {
             float[] expected = new float[] {1.969f, 0.812f, 0.984f};
             final float[] actual = new float[3];
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function2.RIGHT_SHIFT, 8).stream((data, env) -> {
-                byte[] bytes = data.bytes();
-                for(int i = 0; i < bytes.length; i++) {
-                    actual[i] = (bytes[i] << 8) / data.scale();
-                }
-            })).waitForCompletion();
-
-            sendMockResponse(new byte[] {0x09, 0x03, 0x00, 126, 52, 63});
-            assertArrayEquals(expected, actual, 0.001f);
+            setup().addOnSuccessListener(ignored -> {
+                        mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function2.RIGHT_SHIFT, 8).stream((data, env) -> {
+                            byte[] bytes = data.bytes();
+                            for(int i = 0; i < bytes.length; i++) {
+                                actual[i] = (bytes[i] << 8) / data.scale();
+                            }
+                        })).addOnSuccessListener(result -> {
+                            sendMockResponse(new byte[] {0x09, 0x03, 0x00, 126, 52, 63});
+                            assertArrayEquals(expected, actual, 0.001f);
+                        });
+            });
         }
     }
 
@@ -119,32 +135,34 @@ public class TestDataProcessor {
         public void setSum() throws InterruptedException {
             byte[] expected = new byte[] {0x09, 0x04, 0x01, 0x00, 0x00, 0x71, 0x02};
 
-            mwBoard.getModule(Accelerometer.class).configure()
-                    .range(16f)
-                    .odr(100f)
-                    .commit();
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
-                    source.map(Function1.RMS).accumulate().name("rms_acc")
-            ).waitForCompletion();
-
-            mwBoard.getModule(DataProcessor.class).edit("rms_acc", DataProcessor.AccumulatorEditor.class).set(20000f);
-            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            setup().addOnSuccessListener(ignored -> {
+                mwBoard.getModule(Accelerometer.class).configure()
+                        .range(16f)
+                        .odr(100f)
+                        .commit();
+                mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
+                        source.map(Function1.RMS).accumulate().name("rms_acc")
+                ).addOnSuccessListener(result -> {
+                    mwBoard.getModule(DataProcessor.class).edit("rms_acc", DataProcessor.AccumulatorEditor.class).set(20000f);
+                    assertArrayEquals(expected, junitPlatform.getLastCommand());
+                });
+            });
         }
     }
 
     public static class TestFreefall extends TestBase {
         @BeforeEach
-        public void setup() throws Exception {
+        public Task<Void> setup() {
             junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
-            super.setup();
-
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
-                    source.map(Function1.RSS).lowpass((byte) 4).filter(ThresholdOutput.BINARY, 0.5f)
-                        .multicast()
-                            .to().filter(Comparison.EQ, -1).log(null)
-                            .to().filter(Comparison.EQ, 1).log(null)
-                        .end()
-            ).waitForCompletion();
+            return super.setup().addOnSuccessListener(ignored -> {
+                mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
+                        source.map(Function1.RSS).lowpass((byte) 4).filter(ThresholdOutput.BINARY, 0.5f)
+                                .multicast()
+                                .to().filter(Comparison.EQ, -1).log(null)
+                                .to().filter(Comparison.EQ, 1).log(null)
+                                .end()
+                );
+            });
         }
 
         @Test
@@ -159,13 +177,15 @@ public class TestDataProcessor {
                     {0x0b, 0x02, 0x09, 0x03, 0x04, 0x00},
             };
 
-            assertArrayEquals(expected, junitPlatform.getCommands());
+            setup().addOnSuccessListener(ignored -> assertArrayEquals(expected, junitPlatform.getCommands()));
         }
 
         @Test
         public void checkIdentifier() {
-            assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=3", mwBoard.lookupRoute(0).generateIdentifier(0));
-            assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=4", mwBoard.lookupRoute(0).generateIdentifier(1));
+            setup().addOnSuccessListener(ignored -> {
+                assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=3", mwBoard.lookupRoute(0).generateIdentifier(0));
+                assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=4", mwBoard.lookupRoute(0).generateIdentifier(1));
+            });
         }
     }
 
@@ -185,9 +205,11 @@ public class TestDataProcessor {
                     {0x0a, 0x03, 0x01}
             };
 
-            RouteCreator.createLedController(mwBoard).waitForCompletion();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                RouteCreator.createLedController(mwBoard).addOnSuccessListener(ignored2 -> {
+                    assertArrayEquals(expected, junitPlatform.getCommands());
+                });
+            });
         }
     }
 
@@ -218,7 +240,7 @@ public class TestDataProcessor {
                     .to()
                         .map(Function2.ADD, 273.15f)
                         .stream(null)
-            ).waitForCompletion();
+            ).getResult();
             thermometer.read();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
@@ -231,7 +253,7 @@ public class TestDataProcessor {
             byte[] expected = new byte[] {0x9, 0x2, 0x4, (byte) 0xc1, 0x1, 0x20, 0x10, 0x1, 0x3};
             final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.PRESET_THERMISTOR)[0];
 
-            thermometer.addRouteAsync(source -> source.pack((byte) 4)).waitForCompletion();
+            thermometer.addRouteAsync(source -> source.pack((byte) 4)).getResult();
 
             assertArrayEquals(expected, junitPlatform.getLastCommand());
         }
@@ -248,7 +270,7 @@ public class TestDataProcessor {
                 public void apply(Data data, Object... env) {
                     actual[i++] = data.value(Float.class);
                 }
-            })).waitForCompletion();
+            })).getResult();
 
             byte[] response = new byte[] {0x09, 0x03, 0x00, (byte) 0xf5, 0x00, (byte) 0xf1, 0x00, (byte) 0xf2, 0x00, (byte) 0xf2, 0x00};
             sendMockResponse(response);
@@ -259,9 +281,9 @@ public class TestDataProcessor {
         @Test
         public void countTooHigh() throws Exception {
             Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 5));
-            task.waitForCompletion();
+            task.getResult();
 
-            assertInstanceOf(IllegalRouteOperationException.class, task.getError());
+            assertInstanceOf(IllegalRouteOperationException.class, task.getException());
         }
     }
 
@@ -270,7 +292,7 @@ public class TestDataProcessor {
         public void createTempAccounter() throws InterruptedException {
             byte[] expected = new byte[] {0x9, 0x2, 0x3, 0x4, (byte) 0xff, (byte) 0xa0, 0x11, 0x31, 0x3};
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(RouteComponent::account).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(RouteComponent::account).getResult();
 
             assertArrayEquals(expected, junitPlatform.getLastCommand());
         }
@@ -280,7 +302,7 @@ public class TestDataProcessor {
             final Acceleration expected = new Acceleration(Float.intBitsToFloat(0x3c410000), Float.intBitsToFloat(0x3f12c400), Float.intBitsToFloat(0xbf4b9c00));
             final Capture<Acceleration> actual = new Capture<>();
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream((Subscriber) (data, env) -> actual.set(data.value(Acceleration.class)))).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream((Subscriber) (data, env) -> actual.set(data.value(Acceleration.class)))).getResult();
 
             byte[] response = new byte[] {0x09, 0x03, 0x00, (byte) 0xa6, 0x33, 0x0d, 0x00, (byte) 0xc1, 0x00, (byte) 0xb1, 0x24, 0x19, (byte) 0xcd};
             sendMockResponse(response);
@@ -307,7 +329,7 @@ public class TestDataProcessor {
             final long[] actual = new long[5];
 
             Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor));
-            task.waitForCompletion();
+            task.getResult();
             task.getResult().setEnvironment(0, (Object) actual);
 
             byte[][] responses = {
@@ -331,7 +353,7 @@ public class TestDataProcessor {
             final long[] actual = new long[5];
 
             Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor));
-            task.waitForCompletion();
+            task.getResult();
             task.getResult().setEnvironment(0, (Object) actual);
 
             byte[][] responses = {
@@ -352,9 +374,9 @@ public class TestDataProcessor {
         @Test
         public void noSpace() throws Exception {
             Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 4).account());
-            task.waitForCompletion();
+            task.getResult();
 
-            assertInstanceOf(IllegalRouteOperationException.class, task.getError());
+            assertInstanceOf(IllegalRouteOperationException.class, task.getException());
         }
 
         @Test
@@ -365,7 +387,7 @@ public class TestDataProcessor {
 
             mwBoard.getModule(Accelerometer.class).acceleration()
                     .addRouteAsync(source -> source.account(RouteComponent.AccountType.COUNT))
-                    .waitForCompletion();
+                    .getResult();
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
 
@@ -378,7 +400,7 @@ public class TestDataProcessor {
                     .addRouteAsync(source -> source.account(RouteComponent.AccountType.COUNT).stream(
                             (data, env) -> actual.set(data.extra(Long.class)))
                     )
-                    .waitForCompletion();
+                    .getResult();
             sendMockResponse(new byte[] { 0x09, 0x03, 0x00, (byte) 0xec, 0x01, 0x00, 0x00, 0x01, 0x0b, (byte) 0x9a, 0x07, 0x40, 0x40 });
 
             assertEquals(expected, actual.get().longValue());
@@ -397,10 +419,10 @@ public class TestDataProcessor {
                             source.account().stream(null)
                     )
             );
-            routeTask.waitForCompletion();
+            routeTask.getResult();
 
-            if (routeTask.getError() != null) {
-                throw routeTask.getError();
+            if (routeTask.getException() != null) {
+                throw routeTask.getException();
             }
 
             final Capture<Long> prev = new Capture<>(null);
@@ -428,11 +450,12 @@ public class TestDataProcessor {
 
     public static class TestAccounterPackerChain extends TestBase {
         @BeforeEach
-        public void setup() throws Exception {
+        public Task<Void> setup() {
             super.setup();
 
             final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.PRESET_THERMISTOR)[0];
-            thermometer.addRouteAsync(source -> source.account().pack((byte) 2).stream(null)).waitForCompletion();
+            thermometer.addRouteAsync(source -> source.account().pack((byte) 2).stream(null)).getResult();
+            return null;
         }
 
         @Test
@@ -440,7 +463,7 @@ public class TestDataProcessor {
             Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(
                 source -> source.pack((byte) 2).account(RouteComponent.AccountType.COUNT).stream(null)
             );
-            task.waitForCompletion();
+            task.getResult();
 
             System.out.println("temperature[0]".split("[:|\\[]")[0]);
             System.out.println(task.getResult().generateIdentifier(0));
@@ -509,11 +532,12 @@ public class TestDataProcessor {
 
     public static class TestPackerAccounterChain extends TestBase {
         @BeforeEach
-        public void setup() throws Exception {
+        public Task<Void> setup() {
             super.setup();
 
             final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.PRESET_THERMISTOR)[0];
-            thermometer.addRouteAsync(source -> source.pack((byte) 4).account().stream(null)).waitForCompletion();
+            thermometer.addRouteAsync(source -> source.pack((byte) 4).account().stream(null)).getResult();
+            return null;
         }
 
         @Test
@@ -586,7 +610,7 @@ public class TestDataProcessor {
             byte[][] expected = new byte[][] {
                     {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x03, 0x25, 0x04, 0x02}
             };
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.highpass((byte) 4)).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.highpass((byte) 4)).getResult();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
@@ -595,7 +619,7 @@ public class TestDataProcessor {
         public void accHpfData() throws InterruptedException {
             Acceleration expected = new Acceleration(Float.intBitsToFloat(0xba880000), Float.intBitsToFloat(0x3b240000), Float.intBitsToFloat(0x3ab00000));
             final Capture<Acceleration> actual = new Capture<>();
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.highpass((byte) 4).stream((Subscriber) (data, env) -> actual.set(data.value(Acceleration.class)))).waitForCompletion();
+            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.highpass((byte) 4).stream((Subscriber) (data, env) -> actual.set(data.value(Acceleration.class)))).getResult();
 
             sendMockResponse(new byte[] {0x09, 0x03, 0x00, (byte) 0xef, (byte) 0xff, 0x29, 0x00, 0x16, 0x00});
             assertEquals(expected, actual.get());
@@ -621,7 +645,7 @@ public class TestDataProcessor {
             }).continueWith(task -> {
                 bufferStateRoute= task.getResult();
                 return null;
-            }).waitForCompletion();
+            }).getResult();
         }
 
         @Test
@@ -698,12 +722,12 @@ public class TestDataProcessor {
             AccelerometerBmi160 accelerometer = mwBoard.getModule(AccelerometerBmi160.class);
             accelerometer.acceleration().addRouteAsync(source ->
                     source.delay(samples).limit(Passthrough.COUNT, (short) 0).name("history")
-            ).waitForCompletion();
+            ).getResult();
 
             final DataProcessor dataprocessor = mwBoard.getModule(DataProcessor.class);
             accelerometer.lowHigh().addRouteAsync(source ->
                     source.react(token -> dataprocessor.edit("history", PassthroughEditor.class).set((short) (samples * 2)))
-            ).waitForCompletion();
+            ).getResult();
 
             assertArrayEquals(expected, junitPlatform.getCommands());
         }
@@ -711,7 +735,7 @@ public class TestDataProcessor {
 
     public static class TestFuser extends TestBase {
         @BeforeEach
-        public void setup() throws Exception {
+        public Task<Void> setup() {
             super.setup();
 
             final Accelerometer acc = mwBoard.getModule(Accelerometer.class);
@@ -722,14 +746,15 @@ public class TestDataProcessor {
             ).onSuccessTask(ignored ->acc.acceleration().addRouteAsync(source ->
                     source.fuse("gyro-buffer").limit(20).stream(null)
             ));
-            task.waitForCompletion();
+            task.getResult();
 
-            if (task.isFaulted()) {
-                throw task.getError();
+            if (!task.isSuccessful()) {
+                fail(task.getException());
             }
-            if (task.isCancelled()) {
+            if (task.isCanceled()) {
                 throw new CancellationException("Task cancelled");
             }
+            return null;
         }
 
         @Test
@@ -767,7 +792,7 @@ public class TestDataProcessor {
             ).onSuccessTask(ignored ->acc.acceleration().addRouteAsync(source ->
                     source.stream((data, env) -> rawAccData.set(data.value(Acceleration.class)))
             ));
-            task.waitForCompletion();
+            task.getResult();
 
             sendMockResponse(new byte[] {0x09, 0x03, 0x02, (byte) 0xf4, 0x0d, 0x3c, 0x39, (byte) 0x99, 0x11, 0x01, (byte) 0x80, (byte) 0xd6, (byte) 0x91, (byte) 0xd3, 0x67});
             sendMockResponse(new byte[] {0x03, 0x04, (byte) 0xf4, 0x0d, 0x3c, 0x39, (byte) 0x99, 0x11});

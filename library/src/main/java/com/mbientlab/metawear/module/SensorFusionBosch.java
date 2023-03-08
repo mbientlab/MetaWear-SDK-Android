@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.CancellationToken;
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.ConfigEditorBase;
 import com.mbientlab.metawear.Configurable;
@@ -37,9 +39,6 @@ import com.mbientlab.metawear.impl.Util;
 
 import java.util.Arrays;
 import java.util.Locale;
-
-import bolts.CancellationToken;
-import bolts.Task;
 
 /**
  * Algorithm combining accelerometer, gyroscope, and magnetometer data for Bosch sensors.  When using

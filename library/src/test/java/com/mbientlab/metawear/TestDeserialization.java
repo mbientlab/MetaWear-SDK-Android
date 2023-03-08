@@ -26,6 +26,9 @@ package com.mbientlab.metawear;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.TaskCompletionSource;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.module.Timer;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,8 +36,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import bolts.Task;
-import bolts.TaskCompletionSource;
 
 /**
  * Created by etsai on 3/13/17.
@@ -46,12 +47,10 @@ public class TestDeserialization {
             junitPlatform.boardStateSuffix = "i2c_stream";
             try {
                 mwBoard.deserialize();
-                return Task.forResult(mwBoard.lookupRoute(0));
+                return Tasks.forResult(mwBoard.lookupRoute(0));
             } catch (IOException | ClassNotFoundException e) {
-                return Task.forError(e);
+                return Tasks.forException(e);
             }
-
-
         }
     }
 
@@ -66,7 +65,7 @@ public class TestDeserialization {
                 deserializeTask.setResult(mwBoard.lookupRoute((byte) 0));
                 return deserializeTask.getTask();
             } catch (IOException | ClassNotFoundException e) {
-                return Task.forError(e);
+                return Tasks.forException(e);
             }
         }
 
@@ -80,7 +79,7 @@ public class TestDeserialization {
                 deserializeTask.setResult(mwBoard.lookupRoute((byte) 0));
                 return deserializeTask.getTask();
             } catch (IOException | ClassNotFoundException e) {
-                return Task.forError(e);
+                return Tasks.forException(e);
             }
         }
     }
@@ -92,9 +91,9 @@ public class TestDeserialization {
                 junitPlatform.boardStateSuffix = "spi_stream";
                 mwBoard.deserialize();
 
-                return Task.forResult(mwBoard.lookupRoute(0));
+                return Tasks.forResult(mwBoard.lookupRoute(0));
             } catch (IOException | ClassNotFoundException e) {
-                return Task.forError(e);
+                return Tasks.forException(e);
             }
         }
     }
@@ -105,9 +104,9 @@ public class TestDeserialization {
                 junitPlatform.boardStateSuffix = "timer";
                 mwBoard.deserialize();
 
-                return Task.forResult(mwBoard.getModule(Timer.class).lookupScheduledTask((byte) 0));
+                return Tasks.forResult(mwBoard.getModule(Timer.class).lookupScheduledTask((byte) 0));
             } catch (IOException | ClassNotFoundException e) {
-                return Task.forError(e);
+                return Tasks.forException(e);
             }
         }
 
@@ -123,7 +122,7 @@ public class TestDeserialization {
             junitPlatform.boardStateSuffix = "dc_observer";
             mwBoard.deserialize();
 
-            connectToBoard();
+            connectToBoardNew();
         }
 
         @Test

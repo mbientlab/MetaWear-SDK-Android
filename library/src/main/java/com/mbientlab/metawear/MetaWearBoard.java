@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear;
 
+import com.google.android.gms.tasks.Task;
+
 import org.json.JSONObject;
 
 import java.io.File;
@@ -32,8 +34,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.UUID;
-
-import bolts.Task;
 
 /**
  * Object representing a MetaWear board

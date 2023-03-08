@@ -24,14 +24,13 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.impl.Constant.Module.AMBIENT_LIGHT;
+
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.module.AmbientLightLtr329;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.AMBIENT_LIGHT;
 
 /**
  * Created by etsai on 9/20/16.

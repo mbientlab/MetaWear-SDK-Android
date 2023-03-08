@@ -24,18 +24,21 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AmbientLightLtr329;
 import com.mbientlab.metawear.module.AmbientLightLtr329.Gain;
 import com.mbientlab.metawear.module.AmbientLightLtr329.IntegrationTime;
 import com.mbientlab.metawear.module.AmbientLightLtr329.MeasurementRate;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 10/2/16.
@@ -44,33 +47,45 @@ import bolts.Capture;
 public class TestAmbientLightLtr329 extends UnitTestBase {
     private AmbientLightLtr329 alsLtr329;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AmbientLightLtr329.class);
-        connectToBoard();
-
-        alsLtr329= mwBoard.getModule(AmbientLightLtr329.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            alsLtr329 = mwBoard.getModule(AmbientLightLtr329.class);
+        });
     }
 
     @Test
-    public void start() {
+    public void start() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x14, 0x01, 0x01};
 
-        alsLtr329.illuminance().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            alsLtr329.illuminance().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void stop() {
+    public void stop() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x14, 0x01, 0x00};
 
-        alsLtr329.illuminance().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            alsLtr329.illuminance().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void setGain() {
-        byte[][] expected= new byte[][] {
+    public void setGain() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[][] expected = new byte[][] {
                 {0x14, 0x02, 0x00, 0x03},
                 {0x14, 0x02, 0x04, 0x03},
                 {0x14, 0x02, 0x08, 0x03},
@@ -79,17 +94,23 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
                 {0x14, 0x02, 0x1c, 0x03}
         };
 
-        for(Gain it: Gain.values()) {
-            alsLtr329.configure()
-                    .gain(it)
-                    .commit();
-        }
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            for(Gain it: Gain.values()) {
+                alsLtr329.configure()
+                        .gain(it)
+                        .commit();
+            }
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void setIntegrationTime() {
+    public void setIntegrationTime() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[][] expected= new byte[][] {
                 {0x14, 0x02, 0x00, 0x0b},
                 {0x14, 0x02, 0x00, 0x03},
@@ -101,17 +122,23 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
                 {0x14, 0x02, 0x00, 0x1b}
         };
 
-        for(IntegrationTime it: IntegrationTime.values()) {
-            alsLtr329.configure()
-                    .integrationTime(it)
-                    .commit();
-        }
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            for(IntegrationTime it: IntegrationTime.values()) {
+                alsLtr329.configure()
+                        .integrationTime(it)
+                        .commit();
+            }
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void setMeasurementRate() {
+    public void setMeasurementRate() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[][] expected= new byte[][] {
                 {0x14, 0x02, 0x00, 0x00},
                 {0x14, 0x02, 0x00, 0x01},
@@ -121,40 +148,56 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
                 {0x14, 0x02, 0x00, 0x05}
         };
 
-        for(MeasurementRate it: MeasurementRate.values()) {
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            for(MeasurementRate it: MeasurementRate.values()) {
+                alsLtr329.configure()
+                        .measurementRate(it)
+                        .commit();
+            }
+
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
+
+    @Test
+    public void setAll() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {0x14, 0x02, 0x0c, 0x28};
+
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             alsLtr329.configure()
-                    .measurementRate(it)
+                    .gain(Gain.LTR329_8X)
+                    .integrationTime(IntegrationTime.LTR329_TIME_250MS)
+                    .measurementRate(MeasurementRate.LTR329_RATE_50MS)
                     .commit();
-        }
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void setAll() {
-        byte[] expected= new byte[] {0x14, 0x02, 0x0c, 0x28};
-
-        alsLtr329.configure()
-                .gain(Gain.LTR329_8X)
-                .integrationTime(IntegrationTime.LTR329_TIME_250MS)
-                .measurementRate(MeasurementRate.LTR329_RATE_50MS)
-                .commit();
-
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
-    }
-
-    @Test
-    public void handleData() {
+    public void handleData() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         float expected = 11571.949f;
         final Capture<Float> actual = new Capture<>();
 
-        alsLtr329.illuminance().addRouteAsync(source -> source.stream((data, env) -> actual.set(data.value(Float.class))))
-                .continueWith(task -> {
-                    alsLtr329.illuminance().start();
-                    return null;
-                });
-        sendMockResponse(new byte[] {0x14, 0x03, (byte) 0xed, (byte) 0x92, (byte) 0xb0, 0x00});
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            alsLtr329.illuminance().addRouteAsync(source -> source.stream((data, env) -> actual.set(data.value(Float.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        alsLtr329.illuminance().start();
+                        sendMockResponse(new byte[] {0x14, 0x03, (byte) 0xed, (byte) 0x92, (byte) 0xb0, 0x00});
 
-        assertEquals(expected, actual.get(), 0.001f);
+                        assertEquals(expected, actual.get(), 0.001f);
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

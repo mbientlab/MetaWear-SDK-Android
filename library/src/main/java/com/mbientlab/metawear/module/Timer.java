@@ -24,10 +24,9 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.MetaWearBoard.Module;
-
-import bolts.Task;
 
 /**
  * On-board scheduler for executing MetaWear commands in the future

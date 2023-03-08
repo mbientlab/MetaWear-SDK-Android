@@ -1,5 +1,8 @@
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.impl.Constant.Module.GYRO;
+
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
@@ -12,10 +15,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
 import java.util.Locale;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.GYRO;
 
 class GyroBmi160Impl extends GyroImpl implements GyroBmi160 {
     static final byte IMPLEMENTATION= 0;

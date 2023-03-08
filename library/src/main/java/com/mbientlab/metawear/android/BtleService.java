@@ -24,6 +24,8 @@
 
 package com.mbientlab.metawear.android;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+
 import android.app.Service;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -39,7 +41,11 @@ import android.os.IBinder;
 import android.util.Base64;
 import android.util.Log;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.TaskCompletionSource;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.BuildConfig;
+import com.mbientlab.metawear.Capture;
 import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.impl.JseMetaWearBoard;
 import com.mbientlab.metawear.impl.platform.BtleGatt;
@@ -63,12 +69,9 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import bolts.Capture;
-import bolts.Task;
-import bolts.TaskCompletionSource;
 
 /**
  * Created by etsai on 10/9/16.
@@ -106,10 +109,10 @@ public class BtleService extends Service {
         if (!pendingGattOps.isEmpty() && (pendingGattOps.size() == 1 || ready)) {
             GattOp next = pendingGattOps.peek();
             gattOpTask.execute(next.msg, 1000, next.task).continueWith(task -> {
-                if (task.isFaulted()) {
-                    next.taskSource.setError(task.getError());
-                } else if (task.isCancelled()) {
-                    next.taskSource.setCancelled();
+                if (!task.isSuccessful()) {
+                    next.taskSource.setException(task.getException());
+//                } else if (task.isCanceled()) { TODO: Fix me
+//                    next.taskSource.set();
                 } else {
                     next.taskSource.setResult(task.getResult());
                 }
@@ -136,7 +139,7 @@ public class BtleService extends Service {
                         platform.closeGatt();
                         platform.connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onConnectionStateChange status (%s)", status)));
                     } else {
-                        Task.delay(1000).continueWith(ignored -> gatt.discoverServices());
+                        Tasks.withTimeout(Tasks.forResult(gatt.discoverServices()), 1000, TimeUnit.MILLISECONDS);
                     }
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
@@ -222,7 +225,7 @@ public class BtleService extends Service {
             if (!connectTask.isCompleted() && status != 0) {
                 connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onConnectionStateChange status (%s)", status)));
             } else {
-                if (disconnectTaskSrc == null || disconnectTaskSrc.getTask().isCompleted()) {
+                if (disconnectTaskSrc == null || disconnectTaskSrc.getTask().isSuccessful()) {
                     dcHandler.onUnexpectedDisconnect(status);
                 } else {
                     dcHandler.onDisconnect();
@@ -234,12 +237,7 @@ public class BtleService extends Service {
         void gattTaskCompleted() {
             int count = nGattOps.decrementAndGet();
             if (count == 0 && readyToClose.get()) {
-                Task.delay(1000).continueWith(ignored -> {
-                    if (androidBtGatt != null) {
-                        androidBtGatt.disconnect();
-                    }
-                    return null;
-                });
+                androidBtGatt.disconnect();
             }
         }
 
@@ -277,10 +275,8 @@ public class BtleService extends Service {
                     null;
         }
 
-        @Override
-        public Task<File> downloadFileAsync(final String srcUrl, final String dest) {
-            final Capture<HttpURLConnection> urlConn = new Capture<>();
-            return Task.callInBackground(() -> {
+        private Task<File> downloadFileTask(final String srcUrl, final String dest, final Capture<HttpURLConnection> urlConn) {
+            try {
                 URL fileUrl = new URL(srcUrl);
                 urlConn.set((HttpURLConnection) fileUrl.openConnection());
                 InputStream ins = urlConn.get().getInputStream();
@@ -302,14 +298,23 @@ public class BtleService extends Service {
                     }
                     fos.close();
 
-                    return location;
+                    return Tasks.forResult(location);
                 }
-                throw new IOException(String.format("Could not retrieve resource (response = %d, msg = %s)", code, urlConn.get().getResponseMessage()));
-            }).continueWithTask(ignored -> {
+            } catch (IOException exception) {
+                return Tasks.forException(exception);
+            }
+            return Tasks.forException(new IOException("Could not retrieve resource"));
+        }
+
+        @Override
+        public Task<File> downloadFileAsync(final String srcUrl, final String dest) {
+            final Capture<HttpURLConnection> urlConn = new Capture<>();
+            return Tasks.forResult(downloadFileTask(srcUrl, dest, urlConn)
+            ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
                 if (urlConn.get() != null) {
                     urlConn.get().disconnect();
                 }
-                return ignored;
+                return task.getResult();
             });
         }
 
@@ -341,17 +346,17 @@ public class BtleService extends Service {
         @Override
         public Task<Void> writeCharacteristicAsync(final BtleGattCharacteristic characteristic, final WriteType type, final byte[] value) {
             if (androidBtGatt == null) {
-                return Task.forError(new IllegalStateException("Not connected to the BTLE gatt server"));
+                return Tasks.forException(new IllegalStateException("Not connected to the BTLE gatt server"));
             }
 
             final BluetoothGattService service = androidBtGatt.getService(characteristic.serviceUuid);
             if (service == null) {
-                return Task.forError(new IllegalStateException("Service \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
+                return Tasks.forException(new IllegalStateException("Service \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
             final BluetoothGattCharacteristic androidGattChar = service.getCharacteristic(characteristic.uuid);
             if (androidGattChar == null) {
-                return Task.forError(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
+                return Tasks.forException(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
             return addGattOperation(this, "onCharacteristicWrite not called within %dms", () -> {
@@ -362,7 +367,7 @@ public class BtleService extends Service {
                 androidGattChar.setValue(value);
 
                 androidBtGatt.writeCharacteristic(androidGattChar);
-            }).onSuccessTask(task -> Task.<Void>forResult(null));
+            }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> Tasks.<Void>forResult(null));
         }
 
         @Override
@@ -373,30 +378,30 @@ public class BtleService extends Service {
                 tasks.add(readCharacteristicAsync(it));
             }
 
-            return Task.whenAll(tasks).onSuccessTask(task -> {
+            return Tasks.whenAll(tasks).onSuccessTask(task -> {
                 byte[][] valuesArray = new byte[tasks.size()][];
                 for (int i = 0; i < valuesArray.length; i++) {
                     valuesArray[i] = tasks.get(i).getResult();
                 }
 
-                return Task.forResult(valuesArray);
+                return Tasks.forResult(valuesArray);
             });
         }
 
         @Override
         public Task<byte[]> readCharacteristicAsync(final BtleGattCharacteristic characteristic) {
             if (androidBtGatt == null) {
-                return Task.forError(new IllegalStateException("Not connected to the BTLE gatt server"));
+                return Tasks.forException(new IllegalStateException("Not connected to the BTLE gatt server"));
             }
 
             BluetoothGattService service = androidBtGatt.getService(characteristic.serviceUuid);
             if (service == null) {
-                return Task.forError(new IllegalStateException("Service \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
+                return Tasks.forException(new IllegalStateException("Service \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
             final BluetoothGattCharacteristic androidGattChar = service.getCharacteristic(characteristic.uuid);
             if (androidGattChar == null) {
-                return Task.forError(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
+                return Tasks.forException(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
             return addGattOperation(this, "onCharacteristicRead not called within %dms", () -> androidBtGatt.readCharacteristic(androidGattChar));
@@ -404,17 +409,17 @@ public class BtleService extends Service {
 
         private Task<Void> editNotifications(BtleGattCharacteristic characteristic, final NotificationListener listener) {
             if (androidBtGatt == null) {
-                return Task.forError(new IllegalStateException("Not connected to the BTLE gatt server"));
+                return Tasks.forException(new IllegalStateException("Not connected to the BTLE gatt server"));
             }
 
             BluetoothGattService service = androidBtGatt.getService(characteristic.serviceUuid);
             if (service == null) {
-                return Task.forError(new IllegalStateException("Service \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
+                return Tasks.forException(new IllegalStateException("Service \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
             final BluetoothGattCharacteristic androidGattChar = service.getCharacteristic(characteristic.uuid);
             if (androidGattChar == null) {
-                return Task.forError(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
+                return Tasks.forException(new IllegalStateException("Characteristic \'" + characteristic.serviceUuid.toString() + "\' does not exist"));
             }
 
             int charProps = androidGattChar.getProperties();
@@ -426,10 +431,10 @@ public class BtleService extends Service {
                     androidBtGatt.writeDescriptor(descriptor);
                 }).onSuccessTask(ignored -> {
                     notificationListener = listener;
-                    return Task.forResult(null);
+                    return Tasks.forResult(null);
                 });
             }
-            return Task.forError(new IllegalStateException(("Characteristic does not have 'notify property' bit set")));
+            return Tasks.forException(new IllegalStateException(("Characteristic does not have 'notify property' bit set")));
         }
 
         @Override
@@ -441,13 +446,14 @@ public class BtleService extends Service {
         public Task<Void> localDisconnectAsync() {
             Task<Void> task = remoteDisconnectAsync();
 
-            if (!task.isCompleted()) {
+            if (!task.isComplete()) {
                 if (nGattOps.get() > 0) {
                     readyToClose.set(true);
                 } else {
                     if (connectTask.isCompleted()) {
                         androidBtGatt.disconnect();
                     } else {
+                        connectTask.cancel();
                         connectTask.cancel();
                         disconnected(0);
                     }
@@ -459,7 +465,7 @@ public class BtleService extends Service {
         @Override
         public Task<Void> remoteDisconnectAsync() {
             if (androidBtGatt == null) {
-                return Task.forResult(null);
+                return Tasks.forResult(null);
             }
 
             disconnectTaskSrc = new TaskCompletionSource<>();
@@ -469,13 +475,13 @@ public class BtleService extends Service {
         @Override
         public Task<Void> connectAsync() {
             if (androidBtGatt != null) {
-                return Task.forResult(null);
+                return Tasks.forResult(null);
             }
 
             return connectTask.execute("Failed to connect and discover services within %dms", 10000,
                     () -> androidBtGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback)
-            ).continueWithTask(task -> {
-                if (task.isFaulted()) {
+            ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                if (!task.isSuccessful()) {
                     closeGatt();
                 }
                 return task;
@@ -486,8 +492,8 @@ public class BtleService extends Service {
         public Task<Integer> readRssiAsync() {
             return androidBtGatt != null ?
                     addGattOperation(this, "onReadRemoteRssi not called within %dms", () -> androidBtGatt.readRemoteRssi())
-                            .onSuccessTask(task -> Task.forResult(ByteBuffer.wrap(task.getResult()).order(ByteOrder.LITTLE_ENDIAN).getInt(0))) :
-                    Task.forError(new IllegalStateException("No longer connected to the BTLE gatt server"));
+                            .onSuccessTask(IMMEDIATE_EXECUTOR, task -> Tasks.forResult(ByteBuffer.wrap(task).order(ByteOrder.LITTLE_ENDIAN).getInt(0))) :
+                    Tasks.forException(new IllegalStateException("No longer connected to the BTLE gatt server"));
         }
     }
 

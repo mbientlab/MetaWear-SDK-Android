@@ -1,3 +1,5 @@
+//TODO: fix me
+
 ///*
 // * Copyright 2014-2015 MbientLab Inc. All rights reserved.
 // *
@@ -29,11 +31,14 @@
 //import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.M4G;
 //import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.NDOF;
 //
+//import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+//
 //import com.mbientlab.metawear.module.AccelerometerBmi160;
 //import com.mbientlab.metawear.module.Gyro;
 //import com.mbientlab.metawear.module.MagnetometerBmm150;
 //import com.mbientlab.metawear.module.SensorFusionBosch;
 //
+//import org.junit.jupiter.api.Test;
 //import org.junit.jupiter.params.provider.Arguments;
 //
 //import java.lang.reflect.InvocationTargetException;

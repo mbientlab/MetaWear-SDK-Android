@@ -24,20 +24,24 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.module.AccelerometerBmi160.StepDetectorMode.NORMAL;
 import static com.mbientlab.metawear.module.AccelerometerBmi160.StepDetectorMode.ROBUST;
 import static com.mbientlab.metawear.module.AccelerometerBmi160.StepDetectorMode.SENSITIVE;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -59,27 +63,38 @@ public class TestBmi160StepDetectionConfig extends UnitTestBase {
         return parameters.stream();
     }
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        connectToBoard();
+        return connectToBoardNew();
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureDetector(AccelerometerBmi160.StepDetectorMode mode, byte[] expectedCounter, byte[] expectedDetector) {
-        mwBoard.getModule(AccelerometerBmi160.class).stepDetector().configure()
-                .mode(mode)
-                .commit();
-        assertArrayEquals(expectedDetector, junitPlatform.getLastCommand());
+    public void configureDetector(AccelerometerBmi160.StepDetectorMode mode, byte[] expectedCounter, byte[] expectedDetector) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            mwBoard.getModule(AccelerometerBmi160.class).stepDetector().configure()
+                    .mode(mode)
+                    .commit();
+            assertArrayEquals(expectedDetector, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureCounter(AccelerometerBmi160.StepDetectorMode mode, byte[] expectedCounter, byte[] expectedDetector) {
-        mwBoard.getModule(AccelerometerBmi160.class).stepCounter().configure()
-                .mode(mode)
-                .commit();
-        assertArrayEquals(expectedCounter, junitPlatform.getLastCommand());
+    public void configureCounter(AccelerometerBmi160.StepDetectorMode mode, byte[] expectedCounter, byte[] expectedDetector) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            mwBoard.getModule(AccelerometerBmi160.class).stepCounter().configure()
+                    .mode(mode)
+                    .commit();
+            assertArrayEquals(expectedCounter, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

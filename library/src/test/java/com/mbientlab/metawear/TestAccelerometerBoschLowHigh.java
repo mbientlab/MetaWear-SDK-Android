@@ -24,12 +24,13 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.data.Sign.NEGATIVE;
 import static com.mbientlab.metawear.data.Sign.POSITIVE;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
@@ -41,9 +42,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 12/19/16.
@@ -58,161 +60,200 @@ public class TestAccelerometerBoschLowHigh extends UnitTestBase {
 
     private AccelerometerBosch boschAcc;
 
-    public void setup(Class<? extends AccelerometerBosch> accelClass) {
-        try {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-            connectToBoard();
-
+    public Task<Void> setup(Class<? extends AccelerometerBosch> accelClass) {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             boschAcc = mwBoard.getModule(AccelerometerBosch.class);
-        } catch (Exception e) {
-            fail(e);
-        }
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureLow(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
-                new byte[] {0x03, 0x07, 0x07, 0x40, (byte) 0x85, 0x0b, (byte) 0xc0} :
-                new byte[] {0x03, 0x07, 0x09, 0x40, (byte) 0x85, 0x0f, (byte) 0xc0};
+    public void configureLow(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
+                    new byte[] {0x03, 0x07, 0x07, 0x40, (byte) 0x85, 0x0b, (byte) 0xc0} :
+                    new byte[] {0x03, 0x07, 0x09, 0x40, (byte) 0x85, 0x0f, (byte) 0xc0};
 
-        boschAcc.configure()
-                .range(16f)
-                .commit();
-        boschAcc.lowHigh().configure()
-                .enableLowG()
-                .lowThreshold(0.5f)
-                .lowDuration(20)
-                .lowGMode(AccelerometerBosch.LowGMode.SUM)
-                .commit();
+            boschAcc.configure()
+                    .range(16f)
+                    .commit();
+            boschAcc.lowHigh().configure()
+                    .enableLowG()
+                    .lowThreshold(0.5f)
+                    .lowDuration(20)
+                    .lowGMode(AccelerometerBosch.LowGMode.SUM)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startLow(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x06, 0x08, 0x00};
+    public void startLow(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x06, 0x08, 0x00};
 
-        boschAcc.lowHigh().configure()
-                .enableLowG()
-                .commit();
-        boschAcc.lowHigh().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.lowHigh().configure()
+                    .enableLowG()
+                    .commit();
+            boschAcc.lowHigh().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stopLow(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x06, 0x00, 0x0f};
+    public void stopLow(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x06, 0x00, 0x0f};
 
-        boschAcc.lowHigh().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.lowHigh().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void handleLowResponse(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final LowHighResponse expected = new LowHighResponse(
-                false,
-                true,
-                false,
-                false,
-                false,
-                POSITIVE
-        );
-        final byte[] response = new byte[] {0x03, 0x08, 0x02};
-        final Capture<LowHighResponse> actual = new Capture<>();
+    public void handleLowResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final LowHighResponse expected = new LowHighResponse(
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                    POSITIVE
+            );
+            final byte[] response = new byte[] {0x03, 0x08, 0x02};
+            final Capture<LowHighResponse> actual = new Capture<>();
 
-        boschAcc.lowHigh().addRouteAsync(source -> source.stream((data, env) -> actual.set(data.value(LowHighResponse.class))));
-        sendMockResponse(response);
+            boschAcc.lowHigh().addRouteAsync(source -> source.stream((data, env) -> actual.set(data.value(LowHighResponse.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        sendMockResponse(response);
 
-        assertEquals(expected, actual.get());
+                        assertEquals(expected, actual.get());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureHigh(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
-                new byte[] {0x03, 0x07, 0x07, 0x30, (byte) 0x81, 0x05, 0x20} :
-                new byte[] {0x03, 0x07, 0x09, 0x30, (byte) 0x81, 0x06, 0x20};
+    public void configureHigh(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
+                    new byte[] {0x03, 0x07, 0x07, 0x30, (byte) 0x81, 0x05, 0x20} :
+                    new byte[] {0x03, 0x07, 0x09, 0x30, (byte) 0x81, 0x06, 0x20};
 
-        boschAcc.configure()
-                .range(16f)
-                .commit();
-        boschAcc.lowHigh().configure()
-                .enableHighGz()
-                .highThreshold(2f)
-                .highDuration(15)
-                .commit();
+            boschAcc.configure()
+                    .range(16f)
+                    .commit();
+            boschAcc.lowHigh().configure()
+                    .enableHighGz()
+                    .highThreshold(2f)
+                    .highDuration(15)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startHigh(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x06, 0x04, 0x00};
+    public void startHigh(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x06, 0x04, 0x00};
 
-        boschAcc.lowHigh().configure()
-                .enableHighGz()
-                .commit();
-        boschAcc.lowHigh().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.lowHigh().configure()
+                    .enableHighGz()
+                    .commit();
+            boschAcc.lowHigh().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stopHigh(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x06, 0x00, 0x0f};
+    public void stopHigh(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x06, 0x00, 0x0f};
 
-        boschAcc.lowHigh().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.lowHigh().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void handleHighResponse(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final LowHighResponse[] expected = new LowHighResponse[] {
-                new LowHighResponse(true, false, false, true, false, NEGATIVE),
-                new LowHighResponse(true, false, false, true, false, POSITIVE),
-                new LowHighResponse(true, false, false, false, true, NEGATIVE),
-                new LowHighResponse(true, false, false, false, true, POSITIVE),
-                new LowHighResponse(true, false, true, false, false, POSITIVE),
-                new LowHighResponse(true, false, true, false, false, NEGATIVE),
-        };
-        final byte[][] responses = new byte[][] {
-                {0x03, 0x08, 0x29},
-                {0x03, 0x08, 0x09},
-                {0x03, 0x08, 0x31},
-                {0x03, 0x08, 0x11},
-                {0x03, 0x08, 0x05},
-                {0x03, 0x08, 0x25},
-        };
-        final Capture<LowHighResponse[]> actual = new Capture<>();
+    public void handleHighResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final LowHighResponse[] expected = new LowHighResponse[] {
+                    new LowHighResponse(true, false, false, true, false, NEGATIVE),
+                    new LowHighResponse(true, false, false, true, false, POSITIVE),
+                    new LowHighResponse(true, false, false, false, true, NEGATIVE),
+                    new LowHighResponse(true, false, false, false, true, POSITIVE),
+                    new LowHighResponse(true, false, true, false, false, POSITIVE),
+                    new LowHighResponse(true, false, true, false, false, NEGATIVE),
+            };
+            final byte[][] responses = new byte[][] {
+                    {0x03, 0x08, 0x29},
+                    {0x03, 0x08, 0x09},
+                    {0x03, 0x08, 0x31},
+                    {0x03, 0x08, 0x11},
+                    {0x03, 0x08, 0x05},
+                    {0x03, 0x08, 0x25},
+            };
+            final Capture<LowHighResponse[]> actual = new Capture<>();
 
-        actual.set(new LowHighResponse[6]);
-        boschAcc.lowHigh().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(LowHighResponse.class);
-                i++;
-            }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
+            actual.set(new LowHighResponse[6]);
+            boschAcc.lowHigh().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(LowHighResponse.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
 
-        assertArrayEquals(expected, actual.get());
+                assertArrayEquals(expected, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

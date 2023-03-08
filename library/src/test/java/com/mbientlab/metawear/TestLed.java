@@ -24,58 +24,92 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.mbientlab.metawear.module.Led;
 
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 8/31/16.
  */
 public class TestLed extends UnitTestBase {
     public TestLed() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Led.class);
-        connectToBoard();
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Led.class);
     }
 
     @Test
-    public void play() {
-        byte[] expected= new byte[] {0x02, 0x01, 0x01};
+    public void play() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x02, 0x01, 0x01};
 
-        mwBoard.getModule(Led.class).play();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            mwBoard.getModule(Led.class).play();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void autoplay() {
-        byte[] expected= new byte[] {0x02, 0x01, 0x02};
+    public void autoplay() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[]{0x02, 0x01, 0x02};
 
-        mwBoard.getModule(Led.class).autoplay();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            mwBoard.getModule(Led.class).autoplay();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void pause() {
-        byte[] expected = new byte[]{0x02, 0x01, 0x00};
+    public void pause() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[]{0x02, 0x01, 0x00};
 
-        mwBoard.getModule(Led.class).pause();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            mwBoard.getModule(Led.class).pause();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void stopAndClear() {
-        byte[] expected= new byte[] {0x02, 0x02, 0x01};
+    public void stopAndClear() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[]{0x02, 0x02, 0x01};
 
-        mwBoard.getModule(Led.class).stop(true);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            mwBoard.getModule(Led.class).stop(true);
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void stopNoClear() {
-        byte[] expected= new byte[] {0x02, 0x02, 0x00};
+    public void stopNoClear() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[]{0x02, 0x02, 0x00};
 
-        mwBoard.getModule(Led.class).stop(false);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            mwBoard.getModule(Led.class).stop(false);
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

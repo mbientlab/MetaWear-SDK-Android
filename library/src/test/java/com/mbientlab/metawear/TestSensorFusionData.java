@@ -24,8 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.EulerAngles;
 import com.mbientlab.metawear.data.Quaternion;
@@ -34,7 +37,6 @@ import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedAcceleration;
 import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedAngularVelocity;
 import com.mbientlab.metawear.module.SensorFusionBosch.CorrectedMagneticField;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -43,9 +45,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 11/12/16.
@@ -93,27 +96,35 @@ public class TestSensorFusionData extends UnitTestBase {
 
     private SensorFusionBosch sensorFusion;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(SensorFusionBosch.class);
-        connectToBoard();
-
-        sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+                sensorFusion = mwBoard.getModule(SensorFusionBosch.class));
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void receivedData(String methodName, byte[] response, Object expected) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Method m = SensorFusionBosch.class.getMethod(methodName);
-        AsyncDataProducer producer = (AsyncDataProducer) m.invoke(sensorFusion);
-        final Capture<Object> actual = new Capture<>();
+    public void receivedData(String methodName, byte[] response, Object expected) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            try {
+                Method m = SensorFusionBosch.class.getMethod(methodName);
+                AsyncDataProducer producer = (AsyncDataProducer) m.invoke(sensorFusion);
+                final Capture<Object> actual = new Capture<>();
 
-        producer.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Object>) env[0]).set(data.value(data.types()[0])))).continueWith(task -> {
-            task.getResult().setEnvironment(0, actual);
-            return null;
+                producer.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Object>) env[0]).set(data.value(data.types()[0])))).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                    task.getResult().setEnvironment(0, actual);
+                    return null;
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    sendMockResponse(response);
+                    assertEquals(expected, actual.get());
+                    doneSignal.countDown();
+                });
+            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+                fail(e);
+            }
         });
-
-        sendMockResponse(response);
-        assertEquals(expected, actual.get());
+        doneSignal.await(10, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

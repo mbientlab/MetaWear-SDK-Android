@@ -24,12 +24,17 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Macro;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 12/1/16.
@@ -38,27 +43,38 @@ import org.junit.jupiter.api.Test;
 public class TestMacroControl extends UnitTestBase {
     private Macro macro;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Macro.class);
-        connectToBoard();
-
-        macro = mwBoard.getModule(Macro.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            macro = mwBoard.getModule(Macro.class);
+        });
     }
 
     @Test
-    public void eraseAll() {
-        byte[] expected = new byte[] {0x0f, 0x08};
+    public void eraseAll() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x0f, 0x08};
 
-        macro.eraseAll();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            macro.eraseAll();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void execute() {
-        byte[] expected = new byte[] {0x0f, 0x05, 0x00};
+    public void execute() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected = new byte[] {0x0f, 0x05, 0x00};
 
-        macro.execute((byte) 0);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            macro.execute((byte) 0);
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

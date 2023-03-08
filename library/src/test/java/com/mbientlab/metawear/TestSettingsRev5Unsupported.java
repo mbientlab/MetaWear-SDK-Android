@@ -24,15 +24,19 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Settings;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 12/10/16.
@@ -40,45 +44,68 @@ import bolts.Capture;
 public class TestSettingsRev5Unsupported extends UnitTestBase {
     private Settings settings;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x05, 0x00});
-        connectToBoard();
-
-        settings = mwBoard.getModule(Settings.class);
-    }
-
-    @Test
-    public void powerStatusNull() {
-        assertNull(settings.powerStatus());
-    }
-
-    @Test
-    public void chargeStatusNull() {
-        assertNull(settings.chargeStatus());
-    }
-
-    @Test
-    public void readPowerStatusError() {
-        final Capture<Exception> result = new Capture<>();
-
-        settings.readCurrentPowerStatusAsync().continueWith(task -> {
-            result.set(task.getError());
-            return null;
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            settings = mwBoard.getModule(Settings.class);
         });
-
-        assertInstanceOf(UnsupportedOperationException.class, result.get());
     }
 
     @Test
-    public void readChargeStatusError() {
-        final Capture<Exception> result = new Capture<>();
-
-        settings.readCurrentChargeStatusAsync().continueWith(task -> {
-            result.set(task.getError());
-            return null;
+    public void powerStatusNull() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            assertNull(settings.powerStatus());
+            doneSignal.countDown();
         });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
 
-        assertInstanceOf(UnsupportedOperationException.class, result.get());
+    @Test
+    public void chargeStatusNull() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            assertNull(settings.chargeStatus());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
+
+    @Test
+    public void readPowerStatusError() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final Capture<Exception> result = new Capture<>();
+
+            settings.readCurrentPowerStatusAsync().continueWith(IMMEDIATE_EXECUTOR, task -> {
+                result.set(task.getException());
+                return null;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertInstanceOf(UnsupportedOperationException.class, result.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
+
+    @Test
+    public void readChargeStatusError() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final Capture<Exception> result = new Capture<>();
+
+            settings.readCurrentChargeStatusAsync().continueWith(IMMEDIATE_EXECUTOR, task -> {
+                result.set(task.getException());
+                return null;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertInstanceOf(UnsupportedOperationException.class, result.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

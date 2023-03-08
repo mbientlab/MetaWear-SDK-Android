@@ -24,13 +24,12 @@
 
 package com.mbientlab.metawear;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.builder.RouteComponent;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.ComparisonOutput;
 import com.mbientlab.metawear.builder.function.Function2;
-
-import bolts.Task;
 
 /**
  * A component that creates data, such as firmware features (battery level reporting) or sensors

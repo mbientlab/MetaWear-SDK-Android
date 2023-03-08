@@ -24,18 +24,18 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.ActiveDataProducer;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.ConfigEditorBase;
-import com.mbientlab.metawear.Observer;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
+import com.mbientlab.metawear.Observer;
 import com.mbientlab.metawear.impl.Util;
 
 import java.util.Arrays;
 import java.util.Locale;
 
-import bolts.Task;
 
 /**
  * Configures Bluetooth settings and auxiliary hardware and firmware features

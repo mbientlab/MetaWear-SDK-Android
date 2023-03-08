@@ -24,15 +24,18 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.HumidityBme280;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 10/2/16.
@@ -41,42 +44,56 @@ import bolts.Capture;
 public class TestHumidityBme280 extends UnitTestBase {
     private HumidityBme280 humidity;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(HumidityBme280.class);
-        connectToBoard();
-
-        humidity= mwBoard.getModule(HumidityBme280.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            humidity = mwBoard.getModule(HumidityBme280.class);
+        });
     }
 
     @Test
     public void read() {
         byte[] expected= new byte[] {0x16, (byte) 0x81};
 
-        humidity.value().addRouteAsync(source -> source.stream(null));
-        humidity.value().read();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            humidity.value().addRouteAsync(source -> source.stream(null));
+            humidity.value().read();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @Test
-    public void readSilent() {
+    public void readSilent() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected= new byte[] {0x16, (byte) 0xc1};
 
-        humidity.value().read();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            humidity.value().read();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void interpretData() {
+    public void interpretData() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         float expected= 63.1943359375f;
         final Capture<Float> actual= new Capture<>();
 
-        humidity.value().addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(task -> {
-            task.getResult().setEnvironment(0, actual);
-            return null;
-        });
-        sendMockResponse(new byte[] { 0x16, (byte) 0x81, (byte) 0xc7, (byte) 0xfc, 0x00, 0x00 });
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            humidity.value().addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                task.getResult().setEnvironment(0, actual);
+                return null;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                sendMockResponse(new byte[] { 0x16, (byte) 0x81, (byte) 0xc7, (byte) 0xfc, 0x00, 0x00 });
 
-        assertEquals(expected, actual.get(), 0.00000001);
+                assertEquals(expected, actual.get(), 0.00000001);
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

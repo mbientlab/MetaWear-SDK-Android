@@ -24,11 +24,10 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 
 import java.util.Calendar;
-
-import bolts.Task;
 
 /**
  * Firmware feature that saves data to the on-board flash memory

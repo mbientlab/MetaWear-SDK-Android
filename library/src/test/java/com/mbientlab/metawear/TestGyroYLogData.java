@@ -24,7 +24,10 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Logging;
@@ -39,8 +42,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
-import bolts.Task;
 
 /**
  * Created by etsai on 10/30/16.
@@ -54,50 +58,53 @@ public class TestGyroYLogData extends TestLogDataBase {
 
     private static final Subscriber LOG_DATA_HANDLER= (data, env) -> ((List<Float>) env[0]).add(data.value(Float.class));
 
-    protected Task<Route> setupLogDataRoute() {
-        mwBoard.getModule(Gyro.class).configure()
-                .range(Gyro.Range.FSR_250)
-                .commit();
-        return mwBoard.getModule(Gyro.class).angularVelocity().addRouteAsync(source -> source.split().index(1).log(LOG_DATA_HANDLER));
-    }
 
     @Test
     public void checkGyroData() throws IOException, JSONException, InterruptedException {
-        final List<Float> actual = new ArrayList<>();
-        final Float[] expected;
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final List<Float> actual = new ArrayList<>();
+            final Float[] expected;
 
-        {
-            BufferedReader br = new BufferedReader(new FileReader(new File(rootPath, "bmi160_gyro_yaxis_expected_values")));
-            String line;
-            StringBuilder builder = new StringBuilder();
+            try {
+                BufferedReader br = new BufferedReader(new FileReader(new File(rootPath, "bmi160_gyro_yaxis_expected_values")));
+                String line;
+                StringBuilder builder = new StringBuilder();
 
-            while ((line = br.readLine()) != null) {
-                builder.append(line);
-            }
+                while ((line = br.readLine()) != null) {
+                    builder.append(line);
+                }
 
-            JSONArray array = new JSONArray(builder.toString());
-            expected = new Float[array.length()];
-            for(int i= 0; i < array.length(); i++) {
-                expected[i] = (float) array.getDouble(i);
-            }
-        }
+                JSONArray array = new JSONArray(builder.toString());
+                expected = new Float[array.length()];
+                for(int i= 0; i < array.length(); i++) {
+                    expected[i] = (float) array.getDouble(i);
+                }
 
-        setupLogDataRoute().continueWith(task -> {
-            task.getResult().setEnvironment(0, actual);
-            return null;
-        }).waitForCompletion();
-
-        mwBoard.getModule(Logging.class).downloadAsync()
-                .continueWith(task -> {
-                    Float[] actualArray= new Float[actual.size()];
-                    actual.toArray(actualArray);
-
-                    assertArrayEquals(expected, actualArray);
-                    return null;
+                mwBoard.getModule(Gyro.class).configure()
+                        .range(Gyro.Range.FSR_250)
+                        .commit();
+                mwBoard.getModule(Gyro.class).angularVelocity().addRouteAsync(source -> source.split().index(1).log(LOG_DATA_HANDLER))
+                        .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    task.setEnvironment(0, actual);
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                    mwBoard.getModule(Logging.class).downloadAsync()
+                            .continueWith(IMMEDIATE_EXECUTOR, task -> {
+                                Float[] actualArray = new Float[actual.size()];
+                                actual.toArray(actualArray);
+                                for(byte[] response: downloadResponses) {
+                                    sendMockResponse(response);
+                                }
+                                assertArrayEquals(expected, actualArray);
+                                doneSignal.countDown();
+                                return null;
+                            });
                 });
-
-        for(byte[] response: downloadResponses) {
-            sendMockResponse(response);
-        }
+            } catch (JSONException | IOException e) {
+                fail(e);
+            }
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

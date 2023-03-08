@@ -24,16 +24,20 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Settings;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 10/3/16.
@@ -41,51 +45,64 @@ import bolts.Capture;
 public class TestSettingsRev1 extends UnitTestBase {
     private Settings settings;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x01 });
-        connectToBoard();
-
-        settings = mwBoard.getModule(Settings.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+                settings = mwBoard.getModule(Settings.class));
     }
 
     @Test
-    public void setConnParams() {
-        byte[] expected= new byte[] {0x11, 0x09, 0x58, 0x02, 0x20, 0x03, (byte) 0x80, 0x00, 0x66, 0x06};
+    public void setConnParams() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x11, 0x09, 0x58, 0x02, 0x20, 0x03, (byte) 0x80, 0x00, 0x66, 0x06};
 
-        settings.editBleConnParams()
-                .minConnectionInterval(750f)
-                .maxConnectionInterval(1000f)
-                .slaveLatency((short) 128)
-                .supervisorTimeout((short) 16384)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            settings.editBleConnParams()
+                    .minConnectionInterval(750f)
+                    .maxConnectionInterval(1000f)
+                    .slaveLatency((short) 128)
+                    .supervisorTimeout((short) 16384)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void disconnectEvent() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final Capture<Exception> actual = new Capture<>();
 
-        settings.onDisconnectAsync(null).continueWith(task -> {
-            actual.set(task.getError());
-            return null;
+            settings.onDisconnectAsync(null).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                actual.set(task.getException());
+                return null;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertInstanceOf(UnsupportedOperationException.class, actual.get());
+                doneSignal.countDown();
+            });
         });
-
-        assertInstanceOf(UnsupportedOperationException.class, actual.get());
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void batteryNull() {
-        assertNull(settings.battery());
+    public void batteryNull() throws Exception {
+        setup().addOnSuccessListener(ignored ->
+                assertNull(settings.battery()));
     }
 
     @Test
-    public void powerStatusNull() {
-        assertNull(settings.powerStatus());
+    public void powerStatusNull() throws Exception {
+        setup().addOnSuccessListener(ignored ->
+            assertNull(settings.powerStatus()));
     }
 
     @Test
-    public void chargeStatusNull() {
-        assertNull(settings.chargeStatus());
+    public void chargeStatusNull() throws Exception {
+        setup().addOnSuccessListener(ignored ->
+            assertNull(settings.chargeStatus()));
     }
 }

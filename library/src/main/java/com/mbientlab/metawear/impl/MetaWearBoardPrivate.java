@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.impl;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.DataToken;
 import com.mbientlab.metawear.Observer;
@@ -34,8 +35,6 @@ import com.mbientlab.metawear.module.Timer;
 
 import java.util.Collection;
 import java.util.Map;
-
-import bolts.Task;
 
 /**
  * Created by etsai on 8/31/16.

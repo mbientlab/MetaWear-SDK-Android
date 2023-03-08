@@ -24,6 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.TaskCompletionSource;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.impl.platform.BtleGatt;
 import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
 import com.mbientlab.metawear.impl.platform.DeviceInformationService;
@@ -42,20 +47,14 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeoutException;
-
-import bolts.Task;
-import bolts.TaskCompletionSource;
 
 /**
  * Created by etsai on 8/31/16.
  */
 public class JunitPlatform implements IO, BtleGatt {
     public static final File RES_PATH = new File(new File("src", "test"), "res");
-    private static final ScheduledExecutorService SCHEDULED_TASK_THREADPOOL = Executors.newSingleThreadScheduledExecutor();
 
     interface MwBridge {
         void disconnected();
@@ -96,11 +95,11 @@ public class JunitPlatform implements IO, BtleGatt {
     }
 
     private void scheduleMockResponse(final byte[] response) {
-        SCHEDULED_TASK_THREADPOOL.schedule(() -> bridge.sendMockResponse(response), 20, TimeUnit.MILLISECONDS);
+        IMMEDIATE_EXECUTOR.execute(() -> bridge.sendMockResponse(response));
     }
 
     public void scheduleTask(Runnable r, long timeout) {
-        SCHEDULED_TASK_THREADPOOL.schedule(r, timeout, TimeUnit.MILLISECONDS);
+        IMMEDIATE_EXECUTOR.execute(r);
     }
 
     @Override
@@ -135,7 +134,7 @@ public class JunitPlatform implements IO, BtleGatt {
                 if (customResponses.containsKey(hash)) {
                     commandHistory.add(value);
                     scheduleMockResponse(customResponses.get(hash));
-                    return Task.forResult(null);
+                    return Tasks.forResult(null);
                 }
             }
         }
@@ -185,34 +184,34 @@ public class JunitPlatform implements IO, BtleGatt {
             }
         }
 
-        return Task.forResult(null);
+        return Tasks.forResult(null);
     }
 
     @Override
     public Task<byte[]> readCharacteristicAsync(BtleGattCharacteristic gattChar) {
         gattCharReadHistory.add(gattChar);
         if (gattChar.equals(DeviceInformationService.FIRMWARE_REVISION)) {
-            return Task.delay(20L).continueWithTask(task -> Task.forResult(firmware.getBytes()));
+            return Tasks.forResult(firmware.getBytes());
         } else if (gattChar.equals(DeviceInformationService.HARDWARE_REVISION)) {
-            return Task.delay(20L).continueWithTask(task -> Task.forResult(boardInfo.hardwareRevision));
+            return Tasks.forResult(boardInfo.hardwareRevision);
         } else if (gattChar.equals(DeviceInformationService.MODEL_NUMBER)) {
-            return Task.delay(20L).continueWithTask(task -> Task.forResult(boardInfo.modelNumber));
+            return Tasks.forResult(boardInfo.modelNumber);
         } else if (gattChar.equals(DeviceInformationService.MANUFACTURER_NAME)) {
-            return Task.delay(20L).continueWithTask(task -> delayReadDevInfo ? Task.forError(new TimeoutException("Reading gatt characteristic timed out")) : Task.forResult(boardInfo.manufacturer));
+            return delayReadDevInfo ? Tasks.forException(new TimeoutException("Reading gatt characteristic timed out")) : Tasks.forResult(boardInfo.manufacturer);
         } else if (gattChar.equals(DeviceInformationService.SERIAL_NUMBER)) {
-            return Task.delay(20L).continueWithTask(task -> delayReadDevInfo ? Task.forError(new TimeoutException("Reading gatt characteristic timed out")) : Task.forResult(boardInfo.serialNumber));
+            return delayReadDevInfo ? Tasks.forException(new TimeoutException("Reading gatt characteristic timed out")) : Tasks.forResult(boardInfo.serialNumber);
         }
 
-        return Task.forResult(null);
+        return Tasks.forResult(null);
     }
 
     @Override
     public Task<Void> enableNotificationsAsync(BtleGattCharacteristic characteristic, NotificationListener listener) {
         if (enableMetaBootState && !characteristic.serviceUuid.equals(MetaWearBoard.METABOOT_SERVICE)) {
-            return Task.forError(new IllegalStateException("Service " + characteristic.serviceUuid.toString() + " does not exist"));
+            return Tasks.forException(new IllegalStateException("Service " + characteristic.serviceUuid.toString() + " does not exist"));
         }
         notificationListener = listener;
-        return Task.forResult(null);
+        return Tasks.forResult(null);
     }
 
     @Override
@@ -233,13 +232,13 @@ public class JunitPlatform implements IO, BtleGatt {
             tasks.add(readCharacteristicAsync(it));
         }
 
-        return Task.whenAll(tasks).onSuccessTask(task -> {
+        return Tasks.whenAll(tasks).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
             byte[][] valuesArray = new byte[tasks.size()][];
             for (int i = 0; i < valuesArray.length; i++) {
                 valuesArray[i] = tasks.get(i).getResult();
             }
 
-            return Task.forResult(valuesArray);
+            return Tasks.forResult(valuesArray);
         });
     }
 
@@ -247,7 +246,7 @@ public class JunitPlatform implements IO, BtleGatt {
     public Task<Void> localDisconnectAsync() {
         nDisconnects++;
         bridge.disconnected();
-        return Task.forResult(null);
+        return Tasks.forResult(null);
     }
 
     @Override
@@ -258,22 +257,22 @@ public class JunitPlatform implements IO, BtleGatt {
     @Override
     public Task<Void> connectAsync() {
         nConnects++;
-        return Task.forResult(null);
+        return Tasks.forResult(null);
     }
 
     @Override
     public Task<Integer> readRssiAsync() {
         TaskCompletionSource<Integer> source= new TaskCompletionSource<>();
-        source.trySetError(new UnsupportedOperationException("Reading rssi not supported in JUnit tests"));
+        source.setException(new UnsupportedOperationException("Reading rssi not supported in JUnit tests"));
         return source.getTask();
     }
 
     @Override
     public Task<File> downloadFileAsync(String srcUrl, String dest) {
         if (srcUrl.endsWith("firmware.zip") || srcUrl.endsWith("bl.zip") || srcUrl.endsWith("sd_bl.zip")) {
-            return Task.forResult(new File(dest));
+            return Tasks.forResult(new File(dest));
         } else if (srcUrl.endsWith("info2.json")) {
-            return Task.forResult(new File(RES_PATH, "info2.json"));
+            return Tasks.forResult(new File(RES_PATH, "info2.json"));
         }
         throw new UnsupportedOperationException("Not yet implemented");
     }

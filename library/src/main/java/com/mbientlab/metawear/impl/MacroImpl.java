@@ -24,15 +24,17 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.MACRO;
+
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Macro;
 
 import java.util.LinkedList;
 import java.util.Queue;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.MACRO;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 11/30/16.
@@ -74,22 +76,24 @@ class MacroImpl extends ModuleImplBase implements Macro {
     }
 
     @Override
-    public Task<Byte> endRecordAsync() {
+    public Task<Object> endRecordAsync() {
         isRecording = false;
-        return Task.delay(WRITE_MACRO_DELAY).onSuccessTask(ignored ->
-                startMacroTask.execute("Did not received macro id within %dms", Constant.RESPONSE_TIMEOUT,
-                        () -> mwPrivate.sendCommand(new byte[] {MACRO.id, BEGIN, (byte) (this.execOnBoot ? 1 : 0)})
-                )
-        ).onSuccessTask(task -> {
-            while(!commands.isEmpty()) {
-                for(byte[] converted: convertToMacroCommand(commands.poll())) {
-                    mwPrivate.sendCommand(converted);
-                }
-            }
-            mwPrivate.sendCommand(new byte[] {MACRO.id, END});
+        try {
+            return Tasks.withTimeout(startMacroTask.execute("Did not received macro id within %dms", Constant.RESPONSE_TIMEOUT,
+                            () -> mwPrivate.sendCommand(new byte[]{MACRO.id, BEGIN, (byte) (this.execOnBoot ? 1 : 0)})
+                    ), WRITE_MACRO_DELAY, TimeUnit.MILLISECONDS).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                        while (!commands.isEmpty()) {
+                            for (byte[] converted : convertToMacroCommand(commands.poll())) {
+                                mwPrivate.sendCommand(converted);
+                            }
+                        }
+                        mwPrivate.sendCommand(new byte[]{MACRO.id, END});
 
-            return task;
-        });
+                        return task;
+                    });
+        } catch (Exception e) {
+            return Tasks.forException(e);
+        }
     }
 
     @Override

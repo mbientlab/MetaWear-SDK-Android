@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.MetaWearBoardInfo.C;
 import static com.mbientlab.metawear.MetaWearBoardInfo.CPRO;
 import static com.mbientlab.metawear.MetaWearBoardInfo.DETECTOR;
@@ -36,7 +37,8 @@ import static com.mbientlab.metawear.MetaWearBoardInfo.RG;
 import static com.mbientlab.metawear.MetaWearBoardInfo.RPRO;
 import static com.mbientlab.metawear.MetaWearBoardInfo.TRACKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+
+import com.google.android.gms.tasks.Task;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -44,6 +46,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -59,19 +63,20 @@ public class TestModel extends UnitTestBase {
         return parameters.stream();
     }
 
-    public void setup(MetaWearBoardInfo info) {
-        try {
-            junitPlatform.boardInfo = info;
-            connectToBoard();
-        } catch (Exception e) {
-            fail(e);
-        }
+    public Task<Void> setup(MetaWearBoardInfo info) {
+        junitPlatform.boardInfo = info;
+        return connectToBoardNew();
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void checkModel(MetaWearBoardInfo info) {
-        setup(info);
-        assertEquals(info.model, mwBoard.getModel());
+    public void checkModel(MetaWearBoardInfo info) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(info).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            assertEquals(info.model, mwBoard.getModel());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

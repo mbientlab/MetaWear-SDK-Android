@@ -24,12 +24,13 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.GYRO;
+
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Gyro;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.GYRO;
 
 /**
  * Created by etsai on 9/20/16.
@@ -215,9 +216,9 @@ abstract class GyroImpl extends ModuleImplBase implements Gyro {
     public Task<Void> pullConfigAsync() {
         return pullConfigTask.execute("Did not receive gyro config within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {GYRO.id, Util.setRead(CONFIG)})
-        ).onSuccessTask(task -> {
-            System.arraycopy(task.getResult(), 2, gyrDataConfig, 0, gyrDataConfig.length);
-            return Task.forResult(null);
+        ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            System.arraycopy(task, 2, gyrDataConfig, 0, gyrDataConfig.length);
+            return Tasks.forResult(null);
         });
     }
 

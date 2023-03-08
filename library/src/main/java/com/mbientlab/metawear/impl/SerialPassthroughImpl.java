@@ -24,6 +24,12 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+import static com.mbientlab.metawear.impl.Constant.Module.SERIAL_PASSTHROUGH;
+
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.impl.platform.TimedTask;
@@ -33,11 +39,6 @@ import java.io.Serializable;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
-import static com.mbientlab.metawear.impl.Constant.Module.SERIAL_PASSTHROUGH;
 
 /**
  * Created by etsai on 10/3/16.
@@ -300,15 +301,15 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
     public Task<byte[]> readI2cAsync(final byte deviceAddr, final byte registerAddr, final byte length) {
         return readI2cDataTask.execute("Did not receive I2C data within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {SERIAL_PASSTHROUGH.id, Util.setRead(I2C_RW), deviceAddr, registerAddr, DIRECT_I2C_READ_ID, length})
-        ).onSuccessTask(task -> {
-            byte[] response = task.getResult();
+        ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            byte[] response = task;
 
             if (response.length > 3) {
                 byte[] data = new byte[response.length - 3];
                 System.arraycopy(response, 3, data, 0, response.length - 3);
-                return Task.forResult(data);
+                return Tasks.forResult(data);
             }
-            return Task.forError(new RuntimeException("Error reading I2C data from device or register address.  Response: " + Util.arrayToHexString(response)));
+            return Tasks.forException(new RuntimeException("Error reading I2C data from device or register address.  Response: " + Util.arrayToHexString(response)));
         });
     }
 
@@ -345,15 +346,13 @@ class SerialPassthroughImpl extends ModuleImplBase implements SerialPassthrough 
             public Task<byte[]> commit() {
                 return readSpiDataTask.execute("Did not received SPI data within %dms", Constant.RESPONSE_TIMEOUT,
                         () -> mwPrivate.sendCommand(SERIAL_PASSTHROUGH, Util.setRead(SPI_RW), config)
-                ).onSuccessTask(task -> {
-                    byte[] response = task.getResult();
-
-                    if (response.length > 3) {
-                        byte[] data = new byte[response.length - 3];
-                        System.arraycopy(response, 3, data, 0, response.length - 3);
-                        return Task.forResult(data);
+                ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+                    if (task.length > 3) {
+                        byte[] data = new byte[task.length - 3];
+                        System.arraycopy(task, 3, data, 0, task.length - 3);
+                        return Tasks.forResult(data);
                     }
-                    return Task.forError(new RuntimeException("Error reading SPI data from device or register address.  Response: " + Util.arrayToHexString(response)));
+                    return Tasks.forException(new RuntimeException("Error reading SPI data from device or register address.  Response: " + Util.arrayToHexString(task)));
                 });
             }
         };

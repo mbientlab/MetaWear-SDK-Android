@@ -24,21 +24,25 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.data.Sign.NEGATIVE;
 import static com.mbientlab.metawear.data.Sign.POSITIVE;
 import static com.mbientlab.metawear.data.TapType.DOUBLE;
 import static com.mbientlab.metawear.data.TapType.SINGLE;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 import com.mbientlab.metawear.module.AccelerometerMma8452q.Tap;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 12/20/16.
@@ -47,81 +51,114 @@ import bolts.Capture;
 public class TestMma8452qTap extends UnitTestBase {
     private AccelerometerMma8452q mma8452qAcc;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
-        connectToBoard();
-
-        mma8452qAcc = mwBoard.getModule(AccelerometerMma8452q.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            mma8452qAcc = mwBoard.getModule(AccelerometerMma8452q.class);
+        });
     }
 
     @Test
-    public void start() {
+    public void start() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, 0x0b, 0x01};
 
-        mma8452qAcc.tap().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mma8452qAcc.tap().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void stop() {
+    public void stop() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, 0x0b, 0x00};
 
-        mma8452qAcc.tap().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mma8452qAcc.tap().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void configureSingle() {
+    public void configureSingle() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, 0x0c, 0x50, 0x00, 0x1f, 0x1f, 0x1f, 0x18, 0x28, 0x3c};
 
-        mma8452qAcc.tap().configure()
-                .enableSingleTap()
-                .axis(CartesianAxis.Z)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mma8452qAcc.tap().configure()
+                    .enableSingleTap()
+                    .axis(CartesianAxis.Z)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void configureDouble() {
+    public void configureDouble() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, 0x0c, 0x60, 0x00, 0x1f, 0x1f, 0x1f, 0x18, 0x28, 0x3c};
 
-        mma8452qAcc.tap().configure()
-                .enableDoubleTap()
-                .axis(CartesianAxis.Z)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mma8452qAcc.tap().configure()
+                    .enableDoubleTap()
+                    .axis(CartesianAxis.Z)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void handleResponse() {
+    public void handleResponse() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final Tap[] expected = new Tap[] {
                 new Tap(new boolean[] {false, false, true}, new Sign[] {POSITIVE, POSITIVE, NEGATIVE}, DOUBLE),
                 new Tap(new boolean[] {false, false, true}, new Sign[] {POSITIVE, POSITIVE, POSITIVE}, DOUBLE),
                 new Tap(new boolean[] {false, false, true}, new Sign[] {POSITIVE, POSITIVE, NEGATIVE}, SINGLE),
                 new Tap(new boolean[] {false, false, true}, new Sign[] {POSITIVE, POSITIVE, POSITIVE}, SINGLE),
         };
+
         final byte[][] responses = new byte[][] {
                 {0x03, 0x0d, (byte) 0xcc},
                 {0x03, 0x0d, (byte) 0xc8},
                 {0x03, 0x0d, (byte) 0xc4},
                 {0x03, 0x0d, (byte) 0xc0}
         };
-        final Capture<Tap[]> actual = new Capture<>();
 
-        actual.set(new Tap[4]);
-        mma8452qAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Tap.class);
-                i++;
-            }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
 
-        assertArrayEquals(expected, actual.get());
+            final Capture<Tap[]> actual = new Capture<>();
+
+            actual.set(new Tap[4]);
+            mma8452qAcc.tap().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Tap.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
+
+                assertArrayEquals(expected, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

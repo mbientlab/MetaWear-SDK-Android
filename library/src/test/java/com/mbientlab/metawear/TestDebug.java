@@ -24,77 +24,120 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Debug;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Task;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 10/12/16.
  */
+
 public class TestDebug extends UnitTestBase {
     private Debug debug;
 
-    @BeforeEach
-    public void setup() throws Exception {
+
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Debug.class);
-        connectToBoard();
-
-        debug= mwBoard.getModule(Debug.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug = mwBoard.getModule(Debug.class);
+        });
     }
 
     @Test
-    public void reset() {
-        byte[] expected= new byte[] {(byte) 0xfe, 0x01};
+    public void reset() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {(byte) 0xfe, 0x01};
 
-        debug.resetAsync();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug.resetAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getLastCommand());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void jumpToBootloader() {
-        byte[] expected= new byte[] {(byte) 0xfe, 0x02};
+    public void jumpToBootloader() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {(byte) 0xfe, 0x02};
 
-        debug.jumpToBootloaderAsync();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug.jumpToBootloaderAsync();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void disconnect() {
-        byte[] expected= new byte[] {(byte) 0xfe, 0x06};
+    public void disconnect() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {(byte) 0xfe, 0x06};
 
-        debug.disconnectAsync();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug.disconnectAsync();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void resetAfterGc() {
-        byte[] expected= new byte[] {(byte) 0xfe, 0x05};
+    public void resetAfterGc() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {(byte) 0xfe, 0x05};
 
-        debug.resetAfterGc();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug.resetAfterGc();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void receivedTmpValue() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         int expected = 0xdeadbeef;
 
-        Task<Integer> task = debug.readTmpValueAsync();
-        sendMockResponse(new byte[] {(byte) 0xfe, (byte) 0x84, (byte) 0xef, (byte) 0xbe, (byte) 0xad, (byte) 0xde});
-        task.waitForCompletion();
-
-        assertEquals(expected, task.getResult().intValue());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            debug.readTmpValueAsync().continueWith(IMMEDIATE_EXECUTOR, task -> {
+                sendMockResponse(new byte[] {(byte) 0xfe, (byte) 0x84, (byte) 0xef, (byte) 0xbe, (byte) 0xad, (byte) 0xde});
+                assertEquals(expected, task.getResult().intValue());
+                doneSignal.countDown();
+                return null;
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void noPowersave() {
-        // test framework uses older debug revision, should be false here
-        assertFalse(debug.enablePowersave());
+    public void noPowersave() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            assertFalse(debug.enablePowersave());
+            doneSignal.countDown();
+        }).addOnFailureListener(IMMEDIATE_EXECUTOR, exception -> {
+            fail(exception);
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -24,12 +24,15 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.COMPASS;
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.IMU_PLUS;
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.M4G;
 import static com.mbientlab.metawear.module.SensorFusionBosch.Mode.NDOF;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
@@ -37,20 +40,21 @@ import com.mbientlab.metawear.module.SensorFusionBosch;
 import com.mbientlab.metawear.module.SensorFusionBosch.AccRange;
 import com.mbientlab.metawear.module.SensorFusionBosch.GyroRange;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
  * Created by etsai on 11/12/16.
  */
 public class TestSensorFusionConfig extends UnitTestBase {
-    private static final byte[] BMI160_ACC_RANGE_BITMASK= new byte[] { 0b0011, 0b0101, 0b1000, 0b1100 };
+    private static final byte[] BMI160_ACC_RANGE_BITMASK = new byte[] { 0b0011, 0b0101, 0b1000, 0b1100 };
     private static final byte[][] CONFIG_MASKS;
     static {
         CONFIG_MASKS = new byte[][] {
@@ -73,12 +77,10 @@ public class TestSensorFusionConfig extends UnitTestBase {
 
     private SensorFusionBosch sensorFusion;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
-        connectToBoard();
-
-        sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+                sensorFusion = mwBoard.getModule(SensorFusionBosch.class));
     }
 
     private byte[] gyroConfig(GyroRange gyroRange) {
@@ -88,77 +90,101 @@ public class TestSensorFusionConfig extends UnitTestBase {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureNdof(AccRange accRange, GyroRange gyroRange) {
-        final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) NDOF.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
-                {0x03, 0x03, 0x28, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
-                gyroConfig(gyroRange),
-                {0x15, 0x04, 0x04, 0x0e},
-                {0x15, 0x03, 0x6}
-        };
+    public void configureNdof(AccRange accRange, GyroRange gyroRange) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x19, 0x02, (byte) NDOF.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
+                    {0x03, 0x03, 0x28, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
+                    gyroConfig(gyroRange),
+                    {0x15, 0x04, 0x04, 0x0e},
+                    {0x15, 0x03, 0x6}
+            };
 
-        sensorFusion.configure()
-                .mode(NDOF)
-                .accRange(accRange)
-                .gyroRange(gyroRange)
-                .commit();
+            sensorFusion.configure()
+                    .mode(NDOF)
+                    .accRange(accRange)
+                    .gyroRange(gyroRange)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureImuPlus(AccRange accRange, GyroRange gyroRange) {
-        final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) IMU_PLUS.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
-                {0x03, 0x03, 0x28, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
-                gyroConfig(gyroRange)
-        };
+    public void configureImuPlus(AccRange accRange, GyroRange gyroRange) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x19, 0x02, (byte) IMU_PLUS.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
+                    {0x03, 0x03, 0x28, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
+                    gyroConfig(gyroRange)
+            };
 
-        sensorFusion.configure()
-                .mode(IMU_PLUS)
-                .accRange(accRange)
-                .gyroRange(gyroRange)
-                .commit();
+            sensorFusion.configure()
+                    .mode(IMU_PLUS)
+                    .accRange(accRange)
+                    .gyroRange(gyroRange)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureCompass(AccRange accRange, GyroRange gyroRange) {
-        final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) COMPASS.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
-                {0x03, 0x03, 0x26, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
-                {0x15, 0x04, 0x04, 0x0e},
-                {0x15, 0x03, 0x6}
-        };
+    public void configureCompass(AccRange accRange, GyroRange gyroRange) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x19, 0x02, (byte) COMPASS.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
+                    {0x03, 0x03, 0x26, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
+                    {0x15, 0x04, 0x04, 0x0e},
+                    {0x15, 0x03, 0x6}
+            };
 
-        sensorFusion.configure()
-                .mode(COMPASS)
-                .accRange(accRange)
-                .gyroRange(gyroRange)
-                .commit();
+            sensorFusion.configure()
+                    .mode(COMPASS)
+                    .accRange(accRange)
+                    .gyroRange(gyroRange)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureM4g(AccRange accRange, GyroRange gyroRange) {
-        final byte[][] expected = new byte[][] {
-                {0x19, 0x02, (byte) M4G.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
-                {0x03, 0x03, 0x27, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
-                {0x15, 0x04, 0x04, 0x0e},
-                {0x15, 0x03, 0x6}
-        };
+    public void configureM4g(AccRange accRange, GyroRange gyroRange) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x19, 0x02, (byte) M4G.ordinal(), CONFIG_MASKS[accRange.ordinal()][gyroRange.ordinal()]},
+                    {0x03, 0x03, 0x27, BMI160_ACC_RANGE_BITMASK[accRange.ordinal()]},
+                    {0x15, 0x04, 0x04, 0x0e},
+                    {0x15, 0x03, 0x6}
+            };
 
-        sensorFusion.configure()
-                .mode(M4G)
-                .accRange(accRange)
-                .gyroRange(gyroRange)
-                .commit();
+            sensorFusion.configure()
+                    .mode(M4G)
+                    .accRange(accRange)
+                    .gyroRange(gyroRange)
+                    .commit();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

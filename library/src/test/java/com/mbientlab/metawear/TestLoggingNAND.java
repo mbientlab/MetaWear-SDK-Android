@@ -25,13 +25,18 @@
 package com.mbientlab.metawear;
 
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBmi270;
 import com.mbientlab.metawear.module.Logging;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by lkasso on 4/1/21.
@@ -39,19 +44,24 @@ import org.junit.jupiter.api.Test;
 public class TestLoggingNAND extends UnitTestBase {
     private Logging logging;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi270.class);
-        connectToBoard();
-
-        logging= mwBoard.getModule(Logging.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            logging = mwBoard.getModule(Logging.class);
+        });
     }
 
     @Test
-    public void flushPage() {
-        byte[] expected= new byte[] {0x0b, 0x10, 0x01};
+    public void flushPage() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x0b, 0x10, 0x01};
 
-        logging.flushPage();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            logging.flushPage();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

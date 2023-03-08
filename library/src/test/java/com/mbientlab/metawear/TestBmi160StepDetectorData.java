@@ -24,15 +24,18 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 11/14/16.
@@ -41,63 +44,90 @@ import bolts.Capture;
 public class TestBmi160StepDetectorData extends UnitTestBase {
     private AccelerometerBmi160.StepDetectorDataProducer detector;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        connectToBoard();
-
-        detector = mwBoard.getModule(AccelerometerBmi160.class).stepDetector();
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            detector = mwBoard.getModule(AccelerometerBmi160.class).stepDetector();
+        });
     }
 
     @Test
-    public void subscribe() {
+    public void subscribe() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x3, 0x19, 0x1};
 
-        detector.addRouteAsync(source -> source.stream(null));
-
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            detector.addRouteAsync(source -> source.stream(null)).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                assertArrayEquals(expected, junitPlatform.getLastCommand());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void unsubscribe() {
+    public void unsubscribe() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x3, 0x19, 0x0};
 
-        detector.addRouteAsync(source -> source.stream(null)).continueWith(task -> {
-            task.getResult().unsubscribe(0);
-            return null;
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            detector.addRouteAsync(source -> source.stream(null)).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                task.unsubscribe(0);
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getLastCommand());
+                doneSignal.countDown();
+            });
         });
-
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void enable() {
-        byte[] expected= new byte[] {0x03, 0x17, 0x01, 0x00};
-        detector.start();
+    public void enable() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {0x03, 0x17, 0x01, 0x00};
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            detector.start();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void disable() {
-        byte[] expected= new byte[] {0x03, 0x17, 0x00, 0x01};
-        detector.stop();
+    public void disable() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {0x03, 0x17, 0x00, 0x01};
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            detector.stop();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void handleResponse() {
+    public void handleResponse() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final Capture<Byte> actual = new Capture<>();
         byte expected = 1;
 
-        detector.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Byte>) env[0]).set(data.value(Byte.class))))
-                .continueWith(task -> {
-                    task.getResult().setEnvironment(0, actual);
-                    return null;
-                });
-
-        sendMockResponse(new byte[] {0x03, 0x19, 0x01});
-        assertEquals(expected, actual.get().byteValue());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            detector.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Byte>) env[0]).set(data.value(Byte.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        task.setEnvironment(0, actual);
+                    }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        sendMockResponse(new byte[] {0x03, 0x19, 0x01});
+                        assertEquals(expected, actual.get().byteValue());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

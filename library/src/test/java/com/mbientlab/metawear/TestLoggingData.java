@@ -24,8 +24,12 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.Logging;
@@ -36,8 +40,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-
-import bolts.Task;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -60,27 +64,41 @@ public class TestLoggingData extends TestLogDataBase {
 
     @Test
     public void checkAccelerometerData() throws InterruptedException, IOException, JSONException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final List<Acceleration> actual= new ArrayList<>();
         final Acceleration[] expected = readAccelerationValues("bmi160_expected_values");
 
-        Task<Route> task =setupLogDataRoute();
-        task.waitForCompletion();
-        task.getResult().setEnvironment(0, actual);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, setup -> {
+            setupLogDataRoute().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                task.setEnvironment(0, actual);
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                // For TestDeserializeLoggingData
+                junitPlatform.boardStateSuffix = "log_acc";
+                try {
+                    mwBoard.serialize();
+                } catch (IOException e) {
+                    fail(e);
+                }
 
-        // For TestDeserializeLoggingData
-        junitPlatform.boardStateSuffix = "log_acc";
-        mwBoard.serialize();
+                var temp = mwBoard.getModule(Logging.class).downloadAsync();
 
-        Task<Void> dlTask = mwBoard.getModule(Logging.class).downloadAsync();
-        for(byte[] response: downloadResponses) {
-            sendMockResponse(response);
-        }
-        dlTask.waitForCompletion();
+                for(byte[] response: downloadResponses) {
+                    sendMockResponse(response);
+                }
 
-        Acceleration[] actualArray= new Acceleration[actual.size()];
-        actual.toArray(actualArray);
+                temp.continueWith(IMMEDIATE_EXECUTOR, dlTask -> {
 
-        assertArrayEquals(expected, actualArray);
+                    Acceleration[] actualArray= new Acceleration[actual.size()];
+                    actual.toArray(actualArray);
+
+                    assertArrayEquals(expected, actualArray);
+                    doneSignal.countDown();
+                    return null;
+                });
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     private static Data offset_handler_prev = null;
@@ -102,53 +120,64 @@ public class TestLoggingData extends TestLogDataBase {
 
     @Test
     public void checkTimeOffsets() throws Exception {
-        resetOffsetHandlerState();
-
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final long[] expected = readOffsetData("bmi160_expected_offsets"), actual = new long[expected.length];
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, setup -> {
+            resetOffsetHandlerState();
 
-        Task<Route> task = setupLogOffsetRoute();
-        task.waitForCompletion();
-        if (task.isFaulted()) {
-            throw task.getError();
-        }
-        task.getResult().setEnvironment(0, (Object) actual);
+            setupLogOffsetRoute().continueWith(IMMEDIATE_EXECUTOR, task -> {
+                task.getResult().setEnvironment(0, (Object) actual);
+                return null;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                // For TestDeserializeLoggingData
+                junitPlatform.boardStateSuffix = "log_offset";
+                try {
+                    mwBoard.serialize();
+                } catch (IOException e) {
+                    fail(e);
+                }
 
-        // For TestDeserializeLoggingData
-        junitPlatform.boardStateSuffix = "log_offset";
-        mwBoard.serialize();
+                var dlTask = mwBoard.getModule(Logging.class).downloadAsync();
 
-        Task<Void> dlTask = mwBoard.getModule(Logging.class).downloadAsync();
-        for(byte[] response: downloadResponses) {
-            sendMockResponse(response);
-        }
-        dlTask.waitForCompletion();
+                for(byte[] response: downloadResponses) {
+                    sendMockResponse(response);
+                }
 
-        assertArrayEquals(expected, actual);
+                dlTask.addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                    assertArrayEquals(expected, actual);
+                    doneSignal.countDown();
+                });
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void checkRollover() throws Exception {
-        resetOffsetHandlerState();
-
-        Task<Route> task = setupLogOffsetRoute();
-        task.waitForCompletion();
-
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final long[] actual = new long[1];
-        if (task.isFaulted()) {
-            throw task.getError();
-        }
-        task.getResult().setEnvironment(0, (Object) actual);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            resetOffsetHandlerState();
+            setupLogOffsetRoute().addOnFailureListener(IMMEDIATE_EXECUTOR, exception -> {
+                fail(exception);
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                task.setEnvironment(0, (Object) actual);
+            }).continueWithTask(IMMEDIATE_EXECUTOR, ignored2 -> {
+                return mwBoard.getModule(Logging.class).downloadAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, dlTask -> {
+                    sendMockResponse(new byte[] {0x0b, (byte) 0x84, 0x15, 0x04, 0x00, 0x00, 0x05});
+                    sendMockResponse(new byte[] { 11, 7,
+                            -95, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -111, -17, 0, 0,
+                            -96, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -128, -1, -73, -1 });
+                    sendMockResponse(new byte[] { 11, 7, -95, 13, 0, 0, 0, 116, -17, 0, 0, -96, 13, 0, 0, 0, 125, -1, -70, -1 });
+                    sendMockResponse(new byte[] { 11, 8, 0, 0, 0, 0});
 
-        Task<Void> dlTask = mwBoard.getModule(Logging.class).downloadAsync();
-
-        sendMockResponse(new byte[] {0x0b, (byte) 0x84, 0x15, 0x04, 0x00, 0x00, 0x05});
-        sendMockResponse(new byte[] { 11, 7,
-                -95, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -111, -17, 0, 0,
-                -96, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -128, -1, -73, -1 });
-        sendMockResponse(new byte[] { 11, 7, -95, 13, 0, 0, 0, 116, -17, 0, 0, -96, 13, 0, 0, 0, 125, -1, -70, -1 });
-        sendMockResponse(new byte[] { 11, 8, 0, 0, 0, 0});
-        dlTask.waitForCompletion();
-
-        assertArrayEquals(new long[] { 21 }, actual);
+                    assertArrayEquals(new long[] { 21 }, actual);
+                    doneSignal.countDown();
+                });
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

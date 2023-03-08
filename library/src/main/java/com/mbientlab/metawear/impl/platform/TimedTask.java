@@ -1,11 +1,10 @@
 package com.mbientlab.metawear.impl.platform;
 
-import java.util.ArrayList;
-import java.util.concurrent.TimeoutException;
+import com.google.android.gms.tasks.CancellationTokenSource;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.TaskCompletionSource;
 
-import bolts.CancellationTokenSource;
-import bolts.Task;
-import bolts.TaskCompletionSource;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Created by eric on 12/8/17.
@@ -17,7 +16,7 @@ public class TimedTask<T> {
     public TimedTask() { }
 
     public Task<T> execute(String msgFormat, long timeout, Runnable action) {
-        if (taskSource != null && !taskSource.getTask().isCompleted()) {
+        if (taskSource != null && !taskSource.getTask().isComplete()) {
             return taskSource.getTask();
         }
 
@@ -26,28 +25,34 @@ public class TimedTask<T> {
         action.run();
 
         if (timeout != 0) {
-            final ArrayList<Task<?>> tasks = new ArrayList<>();
-            tasks.add(taskSource.getTask());
-            tasks.add(Task.delay(timeout, cts.getToken()));
+//            final ArrayList<Task<?>> tasks = new ArrayList<>();
+//            tasks.add(taskSource.getTask());
+//            tasks.add(Tasks.withTimeout(Tasks.forResult(cts.getToken()), timeout, TimeUnit.MILLISECONDS));
 
-            Task.whenAny(tasks).continueWith(task -> {
-                if (task.getResult() != tasks.get(0)) {
-                    setError(new TimeoutException(String.format(msgFormat, timeout)));
-                } else {
-                    cts.cancel();
-                }
-                return null;
-            });
+            if (taskSource.getTask().isCanceled()) {
+                setError(new TimeoutException(String.format(msgFormat, timeout)));
+            } else {
+                return taskSource.getTask();
+            }
+
+//            Tasks.whenAll(tasks).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+//                if (task != tasks.get(0)) {
+//                    setError(new TimeoutException(String.format(msgFormat, timeout)));
+//                } else {
+//                    cts.cancel();
+//                }
+//                return null;
+//            });
         }
         return taskSource.getTask();
     }
 
     public boolean isCompleted() {
-        return taskSource != null && taskSource.getTask().isCompleted();
+        return taskSource != null && taskSource.getTask().isComplete();
     }
 
     public void cancel() {
-        taskSource.trySetCancelled();
+        cts.cancel();
     }
 
     public void setResult(T result) {
@@ -55,6 +60,6 @@ public class TimedTask<T> {
     }
 
     public void setError(Exception error) {
-        taskSource.trySetError(error);
+        taskSource.setException(error);
     }
 }

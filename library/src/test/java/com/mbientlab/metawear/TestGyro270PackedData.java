@@ -24,16 +24,20 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.AngularVelocity;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.GyroBmi270;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -42,17 +46,16 @@ import java.util.ArrayList;
 public class TestGyro270PackedData extends UnitTestBase {
     private Gyro gyro;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(GyroBmi270.class);
-        connectToBoard();
-
-        gyro = mwBoard.getModule(GyroBmi270.class);
-        gyro.packedAngularVelocity().addRouteAsync(source -> source.stream((data, env) -> ((ArrayList<AngularVelocity>) env[0]).add(data.value(AngularVelocity.class))));
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            gyro = mwBoard.getModule(GyroBmi270.class);
+        });
     }
 
     @Test
-    public void interpretPackedData() {
+    public void interpretPackedData() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] response = new byte[] {0x13, 0x05, 0x09, 0x15, (byte) 0xad, 0x26, 0x08, (byte) 0xde, (byte) 0x8a, 0x1a, 0x0d,
                 0x26, 0x65, (byte) 0xe4, (byte) 0x8d, 0x20, (byte) 0xac, 0x27, 0x73, (byte) 0xec};
         AngularVelocity[] expected = new AngularVelocity[] {
@@ -61,46 +64,86 @@ public class TestGyro270PackedData extends UnitTestBase {
                 new AngularVelocity(Float.intBitsToFloat(0x437e0e0d), Float.intBitsToFloat(0x439ad12c), Float.intBitsToFloat(0xc318976a))
         };
 
-        gyro.configure()
-                .range(Gyro.Range.FSR_1000)
-                .commit();
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            gyro.packedAngularVelocity().addRouteAsync(source ->
+                    source.stream((data, env) -> ((ArrayList<AngularVelocity>) env[0])
+                            .add(data.value(AngularVelocity.class)))).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                gyro.configure()
+                        .range(Gyro.Range.FSR_1000)
+                        .commit();
 
-        final ArrayList<AngularVelocity> received = new ArrayList<>();
-        mwBoard.lookupRoute(0).setEnvironment(0, received);
+                final ArrayList<AngularVelocity> received = new ArrayList<>();
+                mwBoard.lookupRoute(0).setEnvironment(0, received);
 
-        sendMockResponse(response);
-        AngularVelocity[] actual = new AngularVelocity[3];
-        received.toArray(actual);
+                sendMockResponse(response);
+                AngularVelocity[] actual = new AngularVelocity[3];
+                received.toArray(actual);
 
-        assertArrayEquals(expected, actual);
+                assertArrayEquals(expected, actual);
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void subscribe() {
+    public void subscribe() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x13, 0x05, 0x01};
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            gyro.packedAngularVelocity().addRouteAsync(source ->
+                    source.stream((data, env) -> ((ArrayList<AngularVelocity>) env[0])
+                            .add(data.value(AngularVelocity.class)))).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getLastCommand());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void unsubscribe() {
+    public void unsubscribe() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x13, 0x05, 0x00};
-        mwBoard.lookupRoute(0).unsubscribe(0);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            gyro.packedAngularVelocity().addRouteAsync(source ->
+                    source.stream((data, env) -> ((ArrayList<AngularVelocity>) env[0])
+                            .add(data.value(AngularVelocity.class)))).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                mwBoard.lookupRoute(0).unsubscribe(0);
+                assertArrayEquals(expected, junitPlatform.getLastCommand());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void enable() {
+    public void enable() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x13, 0x02, 0x00, 0x01};
-
-        gyro.packedAngularVelocity().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            gyro.packedAngularVelocity().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void disable() {
+    public void disable() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x13, 0x02, 0x01, 0x00};
 
-        gyro.packedAngularVelocity().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            gyro.packedAngularVelocity().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -24,95 +24,128 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Timer;
 import com.mbientlab.metawear.module.Timer.ScheduledTask;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import bolts.Capture;
-import bolts.Task;
 
 /**
  * Created by etsai on 9/18/16.
  */
 public class TestTimer extends UnitTestBase {
-    private boolean wait;
     private ScheduledTask manager;
 
     protected Task<ScheduledTask> setupTimer() {
-        wait = true;
         return mwBoard.getModule(Timer.class).scheduleAsync(3141, (short) 59, true, () -> {
         });
     }
 
-    @BeforeEach
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Timer.class);
-        connectToBoard();
-
-        setupTimer().continueWith(task -> {
-            manager= task.getResult();
-            return null;
-        }).waitForCompletion();
-
-        // For TestDeserializeTimer
-        junitPlatform.boardStateSuffix = "timer";
-        mwBoard.serialize();
+    public Task<Void> setup() throws Exception {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Timer.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                    setupTimer().continueWith(IMMEDIATE_EXECUTOR, task -> {
+                        manager = task.getResult();
+                        return null;
+                    });
+                    junitPlatform.boardStateSuffix = "timer";
+                    try {
+                        mwBoard.serialize();
+                    } catch (IOException e) {
+                        fail(e);
+                    }
+                }
+        );
     }
 
     @Test
-    public void scheduleTasks() {
-        byte[][] expected= new byte[][] {
-                {0x0c, 0x02, 0x45, 0x0c, 0x00, 0x00, 0x3B, 0x0, 0x0}
-        };
+    public void scheduleTasks() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[][] expected= new byte[][] {
+                    {0x0c, 0x02, 0x45, 0x0c, 0x00, 0x00, 0x3B, 0x0, 0x0}
+            };
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void start() {
-        byte[] expected= new byte[] {0x0c, 0x03, 0x0};
+    public void start() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x0c, 0x03, 0x0};
 
-        manager.start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            manager.start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void stop() {
-        byte[] expected= new byte[] {0x0c, 0x04, 0x0};
+    public void stop() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x0c, 0x04, 0x0};
 
-        manager.stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            manager.stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void remove() {
-        byte[][] expected= new byte[][] {
-                {0x0c, 0x05, 0x0}
-        };
+    public void remove() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[][] expected= new byte[][] {
+                    {0x0c, 0x05, 0x0}
+            };
 
-        manager.remove();
-        assertArrayEquals(expected, junitPlatform.getLastCommands(1));
+            manager.remove();
+            assertArrayEquals(expected, junitPlatform.getLastCommands(1));
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void timeout() throws Exception {
-        final Capture<Exception> actual= new Capture<>();
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final Capture<Exception> actual = new Capture<>();
 
-        junitPlatform.maxTimers= 0;
-        mwBoard.getModule(Timer.class).scheduleAsync(26535, false, () -> {
+            junitPlatform.maxTimers = 0;
+            mwBoard.getModule(Timer.class).scheduleAsync(26535, false, () -> {
 
-        }).continueWith(task -> {
-            actual.set(task.getError());
-            return null;
-        }).waitForCompletion();
+            }).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                actual.set(task.getException());
+                assertInstanceOf(TimeoutException.class, actual.get());
+                doneSignal.countDown();
+                return null;
+            });
 
-        assertInstanceOf(TimeoutException.class, actual.get());
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -24,19 +24,23 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.ProximityTsl2671;
 import com.mbientlab.metawear.module.ProximityTsl2671.ReceiverDiode;
 import com.mbientlab.metawear.module.ProximityTsl2671.TransmitterDriveCurrent;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -62,26 +66,29 @@ public class TestProximityTsl2671Config extends UnitTestBase {
 
     private ProximityTsl2671 proximity;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(ProximityTsl2671.class);
-        connectToBoard();
-
-        proximity= mwBoard.getModule(ProximityTsl2671.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> proximity = mwBoard.getModule(ProximityTsl2671.class));
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configure(int intgrationIdx, ReceiverDiode diode, TransmitterDriveCurrent current) {
+    public void configure(int intgrationIdx, ReceiverDiode diode, TransmitterDriveCurrent current) throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected= new byte[] {0x18, 0x02, INTEGRATION_BITMASKS[intgrationIdx], 0x20,
                 (byte) ((CURRENT_BITMASKS[current.ordinal()] << 6) | (DIODE_BITMASKS[diode.ordinal()] << 4))};
 
-        proximity.configure()
-                .integrationTime(INTEGRATION_TIMES[intgrationIdx])
-                .pulseCount((byte) 32)
-                .receiverDiode(diode)
-                .transmitterDriveCurrent(current)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            proximity.configure()
+                    .integrationTime(INTEGRATION_TIMES[intgrationIdx])
+                    .pulseCount((byte) 32)
+                    .receiverDiode(diode)
+                    .transmitterDriveCurrent(current)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

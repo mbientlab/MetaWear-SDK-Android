@@ -24,13 +24,13 @@
 
 package com.mbientlab.metawear.impl.dfu;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.impl.platform.IO;
 
 import java.io.File;
 import java.util.Arrays;
 import java.util.Locale;
-
-import bolts.Task;
 
 public class Image {
     private static final String RELEASES_URL = "https://mbientlab.com/releases";
@@ -84,7 +84,7 @@ public class Image {
         final String destName = generateLocalFilename();
         final File dest = io.findDownloadedFile(destName);
 
-        return !dest.exists() ? downloadAsync(destName, io) : Task.forResult(dest);
+        return !dest.exists() ? downloadAsync(destName, io) : Tasks.forResult(dest);
     }
 
     @Override

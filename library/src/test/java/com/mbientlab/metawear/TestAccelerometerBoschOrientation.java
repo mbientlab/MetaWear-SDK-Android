@@ -24,9 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -38,9 +40,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 12/18/16.
@@ -56,77 +59,88 @@ public class TestAccelerometerBoschOrientation extends UnitTestBase {
 
     private AccelerometerBosch boschAcc;
 
-    public void setup(Class<? extends AccelerometerBosch> moduleClass) {
-        try {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(moduleClass);
-            connectToBoard();
-
+    public Task<Void> setup(Class<? extends AccelerometerBosch> moduleClass) {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(moduleClass);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             boschAcc = mwBoard.getModule(AccelerometerBosch.class);
-        } catch (Exception e) {
-            fail(e);
-        }
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startOrientation(Class<? extends AccelerometerBosch> moduleClass) {
-        setup(moduleClass);
-        byte[] expected = new byte[] {0x03, 0x0f, 0x01, 0x00};
+    public void startOrientation(Class<? extends AccelerometerBosch> moduleClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x0f, 0x01, 0x00};
 
-        boschAcc.orientation().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.orientation().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stopOrientation(Class<? extends AccelerometerBosch> moduleClass) {
-        setup(moduleClass);
-        byte[] expected = new byte[] {0x03, 0x0f, 0x00, 0x01};
+    public void stopOrientation(Class<? extends AccelerometerBosch> moduleClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x0f, 0x00, 0x01};
 
-        boschAcc.orientation().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.orientation().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void handleOrientationResponse(Class<? extends AccelerometerBosch> moduleClass) {
-        setup(moduleClass);
-        final SensorOrientation[] expected = new SensorOrientation[] {
-                SensorOrientation.FACE_UP_LANDSCAPE_RIGHT,
-                SensorOrientation.FACE_UP_PORTRAIT_UPRIGHT,
-                SensorOrientation.FACE_UP_PORTRAIT_UPSIDE_DOWN,
-                SensorOrientation.FACE_UP_LANDSCAPE_LEFT,
-                SensorOrientation.FACE_DOWN_LANDSCAPE_RIGHT,
-                SensorOrientation.FACE_DOWN_LANDSCAPE_LEFT,
-                SensorOrientation.FACE_DOWN_PORTRAIT_UPRIGHT,
-                SensorOrientation.FACE_DOWN_PORTRAIT_UPSIDE_DOWN
-        };
-        final byte[][] responses = new byte[][]{
-                {0x03, 0x11, 0x07},
-                {0x03, 0x11, 0x01},
-                {0x03, 0x11, 0x03},
-                {0x03, 0x11, 0x05},
-                {0x03, 0x11, 0x0f},
-                {0x03, 0x11, 0x0d},
-                {0x03, 0x11, 0x09},
-                {0x03, 0x11, 0x0b}
-        };
-        final Capture<SensorOrientation[]> actual = new Capture<>();
+    public void handleOrientationResponse(Class<? extends AccelerometerBosch> moduleClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final SensorOrientation[] expected = new SensorOrientation[] {
+                    SensorOrientation.FACE_UP_LANDSCAPE_RIGHT,
+                    SensorOrientation.FACE_UP_PORTRAIT_UPRIGHT,
+                    SensorOrientation.FACE_UP_PORTRAIT_UPSIDE_DOWN,
+                    SensorOrientation.FACE_UP_LANDSCAPE_LEFT,
+                    SensorOrientation.FACE_DOWN_LANDSCAPE_RIGHT,
+                    SensorOrientation.FACE_DOWN_LANDSCAPE_LEFT,
+                    SensorOrientation.FACE_DOWN_PORTRAIT_UPRIGHT,
+                    SensorOrientation.FACE_DOWN_PORTRAIT_UPSIDE_DOWN
+            };
+            final byte[][] responses = new byte[][]{
+                    {0x03, 0x11, 0x07},
+                    {0x03, 0x11, 0x01},
+                    {0x03, 0x11, 0x03},
+                    {0x03, 0x11, 0x05},
+                    {0x03, 0x11, 0x0f},
+                    {0x03, 0x11, 0x0d},
+                    {0x03, 0x11, 0x09},
+                    {0x03, 0x11, 0x0b}
+            };
+            final Capture<SensorOrientation[]> actual = new Capture<>();
 
-        actual.set(new SensorOrientation[8]);
-        boschAcc.orientation().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(SensorOrientation.class);
-                i++;
-            }
-        }));
+            actual.set(new SensorOrientation[8]);
+            boschAcc.orientation().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(SensorOrientation.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
 
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
-
-        assertArrayEquals(expected, actual.get());
+                assertArrayEquals(expected, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

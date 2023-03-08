@@ -24,16 +24,19 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBmi160.SignificantMotionDataProducer;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 12/17/16.
@@ -42,49 +45,74 @@ import bolts.Capture;
 public class TestBmi160SignificantMotion extends UnitTestBase {
     private AccelerometerBmi160 bmi160Acc;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        connectToBoard();
-
-        bmi160Acc = mwBoard.getModule(AccelerometerBmi160.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            bmi160Acc = mwBoard.getModule(AccelerometerBmi160.class);
+        });
     }
 
     @Test
-    public void startSignificantMotion() {
+    public void startSignificantMotion() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, 0x09, 0x07, 0x00};
 
-        bmi160Acc.motion(SignificantMotionDataProducer.class).start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            bmi160Acc.motion(SignificantMotionDataProducer.class).start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void stopSignificantMotion() {
+    public void stopSignificantMotion() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, 0x09, 0x00, 0x07};
 
-        bmi160Acc.motion(SignificantMotionDataProducer.class).stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            bmi160Acc.motion(SignificantMotionDataProducer.class).stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void configureSignificantMotion() {
+    public void configureSignificantMotion() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, 0x0a, 0x00, 0x14, 0x14, 0x36};
 
-        bmi160Acc.motion(SignificantMotionDataProducer.class).configure()
-                .proofTime(AccelerometerBmi160.ProofTime.PT_1_S)
-                .skipTime(AccelerometerBmi160.SkipTime.ST_1_5_S)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            bmi160Acc.motion(SignificantMotionDataProducer.class).configure()
+                    .proofTime(AccelerometerBmi160.ProofTime.PT_1_S)
+                    .skipTime(AccelerometerBmi160.SkipTime.ST_1_5_S)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void significantMotionData() {
+    public void significantMotionData() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final byte expected = 0x1;
         final Capture<Byte> actual = new Capture<>();
 
-        bmi160Acc.motion(SignificantMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])));
-        sendMockResponse(new byte[] {0x03, 0x0b, 0x01});
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            bmi160Acc.motion(SignificantMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        sendMockResponse(new byte[] {0x03, 0x0b, 0x01});
 
-        assertEquals(expected, actual.get().byteValue());
+                        assertEquals(expected, actual.get().byteValue());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

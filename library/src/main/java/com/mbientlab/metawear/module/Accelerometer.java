@@ -24,13 +24,12 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.ConfigEditorBase;
 import com.mbientlab.metawear.Configurable;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 import com.mbientlab.metawear.data.Acceleration;
-
-import bolts.Task;
 
 /**
  * Measures sources of acceleration, such as gravity or motion.  This interface is provides general

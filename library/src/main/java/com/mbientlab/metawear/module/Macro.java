@@ -24,9 +24,8 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.MetaWearBoard.Module;
-
-import bolts.Task;
 
 /**
  * Firmware feature that saves MetaWear commands to the on-board flash memory
@@ -46,7 +45,7 @@ public interface Macro extends Module {
      * Ends macro recording
      * @return Task containing the id of the recorded task
      */
-    Task<Byte> endRecordAsync();
+    Task<Object> endRecordAsync();
 
     /**
      * Execute the commands corresponding to the macro ID

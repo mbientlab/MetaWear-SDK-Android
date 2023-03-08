@@ -28,15 +28,14 @@ import static com.mbientlab.metawear.data.Sign.NEGATIVE;
 import static com.mbientlab.metawear.data.Sign.POSITIVE;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 import com.mbientlab.metawear.module.AccelerometerMma8452q.Movement;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 12/20/16.
@@ -45,39 +44,44 @@ import bolts.Capture;
 public class TestMma8452qMovement extends UnitTestBase {
     private AccelerometerMma8452q mma8452qAcc;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
-        connectToBoard();
-
         mma8452qAcc = mwBoard.getModule(AccelerometerMma8452q.class);
+
+        return connectToBoardNew();
     }
 
     @Test
     public void start() {
         byte[] expected = new byte[] {0x03, 0x05, 0x01};
 
-        mma8452qAcc.freeFall().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.freeFall().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @Test
     public void stop() {
         byte[] expected = new byte[] {0x03, 0x05, 0x00};
 
-        mma8452qAcc.freeFall().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.freeFall().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @Test
     public void configureFreefall() {
         byte[] expected = new byte[] {0x03, 0x06, (byte) 0xb8, 0x00, 0x07, 0x0a};
 
-        mma8452qAcc.freeFall().configure()
-                .threshold(0.5f)
-                .axes(CartesianAxis.values())
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.freeFall().configure()
+                    .threshold(0.5f)
+                    .axes(CartesianAxis.values())
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @Test
@@ -92,33 +96,40 @@ public class TestMma8452qMovement extends UnitTestBase {
                 new Movement(new boolean[] {false, false, false}, new Sign[] {POSITIVE, POSITIVE, POSITIVE}),
                 new Movement(new boolean[] {false, false, false}, new Sign[] {NEGATIVE, POSITIVE, NEGATIVE}),
         };
-        final Capture<Movement[]> actual = new Capture<>();
+        setup().addOnSuccessListener(ignored -> {
 
-        actual.set(new Movement[3]);
-        mma8452qAcc.freeFall().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Movement.class);
-                i++;
+
+            final Capture<Movement[]> actual = new Capture<>();
+
+            actual.set(new Movement[3]);
+            mma8452qAcc.freeFall().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Movement.class);
+                    i++;
+                }
+            }));
+            for (byte[] it : responses) {
+                sendMockResponse(it);
             }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
 
-        assertArrayEquals(expected, actual.get());
+            assertArrayEquals(expected, actual.get());
+        });
     }
 
     @Test
     public void configureMotion() {
         byte[] expected = new byte[] {0x03, 0x06, (byte) 0xf8, 0x00, 0x1f, 0x0a};
 
-        mma8452qAcc.motion().configure()
-                .threshold(2f)
-                .axes(CartesianAxis.values())
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.motion().configure()
+                    .threshold(2f)
+                    .axes(CartesianAxis.values())
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @Test
@@ -133,21 +144,25 @@ public class TestMma8452qMovement extends UnitTestBase {
                 new Movement(new boolean[] {false, true, false}, new Sign[] {NEGATIVE, POSITIVE, NEGATIVE}),
                 new Movement(new boolean[] {true, false, false}, new Sign[] {NEGATIVE, NEGATIVE, POSITIVE}),
         };
-        final Capture<Movement[]> actual = new Capture<>();
 
-        actual.set(new Movement[3]);
-        mma8452qAcc.motion().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Movement.class);
-                i++;
+        setup().addOnSuccessListener(ignored -> {
+            final Capture<Movement[]> actual = new Capture<>();
+
+            actual.set(new Movement[3]);
+            mma8452qAcc.motion().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Movement.class);
+                    i++;
+                }
+            }));
+            for (byte[] it : responses) {
+                sendMockResponse(it);
             }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
 
-        assertArrayEquals(expected, actual.get());
+            assertArrayEquals(expected, actual.get());
+        });
     }
 }

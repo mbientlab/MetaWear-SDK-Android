@@ -24,8 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.module.BarometerBosch;
 
 /**
@@ -35,14 +38,15 @@ import com.mbientlab.metawear.module.BarometerBosch;
 public abstract class TestBarometerBoschBase extends UnitTestBase {
     protected BarometerBosch baroBosch;
 
-    public void setup(Class<? extends MetaWearBoard.Module> moduleClass) {
+    public Task<Void> setup(Class<? extends MetaWearBoard.Module> moduleClass) {
         try {
             junitPlatform.boardInfo = new MetaWearBoardInfo(moduleClass);
-            connectToBoard();
-
-            baroBosch = mwBoard.getModule(BarometerBosch.class);
+            return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                baroBosch = mwBoard.getModule(BarometerBosch.class);
+            });
         } catch (Exception e) {
             fail(e);
+            return Tasks.forException(e);
         }
     }
 }

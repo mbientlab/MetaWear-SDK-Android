@@ -24,19 +24,23 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.BarometerBme280;
 import com.mbientlab.metawear.module.ColorTcs34725;
 import com.mbientlab.metawear.module.ColorTcs34725.Gain;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -61,27 +65,32 @@ public class TestColorTsc34725Config extends UnitTestBase {
 
     private ColorTcs34725 colorTcs34725;
 
-    @BeforeEach
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(ColorTcs34725.class);
-        connectToBoard();
-
-        colorTcs34725= mwBoard.getModule(ColorTcs34725.class);
+    public Task<Void> setup() {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(ColorTcs34725.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            colorTcs34725 = mwBoard.getModule(ColorTcs34725.class);
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configure(Gain gain, int integrationIdx, boolean illuminate) {
+    public void configure(Gain gain, int integrationIdx, boolean illuminate) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected= new byte[] {0x17, 0x02, INTEGRATION_BITMASKS[integrationIdx], (byte) gain.ordinal(), (byte) (illuminate ? 0x1 : 0x0)};
 
-        ColorTcs34725.ConfigEditor editor = colorTcs34725.configure()
-                .gain(gain)
-                .integrationTime(INTEGRATION_TIMES[integrationIdx]);
-        if (illuminate) {
-            editor.enableIlluminatorLed();
-        }
-        editor.commit();
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            ColorTcs34725.ConfigEditor editor = colorTcs34725.configure()
+                    .gain(gain)
+                    .integrationTime(INTEGRATION_TIMES[integrationIdx]);
+            if (illuminate) {
+                editor.enableIlluminatorLed();
+            }
+            editor.commit();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

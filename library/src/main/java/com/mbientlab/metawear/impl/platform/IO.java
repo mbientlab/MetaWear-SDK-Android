@@ -24,11 +24,11 @@
 
 package com.mbientlab.metawear.impl.platform;
 
+import com.google.android.gms.tasks.Task;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-
-import bolts.Task;
 
 /**
  * IO operations used by the API, must be implemented by the target platform to use the API.

@@ -24,9 +24,13 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.module.MagnetometerBmm150;
 import com.mbientlab.metawear.module.MagnetometerBmm150.Preset;
 
@@ -36,6 +40,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -58,31 +64,37 @@ public class TestMagnetometerBmm150Config extends UnitTestBase {
 
     private MagnetometerBmm150 mag;
 
-    public void setup(byte revision) {
+    public Task<Void> setup(byte revision) {
         try {
             junitPlatform.addCustomModuleInfo(new byte[]{0x15, (byte) 0x80, 0x00, revision});
-            connectToBoard();
-
-            mag = mwBoard.getModule(MagnetometerBmm150.class);
+            return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mag = mwBoard.getModule(MagnetometerBmm150.class);
+            });
         } catch (Exception e) {
             fail(e);
+            return Tasks.forException(e);
         }
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configure(Preset preset, byte revision) {
-        setup(revision);
-        byte[][] expected= revision == SLEEP_REV ? new byte[][] {
-                { 0x15, 0x01, 0x00},
-                { 0x15, 0x04, XY_BITMASK[preset.ordinal()], Z_BITMASK[preset.ordinal()] },
-                { 0x15, 0x03, ODR_BITMASK[preset.ordinal()] }
-        } : new byte[][] {
-                { 0x15, 0x04, XY_BITMASK[preset.ordinal()], Z_BITMASK[preset.ordinal()] },
-                { 0x15, 0x03, ODR_BITMASK[preset.ordinal()] }
-        };
-        mag.usePreset(preset);
+    public void configure(Preset preset, byte revision) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(revision).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[][] expected= revision == SLEEP_REV ? new byte[][] {
+                    { 0x15, 0x01, 0x00},
+                    { 0x15, 0x04, XY_BITMASK[preset.ordinal()], Z_BITMASK[preset.ordinal()] },
+                    { 0x15, 0x03, ODR_BITMASK[preset.ordinal()] }
+            } : new byte[][] {
+                    { 0x15, 0x04, XY_BITMASK[preset.ordinal()], Z_BITMASK[preset.ordinal()] },
+                    { 0x15, 0x03, ODR_BITMASK[preset.ordinal()] }
+            };
+            mag.usePreset(preset);
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            assertArrayEquals(expected, junitPlatform.getCommands());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

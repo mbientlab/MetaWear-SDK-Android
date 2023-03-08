@@ -24,17 +24,18 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.EVENT;
+
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
+import com.mbientlab.metawear.Capture;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.MetaWearBoard.Module;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 
 import java.util.LinkedList;
 import java.util.Queue;
-
-import bolts.Capture;
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.EVENT;
 
 /**
  * Created by etsai on 10/26/16.
@@ -71,40 +72,48 @@ class EventImpl extends ModuleImplBase implements Module {
         final LinkedList<Byte> ids = new LinkedList<>();
         final Capture<Boolean> terminate = new Capture<>(false);
 
-        return Task.forResult(null).continueWhile(() -> !terminate.get() && !eventCodeBlocks.isEmpty(), ignored -> {
+        return Tasks.forResult(!terminate.get() && !eventCodeBlocks.isEmpty()).continueWith(IMMEDIATE_EXECUTOR, result -> {
+            if (!result.getResult()) {
+                return result;
+            }
+
             Pair<? extends DataTypeBase, ? extends CodeBlock> current = eventCodeBlocks.poll();
 
-            activeDataType= current.first;
-            recordedCommands= new LinkedList<>();
+            activeDataType = current.first;
+            recordedCommands = new LinkedList<>();
             current.second.program();
-            activeDataType= null;
+            activeDataType = null;
 
             final Capture<Boolean> terminate2 = new Capture<>(false);
-            return Task.forResult(null).continueWhile(() -> !terminate2.get() && !recordedCommands.isEmpty(), ignored2 -> {
+            return Tasks.forResult(!terminate2.get() && !recordedCommands.isEmpty()).continueWith(IMMEDIATE_EXECUTOR, ignored -> {
+                if (!ignored.getResult()) {
+                    return ignored;
+                }
+
                 mwPrivate.sendCommand(recordedCommands.poll());
                 return createEventTask.execute("Did not receive event id within %dms", Constant.RESPONSE_TIMEOUT,
                         () -> mwPrivate.sendCommand(recordedCommands.poll())
-                ).continueWithTask(task -> {
-                    if (task.isFaulted()) {
+                ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                    if (!task.isSuccessful()) {
                         terminate.set(true);
                         terminate2.set(true);
-                        return Task.<Void>forError(task.getError());
+                        return Tasks.<Void>forException(task.getException());
                     }
 
                     ids.add(task.getResult()[2]);
-                    return Task.forResult(null);
+                    return Tasks.forResult(null);
                 });
             });
-        }).continueWithTask(task -> {
-            if (task.isFaulted()) {
+        }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+            if (!task.isSuccessful()) {
                 for(byte it: ids) {
                     removeEventCommand(it);
                 }
 
-                return Task.forError(task.getError());
+                return Tasks.forException(task.getException());
             }
 
-            return Task.forResult(ids);
+            return Tasks.forResult(ids);
         });
     }
 

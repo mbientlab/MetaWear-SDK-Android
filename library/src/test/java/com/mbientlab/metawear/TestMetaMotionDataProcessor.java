@@ -24,31 +24,34 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.Quaternion;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.SensorFusionBosch;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 12/5/16.
  */
 
 public class TestMetaMotionDataProcessor extends UnitTestBase {
-    @BeforeEach
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(DataProcessor.class, SensorFusionBosch.class);
-        connectToBoard();
+    public Task<Void> setup() {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(DataProcessor.class, SensorFusionBosch.class);
+        return connectToBoardNew();
     }
 
     @Test
     public void testQuaternionLimiter() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[][] expected = new byte[][] {
                 {0x09, 0x02, 0x19, 0x07, (byte) 0xff, (byte) 0xe0, 0x08, 0x17, 0x14, 0x00, 0x00, 0x00},
                 {0x0b, 0x02, 0x09, 0x03, 0x00, 0x60},
@@ -57,24 +60,38 @@ public class TestMetaMotionDataProcessor extends UnitTestBase {
                 {0x0b, 0x02, 0x09, 0x03, 0x00, 0x6c}
         };
 
-        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(source -> source.limit(20).log(null)).waitForCompletion();
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            mwBoard.getModule(SensorFusionBosch.class).quaternion()
+                    .addRouteAsync(source -> source.limit(20).log(null))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                        assertArrayEquals(expected, junitPlatform.getCommands());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void testQuaternionLimiterData() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final Quaternion expected = new Quaternion(Float.intBitsToFloat(0x3f6e62a4), Float.intBitsToFloat( 0x3eba7b01),
                 Float.intBitsToFloat(0x3c756866), Float.intBitsToFloat(0x00000000));
-        final Capture<Quaternion> actual = new Capture<>();
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final Capture<Quaternion> actual = new Capture<>();
 
-        mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(source ->
-                source.limit(20).log((data, env) -> actual.set(data.value(Quaternion.class)))
-        ).waitForCompletion();
-
-        sendMockResponse(new byte[] {0x0b, 0x07, 0x60, 0x78, 0x70, 0x05, 0x00, (byte) 0xa4, 0x62, 0x6e, 0x3f,
-                0x61, 0x78, 0x70, 0x05, 0x00, 0x01, 0x7b, (byte) 0xba, 0x3e});
-        sendMockResponse(new byte[] {0x0b, 0x07, 0x62, 0x78, 0x70, 0x05, 0x00, 0x66, 0x68, 0x75, 0x3c,
-                0x63, 0x78, 0x70, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00});
-        assertEquals(expected, actual.get());
+            mwBoard.getModule(SensorFusionBosch.class).quaternion().addRouteAsync(source ->
+                    source.limit(20).log((data, env) -> actual.set(data.value(Quaternion.class)))
+            ).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                sendMockResponse(new byte[] {0x0b, 0x07, 0x60, 0x78, 0x70, 0x05, 0x00, (byte) 0xa4, 0x62, 0x6e, 0x3f,
+                        0x61, 0x78, 0x70, 0x05, 0x00, 0x01, 0x7b, (byte) 0xba, 0x3e});
+                sendMockResponse(new byte[] {0x0b, 0x07, 0x62, 0x78, 0x70, 0x05, 0x00, 0x66, 0x68, 0x75, 0x3c,
+                        0x63, 0x78, 0x70, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00});
+                assertEquals(expected, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

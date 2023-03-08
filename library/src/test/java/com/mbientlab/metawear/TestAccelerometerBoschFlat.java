@@ -24,9 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.AccelerometerBosch;
@@ -35,9 +37,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 12/18/16.
@@ -52,63 +55,75 @@ public class TestAccelerometerBoschFlat extends UnitTestBase {
 
     private AccelerometerBosch boschAcc;
 
-    public void setup(Class<? extends AccelerometerBosch> accelClass) {
-        try {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-            connectToBoard();
-
+    public Task<Void> setup(Class<? extends AccelerometerBosch> accelClass) {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             boschAcc = mwBoard.getModule(AccelerometerBosch.class);
-        } catch(Exception e) {
-            fail(e);
-        }
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void start(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x12, 0x01, 0x00};
+    public void start(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x12, 0x01, 0x00};
 
-        boschAcc.flat().start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.flat().start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stop(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x12, 0x00, 0x01};
+    public void stop(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x12, 0x00, 0x01};
 
-        boschAcc.flat().stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.flat().stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void handleResponse(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final boolean[] expected = new boolean[] {
-                true, false
-        };
-        final byte[][] responses = new byte[][] {
-                {0x03, 0x14, 0x03},
-                {0x03, 0x14, 0x01}
-        };
-        final Capture<boolean[]> actual = new Capture<>();
+    public void handleResponse(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final boolean[] expected = new boolean[] {
+                    true, false
+            };
+            final byte[][] responses = new byte[][] {
+                    {0x03, 0x14, 0x03},
+                    {0x03, 0x14, 0x01}
+            };
+            final Capture<boolean[]> actual = new Capture<>();
 
-        actual.set(new boolean[2]);
-        boschAcc.flat().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(Boolean.class);
-                i++;
-            }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
+            actual.set(new boolean[2]);
+            boschAcc.flat().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(Boolean.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
 
-        assertArrayEquals(expected, actual.get());
+                assertArrayEquals(expected, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

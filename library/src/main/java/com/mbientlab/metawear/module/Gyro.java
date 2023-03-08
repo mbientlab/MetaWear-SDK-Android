@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.ConfigEditorBase;
 import com.mbientlab.metawear.Configurable;
@@ -31,8 +32,6 @@ import com.mbientlab.metawear.MetaWearBoard.Module;
 import com.mbientlab.metawear.data.AngularVelocity;
 
 import java.util.HashMap;
-
-import bolts.Task;
 
 /**
  * Sensor on the BMI160 and BMI270 IMU measuring angular velocity

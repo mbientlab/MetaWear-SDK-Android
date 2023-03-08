@@ -24,12 +24,11 @@
 
 package com.mbientlab.metawear.module;
 
-import com.mbientlab.metawear.DataToken;
-import com.mbientlab.metawear.builder.RouteComponent.Action;
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.CodeBlock;
+import com.mbientlab.metawear.DataToken;
 import com.mbientlab.metawear.MetaWearBoard.Module;
-
-import bolts.Task;
+import com.mbientlab.metawear.builder.RouteComponent.Action;
 
 /**
  * Auxiliary functions, for advanced use only

@@ -24,15 +24,18 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.ProximityTsl2671;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * Created by etsai on 10/2/16.
@@ -41,42 +44,63 @@ import bolts.Capture;
 public class TestProximityTsl2671 extends UnitTestBase {
     private ProximityTsl2671 proximity;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(ProximityTsl2671.class);
-        connectToBoard();
-
-        proximity= mwBoard.getModule(ProximityTsl2671.class);
-    }
-
-    @Test
-    public void read() {
-        byte[] expected= new byte[] {0x18, (byte) 0x81};
-
-        proximity.adc().addRouteAsync(source -> source.stream(null));
-        proximity.adc().read();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
-    }
-
-    @Test
-    public void readSilent() {
-        byte[] expected= new byte[] {0x18, (byte) 0xc1};
-
-        proximity.adc().read();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
-    }
-
-    @Test
-    public void interpretData() {
-        short expected= 1522;
-        final Capture<Short> actual= new Capture<>();
-
-        proximity.adc().addRouteAsync(source -> source.stream((data, env) -> ((Capture<Short>) env[0]).set(data.value(Short.class)))).continueWith(task -> {
-            task.getResult().setEnvironment(0, actual);
-            return null;
+        return connectToBoardNew().continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
+            proximity = mwBoard.getModule(ProximityTsl2671.class);
+            return ignored;
         });
-        sendMockResponse(new byte[] { 0x18, (byte) 0x81, (byte) 0xf2, 0x05 });
+    }
 
-        assertEquals(expected, actual.get().shortValue());
+    @Test
+    public void read() throws InterruptedException {
+        byte[] expected= new byte[] {0x18, (byte) 0x81};
+        CountDownLatch doneSignal = new CountDownLatch(1);
+
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                    proximity.adc().addRouteAsync(source -> source.stream(null));
+                    proximity.adc().read();
+                    assertArrayEquals(expected, junitPlatform.getLastCommand());
+                    doneSignal.countDown();
+                });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
+
+    @Test
+    public void readSilent() throws InterruptedException {
+        byte[] expected= new byte[] {0x18, (byte) 0xc1};
+        CountDownLatch doneSignal = new CountDownLatch(1);
+
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            proximity.adc().read();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
+    }
+
+    @Test
+    public void interpretData() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            short expected = 1522;
+            final Capture<Short> actual = new Capture<>();
+
+            proximity.adc().addRouteAsync(source -> source.stream((data, env)
+                    -> ((Capture<Short>) env[0]).set(data.value(Short.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        task.setEnvironment(0, actual);
+            }).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                sendMockResponse(new byte[] { 0x18, (byte) 0x81, (byte) 0xf2, 0x05 });
+
+                assertEquals(expected, actual.get().shortValue());
+                doneSignal.countDown();
+                return null;
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

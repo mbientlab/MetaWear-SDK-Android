@@ -24,7 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.mbientlab.metawear.module.BarometerBme280;
 import com.mbientlab.metawear.module.BarometerBmp280;
@@ -35,6 +37,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -50,34 +54,49 @@ public class TestBarometerBosch extends TestBarometerBoschBase {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startNoAltitude(Class<? extends MetaWearBoard.Module> moduleClass) {
-        setup(moduleClass);
-        byte[] expected= new byte[] {0x12, 0x04, 0x01, 0x00};
+    public void startNoAltitude(Class<? extends MetaWearBoard.Module> moduleClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected= new byte[] {0x12, 0x04, 0x01, 0x00};
 
-        baroBosch.start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            baroBosch.start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startWithAltitude(Class<? extends MetaWearBoard.Module> moduleClass) {
-        setup(moduleClass);
-        byte[] expected= new byte[] {0x12, 0x04, 0x01, 0x01};
+    public void startWithAltitude(Class<? extends MetaWearBoard.Module> moduleClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected= new byte[] {0x12, 0x04, 0x01, 0x01};
 
-        baroBosch.altitude().start();
-        baroBosch.start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            baroBosch.altitude().start();
+            baroBosch.start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stop(Class<? extends MetaWearBoard.Module> moduleClass) {
-        setup(moduleClass);
-        byte[] expected= new byte[] {0x12, 0x04, 0x00, 0x00};
+    public void stop(Class<? extends MetaWearBoard.Module> moduleClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x12, 0x04, 0x00, 0x00};
 
-        baroBosch.stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            baroBosch.stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

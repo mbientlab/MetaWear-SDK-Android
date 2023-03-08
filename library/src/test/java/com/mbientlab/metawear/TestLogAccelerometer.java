@@ -1,8 +1,10 @@
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -15,6 +17,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -32,34 +36,34 @@ public class TestLogAccelerometer extends UnitTestBase {
 
     private Accelerometer accelerometer;
 
-    public void setup(Class<? extends Accelerometer> accelClass) {
-        try {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-            connectToBoard();
-
+    public Task<Void> setup(Class<? extends Accelerometer> accelClass) {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             accelerometer = mwBoard.getModule(Accelerometer.class);
-        } catch (Exception e) {
-            fail(e);
-        }
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void setupAndRemove(Class<? extends Accelerometer> accelClass) throws InterruptedException {
-        setup(accelClass);
-        byte[][] expected= new byte[][]{
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[][] expected = new byte[][]{
                 {0x0b, 0x02, 0x03, 0x04, (byte) 0xff, 0x60},
                 {0x0b, 0x02, 0x03, 0x04, (byte) 0xff, 0x24},
                 {0x0b, 0x03, 0x00},
                 {0x0b, 0x03, 0x01}
         };
 
-        accelerometer.acceleration().addRouteAsync(source -> source.log(null)).continueWith(task -> {
-            task.getResult().remove();
-            return null;
-        }).waitForCompletion();
-
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            accelerometer.acceleration().addRouteAsync(source -> source.log(null)).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                task.remove();
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                assertArrayEquals(expected, junitPlatform.getCommands());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
 }

@@ -24,9 +24,12 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.builder.function.Function1;
 import com.mbientlab.metawear.builder.function.Function2;
 import com.mbientlab.metawear.module.Accelerometer;
@@ -42,6 +45,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -59,22 +65,17 @@ public class TestAccFeedback extends UnitTestBase {
 
     private Accelerometer accelerometer;
 
-    public void setup(Class<? extends Accelerometer> accelClass) {
-        try {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-            junitPlatform.firmware = "1.1.3";
-            connectToBoard();
-
-            accelerometer = mwBoard.getModule(Accelerometer.class);
-        } catch (Exception e) {
-            fail(e);
-        }
+    public Task<Void> setup(Class<? extends Accelerometer> accelClass) {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+        junitPlatform.firmware = "1.1.3";
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> accelerometer = mwBoard.getModule(Accelerometer.class))
+                .addOnFailureListener(e -> fail(e));
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void createYXFeedback(Class<? extends Accelerometer> accelClass) throws InterruptedException {
-        setup(accelClass);
+    public void createYXFeedback(Class<? extends Accelerometer> accelClass) throws InterruptedException, ExecutionException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[][] expected= new byte[][] {
                 {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x22, 0x0a, 0x01, 0x01},
                 {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x09, 0x15, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -89,38 +90,48 @@ public class TestAccFeedback extends UnitTestBase {
                 {0x09, 0x06, 0x01},
                 {0x0a, 0x04, 0x00}
         };
-        final AccelerationDataProducer acceleration = accelerometer.acceleration();
 
-        acceleration.addRouteAsync(source ->
-                source.split()
-                    .index(1).delay((byte) 1).map(Function2.SUBTRACT, acceleration.xAxisName()).stream(null).log(null)
-                .end()
-        ).waitForCompletion();
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final AccelerationDataProducer acceleration = accelerometer.acceleration();
 
-        mwBoard.lookupRoute(0).remove();
-
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            acceleration.addRouteAsync(source ->
+                    source.split()
+                            .index(1).delay((byte) 1).map(Function2.SUBTRACT, acceleration.xAxisName()).stream(null).log(null)
+                            .end()
+            ).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                mwBoard.lookupRoute(0).remove();
+                assertArrayEquals(expected, junitPlatform.getCommands());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void xyAbsAdd(Class<? extends Accelerometer> accelClass) throws InterruptedException {
-        setup(accelClass);
-        final byte[][] expected = new byte[][] {
-                {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x20, 0x09, 0x15, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00},
-                {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x22, 0x09, 0x15, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00},
-                {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x09, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00},
-                {0x0a, 0x02, 0x09, 0x03, 0x00, 0x09, 0x05, 0x09, 0x05, 0x04},
-                {0x0a, 0x03, 0x02, 0x09, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00}
-        };
-        final AccelerationDataProducer acceleration = accelerometer.acceleration();
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final byte[][] expected = new byte[][] {
+                    {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x20, 0x09, 0x15, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00},
+                    {0x09, 0x02, 0x03, 0x04, (byte) 0xff, 0x22, 0x09, 0x15, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00},
+                    {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x09, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00},
+                    {0x0a, 0x02, 0x09, 0x03, 0x00, 0x09, 0x05, 0x09, 0x05, 0x04},
+                    {0x0a, 0x03, 0x02, 0x09, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00}
+            };
+            final AccelerationDataProducer acceleration = accelerometer.acceleration();
 
-        acceleration.addRouteAsync(source ->
-                source.split()
-                    .index(0).map(Function1.ABS_VALUE).name("x-abs")
-                    .index(1).map(Function1.ABS_VALUE).map(Function2.ADD, "x-abs")
-        ).waitForCompletion();
-
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            acceleration.addRouteAsync(source ->
+                    source.split()
+                            .index(0).map(Function1.ABS_VALUE).name("x-abs")
+                            .index(1).map(Function1.ABS_VALUE).map(Function2.ADD, "x-abs")
+            ).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getCommands());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -24,9 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.BarometerBme280;
 import com.mbientlab.metawear.module.BarometerBme280.StandbyTime;
 import com.mbientlab.metawear.module.BarometerBosch;
@@ -37,6 +39,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -59,49 +63,60 @@ public class TestBarometerBme280Standby extends UnitTestBase {
 
     private byte[] expected;
 
-    public void setup(StandbyTime standby) {
-        try {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(BarometerBme280.class);
-            connectToBoard();
-
+    public Task<Void> setup(StandbyTime standby) {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(BarometerBme280.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             baroBme280 = mwBoard.getModule(BarometerBme280.class);
             expected = new byte[]{0x12, 0x03, 0x2c, STANDBY_BITMASK[standby.ordinal()]};
-        } catch (Exception e) {
-            fail(e);
-        }
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void setStandbyTime(StandbyTime standby, float standbyLiteral) {
-        setup(standby);
-        baroBme280.configure()
-                .standbyTime(standby)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    public void setStandbyTime(StandbyTime standby, float standbyLiteral) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(standby).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            baroBme280.configure()
+                    .standbyTime(standby)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void setStandbyTimeRaw(StandbyTime standby, float standbyLiteral) {
-        setup(standby);
-        baroBme280.configure()
-                .standbyTime(standbyLiteral)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+    public void setStandbyTimeRaw(StandbyTime standby, float standbyLiteral) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(standby).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            baroBme280.configure()
+                    .standbyTime(standbyLiteral)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void setAll(StandbyTime standby, float standbyLiteral) {
-        setup(standby);
-        byte[] expected= new byte[] {0x12, 0x03, 0x30, (byte) (STANDBY_BITMASK[standby.ordinal()] | 0x10)};
+    public void setAll(StandbyTime standby, float standbyLiteral) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(standby).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x12, 0x03, 0x30, (byte) (STANDBY_BITMASK[standby.ordinal()] | 0x10)};
 
-        baroBme280.configure()
-                .standbyTime(standby)
-                .pressureOversampling(BarometerBosch.OversamplingMode.HIGH)
-                .filterCoeff(BarometerBosch.FilterCoeff.AVG_16)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            baroBme280.configure()
+                    .standbyTime(standby)
+                    .pressureOversampling(BarometerBosch.OversamplingMode.HIGH)
+                    .filterCoeff(BarometerBosch.FilterCoeff.AVG_16)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

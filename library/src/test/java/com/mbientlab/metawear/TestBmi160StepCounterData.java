@@ -24,15 +24,17 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 11/14/16.
@@ -41,46 +43,61 @@ import bolts.Capture;
 public class TestBmi160StepCounterData extends UnitTestBase {
     private AccelerometerBmi160.StepCounterDataProducer counter;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        connectToBoard();
-
-        counter = mwBoard.getModule(AccelerometerBmi160.class).stepCounter();
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            counter = mwBoard.getModule(AccelerometerBmi160.class).stepCounter();
+        });
     }
 
     @Test
-    public void handleResponse() {
+    public void handleResponse() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final Capture<Short> actual = new Capture<>();
-        short expected= 43;
+        short expected = 43;
 
-        counter.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Short>) env[0]).set(data.value(Short.class))))
-                .continueWith(task -> {
-                    task.getResult().setEnvironment(0, actual);
-                    return null;
-                });
-
-        sendMockResponse(new byte[] {0x03, (byte) 0x9a, 0x2b, 0x00});
-        assertEquals(expected, actual.get().shortValue());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            counter.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Short>) env[0]).set(data.value(Short.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        task.setEnvironment(0, actual);
+                    }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        sendMockResponse(new byte[] {0x03, (byte) 0x9a, 0x2b, 0x00});
+                        assertEquals(expected, actual.get().shortValue());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void read() {
+    public void read() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, (byte) 0x9a};
 
-        counter.addRouteAsync(source -> source.stream(null)).continueWith(task -> {
-            counter.read();
-            return null;
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            counter.addRouteAsync(source -> source.stream(null)).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                counter.read();
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getLastCommand());
+                doneSignal.countDown();
+            });
         });
-
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void silentRead() {
+    public void silentRead() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[] expected = new byte[] {0x03, (byte) 0xda};
-        counter.read();
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            counter.read();
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

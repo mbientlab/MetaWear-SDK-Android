@@ -24,10 +24,13 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Temperature.Sensor;
 
@@ -37,9 +40,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 10/3/16.
@@ -55,40 +59,49 @@ public class TestTemperatureMwrProData extends UnitTestBase {
 
     private Sensor currentSrc;
 
-    public void setup(int sourceIdx) {
+    public Task<Void> setup(int sourceIdx) {
         try {
             junitPlatform.boardInfo= new MetaWearBoardInfo(Temperature.class);
-            connectToBoard();
-
-            currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx];
+            return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                currentSrc = mwBoard.getModule(Temperature.class).sensors()[sourceIdx];
+            });
         } catch (Exception e) {
             fail(e);
+            return Tasks.forException(e);
         }
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void read(int sourceIdx) {
-        setup(sourceIdx);
+    public void read(int sourceIdx) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        var task = setup(sourceIdx).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x4, (byte) 0x81, (byte) sourceIdx};
 
-        byte[] expected= new byte[] {0x4, (byte) 0x81, (byte) sourceIdx};
+            currentSrc.addRouteAsync(source -> source.stream(null));
+            currentSrc.read();
 
-        currentSrc.addRouteAsync(source -> source.stream(null));
-        currentSrc.read();
-
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void readSilent(int sourceIdx) {
-        setup(sourceIdx);
+    public void readSilent(int sourceIdx) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(sourceIdx).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x4, (byte) 0xc1, (byte) sourceIdx};
 
-        byte[] expected= new byte[] {0x4, (byte) 0xc1, (byte) sourceIdx};
+            currentSrc.read();
 
-        currentSrc.read();
-
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     private static final byte[][] RESPONSES = new byte[][] {
@@ -101,17 +114,22 @@ public class TestTemperatureMwrProData extends UnitTestBase {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void interpretData(int sourceIdx) {
-        setup(sourceIdx);
+    public void interpretData(int sourceIdx) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(sourceIdx).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final Capture<Float> actual = new Capture<>();
 
-        final Capture<Float> actual= new Capture<>();
+            currentSrc.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                task.getResult().setEnvironment(0, actual);
+                return null;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                sendMockResponse(RESPONSES[sourceIdx]);
 
-        currentSrc.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(task -> {
-            task.getResult().setEnvironment(0, actual);
-            return null;
+                assertEquals(EXPECTED[sourceIdx], actual.get(), 0.00000001f);
+                doneSignal.countDown();
+            });
         });
-        sendMockResponse(RESPONSES[sourceIdx]);
-
-        assertEquals(EXPECTED[sourceIdx], actual.get(), 0.00000001f);
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

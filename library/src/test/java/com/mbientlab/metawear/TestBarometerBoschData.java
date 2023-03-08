@@ -24,10 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.BarometerBme280;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,9 +37,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 10/2/16.
@@ -56,53 +58,78 @@ public class TestBarometerBoschData extends TestBarometerBoschBase {
     }
 
     private Route dataRoute;
-    private final Capture<Float> actualData= new Capture<>();
+    private final Capture<Float> actualData = new Capture<>();
 
-    public void setup(Class<? extends MetaWearBoard.Module> moduleClass, byte dataType) {
-        try {
-            super.setup(moduleClass);
+    public Task<Void> setup(Class<? extends MetaWearBoard.Module> moduleClass, byte dataType) {
+        return super.setup(moduleClass);
+    }
 
+    @ParameterizedTest
+    @MethodSource("data")
+    public void subscribe(Class<? extends MetaWearBoard.Module> moduleClass, byte dataType) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass, dataType).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             AsyncDataProducer producer = dataType == PRESSURE ? baroBosch.pressure() : baroBosch.altitude();
             producer.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))))
-                    .continueWith(task -> {
-                        dataRoute = task.getResult();
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, dr -> {
+                        dataRoute = dr;
                         dataRoute.setEnvironment(0, actualData);
-                        return null;
+                    }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        byte[] expected= new byte[] {0x12, dataType, 0x1};
+
+                        assertArrayEquals(expected, junitPlatform.getLastCommand());
+                        doneSignal.countDown();
                     });
-        } catch (Exception e) {
-            fail(e);
-        }
+
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void subscribe(Class<? extends MetaWearBoard.Module> moduleClass, byte dataType) {
-        setup(moduleClass, dataType);
-        byte[] expected= new byte[] {0x12, dataType, 0x1};
+    public void unsubscribe(Class<? extends MetaWearBoard.Module> moduleClass, byte dataType) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass, dataType).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            AsyncDataProducer producer = dataType == PRESSURE ? baroBosch.pressure() : baroBosch.altitude();
+            producer.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, dr -> {
+                        dataRoute = dr;
+                        dataRoute.setEnvironment(0, actualData);
+                    }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        byte[] expected= new byte[] {0x12, dataType, 0x0};
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+                        dataRoute.unsubscribe(0);
+                        assertArrayEquals(expected, junitPlatform.getLastCommand());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void unsubscribe(Class<? extends MetaWearBoard.Module> moduleClass, byte dataType) {
-        setup(moduleClass, dataType);
-        byte[] expected= new byte[] {0x12, dataType, 0x0};
+    public void interpretData(Class<? extends MetaWearBoard.Module> moduleClass, byte dataType) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(moduleClass, dataType).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            AsyncDataProducer producer = dataType == PRESSURE ? baroBosch.pressure() : baroBosch.altitude();
+            producer.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, dr -> {
+                        dataRoute = dr;
+                        dataRoute.setEnvironment(0, actualData);
+                    }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        float expected= dataType == PRESSURE ? 101173.828125f : -480.8828125f;
+                        byte[] response= dataType == PRESSURE ?
+                                new byte[] {0x12, 0x01, (byte) 0xd3, 0x35, (byte) 0x8b, 0x01} :
+                                new byte[] {0x12, 0x02, 0x1e, 0x1f, (byte) 0xfe, (byte) 0xff};
 
-        dataRoute.unsubscribe(0);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
-    }
-
-    @ParameterizedTest
-    @MethodSource("data")
-    public void interpretData(Class<? extends MetaWearBoard.Module> moduleClass, byte dataType) {
-        setup(moduleClass, dataType);
-        float expected= dataType == PRESSURE ? 101173.828125f : -480.8828125f;
-        byte[] response= dataType == PRESSURE ?
-                new byte[] {0x12, 0x01, (byte) 0xd3, 0x35, (byte) 0x8b, 0x01} :
-                new byte[] {0x12, 0x02, 0x1e, 0x1f, (byte) 0xfe, (byte) 0xff};
-
-        sendMockResponse(response);
-        assertEquals(expected, actualData.get(), 0.00000001);
+                        sendMockResponse(response);
+                        assertEquals(expected, actualData.get(), 0.00000001);
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

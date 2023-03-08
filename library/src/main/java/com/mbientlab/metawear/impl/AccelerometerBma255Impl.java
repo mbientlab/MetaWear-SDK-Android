@@ -24,6 +24,11 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
+
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
@@ -31,10 +36,6 @@ import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 
 import java.util.Arrays;
-
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
 
 /**
  * Created by etsai on 9/1/16.
@@ -136,9 +137,9 @@ class AccelerometerBma255Impl extends AccelerometerBoschImpl implements Accelero
     public Task<Void> pullConfigAsync() {
         return pullConfigTask.execute("Did not receive BMA255 acc config within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)})
-        ).onSuccessTask(task -> {
-            System.arraycopy(task.getResult(), 2, accDataConfig, 0, accDataConfig.length);
-            return Task.forResult(null);
+        ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            System.arraycopy(task, 2, accDataConfig, 0, accDataConfig.length);
+            return Tasks.forResult(null);
         });
     }
 

@@ -26,13 +26,12 @@ package com.mbientlab.metawear;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.SensorOrientation;
 import com.mbientlab.metawear.module.AccelerometerMma8452q;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 12/20/16.
@@ -41,12 +40,11 @@ import bolts.Capture;
 public class TestMma8452qOrientation extends UnitTestBase {
     private AccelerometerMma8452q mma8452qAcc;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
-        connectToBoard();
-
         mma8452qAcc = mwBoard.getModule(AccelerometerMma8452q.class);
+
+        return connectToBoardNew();
     }
 
     @Test
@@ -56,8 +54,10 @@ public class TestMma8452qOrientation extends UnitTestBase {
                 {0x03, 0x08, 0x01}
         };
 
-        mma8452qAcc.orientation().start();
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.orientation().start();
+            assertArrayEquals(expected, junitPlatform.getCommands());
+        });
     }
 
     @Test
@@ -67,8 +67,10 @@ public class TestMma8452qOrientation extends UnitTestBase {
                 {0x03, 0x09, 0x00, (byte) 0x80, 0x00, 0x44, (byte) 0x84}
         };
 
-        mma8452qAcc.orientation().stop();
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        setup().addOnSuccessListener(ignored -> {
+            mma8452qAcc.orientation().stop();
+            assertArrayEquals(expected, junitPlatform.getCommands());
+        });
     }
 
     @Test
@@ -93,21 +95,25 @@ public class TestMma8452qOrientation extends UnitTestBase {
                 {0x03, 0x0a, (byte) 0x81},
                 {0x03, 0x0a, (byte) 0x83}
         };
-        final Capture<SensorOrientation[]> actual = new Capture<>();
 
-        actual.set(new SensorOrientation[8]);
-        mma8452qAcc.orientation().addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(SensorOrientation.class);
-                i++;
+        setup().addOnSuccessListener(ignored -> {
+            final Capture<SensorOrientation[]> actual = new Capture<>();
+
+            actual.set(new SensorOrientation[8]);
+            mma8452qAcc.orientation().addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(SensorOrientation.class);
+                    i++;
+                }
+            }));
+            for (byte[] it : responses) {
+                sendMockResponse(it);
             }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
 
-        assertArrayEquals(expected, actual.get());
+            assertArrayEquals(expected, actual.get());
+        });
     }
 }

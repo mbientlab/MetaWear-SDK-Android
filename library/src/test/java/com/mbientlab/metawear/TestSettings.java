@@ -24,9 +24,12 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.module.Settings;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,84 +54,89 @@ public class TestSettings extends UnitTestBase {
 
     private Settings settings;
 
-    public void setup(byte revision) {
+    public Task<Void> setup(byte revision) {
         try {
             junitPlatform.addCustomModuleInfo(new byte[]{0x11, (byte) 0x80, 0x00, revision});
-            connectToBoard();
-
-            settings = mwBoard.getModule(Settings.class);
+            return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+                    settings = mwBoard.getModule(Settings.class));
         } catch (Exception e) {
             fail(e);
+            return Tasks.forException(e);
         }
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void setName(byte revision) {
-        setup(revision);
-        byte[] expected= new byte[] {0x11, 0x01, 0x41, 0x6e, 0x74, 0x69, 0x57, 0x61, 0x72, 0x65};
+        setup(revision).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x11, 0x01, 0x41, 0x6e, 0x74, 0x69, 0x57, 0x61, 0x72, 0x65};
 
-        settings.editBleAdConfig()
-                .deviceName("AntiWare")
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            settings.editBleAdConfig()
+                    .deviceName("AntiWare")
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void setTxPower(byte revision) {
-        setup(revision);
-        byte[] expected= new byte[] {0x11, 0x03, (byte) 0xec};
+        setup(revision).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x11, 0x03, (byte) 0xec};
 
-        settings.editBleAdConfig()
-                .txPower((byte) -20)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            settings.editBleAdConfig()
+                    .txPower((byte) -20)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void setScanResponse(byte revision) {
-        setup(revision);
-        byte[][] expected= new byte[][] {
-                {0x11, 0x08, 0x03, 0x03, (byte) 0xd8, (byte) 0xfe, 0x10, 0x16, (byte) 0xd8, (byte) 0xfe, 0x00, 0x12, 0x00, 0x6d, 0x62},
-                {0x11, 0x07, 0x69, 0x65, 0x6e, 0x74, 0x6c, 0x61, 0x62, 0x00}
-        };
+        setup(revision).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[][] expected= new byte[][] {
+                    {0x11, 0x08, 0x03, 0x03, (byte) 0xd8, (byte) 0xfe, 0x10, 0x16, (byte) 0xd8, (byte) 0xfe, 0x00, 0x12, 0x00, 0x6d, 0x62},
+                    {0x11, 0x07, 0x69, 0x65, 0x6e, 0x74, 0x6c, 0x61, 0x62, 0x00}
+            };
 
-        settings.editBleAdConfig()
-                .scanResponse(new byte[] {0x03, 0x03, (byte) 0xD8, (byte) 0xfe, 0x10, 0x16, (byte) 0xd8, (byte) 0xfe, 0x00, 0x12, 0x00, 0x6d, 0x62, 0x69, 0x65, 0x6e, 0x74, 0x6c, 0x61, 0x62, 0x00})
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getCommands());
+            settings.editBleAdConfig()
+                    .scanResponse(new byte[] {0x03, 0x03, (byte) 0xD8, (byte) 0xfe, 0x10, 0x16, (byte) 0xd8, (byte) 0xfe, 0x00, 0x12, 0x00, 0x6d, 0x62, 0x69, 0x65, 0x6e, 0x74, 0x6c, 0x61, 0x62, 0x00})
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getCommands());
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void setAdParameters(byte revision) {
-        setup(revision);
-        byte[] expected;
+        setup(revision).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected;
 
-        if (revision >= 6) {
-            expected = new byte[]{0x11, 0x02, (byte) 0x9b, 0x02, (byte) 0xb4, 0x00};
-        } else if (revision >= 1) {
-            expected = new byte[]{0x11, 0x02, (byte) 0x9b, 0x02, (byte) 0xb4};
-        } else {
-            expected = new byte[]{0x11, 0x02, (byte) 0xa1, 0x01, (byte) 0xb4};
-        }
+            if (revision >= 6) {
+                expected = new byte[]{0x11, 0x02, (byte) 0x9b, 0x02, (byte) 0xb4, 0x00};
+            } else if (revision >= 1) {
+                expected = new byte[]{0x11, 0x02, (byte) 0x9b, 0x02, (byte) 0xb4};
+            } else {
+                expected = new byte[]{0x11, 0x02, (byte) 0xa1, 0x01, (byte) 0xb4};
+            }
 
-        settings.editBleAdConfig()
-                .interval((short) 417)
-                .timeout((byte) 180)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            settings.editBleAdConfig()
+                    .interval((short) 417)
+                    .timeout((byte) 180)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
     public void startAdvertising(byte revision) {
-        setup(revision);
-        byte[] expected= new byte[] {0x11, 0x5};
+        setup(revision).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x11, 0x5};
 
-        settings.startBleAdvertising();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            settings.startBleAdvertising();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+        });
     }
 }

@@ -24,8 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.builder.filter.Comparison;
 import com.mbientlab.metawear.builder.filter.ThresholdOutput;
 import com.mbientlab.metawear.builder.function.Function1;
@@ -35,8 +38,10 @@ import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Macro;
 import com.mbientlab.metawear.module.Switch;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 11/30/16.
@@ -45,18 +50,18 @@ import org.junit.jupiter.api.Test;
 public class TestMacro extends UnitTestBase {
     private Macro macro;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.firmware = "1.2.3";
         junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
         junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class, Macro.class);
-        connectToBoard();
-
-        macro = mwBoard.getModule(Macro.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            macro = mwBoard.getModule(Macro.class);
+        });
     }
 
     @Test
     public void ledOnBoot() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         byte[][] expected = new byte[][] {
                 {0x02, 0x03, 0x02, 0x02, 0x10, 0x10, 0x00, 0x00, (byte) 0xf4, 0x01, 0x00, 0x00, (byte) 0xe8, 0x03, 0x00, 0x00, 0x05},
                 {0x02, 0x01, 0x01},
@@ -66,16 +71,22 @@ public class TestMacro extends UnitTestBase {
                 {0x0f, 0x04}
         };
 
-        final Led led = mwBoard.getModule(Led.class);
-        macro.startRecord();
-        led.editPattern(Led.Color.BLUE)
-                .riseTime((short) 0).pulseDuration((short) 1000)
-                .repeatCount((byte) 5).highTime((short) 500)
-                .highIntensity((byte) 16).lowIntensity((byte) 16)
-                .commit();
-        led.play();
-        macro.endRecordAsync().waitForCompletion();
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final Led led = mwBoard.getModule(Led.class);
+            macro.startRecord();
+            led.editPattern(Led.Color.BLUE)
+                    .riseTime((short) 0).pulseDuration((short) 1000)
+                    .repeatCount((byte) 5).highTime((short) 500)
+                    .highIntensity((byte) 16).lowIntensity((byte) 16)
+                    .commit();
+            led.play();
+            macro.endRecordAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getCommands());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
@@ -108,24 +119,31 @@ public class TestMacro extends UnitTestBase {
                 {0x0f, 0x03, 0x03, 0x01, 0x01},
                 {0x0f, 0x04}
         };
-        final Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            final Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
 
-        macro.startRecord();
-        accelerometer.configure()
-                .range(16f)
-                .commit();
-        accelerometer.acceleration().addRouteAsync(source -> source.map(Function1.RSS).lowpass((byte) 16).filter(ThresholdOutput.BINARY, 0.3f)
-                .multicast()
-                .to().filter(Comparison.EQ, -1).stream(null)
-                .to().filter(Comparison.EQ, 1).stream(null)
-                .end())
-        .continueWithTask(task -> {
-            accelerometer.acceleration().start();
-            accelerometer.start();
-            return macro.endRecordAsync();
-        }).waitForCompletion();
+            macro.startRecord();
+            accelerometer.configure()
+                    .range(16f)
+                    .commit();
+            accelerometer.acceleration().addRouteAsync(source -> source.map(Function1.RSS).lowpass((byte) 16).filter(ThresholdOutput.BINARY, 0.3f)
+                            .multicast()
+                            .to().filter(Comparison.EQ, -1).stream(null)
+                            .to().filter(Comparison.EQ, 1).stream(null)
+                            .end())
+                    .continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                        accelerometer.acceleration().start();
+                        accelerometer.start();
+                        return macro.endRecordAsync();
 
-        assertArrayEquals(expected, junitPlatform.getCommands());
+                    }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                        assertArrayEquals(expected, junitPlatform.getCommands());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
@@ -155,9 +173,18 @@ public class TestMacro extends UnitTestBase {
                 {0x0f, 0x04}
         };
 
-        macro.startRecord(false);
-        RouteCreator.createLedController(mwBoard).continueWithTask(task -> macro.endRecordAsync()).waitForCompletion();
-
-        assertArrayEquals(expected, junitPlatform.getCommands());
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            macro.startRecord(false);
+            RouteCreator.createLedController(mwBoard)
+                .continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                    return macro.endRecordAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                        assertArrayEquals(expected, junitPlatform.getCommands());
+                        doneSignal.countDown();
+                    });
+                });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

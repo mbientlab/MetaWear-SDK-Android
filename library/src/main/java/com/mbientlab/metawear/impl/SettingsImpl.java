@@ -24,9 +24,13 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.impl.Constant.Module.SETTINGS;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.ActiveDataProducer;
+import com.mbientlab.metawear.Capture;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Observer;
@@ -39,9 +43,6 @@ import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
-
-import bolts.Capture;
-import bolts.Task;
 
 /**
  * Created by etsai on 9/20/16.
@@ -276,37 +277,35 @@ class SettingsImpl extends ModuleImplBase implements Settings {
 
         return readAdConfigTask.execute("Did not receive device name within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(DEVICE_NAME)})
-        ).onSuccessTask(task -> {
-            byte[] response = task.getResult();
+        ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
             try {
-                deviceName.set(new String(response, 2, response.length - 2, "US-ASCII"));
+                deviceName.set(new String(task, 2, task.length - 2, "US-ASCII"));
             } catch (UnsupportedEncodingException e) {
-                deviceName.set(new String(response, 2, response.length - 2));
+                deviceName.set(new String(task, 2, task.length - 2));
             }
             return readAdConfigTask.execute("Did not receive ad parameters within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(AD_PARAM)}));
-        }).onSuccessTask(task -> {
-            byte[] response = task.getResult();
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
             if (mwPrivate.lookupModuleInfo(SETTINGS).revision >= CONN_PARAMS_REVISION) {
-                int intervalBytes= ((response[2] & 0xff) | (response[3] << 8)) & 0xffff;
+                int intervalBytes= ((task[2] & 0xff) | (task[3] << 8)) & 0xffff;
 
                 interval.set((int) (intervalBytes * AD_INTERVAL_STEP));
-                timeout.set(response[4]);
+                timeout.set(task[4]);
             } else {
-                interval.set(((response[2] & 0xff) | (response[3] << 8)) & 0xffff);
-                timeout.set(response[4]);
+                interval.set(((task[2] & 0xff) | (task[3] << 8)) & 0xffff);
+                timeout.set(task[4]);
             }
             return readAdConfigTask.execute("Did not receive tx power within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(TX_POWER)}));
-        }).onSuccessTask(task -> {
-            tx.set(task.getResult()[2]);
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            tx.set(task[2]);
             return readAdConfigTask.execute("Did not receive scan response within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(SCAN_RESPONSE)}));
-        }).onSuccessTask(task -> {
-            byte[] scanResponse = new byte[task.getResult().length - 2];
-            System.arraycopy(task.getResult(), 2, scanResponse, 0, scanResponse.length);
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            byte[] scanResponse = new byte[task.length - 2];
+            System.arraycopy(task, 2, scanResponse, 0, scanResponse.length);
 
-            return Task.forResult(new BleAdvertisementConfig(deviceName.get(), interval.get(), timeout.get(), tx.get(), scanResponse));
+            return Tasks.forResult(new BleAdvertisementConfig(deviceName.get(), interval.get(), timeout.get(), tx.get(), scanResponse));
         });
     }
 
@@ -356,14 +355,14 @@ class SettingsImpl extends ModuleImplBase implements Settings {
     @Override
     public Task<BleConnectionParameters> readBleConnParamsAsync() {
         if (mwPrivate.lookupModuleInfo(SETTINGS).revision < CONN_PARAMS_REVISION) {
-            return Task.forError(new UnsupportedOperationException("Reading BLE connection parameters is not supported on this firmware"));
+            return Tasks.forException(new UnsupportedOperationException("Reading BLE connection parameters is not supported on this firmware"));
         }
 
         return readConnParamsTask.execute("Did not receive connection parameters within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CONNECTION_PARAMS)})
-        ).onSuccessTask(task -> {
-            final ByteBuffer buffer = ByteBuffer.wrap(task.getResult()).order(ByteOrder.LITTLE_ENDIAN);
-            return Task.forResult(new BleConnectionParameters(
+        ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            final ByteBuffer buffer = ByteBuffer.wrap(task).order(ByteOrder.LITTLE_ENDIAN);
+            return Tasks.forResult(new BleConnectionParameters(
                     buffer.getShort(2) * SettingsImpl.CONN_INTERVAL_STEP,
                     buffer.getShort(4) * SettingsImpl.CONN_INTERVAL_STEP,
                     buffer.getShort(6),
@@ -433,7 +432,7 @@ class SettingsImpl extends ModuleImplBase implements Settings {
             return readPowerStatusTask.execute("Did not receive power status within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(POWER_STATUS)}));
         }
-        return Task.forError(new UnsupportedOperationException("Reading power status not supported on this board / firmware"));
+        return Tasks.forException(new UnsupportedOperationException("Reading power status not supported on this board / firmware"));
     }
 
     @Override
@@ -465,13 +464,13 @@ class SettingsImpl extends ModuleImplBase implements Settings {
             return readChargeStatusTask.execute("Did not receive charge status within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {SETTINGS.id, Util.setRead(CHARGE_STATUS)}));
         }
-        return Task.forError(new UnsupportedOperationException("Reading charge status not supported on this board / firmware"));
+        return Tasks.forException(new UnsupportedOperationException("Reading charge status not supported on this board / firmware"));
     }
 
     @Override
     public Task<Observer> onDisconnectAsync(CodeBlock codeBlock) {
         if (mwPrivate.lookupModuleInfo(SETTINGS).revision < DISCONNECTED_EVENT_REVISION) {
-            return Task.forError(new UnsupportedOperationException("Responding to disconnect events on-board is not supported on this firmware"));
+            return Tasks.forException(new UnsupportedOperationException("Responding to disconnect events on-board is not supported on this firmware"));
         }
         return mwPrivate.queueEvent(disconnectDummyProducer, codeBlock);
     }

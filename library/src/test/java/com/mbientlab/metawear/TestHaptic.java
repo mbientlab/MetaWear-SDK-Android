@@ -24,12 +24,17 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Haptic;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 10/2/16.
@@ -37,27 +42,38 @@ import org.junit.jupiter.api.Test;
 public class TestHaptic extends UnitTestBase {
     private Haptic haptic;
 
-    @BeforeEach
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Haptic.class);
-        connectToBoard();
-
-        haptic= mwBoard.getModule(Haptic.class);
+    public Task<Void> setup() {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Haptic.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            haptic = mwBoard.getModule(Haptic.class);
+        });
     }
 
     @Test
-    public void startMotor() {
-        byte[] expected= new byte[] {0x08, 0x01, (byte) 0xf8, (byte) 0x88, 0x13, 0x00};
+    public void startMotor() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {0x08, 0x01, (byte) 0xf8, (byte) 0x88, 0x13, 0x00};
 
-        haptic.startMotor(100f, (short) 5000);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            haptic.startMotor(100f, (short) 5000);
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void startBuzzer() {
-        byte[] expected= new byte[] {0x08, 0x01, 0x7f, 0x4c, 0x1d, 0x01};
+    public void startBuzzer() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {0x08, 0x01, 0x7f, 0x4c, 0x1d, 0x01};
 
-        haptic.startBuzzer((short) 7500);
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            haptic.startBuzzer((short) 7500);
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -24,10 +24,9 @@
 
 package com.mbientlab.metawear.module;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.DataProducer;
 import com.mbientlab.metawear.MetaWearBoard.Module;
-
-import bolts.Task;
 
 /**
  * Bridge for serial communication to connected sensors

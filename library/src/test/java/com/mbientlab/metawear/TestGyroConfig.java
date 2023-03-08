@@ -24,19 +24,23 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Gyro;
 import com.mbientlab.metawear.module.Gyro.OutputDataRate;
 import com.mbientlab.metawear.module.Gyro.Range;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -58,23 +62,28 @@ public class TestGyroConfig extends UnitTestBase {
 
     private Gyro gyro;
 
-    @BeforeEach
-    public void setup() throws Exception {
+    public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Gyro.class);
-        connectToBoard();
-
-        gyro = mwBoard.getModule(Gyro.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            gyro = mwBoard.getModule(Gyro.class);
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configure(OutputDataRate odr, Range fsr) {
-        byte[] expected= new byte[] {0x13, 0x03, (byte) (0x20 | ODR_BITMASK[odr.ordinal()]), RANGE_BITMASK[fsr.ordinal()]};
+    public void configure(OutputDataRate odr, Range fsr) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {0x13, 0x03, (byte) (0x20 | ODR_BITMASK[odr.ordinal()]), RANGE_BITMASK[fsr.ordinal()]};
 
-        gyro.configure()
-                .odr(odr)
-                .range(fsr)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            gyro.configure()
+                    .odr(odr)
+                    .range(fsr)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

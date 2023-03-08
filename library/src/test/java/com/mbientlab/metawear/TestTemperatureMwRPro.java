@@ -24,14 +24,18 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Temperature;
 import com.mbientlab.metawear.module.Temperature.ExternalThermistor;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 10/3/16.
@@ -39,25 +43,34 @@ import org.junit.jupiter.api.Test;
 public class TestTemperatureMwRPro extends UnitTestBase {
     private Temperature temp;
 
-    @BeforeEach
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Temperature.class);
-        connectToBoard();
-
-        temp= mwBoard.getModule(Temperature.class);
+    public Task<Void> setup() throws Exception {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Temperature.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> temp = mwBoard.getModule(Temperature.class));
     }
 
     @Test
-    public void configureExtThermistor() {
-        byte[] expected= new byte[] {0x04, 0x02, 0x02, 0x00, 0x01, 0x00};
-        ((ExternalThermistor) temp.findSensors(Temperature.SensorType.EXT_THERMISTOR)[0])
-                .configure((byte) 0, (byte) 1, false);
+    public void configureExtThermistor() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            byte[] expected= new byte[] {0x04, 0x02, 0x02, 0x00, 0x01, 0x00};
+            ((ExternalThermistor) temp.findSensors(Temperature.SensorType.EXT_THERMISTOR)[0])
+                    .configure((byte) 0, (byte) 1, false);
 
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void checkNSources() {
-        assertEquals(4, temp.sensors().length);
+    public void checkNSources() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            assertEquals(4, temp.sensors().length);
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

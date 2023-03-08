@@ -24,10 +24,16 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
 import static com.mbientlab.metawear.impl.Constant.Module.MACRO;
 
+import com.google.android.gms.tasks.CancellationTokenSource;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.TaskCompletionSource;
+import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.AnonymousRoute;
+import com.mbientlab.metawear.Capture;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.DataToken;
 import com.mbientlab.metawear.DeviceInformation;
@@ -113,11 +119,8 @@ import java.util.Queue;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
-import bolts.CancellationTokenSource;
-import bolts.Capture;
-import bolts.Task;
-import bolts.TaskCompletionSource;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Platform agnostic implementation of the {@link MetaWearBoard} interface using only standard Java APIs.  Platform specific functionality
@@ -339,24 +342,29 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
         @Override
         public Task<Route> queueRouteBuilder(RouteBuilder builder, String producerTag) {
-            TaskCompletionSource<Route> taskSrc= new TaskCompletionSource<>();
+            TaskCompletionSource<Route> taskSrc = new TaskCompletionSource<>();
             if (persist.taggedProducers.containsKey(producerTag)) {
                 pendingRoutes.add(new Tuple3<>(builder, new RouteComponentImpl(persist.taggedProducers.get(producerTag)), taskSrc));
                 routeTypes.add(RouteType.DATA);
                 createRoute(false);
+//                return createRoute(false).continueWithTask(IMMEDIATE_EXECUTOR, task -> { TODO: fix
+//                    return taskSrc.getTask();
+//                });
             } else {
-                taskSrc.setError(new NullPointerException(String.format(Locale.US, "Producer tag \'%s\' does not exist", producerTag)));
+                taskSrc.setException(new NullPointerException(String.format(Locale.US, "Producer tag \'%s\' does not exist", producerTag)));
+                return taskSrc.getTask();
             }
             return taskSrc.getTask();
         }
 
         @Override
         public Task<ScheduledTask> queueTaskManager(CodeBlock mwCode, byte[] timerConfig) {
-            TaskCompletionSource<ScheduledTask> createManagerTask= new TaskCompletionSource<>();
+            TaskCompletionSource<ScheduledTask> createManagerTask = new TaskCompletionSource<>();
             pendingTaskManagers.add(new Tuple3<>(createManagerTask, mwCode, timerConfig));
             routeTypes.add(RouteType.TIMER);
-            createRoute(false);
-            return createManagerTask.getTask();
+            return createRoute(false).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                return createManagerTask.getTask();
+            });
         }
 
         @Override
@@ -364,8 +372,9 @@ public class JseMetaWearBoard implements MetaWearBoard {
             TaskCompletionSource<Observer> createManagerTask= new TaskCompletionSource<>();
             pendingEventManagers.add(new Tuple3<>(createManagerTask, owner, codeBlock));
             routeTypes.add(RouteType.EVENT);
-            createRoute(false);
-            return createManagerTask.getTask();
+            return createRoute(false).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                return createManagerTask.getTask();
+            });
         }
 
         @Override
@@ -530,23 +539,23 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Task<Byte> readBatteryLevelAsync() {
-        return gatt.readCharacteristicAsync(BatteryService.BATTERY_LEVEL).onSuccessTask(task -> Task.forResult(task.getResult()[0]));
+        return gatt.readCharacteristicAsync(BatteryService.BATTERY_LEVEL).onSuccessTask(IMMEDIATE_EXECUTOR, task -> Tasks.forResult(task[0]));
     }
 
     @Override
     public Task<DeviceInformation> readDeviceInformationAsync() {
         if (serialNumber != null && manufacturer != null) {
-            return Task.forResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber, serialNumber,
+            return Tasks.forResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber, serialNumber,
                     persist.boardInfo.firmware.toString(), persist.boardInfo.hardwareRevision));
         }
         return gatt.readCharacteristicAsync(new BtleGattCharacteristic[] {
                 DeviceInformationService.SERIAL_NUMBER,
                 DeviceInformationService.MANUFACTURER_NAME
-        }).onSuccessTask(task -> {
-            serialNumber = new String(task.getResult()[0]);
-            manufacturer = new String(task.getResult()[1]);
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            serialNumber = new String(task[0]);
+            manufacturer = new String(task[1]);
 
-            return Task.forResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber, serialNumber,
+            return Tasks.forResult(new DeviceInformation(manufacturer, persist.boardInfo.modelNumber, serialNumber,
                     persist.boardInfo.firmware.toString(), persist.boardInfo.hardwareRevision));
         });
     }
@@ -574,17 +583,17 @@ public class JseMetaWearBoard implements MetaWearBoard {
         File info1Json = io.findDownloadedFile(INFO_JSON);
         return (!info1Json.exists() || info1Json.lastModified() < Calendar.getInstance().getTimeInMillis() - RELEASE_INFO_TTL ?
                 io.downloadFileAsync(String.format(Locale.US, "%s/metawear/%s", RELEASES_URL, INFO_JSON), INFO_JSON) :
-                Task.forResult(info1Json)).onSuccessTask(task -> {
+                Tasks.forResult(info1Json)).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
                     StringBuilder builder = new StringBuilder();
-                    InputStream ins = new FileInputStream(task.getResult());
+                    try (InputStream ins = new FileInputStream(task)) {
+                        byte data[] = new byte[1024];
+                        int count;
+                        while ((count = ins.read(data)) != -1) {
+                            builder.append(new String(data, 0, count));
+                        }
 
-                    byte data[] = new byte[1024];
-                    int count;
-                    while ((count = ins.read(data)) != -1) {
-                        builder.append(new String(data, 0, count));
+                        return Tasks.forResult(new JSONObject(builder.toString()));
                     }
-
-                    return Task.forResult(new JSONObject(builder.toString()));
                 });
     }
 
@@ -603,17 +612,17 @@ public class JseMetaWearBoard implements MetaWearBoard {
     @Override
     public Task<List<File>> downloadFirmwareUpdateFilesAsync(final String version) {
         if (persist.boardInfo.hardwareRevision == null) {
-            return Task.forError(new IllegalStateException("Hardware revision unavailable"));
+            return Tasks.forException(new IllegalStateException("Hardware revision unavailable"));
         }
         if (persist.boardInfo.modelNumber == null) {
-            return Task.forError(new IllegalStateException("Model number unavailable"));
+            return Tasks.forException(new IllegalStateException("Model number unavailable"));
         }
         if (!connected) {
-            return Task.forError(new IllegalStateException("Android device not connected to the board"));
+            return Tasks.forException(new IllegalStateException("Android device not connected to the board"));
         }
 
-        return retrieveInfoJson().onSuccessTask(task -> {
-            JSONObject models= task.getResult().getJSONObject(persist.boardInfo.hardwareRevision);
+        return retrieveInfoJson().onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            JSONObject models= task.getJSONObject(persist.boardInfo.hardwareRevision);
             JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
 
             ModuleInfo mInfo = persist.boardInfo.moduleInfo.get(Constant.Module.SETTINGS);
@@ -640,20 +649,20 @@ public class JseMetaWearBoard implements MetaWearBoard {
             files.add(new Tuple3<>(build, result.second, result.first.getString("filename")));
 
             final List<File> dests = new ArrayList<>();
-            Task<Void> task2 = Task.forResult(null);
+            Task<Void> task2 = Tasks.forResult(null);
             for(Tuple3<String, Version, String> info: files) {
                 final String destName = generateFileName(info.first, info.second, info.third);
                 final File dest = io.findDownloadedFile(destName);
 
-                task2 = task2.onSuccessTask(ignored ->
-                    !dest.exists() ? downloadFirmwareFile(info.first, info.second, info.third) : Task.forResult(dest)
-                ).onSuccessTask(fileTask -> {
-                    dests.add(fileTask.getResult());
-                    return Task.forResult(null);
+                task2 = task2.onSuccessTask(IMMEDIATE_EXECUTOR, ignored ->
+                    !dest.exists() ? downloadFirmwareFile(info.first, info.second, info.third) : Tasks.forResult(dest)
+                ).onSuccessTask(IMMEDIATE_EXECUTOR, fileTask -> {
+                    dests.add(fileTask);
+                    return Tasks.forResult(null);
                 });
             }
 
-            return task2.onSuccessTask(ignored -> Task.forResult(dests));
+            return task2.onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> Tasks.forResult(dests));
         });
     }
 
@@ -665,26 +674,26 @@ public class JseMetaWearBoard implements MetaWearBoard {
     @Override
     public Task<List<File>> downloadFirmwareUpdateFilesAsyncV2(final String version) {
         if (persist.boardInfo.hardwareRevision == null) {
-            return Task.forError(new IllegalStateException("Hardware revision unavailable"));
+            return Tasks.forException(new IllegalStateException("Hardware revision unavailable"));
         }
         if (persist.boardInfo.modelNumber == null) {
-            return Task.forError(new IllegalStateException("Model number unavailable"));
+            return Tasks.forException(new IllegalStateException("Model number unavailable"));
         }
         if (!connected) {
-            return Task.forError(new IllegalStateException("Android device not connected to the board"));
+            return Tasks.forException(new IllegalStateException("Android device not connected to the board"));
         }
 
         final Capture<Task<Void>> dcTask = new Capture<>();
         final Capture<Image> firmware = new Capture<>();
         final Capture<Info2> info = new Capture<>();
         final Capture<List<File>> files = new Capture<>(new ArrayList<>());
-        return retrieveInfoJson().onSuccessTask(task -> {
+        return retrieveInfoJson().onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
             ModuleInfo mInfo = persist.boardInfo.moduleInfo.get(Constant.Module.SETTINGS);
             String build = mInfo != null && mInfo.extra.length >= 2 && mInfo.extra[1] != 0 ?
                     String.format(Locale.US, "%d", ((short) mInfo.extra[1] & 0xff)) :
                     DEFAULT_FIRMWARE_BUILD;
 
-            info.set(new Info2(task.getResult(), libVersion));
+            info.set(new Info2(task, libVersion));
             firmware.set(
                     version != null ?
                     info.get().findFirmwareImage(persist.boardInfo.hardwareRevision, persist.boardInfo.modelNumber, build, version) :
@@ -692,18 +701,18 @@ public class JseMetaWearBoard implements MetaWearBoard {
             );
 
             return downloadFirmwareFile(build, new Version(firmware.get().version), firmware.get().filename);
-        }).onSuccessTask(task -> {
-            files.get().add(task.getResult());
-            return inMetaBootMode() ? Task.forResult(null) :
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            files.get().add(task);
+            return inMetaBootMode() ? Tasks.forResult(null) :
                     getModule(Debug.class).jumpToBootloaderAsync()
-                        .onSuccessTask(ignored -> connectWithRetryAsync(3))
-                        .onSuccessTask(ignored -> !inMetaBootMode() ?
-                                Task.forError(new IllegalStateException("Board is still in MetaWear mode")) :
-                                Task.forResult(null)
+                        .onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> connectWithRetryAsync(3))
+                        .onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> !inMetaBootMode() ?
+                                Tasks.forException(new IllegalStateException("Board is still in MetaWear mode")) :
+                                Tasks.forResult(null)
                         );
-        }).onSuccessTask(ignored -> {
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> {
             if (!inMetaBootMode()) {
-                return Task.forError(new IllegalStateException("Board is still in MetaWear mode"));
+                return Tasks.forException(new IllegalStateException("Board is still in MetaWear mode"));
             }
 
             List<Image> bootloaders = info.get().findBootloaderImages(
@@ -718,11 +727,12 @@ public class JseMetaWearBoard implements MetaWearBoard {
             for(Image it: bootloaders) {
                 tasks.add(it.downloadAsync(io));
             }
-            return Task.whenAllResult(tasks);
-        }).onSuccessTask(task -> {
-            files.get().addAll(0, task.getResult());
+            return Tasks.forResult(tasks);
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, tasks -> {
+            List<File> resultFiles = tasks.stream().map(Task::getResult).collect(Collectors.toList());
+            files.get().addAll(0, resultFiles);
             return dcTask.get();
-        }).onSuccessTask(ignored -> Task.forResult(files.get()));
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> Tasks.forResult(files.get()));
     }
 
     @Override
@@ -762,37 +772,37 @@ public class JseMetaWearBoard implements MetaWearBoard {
     @Override
     public Task<String> findLatestAvailableFirmwareAsync() {
         if (persist.boardInfo.hardwareRevision == null) {
-            return Task.forError(new IllegalStateException("Hardware revision unavailable"));
+            return Tasks.forException(new IllegalStateException("Hardware revision unavailable"));
         }
         if (persist.boardInfo.modelNumber == null) {
-            return Task.forError(new IllegalStateException("Model number unavailable"));
+            return Tasks.forException(new IllegalStateException("Model number unavailable"));
         }
 
         if (!connected) {
-            return Task.forError(new IllegalStateException("Android device not connected to the board"));
+            return Tasks.forException(new IllegalStateException("Android device not connected to the board"));
         }
         if (inMetaBootMode()) {
-            return Task.forError(new IllegalStateException("Cannot determine if newer firmware is available for MetaBoot boards"));
+            return Tasks.forException(new IllegalStateException("Cannot determine if newer firmware is available for MetaBoot boards"));
         }
-        return retrieveInfoJson().onSuccessTask(task -> {
-            JSONObject models= task.getResult().getJSONObject(persist.boardInfo.hardwareRevision);
+        return retrieveInfoJson().onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            JSONObject models = task.getJSONObject(persist.boardInfo.hardwareRevision);
             JSONObject builds = models.getJSONObject(persist.boardInfo.modelNumber);
 
             ModuleInfo info = persist.boardInfo.moduleInfo.get(Constant.Module.SETTINGS);
             String build = info != null && info.extra.length >= 2 && info.extra[1] != 0 ? String.format(Locale.US, "%d", info.extra[1]) : DEFAULT_FIRMWARE_BUILD;
 
             Pair<JSONObject, Version> result = findFirmwareAttrs(builds.getJSONObject(build), null);
-            return Task.forResult(result.second.compareTo(persist.boardInfo.firmware) > 0 ? result.second.toString() : null);
+            return Tasks.forResult(result.second.compareTo(persist.boardInfo.firmware) > 0 ? result.second.toString() : null);
         });
     }
 
     @Override
     public Task<File> downloadFirmwareAsync(final String version) {
-        return downloadFirmwareUpdateFilesAsync(version).onSuccessTask(task -> {
-            if (task.getResult().size() > 1) {
+        return downloadFirmwareUpdateFilesAsync(version).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            if (task.size() > 1) {
                 throw new UnsupportedOperationException(String.format(Locale.US, "Updating to firmware v'%s' requires multiple files, use 'downloadFirmwareUpdateFilesAsync' instead", version));
             } else {
-                return Task.forResult(task.getResult().get(0));
+                return Tasks.forResult(task.get(0));
             }
         });
     }
@@ -804,7 +814,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
     @Override
     public Task<Boolean> checkForFirmwareUpdateAsync() {
-        return findLatestAvailableFirmwareAsync().onSuccessTask(task -> Task.forResult(task.getResult() != null));
+        return findLatestAvailableFirmwareAsync().onSuccessTask(IMMEDIATE_EXECUTOR, task -> Tasks.forResult(task != null));
     }
 
     public void loadBoardAttributes() throws IOException, ClassNotFoundException {
@@ -851,45 +861,49 @@ public class JseMetaWearBoard implements MetaWearBoard {
             }
         }
 
-        return Task.forResult(null).continueWhile(() -> !terminate.get() && !modules.isEmpty(), ignored -> {
-            final Constant.Module next = modules.poll();
-            return readModuleInfoTask.execute("Did not receive info for module (" + next.friendlyName + ") within %dms", Constant.RESPONSE_TIMEOUT,
-                    () -> gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] { next.id, READ_INFO_REGISTER })
-            ).continueWithTask(task -> {
-                if (task.isFaulted()) {
-                    terminate.set(true);
-                    return Task.<Void>forError(task.getError());
-                } else {
-                    info.add(new ModuleInfo(task.getResult()));
-                    return Task.<Void>forResult(null);
-                }
-            });
-        }).continueWithTask(task -> task.isFaulted() ? Task.forError(new TaskTimeoutException(task.getError(), info)) : Task.forResult(info));
+        return Tasks.forResult(null).continueWith(IMMEDIATE_EXECUTOR, mainTask -> {
+            while(!terminate.get() && !modules.isEmpty()) {
+                var newTask = Tasks.forResult(modules.poll()).continueWithTask(IMMEDIATE_EXECUTOR, next ->
+                        readModuleInfoTask.execute("Did not receive info for module (" + next.getResult().friendlyName + ") within %dms", Constant.RESPONSE_TIMEOUT,
+                        () -> gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] { next.getResult().id, READ_INFO_REGISTER }))
+                ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                    if (!task.isSuccessful()) {
+                        terminate.set(true);
+                        return Tasks.<Void>forException(task.getException());
+                    } else {
+                        info.add(new ModuleInfo(task.getResult()));
+                        return Tasks.<Void>forResult(null);
+                    }
+                });
+                mainTask.continueWithTask(IMMEDIATE_EXECUTOR, ignored -> newTask);
+            }
+            return mainTask;
+        }).continueWithTask(IMMEDIATE_EXECUTOR, task -> !task.isSuccessful() ? Tasks.forException(new TaskTimeoutException(task.getException(), info)) : Tasks.forResult(info));
     }
 
     @Override
     public Task<Void> connectAsync() {
-        if (connectTask != null && !connectTask.isCompleted()) {
+        if (connectTask != null && !connectTask.isComplete()) {
             return connectTask;
         }
 
         connectCts = new CancellationTokenSource();
         final Capture<Boolean> serviceDiscoveryRefresh = new Capture<>();
 
-        connectTask = gatt.connectAsync().onSuccessTask(task -> {
-            if (connectCts.isCancellationRequested()) {
-                return Task.cancelled();
+        connectTask = gatt.connectAsync().onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            if (connectCts.getToken().isCancellationRequested()) {
+                return Tasks.forCanceled();
             }
 
             loadBoardAttributes();
 
             return gatt.readCharacteristicAsync(DeviceInformationService.FIRMWARE_REVISION);
-        }).onSuccessTask(task -> {
-            if (connectCts.isCancellationRequested()) {
-                return Task.cancelled();
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            if (connectCts.getToken().isCancellationRequested()) {
+                return Tasks.forCanceled();
             }
 
-            Version readFirmware = new Version(new String(task.getResult()));
+            Version readFirmware = new Version(new String(task));
             if (persist.boardInfo.firmware.compareTo(readFirmware) != 0) {
                 persist.boardInfo.firmware = readFirmware;
                 serviceDiscoveryRefresh.set(true);
@@ -897,21 +911,18 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 serviceDiscoveryRefresh.set(false);
             }
 
-            if (persist.boardInfo.modelNumber == null || persist.boardInfo.hardwareRevision == null) {
-                return gatt.readCharacteristicAsync(new BtleGattCharacteristic[]{
-                        DeviceInformationService.MODEL_NUMBER,
-                        DeviceInformationService.HARDWARE_REVISION
-                });
-            }
-            return Task.forResult(null);
-        }).onSuccessTask(task -> {
-            if (connectCts.isCancellationRequested()) {
-                return Task.cancelled();
+            return gatt.readCharacteristicAsync(new BtleGattCharacteristic[]{
+                    DeviceInformationService.MODEL_NUMBER,
+                    DeviceInformationService.HARDWARE_REVISION
+            });
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            if (connectCts.getToken().isCancellationRequested()) {
+                return Tasks.forCanceled();
             }
 
-            if (task.getResult() != null) {
-                persist.boardInfo.modelNumber = new String(task.getResult()[0]);
-                persist.boardInfo.hardwareRevision = new String(task.getResult()[1]);
+            if (task != null) {
+                persist.boardInfo.modelNumber = new String(task[0]);
+                persist.boardInfo.hardwareRevision = new String(task[1]);
             }
 
             return gatt.enableNotificationsAsync(MW_NOTIFY_CHAR, value -> {
@@ -928,14 +939,14 @@ public class JseMetaWearBoard implements MetaWearBoard {
                     readModuleInfoTask.setResult(value);
                 }
             });
-        }).onSuccessTask(task -> {
-            if (connectCts.isCancellationRequested()) {
-                return Task.cancelled();
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            if (connectCts.getToken().isCancellationRequested()) {
+                return Tasks.forCanceled();
             }
 
             Collection<Constant.Module> ignore = new HashSet<>();
             if (serviceDiscoveryRefresh.get()) {
-                persist.routeIdCounter= 0;
+                persist.routeIdCounter = 0;
                 persist.taggedProducers.clear();
                 persist.activeEventManagers.clear();
                 persist.activeRoutes.clear();
@@ -945,37 +956,37 @@ public class JseMetaWearBoard implements MetaWearBoard {
             ignore.addAll(persist.boardInfo.moduleInfo.keySet());
 
             return discoverModules(ignore);
-        }).onSuccessTask(task -> {
-            if (connectCts.isCancellationRequested()) {
-                return Task.cancelled();
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            if (connectCts.getToken().isCancellationRequested()) {
+                return Tasks.forCanceled();
             }
 
-            for(ModuleInfo it: task.getResult()) {
+            for(ModuleInfo it: task) {
                 persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(it.id), it);
                 instantiateModule(it);
             }
 
-            return logger == null ? Task.forResult(null) : logger.queryTime();
-        }).continueWithTask(task -> {
-            if (task.isCancelled()) {
+            return logger == null ? Tasks.forResult(null) : logger.queryTime();
+        }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+            if (task.isCanceled()) {
                 return task;
             }
 
-            if (task.isFaulted()) {
+            if (!task.isSuccessful()) {
                 if (inMetaBootMode()) {
                     connected = true;
-                    return Task.forResult(null);
+                    return Tasks.forResult(null);
                 } else {
-                    if (task.getError() instanceof TaskTimeoutException) {
-                        Queue<ModuleInfo> partial = (Queue<ModuleInfo>) ((TaskTimeoutException) task.getError()).partial;
+                    if (task.getException() instanceof TaskTimeoutException) {
+                        Queue<ModuleInfo> partial = (Queue<ModuleInfo>) ((TaskTimeoutException) task.getException()).partial;
                         for(ModuleInfo it: partial) {
                             persist.boardInfo.moduleInfo.put(Constant.Module.lookupEnum(it.id), it);
                             instantiateModule(it);
                         }
                     }
 
-                    return gatt.localDisconnectAsync().continueWithTask(ignored ->
-                            task.getError() instanceof TaskTimeoutException ? Task.forError((Exception) task.getError().getCause()) : task
+                    return gatt.localDisconnectAsync().continueWithTask(IMMEDIATE_EXECUTOR, ignored ->
+                            task.getException() instanceof TaskTimeoutException ? Tasks.forException((Exception) task.getException().getCause()) : task
                     );
                 }
             }
@@ -990,10 +1001,10 @@ public class JseMetaWearBoard implements MetaWearBoard {
             } catch (IOException e) {
                 io.logWarn(LOG_TAG, "Cannot serialize MetaWear module info", e);
             } finally {
-                connected= true;
+                connected = true;
             }
 
-            return Task.forResult(null);
+            return Tasks.forResult(null);
         });
 
         return connectTask;
@@ -1003,18 +1014,18 @@ public class JseMetaWearBoard implements MetaWearBoard {
     public Task<Void> connectWithRetryAsync(int retries) {
         final Capture<Integer> remaining = new Capture<>(retries);
         final Capture<Task<Void>> lastResult = new Capture<>();
-        return Task.forResult(null).continueWhile(() -> remaining.get() > 0, ignored ->
-                connectAsync().continueWithTask(task -> {
+        return Tasks.whenAllSuccess(Tasks.forResult(remaining.get() > 0), Tasks.forResult(
+                connectAsync().continueWithTask(IMMEDIATE_EXECUTOR, task -> {
                     lastResult.set(task);
-                    remaining.set(task.isFaulted() || task.isCancelled() ? remaining.get() - 1 : -1);
-                    return Task.forResult(null);
-                })
-        ).continueWithTask(ignored -> lastResult.get());
+                    remaining.set(!task.isSuccessful() || task.isCanceled() ? remaining.get() - 1 : -1);
+                    return Tasks.forResult(null);
+                }))
+        ).continueWithTask(IMMEDIATE_EXECUTOR, ignored -> lastResult.get());
     }
 
     @Override
     public Task<Void> connectAsync(long delay) {
-        return Task.delay(delay).continueWithTask(task -> connectAsync());
+        return Tasks.withTimeout(connectAsync(), delay, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -1166,9 +1177,9 @@ public class JseMetaWearBoard implements MetaWearBoard {
             }
         }
 
-        return discoverModules(ignore).continueWithTask(task -> {
-            Queue<ModuleInfo> result = task.isFaulted() ?
-                    (Queue<ModuleInfo>) ((TaskTimeoutException) task.getError()).partial :
+        return discoverModules(ignore).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+            Queue<ModuleInfo> result = !task.isSuccessful() ?
+                    (Queue<ModuleInfo>) ((TaskTimeoutException) task.getException()).partial :
                     task.getResult();
 
             while(!result.isEmpty()) {
@@ -1177,7 +1188,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
             }
 
             JSONObject actual = new JSONObject(diagnosticResult);
-            return !task.isFaulted() ? Task.forResult(actual) : Task.forError(new TaskTimeoutException((Exception) task.getError().getCause(), actual));
+            return task.isSuccessful() ? Tasks.forResult(actual) : Tasks.forException(new TaskTimeoutException((Exception) task.getException().getCause(), actual));
         });
     }
 
@@ -1211,18 +1222,18 @@ public class JseMetaWearBoard implements MetaWearBoard {
         final Gyro gyro = getModule(Gyro.class);
         final SensorFusionBosch sensorFusion = getModule(SensorFusionBosch.class);
 
-        return (accelerometer == null ? Task.<Void>forResult(null) : accelerometer.pullConfigAsync())
-                .onSuccessTask(task -> gyro == null ? Task.forResult(null) : gyro.pullConfigAsync())
-                .onSuccessTask(task -> sensorFusion == null ? Task.forResult(null) : sensorFusion.pullConfigAsync())
-                .onSuccessTask(task -> logger.queryActiveLoggersAsync())
-                .onSuccessTask(task -> {
-                    AnonymousRoute[] routes = new AnonymousRoute[task.getResult().size()];
+        return (accelerometer == null ? Tasks.<Void>forResult(null) : accelerometer.pullConfigAsync())
+                .onSuccessTask(IMMEDIATE_EXECUTOR, task -> gyro == null ? Tasks.forResult(null) : gyro.pullConfigAsync())
+                .onSuccessTask(IMMEDIATE_EXECUTOR, task -> sensorFusion == null ? Tasks.forResult(null) : sensorFusion.pullConfigAsync())
+                .onSuccessTask(IMMEDIATE_EXECUTOR, task -> logger.queryActiveLoggersAsync())
+                .onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+                    AnonymousRoute[] routes = new AnonymousRoute[task.size()];
                     int i = 0;
-                    for(DataLogger it: task.getResult()) {
+                    for(DataLogger it: task) {
                         routes[i] = new AnonymousRouteInner(it, mwPrivate);
                         i++;
                     }
-                    return Task.forResult(routes);
+                    return Tasks.forResult(routes);
                 });
     }
 
@@ -1534,15 +1545,15 @@ public class JseMetaWearBoard implements MetaWearBoard {
             }
         }
     }
-    private void createRoute(boolean ready) {
+    private Task<Route> createRoute(boolean ready) {
         if (!routeTypes.isEmpty() && (ready || routeTypes.size() == 1)) {
             switch(routeTypes.peek()) {
                 case DATA: {
                     final Tuple3<RouteBuilder, ? extends RouteComponentImpl, TaskCompletionSource<Route>> current= pendingRoutes.peek();
-                    final LinkedList<Byte> createdProcessors= new LinkedList<>();
-                    final LinkedList<DataLogger> createdLoggers= new LinkedList<>();
-                    final Cache signalVars= new Cache(mwPrivate);
-                    final HashSet<Integer> loggerIndices= new HashSet<>();
+                    final LinkedList<Byte> createdProcessors = new LinkedList<>();
+                    final LinkedList<DataLogger> createdLoggers = new LinkedList<>();
+                    final Cache signalVars = new Cache(mwPrivate);
+                    final HashSet<Integer> loggerIndices = new HashSet<>();
                     Task<Queue<Byte>> queueProcessorTask;
 
                     try {
@@ -1555,13 +1566,13 @@ public class JseMetaWearBoard implements MetaWearBoard {
                             }
                             mwPrivate.tagProducer(it.getKey(), it.getValue().editor.source);
                         }
-                        queueProcessorTask= dataprocessor.queueDataProcessors(signalVars.dataProcessors);
+                        queueProcessorTask = dataprocessor.queueDataProcessors(signalVars.dataProcessors);
                     } catch (IllegalRouteOperationException e) {
-                        queueProcessorTask= Task.forError(e);
+                        queueProcessorTask = Tasks.forException(e);
                     }
 
-                    queueProcessorTask.onSuccessTask(task -> {
-                        createdProcessors.addAll(task.getResult());
+                    return queueProcessorTask.onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+                        createdProcessors.addAll(task);
                         dataprocessor.assignNameToId(signalVars.taggedProcessors);
 
                         int i= 0;
@@ -1574,8 +1585,8 @@ public class JseMetaWearBoard implements MetaWearBoard {
                             i++;
                         }
                         return logger.queueLoggers(producersToLog);
-                    }).onSuccessTask(task -> {
-                        createdLoggers.addAll(task.getResult());
+                    }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+                        createdLoggers.addAll(task);
 
                         final Queue<Pair<? extends DataTypeBase, ? extends CodeBlock>> eventCodeBlocks = new LinkedList<>();
                         for(final Pair<String, Tuple3<DataTypeBase, Integer, byte[]>> it: signalVars.feedback) {
@@ -1590,8 +1601,8 @@ public class JseMetaWearBoard implements MetaWearBoard {
                             eventCodeBlocks.add(new Pair<>(source, () -> it.second.execute(source)));
                         }
                         return event.queueEvents(eventCodeBlocks);
-                    }).continueWith(task -> {
-                        if (task.isFaulted()) {
+                    }).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                        if (task.getException() != null) {
                             for(DataLogger it: createdLoggers) {
                                 logger.removeDataLogger(true, it);
                             }
@@ -1601,7 +1612,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                             for(String it: signalVars.taggedProcessors.keySet()) {
                                 persist.taggedProducers.remove(it);
                             }
-                            current.third.setError(task.getError());
+                            current.third.setException(task.getException());
                         } else {
                             HashSet<String> processorNames = new HashSet<>();
                             processorNames.addAll(signalVars.taggedProcessors.keySet());
@@ -1626,48 +1637,46 @@ public class JseMetaWearBoard implements MetaWearBoard {
                             current.third.setResult(newRoute);
                         }
 
+                        return task;
+                    }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
                         pendingRoutes.poll();
                         routeTypes.poll();
-                        createRoute(true);
-
-                        return null;
+                        return createRoute(true);
                     });
-                    break;
                 }
                 case TIMER: {
                     final Tuple3<TaskCompletionSource<ScheduledTask>, CodeBlock, byte[]> current = pendingTaskManagers.peek();
                     final Capture<Byte> ScheduledTaskId= new Capture<>();
 
-                    mwTimer.create(current.third).onSuccessTask(task -> {
-                        ScheduledTaskId.set(task.getResult().eventConfig[2]);
+                    return mwTimer.create(current.third).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+                        ScheduledTaskId.set(task.eventConfig[2]);
                         final Queue<Pair<? extends DataTypeBase, ? extends CodeBlock>> eventCodeBlocks = new LinkedList<>();
-                        eventCodeBlocks.add(new Pair<>(task.getResult(), current.second));
+                        eventCodeBlocks.add(new Pair<>(task, current.second));
                         return event.queueEvents(eventCodeBlocks);
-                    }).continueWith(task -> {
-                        if (task.isFaulted()) {
-                            current.first.setError(task.getError());
+                    }).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                        if (task.getException() != null) {
+                            current.first.setException(task.getException());
                         } else {
                             current.first.setResult(mwTimer.createTimedEventManager(ScheduledTaskId.get(), task.getResult()));
                         }
 
-                        pendingTaskManagers.poll();
-                        routeTypes.poll();
-                        createRoute(true);
-
                         return null;
+                    }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                        pendingRoutes.poll();
+                        routeTypes.poll();
+                        return createRoute(true);
                     });
-                    break;
                 }
                 case EVENT: {
                     final Tuple3<TaskCompletionSource<Observer>, DataTypeBase, CodeBlock> current = pendingEventManagers.peek();
                     final Queue<Pair<? extends DataTypeBase, ? extends CodeBlock>> eventCodeBlocks = new LinkedList<>();
 
                     eventCodeBlocks.add(new Pair<>(current.second, current.third));
-                    event.queueEvents(eventCodeBlocks).continueWith(task -> {
-                        if (task.isFaulted()) {
-                            current.first.setError(task.getError());
+                    return event.queueEvents(eventCodeBlocks).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                        if (task.getException() != null) {
+                            current.first.setException(task.getException());
                         } else {
-                            ObserverInner newManager= new ObserverInner(persist.routeIdCounter, task.getResult());
+                            ObserverInner newManager = new ObserverInner(persist.routeIdCounter, task.getResult());
                             newManager.restoreTransientVar(mwPrivate);
                             persist.activeEventManagers.put(persist.routeIdCounter, newManager);
                             persist.routeIdCounter++;
@@ -1675,15 +1684,18 @@ public class JseMetaWearBoard implements MetaWearBoard {
                             current.first.setResult(newManager);
                         }
 
-                        pendingEventManagers.poll();
-                        routeTypes.poll();
-                        createRoute(true);
-
                         return null;
+                    }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                        pendingRoutes.poll();
+                        routeTypes.poll();
+                        return createRoute(true);
                     });
-                    break;
+                }
+                default: {
+                    return Tasks.forResult(null);
                 }
             }
         }
+        return Tasks.forResult(null);
     }
 }

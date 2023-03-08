@@ -24,10 +24,11 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.module.AccelerometerBma255;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -42,9 +43,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import bolts.Capture;
 
 /**
  * Created by etsai on 12/19/16.
@@ -60,194 +62,254 @@ public class TestAccelerometerBoschMotion extends UnitTestBase {
     private AccelerometerBosch boschAcc;
 
 
-    public void setup(Class<? extends AccelerometerBosch> accelClass) {
-        try {
-            junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-            connectToBoard();
-
+    public Task<Void> setup(Class<? extends AccelerometerBosch> accelClass) {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             boschAcc = mwBoard.getModule(AccelerometerBosch.class);
-        } catch(Exception e) {
-            fail(e);
-        }
+        });
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startNoMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
-                new byte[] {0x03, 0x09, 0x38, 0x00} :
-                new byte[] {0x03, 0x09, 0x78, 0x00};
+    public void startNoMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
+                    new byte[] {0x03, 0x09, 0x38, 0x00} :
+                    new byte[] {0x03, 0x09, 0x78, 0x00};
 
-        boschAcc.motion(NoMotionDataProducer.class).start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.motion(NoMotionDataProducer.class).start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stopNoMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
-                new byte[] {0x03, 0x09, 0x00, 0x38} :
-                new byte[] {0x03, 0x09, 0x00, 0x78};
+    public void stopNoMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
+                    new byte[] {0x03, 0x09, 0x00, 0x38} :
+                    new byte[] {0x03, 0x09, 0x00, 0x78};
 
-        boschAcc.motion(NoMotionDataProducer.class).stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.motion(NoMotionDataProducer.class).stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureNoMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
-                new byte[] {0x03, 0x0a, 0x18, 0x14, 0x7f, 0x15} :
-                new byte[] {0x03, 0x0a, 0x24, 0x14, 0x7f};
+    public void configureNoMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
+                    new byte[] {0x03, 0x0a, 0x18, 0x14, 0x7f, 0x15} :
+                    new byte[] {0x03, 0x0a, 0x24, 0x14, 0x7f};
 
-        boschAcc.motion(NoMotionDataProducer.class).configure()
-                .duration(10000)
-                .threshold(0.5f)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.motion(NoMotionDataProducer.class).configure()
+                    .duration(10000)
+                    .threshold(0.5f)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void noMotionData(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final byte expected = 0x4;
-        final Capture<Byte> actual = new Capture<>();
+    public void noMotionData(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final byte expected = 0x4;
+            final Capture<Byte> actual = new Capture<>();
 
-        boschAcc.motion(NoMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])));
-        sendMockResponse(new byte[] {0x03, 0x0b, 0x04});
+            boschAcc.motion(NoMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        sendMockResponse(new byte[] {0x03, 0x0b, 0x04});
 
-        assertEquals(expected, actual.get().byteValue());
+                        assertEquals(expected, actual.get().byteValue());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startSlowMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x09, 0x38, 0x00};
+    public void startSlowMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x09, 0x38, 0x00};
 
-        boschAcc.motion(SlowMotionDataProducer.class).start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.motion(SlowMotionDataProducer.class).start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stopSlowMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x09, 0x00, 0x38};
+    public void stopSlowMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x09, 0x00, 0x38};
 
-        boschAcc.motion(SlowMotionDataProducer.class).stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.motion(SlowMotionDataProducer.class).stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureSlowMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
-                new byte[] {0x03, 0x0a, 0x10, 0x14, (byte) 0xc0, 0x14} :
-                new byte[] {0x03, 0x0a, 0x10, 0x14, (byte) 0xc0};
+    public void configureSlowMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
+                    new byte[] {0x03, 0x0a, 0x10, 0x14, (byte) 0xc0, 0x14} :
+                    new byte[] {0x03, 0x0a, 0x10, 0x14, (byte) 0xc0};
 
-        boschAcc.configure()
-                .range(4f)
-                .commit();
-        boschAcc.motion(SlowMotionDataProducer.class).configure()
-                .threshold(1.5f)
-                .count((byte) 5)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.configure()
+                    .range(4f)
+                    .commit();
+            boschAcc.motion(SlowMotionDataProducer.class).configure()
+                    .threshold(1.5f)
+                    .count((byte) 5)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void slowMotionData(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final byte expected = 0x4;
-        final Capture<Byte> actual = new Capture<>();
+    public void slowMotionData(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final byte expected = 0x4;
+            final Capture<Byte> actual = new Capture<>();
 
-        boschAcc.motion(SlowMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])));
-        sendMockResponse(new byte[] {0x03, 0x0b, 0x04});
+            boschAcc.motion(SlowMotionDataProducer.class).addRouteAsync(source -> source.stream((data, env) -> actual.set(data.bytes()[0])))
+                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        sendMockResponse(new byte[] {0x03, 0x0b, 0x04});
 
-        assertEquals(expected, actual.get().byteValue());
+                        assertEquals(expected, actual.get().byteValue());
+                        doneSignal.countDown();
+                    });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void startAnyMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x09, 0x07, 0x00};
+    public void startAnyMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x09, 0x07, 0x00};
 
-        boschAcc.motion(AnyMotionDataProducer.class).start();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.motion(AnyMotionDataProducer.class).start();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void stopAnyMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = new byte[] {0x03, 0x09, 0x00, 0x07};
+    public void stopAnyMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = new byte[] {0x03, 0x09, 0x00, 0x07};
 
-        boschAcc.motion(AnyMotionDataProducer.class).stop();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.motion(AnyMotionDataProducer.class).stop();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configureAnyMotion(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
-                new byte[] {0x03, 0x0a, 0x01, 0x2f, 0x14, 0x14} :
-                new byte[] {0x03, 0x0a, 0x01, 0x2f, 0x14};
+    public void configureAnyMotion(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected = accelClass.equals(AccelerometerBmi160.class) ?
+                    new byte[] {0x03, 0x0a, 0x01, 0x2f, 0x14, 0x14} :
+                    new byte[] {0x03, 0x0a, 0x01, 0x2f, 0x14};
 
-        boschAcc.configure()
-                .range(8f)
-                .commit();
-        boschAcc.motion(AnyMotionDataProducer.class).configure()
-                .threshold(0.75f)
-                .count((byte) 10)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            boschAcc.configure()
+                    .range(8f)
+                    .commit();
+            boschAcc.motion(AnyMotionDataProducer.class).configure()
+                    .threshold(0.75f)
+                    .count((byte) 10)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void anyMotionData(Class<? extends AccelerometerBosch> accelClass) {
-        setup(accelClass);
-        final AccelerometerBosch.AnyMotion[] expected = new AccelerometerBosch.AnyMotion[] {
-                new AccelerometerBosch.AnyMotion(Sign.POSITIVE, false, false, true),
-                new AccelerometerBosch.AnyMotion(Sign.NEGATIVE, false, false, true),
-                new AccelerometerBosch.AnyMotion(Sign.NEGATIVE, false, true, false),
-                new AccelerometerBosch.AnyMotion(Sign.POSITIVE, false, true, false),
-                new AccelerometerBosch.AnyMotion(Sign.POSITIVE, true, false, false),
-                new AccelerometerBosch.AnyMotion(Sign.NEGATIVE, true, false, false)
-        };
-        final byte[][] responses = new byte[][] {
-                {0x03, 0x0b, 0x22},
-                {0x03, 0x0b, 0x62},
-                {0x03, 0x0b, 0x52},
-                {0x03, 0x0b, 0x12},
-                {0x03, 0x0b, 0x0a},
-                {0x03, 0x0b, 0x4a}
-        };
-        final Capture<AccelerometerBosch.AnyMotion[]> actual = new Capture<>();
+    public void anyMotionData(Class<? extends AccelerometerBosch> accelClass) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(accelClass).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            final AccelerometerBosch.AnyMotion[] expected = new AccelerometerBosch.AnyMotion[] {
+                    new AccelerometerBosch.AnyMotion(Sign.POSITIVE, false, false, true),
+                    new AccelerometerBosch.AnyMotion(Sign.NEGATIVE, false, false, true),
+                    new AccelerometerBosch.AnyMotion(Sign.NEGATIVE, false, true, false),
+                    new AccelerometerBosch.AnyMotion(Sign.POSITIVE, false, true, false),
+                    new AccelerometerBosch.AnyMotion(Sign.POSITIVE, true, false, false),
+                    new AccelerometerBosch.AnyMotion(Sign.NEGATIVE, true, false, false)
+            };
+            final byte[][] responses = new byte[][] {
+                    {0x03, 0x0b, 0x22},
+                    {0x03, 0x0b, 0x62},
+                    {0x03, 0x0b, 0x52},
+                    {0x03, 0x0b, 0x12},
+                    {0x03, 0x0b, 0x0a},
+                    {0x03, 0x0b, 0x4a}
+            };
+            final Capture<AccelerometerBosch.AnyMotion[]> actual = new Capture<>();
 
-        actual.set(new AccelerometerBosch.AnyMotion[6]);
-        boschAcc.motion(AnyMotionDataProducer.class).addRouteAsync(source -> source.stream(new Subscriber() {
-            int i = 0;
-            @Override
-            public void apply(Data data, Object... env) {
-                actual.get()[i] = data.value(AccelerometerBosch.AnyMotion.class);
-                i++;
-            }
-        }));
-        for(byte[] it: responses) {
-            sendMockResponse(it);
-        }
+            actual.set(new AccelerometerBosch.AnyMotion[6]);
+            boschAcc.motion(AnyMotionDataProducer.class).addRouteAsync(source -> source.stream(new Subscriber() {
+                int i = 0;
+                @Override
+                public void apply(Data data, Object... env) {
+                    actual.get()[i] = data.value(AccelerometerBosch.AnyMotion.class);
+                    i++;
+                }
+            })).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                for(byte[] it: responses) {
+                    sendMockResponse(it);
+                }
 
-        assertArrayEquals(expected, actual.get());
+                assertArrayEquals(expected, actual.get());
+                doneSignal.countDown();
+            });
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
-
 }

@@ -24,23 +24,25 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.android.gms.tasks.Task;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
 import com.mbientlab.metawear.module.Logging;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
-import bolts.Capture;
-import bolts.Task;
 
 /**
  * Created by etsai on 9/3/16.
@@ -49,26 +51,32 @@ public class TestLoggingDownload extends UnitTestBase {
     private Logging logging;
     private long now;
 
-    @BeforeEach
-    public void setup() throws Exception {
-        junitPlatform.boardInfo= new MetaWearBoardInfo(Logging.class, AccelerometerBmi160.class);
+    public Task<Void> setup() {
+        junitPlatform.boardInfo = new MetaWearBoardInfo(Logging.class, AccelerometerBmi160.class);
         junitPlatform.addCustomResponse(new byte[] {0x0b, (byte) 0x84}, new byte[] {0x0b, (byte) 0x84, (byte) 0xa9, 0x72, 0x04, 0x00, 0x01});
-        connectToBoard();
-
-        now = Calendar.getInstance().getTimeInMillis();
-        logging= mwBoard.getModule(Logging.class);
+        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            now = Calendar.getInstance().getTimeInMillis();
+            logging = mwBoard.getModule(Logging.class);
+        });
     }
 
     @Test
-    public void readoutPageConfirm() {
-        byte[] expected= new byte[] {0x0b, 0x0e};
+    public void readoutPageConfirm() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[] expected = new byte[] {0x0b, 0x0e};
 
-        sendMockResponse(new byte[] {0xb, 0xd});
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            sendMockResponse(new byte[] {0xb, 0xd});
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
     
     @Test
-    public void readoutProgress() {
+    public void readoutProgress() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         long[] expected = new long[] {
                 0x019e,
                 0x0271, 0x0251, 0x0231, 0x0211, 0x01f1,
@@ -103,25 +111,31 @@ public class TestLoggingDownload extends UnitTestBase {
                 {0x0b, 0x08, 0x00, 0x00, 0x00, 0x00}
         };
 
-        logging.downloadAsync(20, new Logging.LogDownloadUpdateHandler() {
-            private int i;
-            @Override
-            public void receivedUpdate(long nEntriesLeft, long totalEntries) {
-                actual[i]= nEntriesLeft;
-                i++;
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            logging.downloadAsync(20, new Logging.LogDownloadUpdateHandler() {
+                private int i;
+                @Override
+                public void receivedUpdate(long nEntriesLeft, long totalEntries) {
+                    actual[i]= nEntriesLeft;
+                    i++;
+                }
+            });
+
+            for(byte[] it: progress_responses) {
+                sendMockResponse(it);
             }
+
+            assertArrayEquals(expected, actual);
+            doneSignal.countDown();
         });
-
-        for(byte[] it: progress_responses) {
-            sendMockResponse(it);
-        }
-
-        assertArrayEquals(expected, actual);
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void download() {
-        byte[][] expected= new byte[][]{
+    public void download() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        byte[][] expected = new byte[][]{
                 {0x0b, 0x0d, 0x01},
                 {0x0b, 0x07, 0x01},
                 {0x0b, 0x08, 0x01},
@@ -129,54 +143,78 @@ public class TestLoggingDownload extends UnitTestBase {
                 {0x0b, 0x06, (byte) 0x9e, (byte) 0x01, (byte) 0x00, (byte) 0x00, 0x14, 0x00, 0x00, 0x00}
         };
 
-        logging.downloadAsync(20, (nEntriesLeft, totalEntries) -> {
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            logging.downloadAsync(20, (nEntriesLeft, totalEntries) -> {
 
+            });
+            assertArrayEquals(expected, junitPlatform.getCommands(1));
+            doneSignal.countDown();
         });
-        assertArrayEquals(expected, junitPlatform.getCommands(1));
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void downloadInterrupted() throws Exception {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final Capture<Exception> actual = new Capture<>();
-        Task<Void> download = logging.downloadAsync().continueWith(task -> {
-            actual.set(task.getError());
-            return null;
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+
+        }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+            logging.downloadAsync().continueWith(IMMEDIATE_EXECUTOR, task -> {
+                actual.set(task.getException());
+                return null;
+            });
+        }).addOnSuccessListener(IMMEDIATE_EXECUTOR, download -> {
+            junitPlatform.scheduleTask(mwBoard::disconnectAsync, 5000L);
+
+            assertInstanceOf(RuntimeException.class, actual.get());
+            doneSignal.countDown();
         });
-
-        junitPlatform.scheduleTask(mwBoard::disconnectAsync, 5000L);
-
-        download.waitForCompletion();
-
-        assertInstanceOf(RuntimeException.class, actual.get());
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
-    public void unknownEntry() {
+    public void unknownEntry() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         Object[] expected= new Object[] {Logging.DownloadError.UNKNOWN_LOG_ENTRY, (byte) 0x1, (short) 0x016c};
         final Object[] actual= new Object[3];
 
-        logging.downloadAsync((errorType, logId, timestamp, data) -> {
-            actual[0]= errorType;
-            actual[1]= logId;
-            actual[2]= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getShort(0);
-        });
-        sendMockResponse(new byte[] {0x0b, 0x07, (byte) 0xa1, (byte) 0xcc, 0x4d, 0x00, 0x00, 0x6c, 0x01, 0x00, 0x00});
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            logging.downloadAsync((errorType, logId, timestamp, data) -> {
+                actual[0]= errorType;
+                actual[1]= logId;
+                actual[2]= ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getShort(0);
+            });
+            sendMockResponse(new byte[] {0x0b, 0x07, (byte) 0xa1, (byte) 0xcc, 0x4d, 0x00, 0x00, 0x6c, 0x01, 0x00, 0x00});
 
-        assertArrayEquals(expected, actual);
+            assertArrayEquals(expected, actual);
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void handlePastTime() throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
         final Accelerometer accelerometer = mwBoard.getModule(Accelerometer.class);
         final Capture<Long> epoch = new Capture<>();
 
-        accelerometer.acceleration().addRouteAsync(source ->
-                source.log((data, env) -> epoch.set(data.timestamp().getTimeInMillis()))
-        ).waitForCompletion();
-        sendMockResponse(new byte[] {0x0b, 0x07, 0x20, 0x75, 0x1b, 0x04, 0x00, 0x3e, 0x01, (byte) 0xcd, 0x01, 0x21, 0x76, 0x1b, 0x04, 0x00, (byte) 0xc0, 0x07, 0x00, 0x00});
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            accelerometer.acceleration().addRouteAsync(source ->
+                    source.log((data, env) -> epoch.set(data.timestamp().getTimeInMillis()))
+            );
 
-        System.out.printf("{epoch: %d, now: %d}%n", epoch.get(), now);
-        // should be 32701ms but leave some leeway for when `now` is assigned vs when the logger assigns its `now`
-        assertTrue(Math.abs(epoch.get() - now) <= 33701);
+        }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+            sendMockResponse(new byte[] {0x0b, 0x07, 0x20, 0x75, 0x1b, 0x04, 0x00, 0x3e, 0x01, (byte) 0xcd, 0x01, 0x21, 0x76, 0x1b, 0x04, 0x00, (byte) 0xc0, 0x07, 0x00, 0x00});
+
+            // should be 32701ms but leave some leeway for when `now` is assigned vs when the logger assigns its `now`
+            assertTrue(Math.abs(epoch.get() - now) <= 33701);
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

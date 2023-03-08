@@ -24,6 +24,12 @@
 
 package com.mbientlab.metawear.impl;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
+import com.mbientlab.metawear.Capture;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
@@ -37,11 +43,7 @@ import java.util.LinkedList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
-
-import bolts.Capture;
-import bolts.Task;
-
-import static com.mbientlab.metawear.impl.Constant.Module.DATA_PROCESSOR;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Created by etsai on 9/5/16.
@@ -164,9 +166,9 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         final Queue<Byte> ids = new LinkedList<>();
         final Capture<Boolean> terminate = new Capture<>(false);
 
-        return Task.forResult(null).continueWhile(() -> !terminate.get() && !pendingProcessors.isEmpty(), ignored -> {
-            final Processor current= pendingProcessors.poll();
-            DataTypeBase input= current.editor.source.input;
+        return Tasks.forResult(!terminate.get() && !pendingProcessors.isEmpty()).continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
+            final Processor current = pendingProcessors.poll();
+            DataTypeBase input = current.editor.source.input;
 
             if (current.editor.configObj instanceof DataProcessorConfig.Fuser) {
                 ((DataProcessorConfig.Fuser) current.editor.configObj).syncFilterIds(this);
@@ -179,10 +181,10 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
 
             return createProcessorTask.execute("Did not receive data processor id within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(DATA_PROCESSOR, ADD, filterConfig)
-            ).continueWithTask(task -> {
-                if (task.isFaulted()) {
+            ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                if (!task.isSuccessful()) {
                     terminate.set(true);
-                    return Task.<Void>forError(task.getError());
+                    return Tasks.<Void>forException(task.getException());
                 }
                 byte id = task.getResult()[2];
                 current.editor.source.eventConfig[2]= id;
@@ -192,16 +194,16 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
                 activeProcessors.put(id, current);
                 ids.add(id);
 
-                return Task.forResult(null);
+                return Tasks.forResult(null);
             });
-        }).continueWithTask(task -> {
-            if (task.isFaulted()) {
+        }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+            if (!task.isSuccessful()) {
                 for(byte it: ids) {
                     removeProcessor(true, it);
                 }
-                return Task.forError(task.getError());
+                return Tasks.forResult(ids);
             }
-            return Task.forResult(ids);
+            return Tasks.forResult(ids);
         });
     }
 
@@ -260,13 +262,17 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         final Deque<ProcessorEntry> result = new LinkedList<>();
         final Capture<Byte> nextId = new Capture<>(id);
 
-        return Task.forResult(null).continueWhile(() -> !terminate.get(), ignored ->
+        if (terminate.get()) {
+            return Tasks.forException(new TimeoutException(String.format("Did not received data processor config within %dms", Constant.RESPONSE_TIMEOUT)));
+        }
+
+        return Tasks.forResult(null).continueWith(IMMEDIATE_EXECUTOR, ignored ->
             pullProcessorConfigTask.execute("Did not received data processor config within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, Util.setRead(ADD), nextId.get()})
-        ).continueWithTask(task -> {
-            if (task.isFaulted()) {
+        ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+            if (!task.isSuccessful()) {
                 terminate.set(true);
-                return Task.<Void>forError(task.getError());
+                return Tasks.<Void>forException(task.getException());
             }
 
             byte[] response = task.getResult();
@@ -287,7 +293,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             nextId.set(response[4]);
             terminate.set(!(response[2] == DATA_PROCESSOR.id && response[3] == NOTIFY));
 
-            return Task.forResult(null);
-        })).onSuccessTask(ignored -> Task.forResult(result));
+            return Tasks.forResult(null);
+        })).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> Tasks.forResult(result));
     }
 }

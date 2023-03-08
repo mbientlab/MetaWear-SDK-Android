@@ -24,7 +24,9 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.mbientlab.metawear.module.BarometerBme280;
 import com.mbientlab.metawear.module.BarometerBmp280;
@@ -37,6 +39,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -59,14 +63,19 @@ public class TestBarometerBoschConfig extends TestBarometerBoschBase {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void configure(Class<? extends MetaWearBoard.Module> info, FilterCoeff filter, OversamplingMode oversampling) {
-        setup(info);
-        byte[] expected= new byte[] {0x12, 0x03, OS_BITMASK[oversampling.ordinal()], FILTER_BITMASK[filter.ordinal()]};
+    public void configure(Class<? extends MetaWearBoard.Module> info, FilterCoeff filter, OversamplingMode oversampling) throws InterruptedException {
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup(info).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            byte[] expected= new byte[] {0x12, 0x03, OS_BITMASK[oversampling.ordinal()], FILTER_BITMASK[filter.ordinal()]};
 
-        baroBosch.configure()
-                .filterCoeff(filter)
-                .pressureOversampling(oversampling)
-                .commit();
-        assertArrayEquals(expected, junitPlatform.getLastCommand());
+            baroBosch.configure()
+                    .filterCoeff(filter)
+                    .pressureOversampling(oversampling)
+                    .commit();
+            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }
