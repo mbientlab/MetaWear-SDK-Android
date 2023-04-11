@@ -45,7 +45,7 @@ public class TestSwitch extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> switchModule = mwBoard.getModule(Switch.class));
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> switchModule = mwBoard.getModule(Switch.class));
     }
 
     @Test
@@ -110,7 +110,7 @@ public class TestSwitch extends UnitTestBase {
             final long expected= 0;
             final long[] actual= new long[1];
 
-            switchModule.state().addRouteAsync(source -> source.stream((data, env) -> ((long[]) env[0])[0]= data.value(Long.class))).continueWith(task -> {
+            switchModule.state().addRouteAsync(source -> source.stream((data, env) -> ((long[]) env[0])[0]= data.value(Long.class))).continueWith(IMMEDIATE_EXECUTOR, task -> {
                 task.getResult().setEnvironment(0, (Object) actual);
                 return null;
             });

@@ -50,7 +50,7 @@ public class TestI2C extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(SerialPassthrough.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             i2c = mwBoard.getModule(SerialPassthrough.class).i2c((byte) 1, (byte) 0xa);
         });
     }

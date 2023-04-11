@@ -54,7 +54,7 @@ public class TestLoggingDownload extends UnitTestBase {
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Logging.class, AccelerometerBmi160.class);
         junitPlatform.addCustomResponse(new byte[] {0x0b, (byte) 0x84}, new byte[] {0x0b, (byte) 0x84, (byte) 0xa9, 0x72, 0x04, 0x00, 0x01});
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             now = Calendar.getInstance().getTimeInMillis();
             logging = mwBoard.getModule(Logging.class);
         });

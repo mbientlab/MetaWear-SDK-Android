@@ -47,7 +47,7 @@ public class TestSettingsRev1 extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x01 });
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
                 settings = mwBoard.getModule(Settings.class));
     }
 
@@ -90,19 +90,34 @@ public class TestSettingsRev1 extends UnitTestBase {
 
     @Test
     public void batteryNull() throws Exception {
-        setup().addOnSuccessListener(ignored ->
-                assertNull(settings.battery()));
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            assertNull(settings.battery());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void powerStatusNull() throws Exception {
-        setup().addOnSuccessListener(ignored ->
-            assertNull(settings.powerStatus()));
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            assertNull(settings.powerStatus());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 
     @Test
     public void chargeStatusNull() throws Exception {
-        setup().addOnSuccessListener(ignored ->
-            assertNull(settings.chargeStatus()));
+        CountDownLatch doneSignal = new CountDownLatch(1);
+        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            assertNull(settings.chargeStatus());
+            doneSignal.countDown();
+        });
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        assertEquals(0, doneSignal.getCount());
     }
 }

@@ -33,6 +33,7 @@ import com.mbientlab.metawear.Capture;
 import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
+import com.mbientlab.metawear.impl.platform.TaskHelper;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.DataProcessor;
 
@@ -43,7 +44,6 @@ import java.util.LinkedList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Created by etsai on 9/5/16.
@@ -166,7 +166,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         final Queue<Byte> ids = new LinkedList<>();
         final Capture<Boolean> terminate = new Capture<>(false);
 
-        return Tasks.forResult(!terminate.get() && !pendingProcessors.isEmpty()).continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
+        return TaskHelper.continueWhile(() -> !terminate.get() && !pendingProcessors.isEmpty(), ignored -> {
             final Processor current = pendingProcessors.poll();
             DataTypeBase input = current.editor.source.input;
 
@@ -196,7 +196,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
 
                 return Tasks.forResult(null);
             });
-        }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+        }, IMMEDIATE_EXECUTOR, null).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
             if (!task.isSuccessful()) {
                 for(byte it: ids) {
                     removeProcessor(true, it);
@@ -206,6 +206,8 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             return Tasks.forResult(ids);
         });
     }
+
+
 
     @Override
     public <T extends Editor> T edit(String name, Class<T> editorClass) {
@@ -262,11 +264,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
         final Deque<ProcessorEntry> result = new LinkedList<>();
         final Capture<Byte> nextId = new Capture<>(id);
 
-        if (terminate.get()) {
-            return Tasks.forException(new TimeoutException(String.format("Did not received data processor config within %dms", Constant.RESPONSE_TIMEOUT)));
-        }
-
-        return Tasks.forResult(null).continueWith(IMMEDIATE_EXECUTOR, ignored ->
+        return TaskHelper.continueWhile(() -> !terminate.get(), ignored ->
             pullProcessorConfigTask.execute("Did not received data processor config within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, Util.setRead(ADD), nextId.get()})
         ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
@@ -294,6 +292,6 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             terminate.set(!(response[2] == DATA_PROCESSOR.id && response[3] == NOTIFY));
 
             return Tasks.forResult(null);
-        })).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> Tasks.forResult(result));
+        }), IMMEDIATE_EXECUTOR, null).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> Tasks.forResult(result));
     }
 }

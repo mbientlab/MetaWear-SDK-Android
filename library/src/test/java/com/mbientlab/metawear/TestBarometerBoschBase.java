@@ -41,7 +41,7 @@ public abstract class TestBarometerBoschBase extends UnitTestBase {
     public Task<Void> setup(Class<? extends MetaWearBoard.Module> moduleClass) {
         try {
             junitPlatform.boardInfo = new MetaWearBoardInfo(moduleClass);
-            return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                 baroBosch = mwBoard.getModule(BarometerBosch.class);
             });
         } catch (Exception e) {

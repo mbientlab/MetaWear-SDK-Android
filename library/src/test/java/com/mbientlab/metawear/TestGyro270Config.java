@@ -65,7 +65,7 @@ public class TestGyro270Config extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(GyroBmi270.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             gyro = mwBoard.getModule(GyroBmi270.class);
         });
     }

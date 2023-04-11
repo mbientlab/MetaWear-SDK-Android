@@ -61,7 +61,7 @@ public class TestMagnetometerBmm150 extends UnitTestBase {
     public Task<Void> setup(byte revision) {
         try {
             junitPlatform.addCustomModuleInfo(new byte[] {0x15, (byte) 0x80, 0x00, revision});
-            return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mag = mwBoard.getModule(MagnetometerBmm150.class);
             });
         } catch (Exception e) {

@@ -65,7 +65,7 @@ public class TestModel extends UnitTestBase {
 
     public Task<Void> setup(MetaWearBoardInfo info) {
         junitPlatform.boardInfo = info;
-        return connectToBoardNew();
+        return connectToBoard();
     }
 
     @ParameterizedTest

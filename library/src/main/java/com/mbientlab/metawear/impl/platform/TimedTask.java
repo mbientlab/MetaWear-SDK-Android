@@ -1,9 +1,12 @@
 package com.mbientlab.metawear.impl.platform;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+
 import com.google.android.gms.tasks.CancellationTokenSource;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.TaskCompletionSource;
 
+import java.util.ArrayList;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -25,24 +28,18 @@ public class TimedTask<T> {
         action.run();
 
         if (timeout != 0) {
-//            final ArrayList<Task<?>> tasks = new ArrayList<>();
-//            tasks.add(taskSource.getTask());
-//            tasks.add(Tasks.withTimeout(Tasks.forResult(cts.getToken()), timeout, TimeUnit.MILLISECONDS));
+            final ArrayList<Task<?>> tasks = new ArrayList<>();
+            tasks.add(taskSource.getTask());
+            tasks.add(TaskHelper.delay(timeout, cts.getToken()));
 
-            if (taskSource.getTask().isCanceled()) {
-                setError(new TimeoutException(String.format(msgFormat, timeout)));
-            } else {
-                return taskSource.getTask();
-            }
-
-//            Tasks.whenAll(tasks).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-//                if (task != tasks.get(0)) {
-//                    setError(new TimeoutException(String.format(msgFormat, timeout)));
-//                } else {
-//                    cts.cancel();
-//                }
-//                return null;
-//            });
+            TaskHelper.whenAny(tasks).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                if (task.getResult() != tasks.get(0)) {
+                    setError(new TimeoutException(String.format(msgFormat, timeout)));
+                } else {
+                    cts.cancel();
+                }
+                return null;
+            });
         }
         return taskSource.getTask();
     }

@@ -68,7 +68,7 @@ public class TestProximityTsl2671Config extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(ProximityTsl2671.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> proximity = mwBoard.getModule(ProximityTsl2671.class));
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> proximity = mwBoard.getModule(ProximityTsl2671.class));
     }
 
     @ParameterizedTest

@@ -44,7 +44,7 @@ public class TestHaptic extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Haptic.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             haptic = mwBoard.getModule(Haptic.class);
         });
     }

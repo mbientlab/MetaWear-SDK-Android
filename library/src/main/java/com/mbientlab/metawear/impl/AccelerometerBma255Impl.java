@@ -137,8 +137,8 @@ class AccelerometerBma255Impl extends AccelerometerBoschImpl implements Accelero
     public Task<Void> pullConfigAsync() {
         return pullConfigTask.execute("Did not receive BMA255 acc config within %dms", Constant.RESPONSE_TIMEOUT,
                 () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)})
-        ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
-            System.arraycopy(task, 2, accDataConfig, 0, accDataConfig.length);
+        ).onSuccessTask(IMMEDIATE_EXECUTOR, result -> {
+            System.arraycopy(result, 2, accDataConfig, 0, accDataConfig.length);
             return Tasks.forResult(null);
         });
     }

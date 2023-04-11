@@ -46,7 +46,7 @@ public class TestHumidityBme280 extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(HumidityBme280.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             humidity = mwBoard.getModule(HumidityBme280.class);
         });
     }

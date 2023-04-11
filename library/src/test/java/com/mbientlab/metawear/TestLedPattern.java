@@ -118,7 +118,7 @@ public class TestLedPattern extends UnitTestBase {
                 expected[14] = (byte) (delay & 0xff);
             }
 
-            return connectToBoardNew();
+            return connectToBoard();
         } catch (Exception e) {
             fail(e);
             return Tasks.forException(e);

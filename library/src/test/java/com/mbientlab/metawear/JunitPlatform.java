@@ -25,6 +25,7 @@
 package com.mbientlab.metawear;
 
 import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
+import static com.mbientlab.metawear.Executors.SCHEDULED_EXECUTOR;
 
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.TaskCompletionSource;
@@ -47,7 +48,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -95,11 +96,11 @@ public class JunitPlatform implements IO, BtleGatt {
     }
 
     private void scheduleMockResponse(final byte[] response) {
-        IMMEDIATE_EXECUTOR.execute(() -> bridge.sendMockResponse(response));
+        SCHEDULED_EXECUTOR.schedule(() -> bridge.sendMockResponse(response), 20, TimeUnit.MILLISECONDS);
     }
 
     public void scheduleTask(Runnable r, long timeout) {
-        IMMEDIATE_EXECUTOR.execute(r);
+        SCHEDULED_EXECUTOR.schedule(r, timeout, TimeUnit.MILLISECONDS);
     }
 
     @Override

@@ -48,7 +48,7 @@ public class TestMma8452qMovement extends UnitTestBase {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
         mma8452qAcc = mwBoard.getModule(AccelerometerMma8452q.class);
 
-        return connectToBoardNew();
+        return connectToBoard();
     }
 
     @Test

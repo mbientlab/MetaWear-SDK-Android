@@ -98,7 +98,7 @@ public class TestSensorFusionData extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(SensorFusionBosch.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
                 sensorFusion = mwBoard.getModule(SensorFusionBosch.class));
     }
 

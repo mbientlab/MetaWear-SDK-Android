@@ -36,7 +36,7 @@ import com.mbientlab.metawear.module.Switch;
 
 class RouteCreator {
     static Task<Route> createLedController(MetaWearBoard board) {
-        final Led led= board.getModule(Led.class);
+        final Led led = board.getModule(Led.class);
         return board.getModule(Switch.class).state().addRouteAsync(source -> source.count().map(Function2.MODULUS, 2)
                 .multicast()
                 .to().filter(Comparison.EQ, 1).react(token -> {

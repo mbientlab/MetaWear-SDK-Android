@@ -68,7 +68,7 @@ public class TestAccFeedback extends UnitTestBase {
     public Task<Void> setup(Class<? extends Accelerometer> accelClass) {
         junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
         junitPlatform.firmware = "1.1.3";
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> accelerometer = mwBoard.getModule(Accelerometer.class))
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> accelerometer = mwBoard.getModule(Accelerometer.class))
                 .addOnFailureListener(e -> fail(e));
     }
 

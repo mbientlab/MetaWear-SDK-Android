@@ -47,7 +47,7 @@ public class TestMagnetometerBmm150PackedData extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo= new MetaWearBoardInfo(MagnetometerBmm150.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             mag = mwBoard.getModule(MagnetometerBmm150.class);
         });
     }

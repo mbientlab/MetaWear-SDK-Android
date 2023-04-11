@@ -73,7 +73,7 @@ public class TestAccelerometerBoschFlatRev2 extends UnitTestBase {
         moduleInfo[3] = 0x2;
 
         junitPlatform.addCustomModuleInfo(moduleInfo);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             acc = mwBoard.getModule(AccelerometerBosch.class);
         });
     }

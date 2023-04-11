@@ -49,7 +49,7 @@ public class TestAmbientLightLtr329 extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AmbientLightLtr329.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             alsLtr329 = mwBoard.getModule(AmbientLightLtr329.class);
         });
     }

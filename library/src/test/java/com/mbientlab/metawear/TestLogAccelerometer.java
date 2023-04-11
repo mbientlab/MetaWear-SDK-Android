@@ -38,7 +38,7 @@ public class TestLogAccelerometer extends UnitTestBase {
 
     public Task<Void> setup(Class<? extends Accelerometer> accelClass) {
         junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             accelerometer = mwBoard.getModule(Accelerometer.class);
         });
     }

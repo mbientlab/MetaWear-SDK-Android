@@ -24,6 +24,7 @@
 
 package com.mbientlab.metawear;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -57,7 +58,7 @@ public class TestTemperatureMwrData extends UnitTestBase {
     public Task<Void> setup(int sourceIdx) {
         try {
             junitPlatform.addCustomModuleInfo(new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x01});
-            return connectToBoardNew().addOnSuccessListener(ignored -> currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx]);
+            return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> currentSrc= mwBoard.getModule(Temperature.class).sensors()[sourceIdx]);
         } catch (Exception e) {
             fail(e);
             return Tasks.forException(e);
@@ -101,7 +102,7 @@ public class TestTemperatureMwrData extends UnitTestBase {
         setup(sourceIdx).addOnSuccessListener(ignored -> {
             final Capture<Float> actual = new Capture<>();
 
-            currentSrc.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(task -> {
+            currentSrc.addRouteAsync(source -> source.stream((data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))).continueWith(IMMEDIATE_EXECUTOR, task -> {
                 task.getResult().setEnvironment(0, actual);
                 return null;
             });

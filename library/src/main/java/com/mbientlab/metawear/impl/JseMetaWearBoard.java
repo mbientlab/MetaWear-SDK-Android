@@ -59,6 +59,7 @@ import com.mbientlab.metawear.impl.platform.BtleGatt.WriteType;
 import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
 import com.mbientlab.metawear.impl.platform.DeviceInformationService;
 import com.mbientlab.metawear.impl.platform.IO;
+import com.mbientlab.metawear.impl.platform.TaskHelper;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBma255;
@@ -119,7 +120,6 @@ import java.util.Queue;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -347,9 +347,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 pendingRoutes.add(new Tuple3<>(builder, new RouteComponentImpl(persist.taggedProducers.get(producerTag)), taskSrc));
                 routeTypes.add(RouteType.DATA);
                 createRoute(false);
-//                return createRoute(false).continueWithTask(IMMEDIATE_EXECUTOR, task -> { TODO: fix
-//                    return taskSrc.getTask();
-//                });
             } else {
                 taskSrc.setException(new NullPointerException(String.format(Locale.US, "Producer tag \'%s\' does not exist", producerTag)));
                 return taskSrc.getTask();
@@ -861,24 +858,20 @@ public class JseMetaWearBoard implements MetaWearBoard {
             }
         }
 
-        return Tasks.forResult(null).continueWith(IMMEDIATE_EXECUTOR, mainTask -> {
-            while(!terminate.get() && !modules.isEmpty()) {
-                var newTask = Tasks.forResult(modules.poll()).continueWithTask(IMMEDIATE_EXECUTOR, next ->
-                        readModuleInfoTask.execute("Did not receive info for module (" + next.getResult().friendlyName + ") within %dms", Constant.RESPONSE_TIMEOUT,
-                        () -> gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] { next.getResult().id, READ_INFO_REGISTER }))
-                ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                    if (!task.isSuccessful()) {
-                        terminate.set(true);
-                        return Tasks.<Void>forException(task.getException());
-                    } else {
-                        info.add(new ModuleInfo(task.getResult()));
-                        return Tasks.<Void>forResult(null);
-                    }
-                });
-                mainTask.continueWithTask(IMMEDIATE_EXECUTOR, ignored -> newTask);
-            }
-            return mainTask;
-        }).continueWithTask(IMMEDIATE_EXECUTOR, task -> !task.isSuccessful() ? Tasks.forException(new TaskTimeoutException(task.getException(), info)) : Tasks.forResult(info));
+        return TaskHelper.continueWhile(() -> !terminate.get() && !modules.isEmpty(), ignored -> {
+            final Constant.Module next = modules.poll();
+            return readModuleInfoTask.execute("Did not receive info for module (" + next.friendlyName + ") within %dms", Constant.RESPONSE_TIMEOUT,
+                    () -> gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] { next.id, READ_INFO_REGISTER })
+            ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                if (!task.isSuccessful()) {
+                    terminate.set(true);
+                    return Tasks.<Void>forException(task.getException());
+                } else {
+                    info.add(new ModuleInfo(task.getResult()));
+                    return Tasks.<Void>forResult(null);
+                }
+            });
+        }, IMMEDIATE_EXECUTOR, null).continueWithTask(IMMEDIATE_EXECUTOR, task -> !task.isSuccessful() ? Tasks.forException(new TaskTimeoutException(task.getException(), info)) : Tasks.forResult(info));
     }
 
     @Override
@@ -1014,18 +1007,18 @@ public class JseMetaWearBoard implements MetaWearBoard {
     public Task<Void> connectWithRetryAsync(int retries) {
         final Capture<Integer> remaining = new Capture<>(retries);
         final Capture<Task<Void>> lastResult = new Capture<>();
-        return Tasks.whenAllSuccess(Tasks.forResult(remaining.get() > 0), Tasks.forResult(
+        return TaskHelper.continueWhile(() -> remaining.get() > 0, ignored ->
                 connectAsync().continueWithTask(IMMEDIATE_EXECUTOR, task -> {
                     lastResult.set(task);
                     remaining.set(!task.isSuccessful() || task.isCanceled() ? remaining.get() - 1 : -1);
                     return Tasks.forResult(null);
-                }))
+                }), IMMEDIATE_EXECUTOR, null
         ).continueWithTask(IMMEDIATE_EXECUTOR, ignored -> lastResult.get());
     }
 
     @Override
     public Task<Void> connectAsync(long delay) {
-        return Tasks.withTimeout(connectAsync(), delay, TimeUnit.MILLISECONDS);
+        return TaskHelper.delay(delay).continueWithTask(IMMEDIATE_EXECUTOR, task -> connectAsync());
     }
 
     @Override

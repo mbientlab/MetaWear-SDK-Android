@@ -52,7 +52,7 @@ public class TestSettingsRev2 extends UnitTestBase {
     public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x02 });
         junitPlatform.boardInfo = new MetaWearBoardInfo(Led.class);
-        return connectToBoardNew().continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
             settings = mwBoard.getModule(Settings.class);
             return ignored;
         });
@@ -68,11 +68,11 @@ public class TestSettingsRev2 extends UnitTestBase {
                 {0x0a, 0x03, 0x01}
         };
 
-        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        setup().continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
 
             final Led led= mwBoard.getModule(Led.class);
 
-            settings.onDisconnectAsync(() -> {
+            return settings.onDisconnectAsync(() -> {
                 led.editPattern(Led.Color.BLUE)
                         .highTime((short) 50)
                         .pulseDuration((short) 500)

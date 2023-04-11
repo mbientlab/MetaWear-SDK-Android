@@ -69,7 +69,7 @@ public class TestModule extends UnitTestBase {
     @Test
     public void notSupported() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNull(mwBoard.getModule(Switch.class));
             assertNull(mwBoard.getModule(Led.class));
             assertNull(mwBoard.getModule(AccelerometerBmi160.class));
@@ -103,7 +103,7 @@ public class TestModule extends UnitTestBase {
     public void lookupSwitch() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Switch.class));
             doneSignal.countDown();
         });
@@ -115,7 +115,7 @@ public class TestModule extends UnitTestBase {
     public void lookupLed() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Led.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Led.class));
             doneSignal.countDown();
         });
@@ -127,7 +127,7 @@ public class TestModule extends UnitTestBase {
     public void lookupAccelerometerBmi160() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertTrue(mwBoard.getModule(Accelerometer.class) instanceof AccelerometerBmi160);
             assertNotNull(mwBoard.getModule(AccelerometerBmi160.class));
             assertNull(mwBoard.getModule(AccelerometerMma8452q.class));
@@ -142,7 +142,7 @@ public class TestModule extends UnitTestBase {
     public void lookupAccelerometerBma255() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBma255.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertTrue(mwBoard.getModule(Accelerometer.class) instanceof AccelerometerBma255);
             assertNotNull(mwBoard.getModule(AccelerometerBma255.class));
             assertNull(mwBoard.getModule(AccelerometerMma8452q.class));
@@ -157,7 +157,7 @@ public class TestModule extends UnitTestBase {
     public void lookupAccelerometerMma8452q() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertTrue(mwBoard.getModule(Accelerometer.class) instanceof AccelerometerMma8452q);
             assertNotNull(mwBoard.getModule(AccelerometerMma8452q.class));
             assertNull(mwBoard.getModule(AccelerometerBma255.class));
@@ -172,7 +172,7 @@ public class TestModule extends UnitTestBase {
     public void lookupTemperature() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Temperature.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Temperature.class));
             doneSignal.countDown();
         });
@@ -184,7 +184,7 @@ public class TestModule extends UnitTestBase {
     public void lookupHaptic() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Haptic.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Haptic.class));
             doneSignal.countDown();
         });
@@ -196,7 +196,7 @@ public class TestModule extends UnitTestBase {
     public void lookupDataProcessor() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(DataProcessor.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(DataProcessor.class));
             doneSignal.countDown();
         });
@@ -208,7 +208,7 @@ public class TestModule extends UnitTestBase {
     public void lookupLogging() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Logging.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Logging.class));
             doneSignal.countDown();
         });
@@ -220,7 +220,7 @@ public class TestModule extends UnitTestBase {
     public void lookupTimer() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Timer.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Timer.class));
             doneSignal.countDown();
         });
@@ -232,7 +232,7 @@ public class TestModule extends UnitTestBase {
     public void lookupSerialPassthrough() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(SerialPassthrough.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(SerialPassthrough.class));
             doneSignal.countDown();
         });
@@ -244,7 +244,7 @@ public class TestModule extends UnitTestBase {
     public void lookupMacro() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Macro.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Macro.class));
             doneSignal.countDown();
         });
@@ -256,7 +256,7 @@ public class TestModule extends UnitTestBase {
     public void lookupSettings() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Settings.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Settings.class));
             doneSignal.countDown();
         });
@@ -268,7 +268,7 @@ public class TestModule extends UnitTestBase {
     public void lookupBarometerBme280() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(BarometerBme280.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertTrue(mwBoard.getModule(BarometerBosch.class) instanceof BarometerBme280);
             assertNotNull(mwBoard.getModule(BarometerBme280.class));
             assertNull(mwBoard.getModule(BarometerBmp280.class));
@@ -282,7 +282,7 @@ public class TestModule extends UnitTestBase {
     public void lookupBarometerBmp280() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(BarometerBmp280.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertTrue(mwBoard.getModule(BarometerBosch.class) instanceof BarometerBmp280);
             assertNotNull(mwBoard.getModule(BarometerBmp280.class));
             assertNull(mwBoard.getModule(BarometerBme280.class));
@@ -296,7 +296,7 @@ public class TestModule extends UnitTestBase {
     public void lookupGyroBmi160() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Gyro.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Gyro.class));
             doneSignal.countDown();
         });
@@ -308,7 +308,7 @@ public class TestModule extends UnitTestBase {
     public void lookupAmbientLightLtr329() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(AmbientLightLtr329.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(AmbientLightLtr329.class));
             doneSignal.countDown();
         });
@@ -320,7 +320,7 @@ public class TestModule extends UnitTestBase {
     public void lookupMagnetometerBmm150() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(MagnetometerBmm150.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(MagnetometerBmm150.class));
             doneSignal.countDown();
         });
@@ -332,7 +332,7 @@ public class TestModule extends UnitTestBase {
     public void lookupHumidityBme280() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(HumidityBme280.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(HumidityBme280.class));
             doneSignal.countDown();
         });
@@ -344,7 +344,7 @@ public class TestModule extends UnitTestBase {
     public void lookupColorTcs34725() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(ColorTcs34725.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(ColorTcs34725.class));
             doneSignal.countDown();
         });
@@ -356,7 +356,7 @@ public class TestModule extends UnitTestBase {
     public void lookupProximityTsl2671() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(ProximityTsl2671.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(ProximityTsl2671.class));
             doneSignal.countDown();
         });
@@ -368,7 +368,7 @@ public class TestModule extends UnitTestBase {
     public void lookupSensorFusionBosch() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(SensorFusionBosch.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(SensorFusionBosch.class));
             doneSignal.countDown();
         });
@@ -380,7 +380,7 @@ public class TestModule extends UnitTestBase {
     public void lookupDebug() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
         junitPlatform.boardInfo = new MetaWearBoardInfo(Debug.class);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             assertNotNull(mwBoard.getModule(Debug.class));
             doneSignal.countDown();
         });

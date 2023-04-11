@@ -47,7 +47,7 @@ public class TestTemperatureMwr extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] {0x04, (byte) 0x80, 0x01, 0x00, 0x00, 0x01});
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> temp = mwBoard.getModule(Temperature.class));
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> temp = mwBoard.getModule(Temperature.class));
     }
 
     @Test

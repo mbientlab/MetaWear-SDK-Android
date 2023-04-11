@@ -47,7 +47,7 @@ public class TestBmi160SignificantMotion extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             bmi160Acc = mwBoard.getModule(AccelerometerBmi160.class);
         });
     }

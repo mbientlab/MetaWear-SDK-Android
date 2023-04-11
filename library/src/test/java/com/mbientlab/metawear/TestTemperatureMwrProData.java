@@ -62,7 +62,7 @@ public class TestTemperatureMwrProData extends UnitTestBase {
     public Task<Void> setup(int sourceIdx) {
         try {
             junitPlatform.boardInfo= new MetaWearBoardInfo(Temperature.class);
-            return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 currentSrc = mwBoard.getModule(Temperature.class).sensors()[sourceIdx];
             });
         } catch (Exception e) {

@@ -65,7 +65,7 @@ public class TestBarometerBme280Standby extends UnitTestBase {
 
     public Task<Void> setup(StandbyTime standby) {
         junitPlatform.boardInfo = new MetaWearBoardInfo(BarometerBme280.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             baroBme280 = mwBoard.getModule(BarometerBme280.class);
             expected = new byte[]{0x12, 0x03, 0x2c, STANDBY_BITMASK[standby.ordinal()]};
         });

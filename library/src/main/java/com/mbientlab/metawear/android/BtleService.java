@@ -51,6 +51,7 @@ import com.mbientlab.metawear.impl.JseMetaWearBoard;
 import com.mbientlab.metawear.impl.platform.BtleGatt;
 import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
 import com.mbientlab.metawear.impl.platform.IO;
+import com.mbientlab.metawear.impl.platform.TaskHelper;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 
 import java.io.ByteArrayInputStream;
@@ -69,7 +70,6 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -108,11 +108,9 @@ public class BtleService extends Service {
     private void executeGattOperation(boolean ready) {
         if (!pendingGattOps.isEmpty() && (pendingGattOps.size() == 1 || ready)) {
             GattOp next = pendingGattOps.peek();
-            gattOpTask.execute(next.msg, 1000, next.task).continueWith(task -> {
-                if (!task.isSuccessful()) {
+            gattOpTask.execute(next.msg, 1000, next.task).continueWith(IMMEDIATE_EXECUTOR, task -> {
+                if (!task.isSuccessful() || task.isCanceled()) {
                     next.taskSource.setException(task.getException());
-//                } else if (task.isCanceled()) { TODO: Fix me
-//                    next.taskSource.set();
                 } else {
                     next.taskSource.setResult(task.getResult());
                 }
@@ -139,7 +137,7 @@ public class BtleService extends Service {
                         platform.closeGatt();
                         platform.connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onConnectionStateChange status (%s)", status)));
                     } else {
-                        Tasks.withTimeout(Tasks.forResult(gatt.discoverServices()), 1000, TimeUnit.MILLISECONDS);
+                        TaskHelper.delay(1000).continueWith(IMMEDIATE_EXECUTOR, ignored -> gatt.discoverServices());
                     }
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
@@ -237,7 +235,12 @@ public class BtleService extends Service {
         void gattTaskCompleted() {
             int count = nGattOps.decrementAndGet();
             if (count == 0 && readyToClose.get()) {
-                androidBtGatt.disconnect();
+                TaskHelper.delay(1000).continueWith(IMMEDIATE_EXECUTOR, ignored -> {
+                    if (androidBtGatt != null) {
+                        androidBtGatt.disconnect();
+                    }
+                    return null;
+                });
             }
         }
 
@@ -378,7 +381,7 @@ public class BtleService extends Service {
                 tasks.add(readCharacteristicAsync(it));
             }
 
-            return Tasks.whenAll(tasks).onSuccessTask(task -> {
+            return Tasks.whenAll(tasks).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
                 byte[][] valuesArray = new byte[tasks.size()][];
                 for (int i = 0; i < valuesArray.length; i++) {
                     valuesArray[i] = tasks.get(i).getResult();

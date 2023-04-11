@@ -45,7 +45,7 @@ public class TestSettingsRev10 extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[]{0x11, (byte) 0x80, 0x00, 0x0a, 0x07, 0x00});
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             settings = mwBoard.getModule(Settings.class);
         });
     }

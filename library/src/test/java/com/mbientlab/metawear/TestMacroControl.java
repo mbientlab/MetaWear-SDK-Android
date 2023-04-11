@@ -45,7 +45,7 @@ public class TestMacroControl extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo= new MetaWearBoardInfo(Macro.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             macro = mwBoard.getModule(Macro.class);
         });
     }

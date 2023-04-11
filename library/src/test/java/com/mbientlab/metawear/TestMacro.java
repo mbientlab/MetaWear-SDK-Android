@@ -54,7 +54,7 @@ public class TestMacro extends UnitTestBase {
         junitPlatform.firmware = "1.2.3";
         junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
         junitPlatform.boardInfo= new MetaWearBoardInfo(Switch.class, Led.class, AccelerometerBmi160.class, Macro.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             macro = mwBoard.getModule(Macro.class);
         });
     }
@@ -71,7 +71,7 @@ public class TestMacro extends UnitTestBase {
                 {0x0f, 0x04}
         };
 
-        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        setup().continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
             final Led led = mwBoard.getModule(Led.class);
             macro.startRecord();
             led.editPattern(Led.Color.BLUE)
@@ -80,7 +80,7 @@ public class TestMacro extends UnitTestBase {
                     .highIntensity((byte) 16).lowIntensity((byte) 16)
                     .commit();
             led.play();
-            macro.endRecordAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            return macro.endRecordAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                 assertArrayEquals(expected, junitPlatform.getCommands());
                 doneSignal.countDown();
             });

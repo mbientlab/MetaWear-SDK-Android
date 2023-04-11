@@ -46,7 +46,7 @@ import java.util.concurrent.TimeUnit;
 public class TestMetaMotionDataProcessor extends UnitTestBase {
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(DataProcessor.class, SensorFusionBosch.class);
-        return connectToBoardNew();
+        return connectToBoard();
     }
 
     @Test

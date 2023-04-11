@@ -45,7 +45,7 @@ public interface Macro extends Module {
      * Ends macro recording
      * @return Task containing the id of the recorded task
      */
-    Task<Object> endRecordAsync();
+    Task<Byte> endRecordAsync();
 
     /**
      * Execute the commands corresponding to the macro ID

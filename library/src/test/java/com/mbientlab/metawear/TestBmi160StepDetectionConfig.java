@@ -65,7 +65,7 @@ public class TestBmi160StepDetectionConfig extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        return connectToBoardNew();
+        return connectToBoard();
     }
 
     @ParameterizedTest

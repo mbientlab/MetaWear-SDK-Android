@@ -68,7 +68,7 @@ public class TestDataProcessor {
         public Task<Void> setup() {
             junitPlatform.boardInfo = new MetaWearBoardInfo(Switch.class, Led.class, BarometerBmp280.class, AccelerometerBmi160.class, Gyro.class, Temperature.class);
             junitPlatform.firmware = "1.2.5";
-            return connectToBoardNew();
+            return connectToBoard();
         }
     }
 
@@ -97,6 +97,7 @@ public class TestDataProcessor {
     public static class TestAccShift extends TestBase {
         @Test
         public void accLogRightShift() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             byte[][] expected = new byte[][] {
                     {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x09, 0x14, 0x08, 0x08, 0x00, 0x00, 0x00, 0x02},
                     {0x0b, 0x02, 0x09, 0x03, 0x00, 0x40}
@@ -105,56 +106,68 @@ public class TestDataProcessor {
             setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.getModule(Accelerometer.class).acceleration()
                         .addRouteAsync(source -> source.map(Function2.RIGHT_SHIFT, 8).log(null))
-                        .addOnSuccessListener(result -> {
+                        .addOnSuccessListener(IMMEDIATE_EXECUTOR, result -> {
                             assertArrayEquals(expected, junitPlatform.getCommands());
+                            doneSignal.countDown();
                         });
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @Test
         public void accRightShiftData() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             float[] expected = new float[] {1.969f, 0.812f, 0.984f};
             final float[] actual = new float[3];
 
-            setup().addOnSuccessListener(ignored -> {
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                         mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function2.RIGHT_SHIFT, 8).stream((data, env) -> {
                             byte[] bytes = data.bytes();
                             for(int i = 0; i < bytes.length; i++) {
                                 actual[i] = (bytes[i] << 8) / data.scale();
                             }
-                        })).addOnSuccessListener(result -> {
+                        })).addOnSuccessListener(IMMEDIATE_EXECUTOR, result -> {
                             sendMockResponse(new byte[] {0x09, 0x03, 0x00, 126, 52, 63});
                             assertArrayEquals(expected, actual, 0.001f);
+                            doneSignal.countDown();
                         });
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
     }
 
     public static class TestAccumulator extends TestBase {
         @Test
         public void setSum() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             byte[] expected = new byte[] {0x09, 0x04, 0x01, 0x00, 0x00, 0x71, 0x02};
 
-            setup().addOnSuccessListener(ignored -> {
-                mwBoard.getModule(Accelerometer.class).configure()
-                        .range(16f)
-                        .odr(100f)
-                        .commit();
-                mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                        mwBoard.getModule(Accelerometer.class).configure()
+                                .range(16f)
+                                .odr(100f)
+                                .commit();
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                    mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
                         source.map(Function1.RMS).accumulate().name("rms_acc")
-                ).addOnSuccessListener(result -> {
+                ).addOnSuccessListener(IMMEDIATE_EXECUTOR, result -> {
                     mwBoard.getModule(DataProcessor.class).edit("rms_acc", DataProcessor.AccumulatorEditor.class).set(20000f);
                     assertArrayEquals(expected, junitPlatform.getLastCommand());
+                    doneSignal.countDown();
                 });
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
     }
 
     public static class TestFreefall extends TestBase {
-        @BeforeEach
+
         public Task<Void> setup() {
             junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x01, 0x1c});
-            return super.setup().addOnSuccessListener(ignored -> {
+            return super.setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source ->
                         source.map(Function1.RSS).lowpass((byte) 4).filter(ThresholdOutput.BINARY, 0.5f)
                                 .multicast()
@@ -166,8 +179,9 @@ public class TestDataProcessor {
         }
 
         @Test
-        public void create() {
-            byte[][] expected= new byte[][] {
+        public void create() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
+            byte[][] expected = new byte[][] {
                     {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x07, (byte) 0xa5, 0x01},
                     {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x03, 0x05, 0x04},
                     {0x09, 0x02, 0x09, 0x03, 0x01, 0x20, 0x0d, 0x09, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00},
@@ -177,22 +191,32 @@ public class TestDataProcessor {
                     {0x0b, 0x02, 0x09, 0x03, 0x04, 0x00},
             };
 
-            setup().addOnSuccessListener(ignored -> assertArrayEquals(expected, junitPlatform.getCommands()));
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                assertArrayEquals(expected, junitPlatform.getCommands());
+                doneSignal.countDown();
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @Test
-        public void checkIdentifier() {
-            setup().addOnSuccessListener(ignored -> {
+        public void checkIdentifier() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=3", mwBoard.lookupRoute(0).generateIdentifier(0));
                 assertEquals("acceleration:rss?id=0:low-pass?id=1:threshold?id=2:comparison?id=4", mwBoard.lookupRoute(0).generateIdentifier(1));
+                doneSignal.countDown();
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
     }
 
     public static class TestLedController extends TestBase {
         @Test
         public void create() throws InterruptedException {
-            byte[][] expected= new byte[][] {
+            CountDownLatch doneSignal = new CountDownLatch(1);
+            byte[][] expected = new byte[][] {
                     {0x09, 0x02, 0x01, 0x01, (byte) 0xff, 0x00, 0x02, 0x13},
                     {0x09, 0x02, 0x09, 0x03, 0x00, 0x60, 0x09, 0x0f, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00},
                     {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x06, 0b00000110, 0x01, 0x00, 0x00, 0x00},
@@ -206,16 +230,20 @@ public class TestDataProcessor {
             };
 
             setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
-                RouteCreator.createLedController(mwBoard).addOnSuccessListener(ignored2 -> {
+                RouteCreator.createLedController(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
                     assertArrayEquals(expected, junitPlatform.getCommands());
+                    doneSignal.countDown();
                 });
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
     }
 
     public static class TestMaths extends TestBase {
         @Test
         public void tempConverter() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             byte[][] expected = new byte[][] {
                     {0x09, 0x02, 0x04, (byte) 0x81, 0x00, 0x20, 0x09, 0x17, 0x02, 0x12, 0x00, 0x00, 0x00, 0x00},
                     {0x09, 0x02, 0x09, 0x03, 0x00, 0x60, 0x09, 0x1f, 0x03, 0x0a, 0x00, 0x00, 0x00, 0x00},
@@ -228,22 +256,26 @@ public class TestDataProcessor {
                     {0x04, (byte) 0x81, 0x00}
             };
 
-
-            final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.NRF_SOC)[0];
-            thermometer.addRouteAsync(source -> source.multicast()
-                    .to().stream(null)
-                    .to()
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                final Temperature.Sensor thermometer = mwBoard.getModule(Temperature.class).findSensors(Temperature.SensorType.NRF_SOC)[0];
+                thermometer.addRouteAsync(source -> source.multicast()
+                        .to().stream(null)
+                        .to()
                         .map(Function2.MULTIPLY, 18)
                         .map(Function2.DIVIDE, 10)
                         .map(Function2.ADD, 32)
                         .stream(null)
-                    .to()
+                        .to()
                         .map(Function2.ADD, 273.15f)
                         .stream(null)
-            ).getResult();
-            thermometer.read();
-
-            assertArrayEquals(expected, junitPlatform.getCommands());
+                );
+                thermometer.read();
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertArrayEquals(expected, junitPlatform.getCommands());
+                doneSignal.countDown();
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
     }
 
@@ -280,34 +312,52 @@ public class TestDataProcessor {
 
         @Test
         public void countTooHigh() throws Exception {
-            Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 5));
-            task.getResult();
-
-            assertInstanceOf(IllegalRouteOperationException.class, task.getException());
+            CountDownLatch doneSignal = new CountDownLatch(1);
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 5)).addOnFailureListener(IMMEDIATE_EXECUTOR, exception -> {
+                    assertInstanceOf(IllegalRouteOperationException.class,exception);
+                    doneSignal.countDown();
+                });
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
     }
 
     public static class TestAccounter extends TestBase {
         @Test
         public void createTempAccounter() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             byte[] expected = new byte[] {0x9, 0x2, 0x3, 0x4, (byte) 0xff, (byte) 0xa0, 0x11, 0x31, 0x3};
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(RouteComponent::account).getResult();
-
-            assertArrayEquals(expected, junitPlatform.getLastCommand());
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(RouteComponent::account).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    assertArrayEquals(expected, junitPlatform.getLastCommand());
+                    doneSignal.countDown();
+                });
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @Test
         public void dataExtraction() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             final Acceleration expected = new Acceleration(Float.intBitsToFloat(0x3c410000), Float.intBitsToFloat(0x3f12c400), Float.intBitsToFloat(0xbf4b9c00));
             final Capture<Acceleration> actual = new Capture<>();
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream((Subscriber) (data, env) -> actual.set(data.value(Acceleration.class)))).getResult();
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream((Subscriber) (data, env) -> actual.set(data.value(Acceleration.class)))).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    byte[] response = new byte[] {0x09, 0x03, 0x00, (byte) 0xa6, 0x33, 0x0d, 0x00, (byte) 0xc1, 0x00, (byte) 0xb1, 0x24, 0x19, (byte) 0xcd};
+                    sendMockResponse(response);
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    assertEquals(expected, actual.get());
+                    doneSignal.countDown();
+                });
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
 
-            byte[] response = new byte[] {0x09, 0x03, 0x00, (byte) 0xa6, 0x33, 0x0d, 0x00, (byte) 0xc1, 0x00, (byte) 0xb1, 0x24, 0x19, (byte) 0xcd};
-            sendMockResponse(response);
-
-            assertEquals(expected, actual.get());
         }
 
         private final Subscriber timeExtractor = new Subscriber() {
@@ -325,12 +375,13 @@ public class TestDataProcessor {
         };
         @Test
         public void timeExtraction() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             long[] expected = new long[] {10, 10, 9, 10, 11};
             final long[] actual = new long[5];
 
             Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor));
             task.getResult();
-            task.getResult().setEnvironment(0, (Object) actual);
+            task.getResult().setEnvironment(0, actual);
 
             byte[][] responses = {
                     {0x09, 0x03, 0x00, (byte) 0xa6, 0x33, 0x0d, 0x00, (byte) 0xc1, 0x00, (byte) 0xb1, 0x24, 0x19, (byte) 0xcd},
@@ -345,38 +396,49 @@ public class TestDataProcessor {
             }
 
             assertArrayEquals(expected, actual);
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @Test
         public void handleRollback() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             long[] expected = new long[] {11, 10, 9, 10, 10};
             final long[] actual = new long[5];
 
-            Task<Route> task = mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor));
-            task.getResult();
-            task.getResult().setEnvironment(0, (Object) actual);
-
-            byte[][] responses = {
-                    {0x09, 0x03, 0x00, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xc1, 0x00, (byte) 0xb1, 0x24, 0x19, (byte) 0xcd},
-                    {0x09, 0x03, 0x00, 0x06, 0x00, 0x00, 0x00, (byte) 0xd4, 0x00, 0x18, 0x25, (byte) 0xc0, (byte) 0xcc},
-                    {0x09, 0x03, 0x00, 0x0d, 0x00, 0x00, 0x00, (byte) 0xc7, 0x00, 0x09, 0x25, (byte) 0xb2, (byte) 0xcc},
-                    {0x09, 0x03, 0x00, 0x13, 0x00, 0x00, 0x00, (byte) 0xc5, 0x00, 0x17, 0x25, (byte) 0xbc, (byte) 0xcc},
-                    {0x09, 0x03, 0x00, 0x1a, 0x00, 0x00, 0x00, (byte) 0xd4, 0x00, (byte) 0xe9, 0x24, (byte) 0xe4, (byte) 0xcc},
-                    {0x09, 0x03, 0x00, 0x21, 0x00, 0x00, 0x00, (byte) 0xaf, 0x00, (byte) 0xf7, 0x24, (byte) 0xe3, (byte) 0xcc}
-            };
-            for(byte[] it: responses) {
-                sendMockResponse(it);
-            }
-
-            assertArrayEquals(expected, actual);
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.account().stream(timeExtractor)).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    task.setEnvironment(0, actual);
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    byte[][] responses = {
+                            {0x09, 0x03, 0x00, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xc1, 0x00, (byte) 0xb1, 0x24, 0x19, (byte) 0xcd},
+                            {0x09, 0x03, 0x00, 0x06, 0x00, 0x00, 0x00, (byte) 0xd4, 0x00, 0x18, 0x25, (byte) 0xc0, (byte) 0xcc},
+                            {0x09, 0x03, 0x00, 0x0d, 0x00, 0x00, 0x00, (byte) 0xc7, 0x00, 0x09, 0x25, (byte) 0xb2, (byte) 0xcc},
+                            {0x09, 0x03, 0x00, 0x13, 0x00, 0x00, 0x00, (byte) 0xc5, 0x00, 0x17, 0x25, (byte) 0xbc, (byte) 0xcc},
+                            {0x09, 0x03, 0x00, 0x1a, 0x00, 0x00, 0x00, (byte) 0xd4, 0x00, (byte) 0xe9, 0x24, (byte) 0xe4, (byte) 0xcc},
+                            {0x09, 0x03, 0x00, 0x21, 0x00, 0x00, 0x00, (byte) 0xaf, 0x00, (byte) 0xf7, 0x24, (byte) 0xe3, (byte) 0xcc}
+                    };
+                    for(byte[] it: responses) {
+                        sendMockResponse(it);
+                    }
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    assertArrayEquals(expected, actual);
+                    doneSignal.countDown();
+                });
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @Test
         public void noSpace() throws Exception {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             Task<Route> task = mwBoard.getModule(BarometerBosch.class).pressure().addRouteAsync(source -> source.pack((byte) 4).account());
             task.getResult();
 
             assertInstanceOf(IllegalRouteOperationException.class, task.getException());
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @Test
@@ -629,48 +691,76 @@ public class TestDataProcessor {
     public static class TestActivityMonitor extends UnitTestBase {
         private Route activityRoute, bufferStateRoute;
 
-        @BeforeEach
-        public void setup() throws Exception {
+        public Task<Void> setup() {
             junitPlatform.addCustomModuleInfo(new byte[] {0x09, (byte) 0x80, 0x00, 0x00, 0x1c});
             junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
-            connectToBoard();
+            return connectToBoard();
+        }
+//mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function1.RMS).accumulate()
+//                .multicast()
+//                    .to().limit(1000).stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))
+//                .to().buffer().name("rms_accum")
+//                .end()).continueWithTask(task -> {
+//            activityRoute = task.getResult();
+//            return mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(source -> source.stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))));
+//        }).continueWith(task -> {
+//            bufferStateRoute= task.getResult();
+//            return null;
+//        }).getResult();
+        @Test
+        public void createRoute() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
 
-            mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function1.RMS).accumulate()
-                .multicast()
-                    .to().limit(1000).stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))
-                    .to().buffer().name("rms_accum")
-                .end()).continueWithTask(task -> {
-                activityRoute = task.getResult();
-                return mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(source -> source.stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))));
-            }).continueWith(task -> {
-                bufferStateRoute= task.getResult();
-                return null;
-            }).getResult();
+                mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function1.RMS).accumulate()
+                        .multicast()
+                        .to().limit(1000).stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))
+                        .to().buffer().name("rms_accum")
+                        .end()).addOnSuccessListener(IMMEDIATE_EXECUTOR, activityRoute -> {
+                            this.activityRoute = activityRoute;
+                    mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(source -> source.stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))));
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    bufferStateRoute = task;
+                    byte[][] expected = new byte[][] {
+                            {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x07, (byte) 0xa5, 0x00},
+                            {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x02, 0x07},
+                            {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x08, 0x03, (byte) 0xe8, 0x03, 0x00, 0x00},
+                            {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x0f, 0x03},
+                            {0x09, 0x03, 0x01},
+                            {0x09, 0x07, 0x02, 0x01}
+                    };
+                    assertArrayEquals(expected, junitPlatform.getCommands());
+                    doneSignal.countDown();
+                });
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @Test
-        public void createRoute() {
-            byte[][] expected= new byte[][] {
-                    {0x09, 0x02, 0x03, 0x04, (byte) 0xff, (byte) 0xa0, 0x07, (byte) 0xa5, 0x00},
-                    {0x09, 0x02, 0x09, 0x03, 0x00, 0x20, 0x02, 0x07},
-                    {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x08, 0x03, (byte) 0xe8, 0x03, 0x00, 0x00},
-                    {0x09, 0x02, 0x09, 0x03, 0x01, 0x60, 0x0f, 0x03},
-                    {0x09, 0x03, 0x01},
-                    {0x09, 0x07, 0x02, 0x01}
-            };
+        public void handleData() throws InterruptedException {
+            CountDownLatch doneSignal = new CountDownLatch(1);
+            float expected = 33.771667f;
 
-            assertArrayEquals(expected, junitPlatform.getCommands());
-        }
+            Capture<Float> actual = new Capture<>();
+            setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function1.RMS).accumulate()
+                        .multicast()
+                        .to().limit(1000).stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))
+                        .to().buffer().name("rms_accum")
+                        .end()).addOnSuccessListener(IMMEDIATE_EXECUTOR, activityRoute -> {
+                    this.activityRoute = activityRoute;
+                    mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(source -> source.stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))));
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
 
-        @Test
-        public void handleData() {
-            float expected= 33.771667f;
-            Capture<Float> actual= new Capture<>();
-
-            activityRoute.setEnvironment(0, actual);
-
-            sendMockResponse(new byte[] {0x09, 0x03, 0x02, 0x63, 0x71, 0x08, 0x00});
-            assertEquals(expected, actual.get(), 0.0001f);
+                    activityRoute.setEnvironment(0, actual);
+                    sendMockResponse(new byte[] {0x09, 0x03, 0x02, 0x63, 0x71, 0x08, 0x00});
+                    assertEquals(expected, actual.get(), 0.0001f);
+                    doneSignal.countDown();
+                });
+            });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @Test

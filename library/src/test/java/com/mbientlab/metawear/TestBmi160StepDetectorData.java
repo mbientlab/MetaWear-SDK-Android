@@ -46,7 +46,7 @@ public class TestBmi160StepDetectorData extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             detector = mwBoard.getModule(AccelerometerBmi160.class).stepDetector();
         });
     }

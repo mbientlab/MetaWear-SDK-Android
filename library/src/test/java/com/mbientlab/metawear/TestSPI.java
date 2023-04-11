@@ -62,7 +62,7 @@ public class TestSPI extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(SerialPassthrough.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
                 spi = mwBoard.getModule(SerialPassthrough.class).spi((byte) 5, (byte) 0xe));
     }
 
@@ -103,9 +103,9 @@ public class TestSPI extends UnitTestBase {
                   } catch (IOException e) {
                       fail(e);
                   }
-
-                  assertArrayEquals(expected, actual.get());
-                  doneSignal.countDown();
+        }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            assertArrayEquals(expected, actual.get());
+            doneSignal.countDown();
         }));
         doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
         assertEquals(0, doneSignal.getCount());
@@ -128,19 +128,20 @@ public class TestSPI extends UnitTestBase {
     @Test
     public void directReadBmi160Data() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
-            byte[] expected= new byte[] {0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0};
-            final Capture<byte[]> actual= new Capture<>();
+        byte[] expected= new byte[] {0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0};
+        final Capture<byte[]> actual= new Capture<>();
+        setup().continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
 
-            setParameters(mwBoard.getModule(SerialPassthrough.class).readSpiAsync((byte) 5)).commit()
-                    .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
-                        actual.set(task);
-                    }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
-                        sendMockResponse(new byte[] {0x0d, (byte) 0x82, (byte) 0x0f, 0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0});
-                        assertArrayEquals(expected, actual.get());
-                        doneSignal.countDown();
-                    });
-        });
+            return setParameters(mwBoard.getModule(SerialPassthrough.class).readSpiAsync((byte) 5)).commit();
+
+        }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            actual.set(task);
+        }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            sendMockResponse(new byte[] {0x0d, (byte) 0x82, (byte) 0x0f, 0x07, 0x30, (byte) 0x81, 0x0b, (byte) 0xc0});
+        }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            assertArrayEquals(expected, actual.get());
+            doneSignal.countDown();
+        });;
         doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
         assertEquals(0, doneSignal.getCount());
     }

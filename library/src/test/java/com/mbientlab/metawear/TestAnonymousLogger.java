@@ -71,7 +71,7 @@ public class TestAnonymousLogger {
         @Test
         public void syncLoggers() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals(1, routes.length);
                     doneSignal.countDown();
@@ -84,17 +84,17 @@ public class TestAnonymousLogger {
         @Test
         public void handleDownload() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
-                mwBoard.createAnonymousRoutesAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, route -> {
-                    Acceleration expected = new Acceleration(Float.intBitsToFloat(1031077888), Float.intBitsToFloat(1033797632), Float.intBitsToFloat(1065209856));
-                    final Capture<Acceleration> actual = new Capture<>();
-                    route[0].subscribe((data, env) -> actual.set(data.value(Acceleration.class)));
+            connectToBoard().continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                    return mwBoard.createAnonymousRoutesAsync();
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, route -> {
+                Acceleration expected = new Acceleration(Float.intBitsToFloat(1031077888), Float.intBitsToFloat(1033797632), Float.intBitsToFloat(1065209856));
+                final Capture<Acceleration> actual = new Capture<>();
+                route[0].subscribe((data, env) -> actual.set(data.value(Acceleration.class)));
 
-                    sendMockResponse(new byte[] {11,7,-96,-26,66,0,0,-11,0,61,1,-95,-26,66,0,0,-35,15,0,0});
+                sendMockResponse(new byte[] {11,7,-96,-26,66,0,0,-11,0,61,1,-95,-26,66,0,0,-35,15,0,0});
 
-                    assertEquals(expected, actual.get());
-                    doneSignal.countDown();
-                });
+                assertEquals(expected, actual.get());
+                doneSignal.countDown();
             });
             doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
             assertEquals(0, doneSignal.getCount());
@@ -125,7 +125,7 @@ public class TestAnonymousLogger {
         @Test
         public void syncLoggers() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals(1, routes.length);
                     doneSignal.countDown();
@@ -138,7 +138,7 @@ public class TestAnonymousLogger {
         @Test
         public void handleDownload() throws Exception {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     float[] expected = new float[] {-0.053f, -0.015f};
                     final float actual[] = new float[2];
@@ -163,7 +163,7 @@ public class TestAnonymousLogger {
         @Test
         public void checkIdentifier() throws Exception {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals("angular-velocity[1]", routes[0].identifier());
                     doneSignal.countDown();
@@ -206,7 +206,7 @@ public class TestAnonymousLogger {
         @Test
         public void syncLoggers() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals(2, routes.length);
                     doneSignal.countDown();
@@ -219,7 +219,7 @@ public class TestAnonymousLogger {
         @Test
         public void checkScheme() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.createAnonymousRoutesAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                     assertEquals("acceleration:rms?id=0:accumulate?id=1:time?id=2", task[0].identifier());
                     assertEquals("acceleration:rms?id=0:accumulate?id=1:buffer-state?id=3", task[1].identifier());
@@ -233,7 +233,7 @@ public class TestAnonymousLogger {
         @Test
         public void handleDownload() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.createAnonymousRoutesAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                     float[] expected = new float[] {1.16088868f, 1793.6878f, 3545.5054f};
                     final float actual[] = new float[expected.length];
@@ -259,7 +259,7 @@ public class TestAnonymousLogger {
         @Test
         public void handleStateDownload() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     float expected = 3521.868f;
                     final Capture<Float> actual = new Capture<>();
@@ -303,7 +303,7 @@ public class TestAnonymousLogger {
         @Test
         public void syncLoggers() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals(1, routes.length);
                     doneSignal.countDown();
@@ -316,7 +316,7 @@ public class TestAnonymousLogger {
         @Test
         public void checkScheme() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals("quaternion:time?id=0", routes[0].identifier());
                     doneSignal.countDown();
@@ -332,7 +332,7 @@ public class TestAnonymousLogger {
         }
 
         public Task<Void> setup() {
-            return connectToBoardNew();
+            return connectToBoard();
         }
 
         @Test
@@ -426,7 +426,7 @@ public class TestAnonymousLogger {
 
         @Test
         public void syncLoggers() throws Exception {
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals(2, routes.length);
                 });
@@ -436,7 +436,7 @@ public class TestAnonymousLogger {
         @Test
         public void handleDownload() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.createAnonymousRoutesAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                     AngularVelocity expected = new AngularVelocity(Float.intBitsToFloat(0x4360312c), Float.intBitsToFloat(0x432ad2bc), Float.intBitsToFloat(0x4313031f));
                     final Capture<AngularVelocity> actual = new Capture<>();
@@ -483,7 +483,7 @@ public class TestAnonymousLogger {
         @Test
         public void syncLoggers() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals(2, routes.length);
                     doneSignal.countDown();
@@ -518,7 +518,7 @@ public class TestAnonymousLogger {
         @Test
         public void SyncLoggers() throws Exception {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals(1, routes.length);
                     doneSignal.countDown();
@@ -531,7 +531,7 @@ public class TestAnonymousLogger {
         @Test
         public void CheckIdentifier() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals("step-counter", routes[0].identifier());
                     doneSignal.countDown();
@@ -570,7 +570,7 @@ public class TestAnonymousLogger {
         @Test
         public void syncLoggers() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals(1, routes.length);
                     doneSignal.countDown();
@@ -583,7 +583,7 @@ public class TestAnonymousLogger {
         @Test
         public void checkScheme() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 retrieveLoggers(mwBoard).addOnSuccessListener(IMMEDIATE_EXECUTOR, routes -> {
                     assertEquals("acceleration:fuser?id=1", routes[0].identifier());
                     doneSignal.countDown();
@@ -596,7 +596,7 @@ public class TestAnonymousLogger {
         @Test
         public void handleDownload() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.createAnonymousRoutesAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                     AngularVelocity[] expectedGyro= new AngularVelocity[] {
                             new AngularVelocity(Float.intBitsToFloat(0x3E84AED4), Float.intBitsToFloat(0x3EEC18FA), Float.intBitsToFloat(0x3D3B512C)),

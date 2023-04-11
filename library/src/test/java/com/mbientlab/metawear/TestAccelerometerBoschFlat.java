@@ -57,7 +57,7 @@ public class TestAccelerometerBoschFlat extends UnitTestBase {
 
     public Task<Void> setup(Class<? extends AccelerometerBosch> accelClass) {
         junitPlatform.boardInfo = new MetaWearBoardInfo(accelClass);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             boschAcc = mwBoard.getModule(AccelerometerBosch.class);
         });
     }

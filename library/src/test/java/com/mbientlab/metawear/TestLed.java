@@ -46,7 +46,7 @@ public class TestLed extends UnitTestBase {
     @Test
     public void play() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             byte[] expected = new byte[] {0x02, 0x01, 0x01};
 
             mwBoard.getModule(Led.class).play();
@@ -60,7 +60,7 @@ public class TestLed extends UnitTestBase {
     @Test
     public void autoplay() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             byte[] expected = new byte[]{0x02, 0x01, 0x02};
 
             mwBoard.getModule(Led.class).autoplay();
@@ -74,7 +74,7 @@ public class TestLed extends UnitTestBase {
     @Test
     public void pause() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             byte[] expected = new byte[]{0x02, 0x01, 0x00};
 
             mwBoard.getModule(Led.class).pause();
@@ -88,7 +88,7 @@ public class TestLed extends UnitTestBase {
     @Test
     public void stopAndClear() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             byte[] expected = new byte[]{0x02, 0x02, 0x01};
 
             mwBoard.getModule(Led.class).stop(true);
@@ -102,7 +102,7 @@ public class TestLed extends UnitTestBase {
     @Test
     public void stopNoClear() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             byte[] expected = new byte[]{0x02, 0x02, 0x00};
 
             mwBoard.getModule(Led.class).stop(false);

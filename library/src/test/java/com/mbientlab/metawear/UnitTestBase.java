@@ -25,7 +25,6 @@
 package com.mbientlab.metawear;
 
 import com.google.android.gms.tasks.Task;
-import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.JunitPlatform.MwBridge;
 import com.mbientlab.metawear.impl.JseMetaWearBoard;
 
@@ -48,32 +47,8 @@ public abstract class UnitTestBase implements MwBridge {
         this("3.5.0");
     }
 
-    protected Task<Void> connectToBoardNew() {
+    protected Task<Void> connectToBoard() {
         return mwBoard.connectAsync();
-    }
-
-    protected void connectToBoard() throws Exception {
-        Task<Void> task = mwBoard.connectAsync();
-        Tasks.await(task);
-
-//        var future = executor.schedule(() -> {
-//            try {
-//                Tasks.await(task);
-//            } catch (ExecutionException | InterruptedException e) {
-//                e.printStackTrace();
-//            }
-//        }, 100, TimeUnit.MILLISECONDS);
-//        try {
-//            while (!task.isComplete()) {
-//                Thread.sleep(500);
-//                System.out.println(future.get());
-//                System.out.println(task.isComplete());
-//                System.out.println(task.isCanceled());
-//                System.out.println(task.isSuccessful());
-//            }
-//        } catch (Exception e) {
-//            throw e;
-//        }
     }
 
     @Override

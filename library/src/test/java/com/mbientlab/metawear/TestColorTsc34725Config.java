@@ -67,7 +67,7 @@ public class TestColorTsc34725Config extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(ColorTcs34725.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             colorTcs34725 = mwBoard.getModule(ColorTcs34725.class);
         });
     }

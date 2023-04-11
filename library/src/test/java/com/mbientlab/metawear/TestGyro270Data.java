@@ -48,7 +48,7 @@ public class TestGyro270Data extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(GyroBmi270.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             gyro = mwBoard.getModule(GyroBmi270.class);
         });
     }
@@ -146,7 +146,7 @@ public class TestGyro270Data extends UnitTestBase {
                             .index(0).stream((data, env) -> ((float[]) env[0])[0] = data.value(Float.class))
                             .index(1).stream((data, env) -> ((float[]) env[0])[1] = data.value(Float.class))
                             .index(2).stream((data, env) -> ((float[]) env[0])[2] = data.value(Float.class)))
-                    .continueWith(task -> {
+                    .continueWith(IMMEDIATE_EXECUTOR, task -> {
                         task.getResult().setEnvironment(0, (Object) actual);
                         task.getResult().setEnvironment(1, (Object) actual);
                         task.getResult().setEnvironment(2, (Object) actual);
@@ -172,7 +172,7 @@ public class TestGyro270Data extends UnitTestBase {
     public void unsubscribe() {
         byte[] expected= new byte[] { 0x13, 0x04, 0x00 };
         setup().addOnSuccessListener(ignored -> {
-            gyro.angularVelocity().addRouteAsync(source -> source.stream(null)).continueWith(task -> {
+            gyro.angularVelocity().addRouteAsync(source -> source.stream(null)).continueWith(IMMEDIATE_EXECUTOR, task -> {
                 task.getResult().unsubscribe(0);
                 return null;
             });

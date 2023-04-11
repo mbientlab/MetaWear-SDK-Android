@@ -45,7 +45,7 @@ public class TestBmi160StepCounterData extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             counter = mwBoard.getModule(AccelerometerBmi160.class).stepCounter();
         });
     }

@@ -45,7 +45,7 @@ public class TestTemperatureMwRPro extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Temperature.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> temp = mwBoard.getModule(Temperature.class));
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> temp = mwBoard.getModule(Temperature.class));
     }
 
     @Test

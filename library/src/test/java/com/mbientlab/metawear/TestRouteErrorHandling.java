@@ -60,7 +60,7 @@ public class TestRouteErrorHandling extends UnitTestBase {
                 Temperature.class, Haptic.class, Timer.class);
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x03 });
         junitPlatform.addCustomModuleInfo(new byte[] { 0x05, (byte) 0x80, 0x00, 0x00, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01 });
-        return connectToBoardNew();
+        return connectToBoard();
     }
 
     @Test

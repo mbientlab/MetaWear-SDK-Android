@@ -53,7 +53,7 @@ public class TestMma8452qTap extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerMma8452q.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             mma8452qAcc = mwBoard.getModule(AccelerometerMma8452q.class);
         });
     }

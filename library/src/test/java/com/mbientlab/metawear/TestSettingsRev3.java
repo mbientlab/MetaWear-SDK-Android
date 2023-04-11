@@ -45,11 +45,11 @@ import java.util.concurrent.TimeUnit;
  */
 public class TestSettingsRev3 extends UnitTestBase {
     private Settings settings;
-// TODO: all tests flakey, race condition?
+
     public Task<Void> setup() throws Exception {
         junitPlatform.addCustomModuleInfo(new byte[] { 0x11, (byte) 0x80, 0x00, 0x03 });
         junitPlatform.boardInfo = new MetaWearBoardInfo(Haptic.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
                 settings = mwBoard.getModule(Settings.class));
     }
 

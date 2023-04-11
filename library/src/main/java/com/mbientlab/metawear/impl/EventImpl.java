@@ -32,6 +32,7 @@ import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.Capture;
 import com.mbientlab.metawear.CodeBlock;
 import com.mbientlab.metawear.MetaWearBoard.Module;
+import com.mbientlab.metawear.impl.platform.TaskHelper;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 
 import java.util.LinkedList;
@@ -72,11 +73,7 @@ class EventImpl extends ModuleImplBase implements Module {
         final LinkedList<Byte> ids = new LinkedList<>();
         final Capture<Boolean> terminate = new Capture<>(false);
 
-        return Tasks.forResult(!terminate.get() && !eventCodeBlocks.isEmpty()).continueWith(IMMEDIATE_EXECUTOR, result -> {
-            if (!result.getResult()) {
-                return result;
-            }
-
+        return TaskHelper.continueWhile(() -> !terminate.get() && !eventCodeBlocks.isEmpty(), result -> {
             Pair<? extends DataTypeBase, ? extends CodeBlock> current = eventCodeBlocks.poll();
 
             activeDataType = current.first;
@@ -85,10 +82,7 @@ class EventImpl extends ModuleImplBase implements Module {
             activeDataType = null;
 
             final Capture<Boolean> terminate2 = new Capture<>(false);
-            return Tasks.forResult(!terminate2.get() && !recordedCommands.isEmpty()).continueWith(IMMEDIATE_EXECUTOR, ignored -> {
-                if (!ignored.getResult()) {
-                    return ignored;
-                }
+            return TaskHelper.continueWhile(() -> !terminate2.get() && !recordedCommands.isEmpty(), ignored -> {
 
                 mwPrivate.sendCommand(recordedCommands.poll());
                 return createEventTask.execute("Did not receive event id within %dms", Constant.RESPONSE_TIMEOUT,
@@ -101,10 +95,10 @@ class EventImpl extends ModuleImplBase implements Module {
                     }
 
                     ids.add(task.getResult()[2]);
-                    return Tasks.forResult(null);
+                    return Tasks.forResult(ignored);
                 });
-            });
-        }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+            }, IMMEDIATE_EXECUTOR, null);
+        }, IMMEDIATE_EXECUTOR, null).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
             if (!task.isSuccessful()) {
                 for(byte it: ids) {
                     removeEventCommand(it);

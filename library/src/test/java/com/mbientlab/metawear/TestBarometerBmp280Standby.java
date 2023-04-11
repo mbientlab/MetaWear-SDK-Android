@@ -61,7 +61,7 @@ public class TestBarometerBmp280Standby extends UnitTestBase {
     }
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(BarometerBmp280.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
             baroBmp280 = mwBoard.getModule(BarometerBmp280.class);
         });
     }

@@ -48,7 +48,7 @@ public class TestLogging extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             logging = mwBoard.getModule(Logging.class);
         });
     }

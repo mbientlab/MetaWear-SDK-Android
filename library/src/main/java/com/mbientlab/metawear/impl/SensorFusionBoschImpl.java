@@ -38,6 +38,7 @@ import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.EulerAngles;
 import com.mbientlab.metawear.data.Quaternion;
+import com.mbientlab.metawear.impl.platform.TaskHelper;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi160;
@@ -51,7 +52,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by etsai on 11/12/16.
@@ -454,7 +454,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                 extraGyro = settings;
                 return this;
             }
-            //TODO
+
             private void addExtraAccBmi160(AccelerometerBmi160.ConfigEditor editor) {
                 if (extraAcc == null) return;
                 for(Object it: extraAcc) {
@@ -735,7 +735,7 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                     gyro = new Capture<>(null),
                     mag = new Capture<>(null);
 
-            return Tasks.whenAllSuccess(Tasks.forResult(!terminate.get())).continueWith(IMMEDIATE_EXECUTOR, ignored -> !ct.isCancellationRequested() ? readCalibrationStateAsync().onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            return TaskHelper.continueWhile(() -> !terminate.get(), ignored -> !ct.isCancellationRequested() ? readCalibrationStateAsync().onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
                 if (updateHandler != null) {
                     updateHandler.receivedUpdate(task);
                 }
@@ -756,9 +756,8 @@ class SensorFusionBoschImpl extends ModuleImplBase implements SensorFusionBosch 
                                 task.magnetometer == CalibrationAccuracy.HIGH_ACCURACY);
                         break;
                 }
-
-                return !terminate.get() ? Tasks.withTimeout(Tasks.<Void>forResult(null), pollingPeriod, TimeUnit.MILLISECONDS) : Tasks.<Void>forResult(null);
-            }) : Tasks.forCanceled()
+                return !terminate.get() ? TaskHelper.delay(pollingPeriod) : Tasks.<Void>forResult(null);
+            }) : Tasks.forCanceled(), IMMEDIATE_EXECUTOR, null
             ).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> readRegisterTask.execute("Did not receive accelerometer calibration data within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {SENSOR_FUSION.id, Util.setRead(ACC_CALIB_DATA)}))
             ).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {

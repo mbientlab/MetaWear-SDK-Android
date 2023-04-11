@@ -85,7 +85,7 @@ public class TestMetaWearBoard {
             junitPlatform.delayModuleInfoResponse = true;
 
             CountDownLatch doneSignal = new CountDownLatch(1);
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 assertArrayEquals(expected, junitPlatform.getConnectCommands());
                 doneSignal.countDown();
             });
@@ -109,7 +109,7 @@ public class TestMetaWearBoard {
             junitPlatform.deserializeModuleInfo = true;
             junitPlatform.delayModuleInfoResponse = true;
 
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 assertArrayEquals(expected, junitPlatform.getConnectCommands());
                 doneSignal.countDown();
             });
@@ -122,7 +122,7 @@ public class TestMetaWearBoard {
             CountDownLatch doneSignal = new CountDownLatch(1);
             junitPlatform.addCustomModuleInfo(new byte[]{0xf, (byte) 0xff});
 
-            mwBoard.connectWithRetryAsync(3).addOnFailureListener(exception -> {
+            mwBoard.connectWithRetryAsync(3).addOnFailureListener(IMMEDIATE_EXECUTOR, exception -> {
                 assertInstanceOf(TimeoutException.class, exception);
                 doneSignal.countDown();
             });
@@ -144,7 +144,7 @@ public class TestMetaWearBoard {
         public void serviceDiscoveryRetry() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);
             junitPlatform.addCustomModuleInfo(new byte[]{0xf, (byte) 0xff});
-            mwBoard.connectAsync().addOnSuccessListener(ignored -> {
+            mwBoard.connectAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 byte[][] checkpoint1 = {
                         {0x01, (byte) (byte) 0x80}, {0x02, (byte) 0x80}, {0x03, (byte) 0x80}, {0x04, (byte) 0x80},
                         {0x08, (byte) 0x80},
@@ -155,9 +155,9 @@ public class TestMetaWearBoard {
 
                 junitPlatform.removeCustomModuleInfo((byte) 0xf);
                 junitPlatform.connectCmds.clear();
-            }).addOnSuccessListener(ignored2 -> {
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
                 mwBoard.connectAsync();
-            }).addOnSuccessListener(ignored3 -> {
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored3 -> {
                 byte[][] checkpoint2 = {
                         {0x0f, (byte) 0x80}, {0x11, (byte) 0x80},
                         {0x12, (byte) 0x80}, {0x13, (byte) 0x80}, {0x14, (byte) 0x80}, {0x15, (byte) 0x80},
@@ -175,8 +175,8 @@ public class TestMetaWearBoard {
         public void longFirmwareString() throws Exception {
             CountDownLatch doneSignal = new CountDownLatch(1);
             junitPlatform.firmware = "1.3.90";
-            connectToBoardNew().addOnSuccessListener(ignored -> {
-                mwBoard.readDeviceInformationAsync().addOnSuccessListener(task -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.readDeviceInformationAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                     assertTrue(mwBoard.isConnected());
                     assertEquals(junitPlatform.firmware, task.firmwareRevision);
                     doneSignal.countDown();
@@ -192,7 +192,7 @@ public class TestMetaWearBoard {
         public void metabootServiceDiscovery() throws Exception {
             CountDownLatch doneSignal = new CountDownLatch(1);
             junitPlatform.enableMetaBootState = true;
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 byte[][] expected = new byte[][]{};
                 assertArrayEquals(expected, junitPlatform.getConnectCommands());
                 doneSignal.countDown();
@@ -211,7 +211,7 @@ public class TestMetaWearBoard {
             };
 
             junitPlatform.enableMetaBootState = true;
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 assertArrayEquals(expected, junitPlatform.getGattCharReadHistory());
                 doneSignal.countDown();
             });
@@ -224,7 +224,7 @@ public class TestMetaWearBoard {
             CountDownLatch doneSignal = new CountDownLatch(1);
             junitPlatform.boardInfo = new MetaWearBoardInfo(Accelerometer.class);
             junitPlatform.enableMetaBootState = true;
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 assertThrows(com.mbientlab.metawear.UnsupportedModuleException.class, () -> mwBoard.getModuleOrThrow(Accelerometer.class));
                 doneSignal.countDown();
             });
@@ -239,8 +239,8 @@ public class TestMetaWearBoard {
             CountDownLatch doneSignal = new CountDownLatch(1);
             final DeviceInformation expected = new DeviceInformation("MbientLab Inc", "deadbeef", "003BF9", "1.2.3", "cafebabe");
 
-            connectToBoardNew().addOnSuccessListener(ignored -> {
-                mwBoard.readDeviceInformationAsync().addOnSuccessListener(task -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.readDeviceInformationAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                     assertEquals(expected, task);
                     doneSignal.countDown();
                 });
@@ -254,8 +254,8 @@ public class TestMetaWearBoard {
             CountDownLatch doneSignal = new CountDownLatch(1);
             junitPlatform.delayReadDevInfo = true;
 
-            connectToBoardNew().addOnSuccessListener(ignored -> {
-                mwBoard.readDeviceInformationAsync().addOnFailureListener(exception -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.readDeviceInformationAsync().addOnFailureListener(IMMEDIATE_EXECUTOR, exception -> {
                     assertInstanceOf(TimeoutException.class, exception);
                     doneSignal.countDown();
                 });
@@ -268,7 +268,7 @@ public class TestMetaWearBoard {
         public void unknownBoard() throws Exception {
             CountDownLatch doneSignal = new CountDownLatch(1);
             junitPlatform.boardInfo = new MetaWearBoardInfo("7", AccelerometerBmi160.class);
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 assertNull(mwBoard.getModelString());
                 doneSignal.countDown();
             });
@@ -313,8 +313,8 @@ public class TestMetaWearBoard {
             junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
             junitPlatform.delayModuleInfoResponse = true;
 
-            connectToBoardNew().addOnSuccessListener(ignored -> {
-                mwBoard.dumpModuleInfo(null).addOnSuccessListener(task -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.dumpModuleInfo(null).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                     assertEquals(EXPECTED_MODULE_DUMP.length(), task.length());
                     Iterator<String> it = task.keys();
                     while(it.hasNext()) {
@@ -349,7 +349,7 @@ public class TestMetaWearBoard {
             };
 
             junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 JSONObject partialDump = new JSONObject();
                 for(String it: new String[] {"DataProcessor", "Event", "Logging", "Timer", "SerialPassthrough", "Macro", "Conductance", "Settings"}) {
                     try {
@@ -362,10 +362,12 @@ public class TestMetaWearBoard {
                 junitPlatform.connectCmds.clear();
                 junitPlatform.delayModuleInfoResponse = true;
 
-                mwBoard.dumpModuleInfo(partialDump).addOnSuccessListener(ignored2 -> {
+                mwBoard.dumpModuleInfo(partialDump).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
                     assertArrayEquals(expected, junitPlatform.getConnectCommands());
                     doneSignal.countDown();
                 });
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+
             });
             doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
             assertEquals(0, doneSignal.getCount());
@@ -375,10 +377,10 @@ public class TestMetaWearBoard {
         public void moduleInfoDumpTimeout() throws Exception {
             CountDownLatch doneSignal = new CountDownLatch(1);
             junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 junitPlatform.maxModule = 0x8;
                 junitPlatform.delayModuleInfoResponse = true;
-                mwBoard.dumpModuleInfo(null).addOnFailureListener(task -> {
+                mwBoard.dumpModuleInfo(null).addOnFailureListener(IMMEDIATE_EXECUTOR, task -> {
                     TaskTimeoutException exception = (TaskTimeoutException) task;
                     JSONObject partial = (JSONObject) exception.partial, expectedPartial = new JSONObject();
 
@@ -428,12 +430,13 @@ public class TestMetaWearBoard {
             };
 
             junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
-            connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(source -> source.limit(20).stream(null))
                         .continueWithTask(IMMEDIATE_EXECUTOR, task -> mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(source -> source.stream(null)))
-                        .getResult();
-                assertArrayEquals(expected, junitPlatform.getCommands());
-                doneSignal.countDown();
+                        .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                            assertArrayEquals(expected, junitPlatform.getCommands());
+                            doneSignal.countDown();
+                        });
             });
             doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
             assertEquals(0, doneSignal.getCount());
@@ -450,12 +453,13 @@ public class TestMetaWearBoard {
             };
 
             junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.getModule(SensorFusionBosch.class).eulerAngles().addRouteAsync(source -> source.limit(20).stream(null))
-                        .continueWithTask(task -> mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(source -> source.stream(null)))
-                        .getResult();
-                assertArrayEquals(expected, junitPlatform.getCommands());
-                doneSignal.countDown();
+                        .continueWithTask(IMMEDIATE_EXECUTOR, task -> mwBoard.getModule(Accelerometer.class).packedAcceleration().addRouteAsync(source -> source.stream(null)))
+                        .addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                            assertArrayEquals(expected, junitPlatform.getCommands());
+                            doneSignal.countDown();
+                        });
             });
             doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
             assertEquals(0, doneSignal.getCount());
@@ -504,60 +508,75 @@ public class TestMetaWearBoard {
             CountDownLatch doneSignal = new CountDownLatch(1);
             setup(enableMetaboot);
             junitPlatform.firmware = firmwareRevisions.get(0);
-            connectToBoard();
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.downloadFirmwareUpdateFilesAsync("1.4.0").addOnSuccessListener(IMMEDIATE_EXECUTOR, filesTask -> {
 
-            mwBoard.downloadFirmwareUpdateFilesAsync("1.4.0").addOnSuccessListener(filesTask -> {
-
-                // Firmware prior to v1.4.0 will need to upload 3 files with the Nordic DFU lib
-                final String[] expected = new String[] {
-                        "0.1_5_bootloader_0.2.2_bl.zip",
-                        "0.1_5_bootloader_0.3.1_sd_bl.zip",
-                        "0.1_5_vanilla_1.4.0_firmware.zip",
-                };
-                assertArrayEquals(expected, fileToNames(filesTask));
+                    // Firmware prior to v1.4.0 will need to upload 3 files with the Nordic DFU lib
+                    final String[] expected = new String[] {
+                            "0.1_5_bootloader_0.2.2_bl.zip",
+                            "0.1_5_bootloader_0.3.1_sd_bl.zip",
+                            "0.1_5_vanilla_1.4.0_firmware.zip",
+                    };
+                    assertArrayEquals(expected, fileToNames(filesTask));
+                    doneSignal.countDown();
+                });
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @ParameterizedTest
         @MethodSource("data")
         public void updateWithOldDfuFn(boolean enableMetaboot, List<String> firmwareRevisions) throws Exception {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             setup(enableMetaboot);
             junitPlatform.firmware = firmwareRevisions.get(0);
-            connectToBoard();
-
-            //  Updating from older firmware to v1.4.0 requires 3 files, old dfu function only returns 1
-            mwBoard.downloadFirmwareAsync("1.4.0").addOnFailureListener(exception -> {
-                assertInstanceOf(UnsupportedOperationException.class, exception);
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                //  Updating from older firmware to v1.4.0 requires 3 files, old dfu function only returns 1
+                mwBoard.downloadFirmwareAsync("1.4.0").addOnFailureListener(IMMEDIATE_EXECUTOR, exception -> {
+                    assertInstanceOf(UnsupportedOperationException.class, exception);
+                    doneSignal.countDown();
+                });
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @ParameterizedTest
         @MethodSource("data")
         public void updateFromNewBootLoader(boolean enableMetaboot, List<String> firmwareRevisions) throws Exception {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             setup(enableMetaboot);
             junitPlatform.firmware = firmwareRevisions.get(1);
-            connectToBoard();
-
-            mwBoard.downloadFirmwareUpdateFilesAsync().addOnSuccessListener(filesTask -> {
-                // Firmware v1.4.0+ can just upload the next firmware image
-                final String[] expected = new String[] {
-                        "0.1_5_vanilla_1.5.0_firmware.zip",
-                };
-                assertArrayEquals(expected, fileToNames(filesTask));
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.downloadFirmwareUpdateFilesAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, filesTask -> {
+                    // Firmware v1.4.0+ can just upload the next firmware image
+                    final String[] expected = new String[] {
+                            "0.1_5_vanilla_1.5.0_firmware.zip",
+                    };
+                    assertArrayEquals(expected, fileToNames(filesTask));
+                    doneSignal.countDown();
+                });
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
 
         @ParameterizedTest
         @MethodSource("data")
         public void downgradeToOldBootloader(boolean enableMetaboot, List<String> firmwareRevisions) throws Exception {
+            CountDownLatch doneSignal = new CountDownLatch(1);
             setup(enableMetaboot);
             junitPlatform.firmware = firmwareRevisions.get(2);
-            connectToBoard();
-
-            // Firmware v1.4.0+ cannot downgrade below v1.4.0
-            mwBoard.downloadFirmwareUpdateFilesAsync("1.2.5").addOnSuccessListener(exception -> {
-                assertInstanceOf(IllegalFirmwareFile.class, exception);
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                // Firmware v1.4.0+ cannot downgrade below v1.4.0
+                mwBoard.downloadFirmwareUpdateFilesAsync("1.2.5").addOnFailureListener(IMMEDIATE_EXECUTOR, exception -> {
+                    assertInstanceOf(IllegalFirmwareFile.class, exception);
+                    doneSignal.countDown();
+                });
             });
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+            assertEquals(0, doneSignal.getCount());
         }
     }
 
@@ -573,7 +592,7 @@ public class TestMetaWearBoard {
             try {
                 junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
                 junitPlatform.firmware = firmwareRevision;
-                return connectToBoardNew();
+                return connectToBoard();
             } catch (Exception e) {
                 fail(e);
                 return Tasks.forException(e);
@@ -583,8 +602,8 @@ public class TestMetaWearBoard {
         @ParameterizedTest
         @MethodSource("data")
         public void versionString(String expected, String firmwareRevision) throws Exception {
-            setup(firmwareRevision).addOnSuccessListener(ignored -> {
-                mwBoard.findLatestAvailableFirmwareAsync().addOnSuccessListener(stringTask -> {
+            setup(firmwareRevision).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.findLatestAvailableFirmwareAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, stringTask -> {
                     assertEquals(expected, stringTask);
                 });
             });
@@ -593,8 +612,8 @@ public class TestMetaWearBoard {
         @ParameterizedTest
         @MethodSource("data")
         public void versionBoolean(String expected, String firmwareRevision) throws Exception {
-            setup(firmwareRevision).addOnSuccessListener(ignored -> {
-                mwBoard.checkForFirmwareUpdateAsync().addOnSuccessListener(boolTask -> {
+            setup(firmwareRevision).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                mwBoard.checkForFirmwareUpdateAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, boolTask -> {
                     assertEquals(expected != null, boolTask);
                 });
             });
@@ -609,7 +628,7 @@ public class TestMetaWearBoard {
         @Test
         public void updateToLatest() throws Exception {
             junitPlatform.boardInfo = MetaWearBoardInfo.MOTION_R;
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
                 mwBoard.downloadFirmwareUpdateFilesAsync().addOnFailureListener(exception -> {
                     assertInstanceOf(UnsupportedOperationException.class, exception);
                 });
@@ -635,7 +654,7 @@ public class TestMetaWearBoard {
         @MethodSource("data")
         public void checkFilename(byte revision, String buildName) throws Exception {
             junitPlatform.addCustomModuleInfo(new byte[] {0x11, (byte) 0x80, 0x00, 0x08, 0x03, revision});
-            connectToBoardNew().addOnSuccessListener(ignored -> {
+            connectToBoard().addOnSuccessListener(ignored -> {
                 mwBoard.downloadFirmwareUpdateFilesAsync().addOnSuccessListener(filesTask -> {
                     // Firmware v1.4.0+ can just upload the next firmware image
                     final String[] expected = new String[] {

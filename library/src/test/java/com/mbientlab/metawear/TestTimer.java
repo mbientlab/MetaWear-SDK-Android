@@ -54,10 +54,9 @@ public class TestTimer extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Timer.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
-                    setupTimer().continueWith(IMMEDIATE_EXECUTOR, task -> {
-                        manager = task.getResult();
-                        return null;
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+                    setupTimer().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                        manager = task;
                     });
                     junitPlatform.boardStateSuffix = "timer";
                     try {
@@ -115,14 +114,28 @@ public class TestTimer extends UnitTestBase {
     @Test
     public void remove() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
-            byte[][] expected= new byte[][] {
-                    {0x0c, 0x05, 0x0}
-            };
+        setup().continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
 
-            manager.remove();
-            assertArrayEquals(expected, junitPlatform.getLastCommands(1));
-            doneSignal.countDown();
+
+                return setupTimer().addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                    manager = task;
+                }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+
+                    junitPlatform.boardStateSuffix = "timer";
+                    try {
+                        mwBoard.serialize();
+                    } catch (IOException e) {
+                        fail(e);
+                    }
+
+                    byte[][] expected= new byte[][] {
+                            {0x0c, 0x05, 0x0}
+                    };
+
+                    manager.remove();
+                    assertArrayEquals(expected, junitPlatform.getLastCommands(1));
+                    doneSignal.countDown();
+                });
         });
         doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
         assertEquals(0, doneSignal.getCount());
@@ -131,12 +144,12 @@ public class TestTimer extends UnitTestBase {
     @Test
     public void timeout() throws Exception {
         CountDownLatch doneSignal = new CountDownLatch(1);
-        setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        setup().continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
             final Capture<Exception> actual = new Capture<>();
 
             junitPlatform.maxTimers = 0;
-            mwBoard.getModule(Timer.class).scheduleAsync(26535, false, () -> {
-
+            return mwBoard.getModule(Timer.class).scheduleAsync(3000, false, () -> {
+                System.out.println("test");
             }).continueWith(IMMEDIATE_EXECUTOR, task -> {
                 actual.set(task.getException());
                 assertInstanceOf(TimeoutException.class, actual.get());

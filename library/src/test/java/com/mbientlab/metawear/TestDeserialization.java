@@ -122,7 +122,7 @@ public class TestDeserialization {
             junitPlatform.boardStateSuffix = "dc_observer";
             mwBoard.deserialize();
 
-            connectToBoardNew();
+            connectToBoard();
         }
 
         @Test

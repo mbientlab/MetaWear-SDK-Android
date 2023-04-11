@@ -49,7 +49,7 @@ public class TestDebug extends UnitTestBase {
 
     public Task<Void> setup() {
         junitPlatform.boardInfo = new MetaWearBoardInfo(Debug.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             debug = mwBoard.getModule(Debug.class);
         });
     }
@@ -117,14 +117,15 @@ public class TestDebug extends UnitTestBase {
         int expected = 0xdeadbeef;
 
         setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
-            debug.readTmpValueAsync().continueWith(IMMEDIATE_EXECUTOR, task -> {
+            debug.readTmpValueAsync().continueWithTask(IMMEDIATE_EXECUTOR, task -> {
                 sendMockResponse(new byte[] {(byte) 0xfe, (byte) 0x84, (byte) 0xef, (byte) 0xbe, (byte) 0xad, (byte) 0xde});
-                assertEquals(expected, task.getResult().intValue());
+                return task;
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
+                assertEquals(expected, task);
                 doneSignal.countDown();
-                return null;
             });
         });
-        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
+        doneSignal.await(8, TimeUnit.SECONDS);
         assertEquals(0, doneSignal.getCount());
     }
 

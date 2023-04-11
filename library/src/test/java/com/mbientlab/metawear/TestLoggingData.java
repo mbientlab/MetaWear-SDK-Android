@@ -163,18 +163,18 @@ public class TestLoggingData extends TestLogDataBase {
                 fail(exception);
             }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                 task.setEnvironment(0, (Object) actual);
-            }).continueWithTask(IMMEDIATE_EXECUTOR, ignored2 -> {
-                return mwBoard.getModule(Logging.class).downloadAsync().addOnSuccessListener(IMMEDIATE_EXECUTOR, dlTask -> {
-                    sendMockResponse(new byte[] {0x0b, (byte) 0x84, 0x15, 0x04, 0x00, 0x00, 0x05});
-                    sendMockResponse(new byte[] { 11, 7,
-                            -95, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -111, -17, 0, 0,
-                            -96, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -128, -1, -73, -1 });
-                    sendMockResponse(new byte[] { 11, 7, -95, 13, 0, 0, 0, 116, -17, 0, 0, -96, 13, 0, 0, 0, 125, -1, -70, -1 });
-                    sendMockResponse(new byte[] { 11, 8, 0, 0, 0, 0});
-
-                    assertArrayEquals(new long[] { 21 }, actual);
-                    doneSignal.countDown();
-                });
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored2 -> {
+                mwBoard.getModule(Logging.class).downloadAsync();
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, dlTask -> {
+                sendMockResponse(new byte[] {0x0b, (byte) 0x84, 0x15, 0x04, 0x00, 0x00, 0x05});
+                sendMockResponse(new byte[] { 11, 7,
+                        -95, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -111, -17, 0, 0,
+                        -96, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, -128, -1, -73, -1 });
+                sendMockResponse(new byte[] { 11, 7, -95, 13, 0, 0, 0, 116, -17, 0, 0, -96, 13, 0, 0, 0, 125, -1, -70, -1 });
+                sendMockResponse(new byte[] { 11, 8, 0, 0, 0, 0});
+            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, t -> {
+                assertArrayEquals(new long[] { 21 }, actual);
+                doneSignal.countDown();
             });
         });
         doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);

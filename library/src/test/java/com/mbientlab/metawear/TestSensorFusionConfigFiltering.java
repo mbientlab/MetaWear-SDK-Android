@@ -45,7 +45,7 @@ public class TestSensorFusionConfigFiltering extends UnitTestBase {
 
     public Task<Void> setup() throws Exception {
         junitPlatform.boardInfo = new MetaWearBoardInfo(AccelerometerBmi160.class, Gyro.class, MagnetometerBmm150.class, SensorFusionBosch.class);
-        return connectToBoardNew().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
+        return connectToBoard().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored ->
                 sensorFusion = mwBoard.getModule(SensorFusionBosch.class));
     }
 
