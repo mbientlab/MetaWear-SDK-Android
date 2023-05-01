@@ -12,6 +12,7 @@ import com.mbientlab.metawear.Capture;
 
 import java.util.Collection;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -59,7 +60,7 @@ public class TaskHelper {
             return Tasks.forResult(null);
         }
 
-        final TaskCompletionSource<Void> tcs = new TaskCompletionSource<>(cancellationToken);
+        final TaskCompletionSource<Void> tcs = cancellationToken == null ? new TaskCompletionSource<>() : new TaskCompletionSource<>(cancellationToken);
         final ScheduledFuture<?> scheduled = executor.schedule(new Runnable() {
             @Override
             public void run() {
@@ -98,5 +99,36 @@ public class TaskHelper {
             });
         }
         return firstCompleted.getTask();
+    }
+
+    public static <TResult> Task<TResult> callInBackground(Callable<TResult> callable) {
+        return call(callable, SCHEDULED_EXECUTOR, null);
+    }
+
+    public static <TResult> Task<TResult> call(final Callable<TResult> callable, Executor executor,
+                                               final CancellationToken ct) {
+        final TaskCompletionSource<TResult> tcs = ct == null ? new TaskCompletionSource<>() : new TaskCompletionSource<>(ct);
+        try {
+            executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    if (ct != null && ct.isCancellationRequested()) {
+                        return;
+                    }
+
+                    try {
+                        tcs.setResult(callable.call());
+                    } catch (CancellationException e) {
+                        tcs.setException(e);
+                    } catch (Exception e) {
+                        tcs.setException(e);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            tcs.setException(e);
+        }
+
+        return tcs.getTask();
     }
 }

@@ -34,6 +34,7 @@ import com.mbientlab.metawear.impl.platform.BtleGatt;
 import com.mbientlab.metawear.impl.platform.BtleGattCharacteristic;
 import com.mbientlab.metawear.impl.platform.DeviceInformationService;
 import com.mbientlab.metawear.impl.platform.IO;
+import com.mbientlab.metawear.impl.platform.TaskHelper;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -192,15 +193,15 @@ public class JunitPlatform implements IO, BtleGatt {
     public Task<byte[]> readCharacteristicAsync(BtleGattCharacteristic gattChar) {
         gattCharReadHistory.add(gattChar);
         if (gattChar.equals(DeviceInformationService.FIRMWARE_REVISION)) {
-            return Tasks.forResult(firmware.getBytes());
+            return TaskHelper.delay(20L).continueWithTask(IMMEDIATE_EXECUTOR, task -> Tasks.forResult(firmware.getBytes()));
         } else if (gattChar.equals(DeviceInformationService.HARDWARE_REVISION)) {
-            return Tasks.forResult(boardInfo.hardwareRevision);
+            return TaskHelper.delay(20L).continueWithTask(IMMEDIATE_EXECUTOR, task -> Tasks.forResult(boardInfo.hardwareRevision));
         } else if (gattChar.equals(DeviceInformationService.MODEL_NUMBER)) {
-            return Tasks.forResult(boardInfo.modelNumber);
+            return TaskHelper.delay(20L).continueWithTask(IMMEDIATE_EXECUTOR, task -> Tasks.forResult(boardInfo.modelNumber));
         } else if (gattChar.equals(DeviceInformationService.MANUFACTURER_NAME)) {
-            return delayReadDevInfo ? Tasks.forException(new TimeoutException("Reading gatt characteristic timed out")) : Tasks.forResult(boardInfo.manufacturer);
+            return TaskHelper.delay(20L).continueWithTask(IMMEDIATE_EXECUTOR, task -> delayReadDevInfo ? Tasks.forException(new TimeoutException("Reading gatt characteristic timed out")) : Tasks.forResult(boardInfo.manufacturer));
         } else if (gattChar.equals(DeviceInformationService.SERIAL_NUMBER)) {
-            return delayReadDevInfo ? Tasks.forException(new TimeoutException("Reading gatt characteristic timed out")) : Tasks.forResult(boardInfo.serialNumber);
+            return TaskHelper.delay(20L).continueWithTask(IMMEDIATE_EXECUTOR, task -> delayReadDevInfo ? Tasks.forException(new TimeoutException("Reading gatt characteristic timed out")) : Tasks.forResult(boardInfo.serialNumber));
         }
 
         return Tasks.forResult(null);

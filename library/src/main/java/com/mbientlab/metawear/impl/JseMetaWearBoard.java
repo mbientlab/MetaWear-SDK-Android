@@ -349,7 +349,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 createRoute(false);
             } else {
                 taskSrc.setException(new NullPointerException(String.format(Locale.US, "Producer tag \'%s\' does not exist", producerTag)));
-                return taskSrc.getTask();
             }
             return taskSrc.getTask();
         }
@@ -359,9 +358,8 @@ public class JseMetaWearBoard implements MetaWearBoard {
             TaskCompletionSource<ScheduledTask> createManagerTask = new TaskCompletionSource<>();
             pendingTaskManagers.add(new Tuple3<>(createManagerTask, mwCode, timerConfig));
             routeTypes.add(RouteType.TIMER);
-            return createRoute(false).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                return createManagerTask.getTask();
-            });
+            createRoute(false);
+            return createManagerTask.getTask();
         }
 
         @Override
@@ -369,9 +367,8 @@ public class JseMetaWearBoard implements MetaWearBoard {
             TaskCompletionSource<Observer> createManagerTask= new TaskCompletionSource<>();
             pendingEventManagers.add(new Tuple3<>(createManagerTask, owner, codeBlock));
             routeTypes.add(RouteType.EVENT);
-            return createRoute(false).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                return createManagerTask.getTask();
-            });
+            createRoute(false);
+            return createManagerTask.getTask();
         }
 
         @Override
@@ -724,9 +721,9 @@ public class JseMetaWearBoard implements MetaWearBoard {
             for(Image it: bootloaders) {
                 tasks.add(it.downloadAsync(io));
             }
-            return Tasks.forResult(tasks);
+            return Tasks.whenAllSuccess(tasks);
         }).onSuccessTask(IMMEDIATE_EXECUTOR, tasks -> {
-            List<File> resultFiles = tasks.stream().map(Task::getResult).collect(Collectors.toList());
+            List<File> resultFiles = tasks.stream().map(f -> (File) f).collect(Collectors.toList());
             files.get().addAll(0, resultFiles);
             return dcTask.get();
         }).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> Tasks.forResult(files.get()));
@@ -818,18 +815,6 @@ public class JseMetaWearBoard implements MetaWearBoard {
         if (persist.boardInfo == null) {
             InputStream ins = io.localRetrieve(BOARD_INFO);
             if (ins != null) {
-//                try( BufferedReader br =
-//                             new BufferedReader( new InputStreamReader(ins, "UTF-8" )))
-//                {
-//                    StringBuilder sb = new StringBuilder();
-//                    String line;
-//                    while(( line = br.readLine()) != null ) {
-//                        sb.append( line );
-//                        sb.append( '\n' );
-//                    }
-//                    System.out.println(sb.toString());
-//                }
-
                 ObjectInputStream ois = new ObjectInputStream(ins);
                 BoardInfo boardInfoState = (BoardInfo) ois.readObject();
 
@@ -904,10 +889,13 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 serviceDiscoveryRefresh.set(false);
             }
 
-            return gatt.readCharacteristicAsync(new BtleGattCharacteristic[]{
-                    DeviceInformationService.MODEL_NUMBER,
-                    DeviceInformationService.HARDWARE_REVISION
-            });
+            if (persist.boardInfo.modelNumber == null || persist.boardInfo.hardwareRevision == null) {
+                return gatt.readCharacteristicAsync(new BtleGattCharacteristic[]{
+                        DeviceInformationService.MODEL_NUMBER,
+                        DeviceInformationService.HARDWARE_REVISION
+                });
+            }
+            return Tasks.forResult(null);
         }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
             if (connectCts.getToken().isCancellationRequested()) {
                 return Tasks.forCanceled();
@@ -1655,7 +1643,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
                         return null;
                     }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                        pendingRoutes.poll();
+                        pendingTaskManagers.poll();
                         routeTypes.poll();
                         return createRoute(true);
                     });
@@ -1679,7 +1667,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
 
                         return null;
                     }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                        pendingRoutes.poll();
+                        pendingEventManagers.poll();
                         routeTypes.poll();
                         return createRoute(true);
                     });

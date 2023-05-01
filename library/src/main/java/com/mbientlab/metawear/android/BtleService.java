@@ -223,7 +223,7 @@ public class BtleService extends Service {
             if (!connectTask.isCompleted() && status != 0) {
                 connectTask.setError(new IllegalStateException(String.format(Locale.US, "Non-zero onConnectionStateChange status (%s)", status)));
             } else {
-                if (disconnectTaskSrc == null || disconnectTaskSrc.getTask().isSuccessful()) {
+                if (disconnectTaskSrc == null || disconnectTaskSrc.getTask().isComplete()) {
                     dcHandler.onUnexpectedDisconnect(status);
                 } else {
                     dcHandler.onDisconnect();
@@ -278,22 +278,21 @@ public class BtleService extends Service {
                     null;
         }
 
-        private Task<File> downloadFileTask(final String srcUrl, final String dest, final Capture<HttpURLConnection> urlConn) {
-            try {
+        @Override
+        public Task<File> downloadFileAsync(final String srcUrl, final String dest) {
+            final Capture<HttpURLConnection> urlConn = new Capture<>();
+            return TaskHelper.callInBackground(() -> {
                 URL fileUrl = new URL(srcUrl);
                 urlConn.set((HttpURLConnection) fileUrl.openConnection());
                 InputStream ins = urlConn.get().getInputStream();
-
                 int code = urlConn.get().getResponseCode();
                 if (code == HttpURLConnection.HTTP_OK) {
                     File firmwareDir = new File(getFilesDir(), DOWNLOAD_DIR_NAME);
                     if (!firmwareDir.exists()) {
                         firmwareDir.mkdir();
                     }
-
                     File location = new File(firmwareDir, dest);
                     FileOutputStream fos = new FileOutputStream(location);
-
                     byte data[] = new byte[1024];
                     int count;
                     while ((count = ins.read(data)) != -1) {
@@ -301,23 +300,14 @@ public class BtleService extends Service {
                     }
                     fos.close();
 
-                    return Tasks.forResult(location);
+                    return location;
                 }
-            } catch (IOException exception) {
-                return Tasks.forException(exception);
-            }
-            return Tasks.forException(new IOException("Could not retrieve resource"));
-        }
-
-        @Override
-        public Task<File> downloadFileAsync(final String srcUrl, final String dest) {
-            final Capture<HttpURLConnection> urlConn = new Capture<>();
-            return Tasks.forResult(downloadFileTask(srcUrl, dest, urlConn)
-            ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                throw new IOException(String.format("Could not retrieve resource (response = %d, msg = %s)", code, urlConn.get().getResponseMessage()));
+            }).continueWithTask(IMMEDIATE_EXECUTOR, ignored -> {
                 if (urlConn.get() != null) {
                     urlConn.get().disconnect();
                 }
-                return task.getResult();
+                return ignored;
             });
         }
 
@@ -375,18 +365,28 @@ public class BtleService extends Service {
 
         @Override
         public Task<byte[][]> readCharacteristicAsync(final BtleGattCharacteristic[] characteristics) {
+            Log.d("Prabh", "readCharacteristicAsync");
             // Can use do this in parallel since internally, gatt operations are queued and only executed 1 by 1
             final ArrayList<Task<byte[]>> tasks = new ArrayList<>();
             for(BtleGattCharacteristic it: characteristics) {
                 tasks.add(readCharacteristicAsync(it));
             }
 
-            return Tasks.whenAll(tasks).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            Log.d("Prabh", "before task");
+            Log.d("Prabh", Integer.toString(tasks.size()));
+            for (Task task : tasks) {
+                Log.d("Prabh success", Boolean.toString(task.isSuccessful()));
+                Log.d("Prabh complete", Boolean.toString(task.isComplete()));
+                Log.d("Prabh canceled", Boolean.toString(task.isCanceled()));
+            }
+            return Tasks.whenAll(tasks).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
+                Log.d("Prabh", "in task");
                 byte[][] valuesArray = new byte[tasks.size()][];
                 for (int i = 0; i < valuesArray.length; i++) {
                     valuesArray[i] = tasks.get(i).getResult();
                 }
 
+                Log.d("Prabh", "end task");
                 return Tasks.forResult(valuesArray);
             });
         }
@@ -456,7 +456,6 @@ public class BtleService extends Service {
                     if (connectTask.isCompleted()) {
                         androidBtGatt.disconnect();
                     } else {
-                        connectTask.cancel();
                         connectTask.cancel();
                         disconnected(0);
                     }

@@ -148,7 +148,7 @@ public class TestTimer extends UnitTestBase {
             final Capture<Exception> actual = new Capture<>();
 
             junitPlatform.maxTimers = 0;
-            return mwBoard.getModule(Timer.class).scheduleAsync(3000, false, () -> {
+            return mwBoard.getModule(Timer.class).scheduleAsync(1000, false, () -> {
                 System.out.println("test");
             }).continueWith(IMMEDIATE_EXECUTOR, task -> {
                 actual.set(task.getException());

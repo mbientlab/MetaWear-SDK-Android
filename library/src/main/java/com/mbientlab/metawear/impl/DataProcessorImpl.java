@@ -201,7 +201,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
                 for(byte it: ids) {
                     removeProcessor(true, it);
                 }
-                return Tasks.forResult(ids);
+                return Tasks.forException(task.getException());
             }
             return Tasks.forResult(ids);
         });

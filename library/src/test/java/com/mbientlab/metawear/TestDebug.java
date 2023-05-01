@@ -119,13 +119,12 @@ public class TestDebug extends UnitTestBase {
         setup().addOnSuccessListener(IMMEDIATE_EXECUTOR, ignored -> {
             debug.readTmpValueAsync().continueWithTask(IMMEDIATE_EXECUTOR, task -> {
                 sendMockResponse(new byte[] {(byte) 0xfe, (byte) 0x84, (byte) 0xef, (byte) 0xbe, (byte) 0xad, (byte) 0xde});
-                return task;
-            }).addOnSuccessListener(IMMEDIATE_EXECUTOR, task -> {
                 assertEquals(expected, task);
                 doneSignal.countDown();
+                return task;
             });
         });
-        doneSignal.await(8, TimeUnit.SECONDS);
+        doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
         assertEquals(0, doneSignal.getCount());
     }
 
