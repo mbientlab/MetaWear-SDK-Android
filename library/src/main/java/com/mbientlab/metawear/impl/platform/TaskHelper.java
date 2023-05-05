@@ -1,6 +1,9 @@
 package com.mbientlab.metawear.impl.platform;
 
+import static com.mbientlab.metawear.Executors.IMMEDIATE_EXECUTOR;
 import static com.mbientlab.metawear.Executors.SCHEDULED_EXECUTOR;
+
+import androidx.annotation.NonNull;
 
 import com.google.android.gms.tasks.CancellationToken;
 import com.google.android.gms.tasks.Continuation;
@@ -10,7 +13,9 @@ import com.google.android.gms.tasks.TaskCompletionSource;
 import com.google.android.gms.tasks.Tasks;
 import com.mbientlab.metawear.Capture;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
@@ -18,6 +23,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TaskHelper {
     public static Task<Void> continueWhile(final Callable<Boolean> predicate,
@@ -86,7 +92,7 @@ public class TaskHelper {
         final AtomicBoolean isAnyTaskComplete = new AtomicBoolean(false);
 
         for (Task<?> task : tasks) {
-            ((Task<Object>) task).continueWith(new Continuation<Object, Void>() {
+            ((Task<Object>) task).continueWith(IMMEDIATE_EXECUTOR, new Continuation<Object, Void>() {
                 @Override
                 public Void then(Task<Object> task) {
                     if (isAnyTaskComplete.compareAndSet(false, true)) {
@@ -130,5 +136,75 @@ public class TaskHelper {
         }
 
         return tcs.getTask();
+    }
+
+    public static Task<Void> whenAll(Collection<? extends Task<?>> tasks) {
+        if (tasks.size() == 0) {
+            return Tasks.forResult(null);
+        }
+
+        final TaskCompletionSource<Void> allFinished = new TaskCompletionSource<>();
+        final ArrayList<Exception> causes = new ArrayList<>();
+        final Object errorLock = new Object();
+        final AtomicInteger count = new AtomicInteger(tasks.size());
+        final AtomicBoolean isCancelled = new AtomicBoolean(false);
+
+        for (Task<?> task : tasks) {
+            @SuppressWarnings("unchecked")
+            Task<Object> t = (Task<Object>) task;
+            t.continueWith(new Continuation<Object, Void>() {
+                @Override
+                public Void then(Task<Object> task) {
+                    if (task.getException() != null) {
+                        synchronized (errorLock) {
+                            causes.add(task.getException());
+                        }
+                    }
+
+                    if (task.isCanceled()) {
+                        isCancelled.set(true);
+                    }
+
+                    if (count.decrementAndGet() == 0) {
+                        if (causes.size() != 0) {
+                            if (causes.size() == 1) {
+                                allFinished.setException(causes.get(0));
+                            } else {
+                                Exception error = new AggregateException(
+                                        String.format("There were %d exceptions.", causes.size()),
+                                        causes);
+                                allFinished.setException(error);
+                            }
+                        } else if (isCancelled.get()) {
+                            allFinished.setException(new CancellationException());
+                        } else {
+                            allFinished.setResult(null);
+                        }
+                    }
+                    return null;
+                }
+            });
+        }
+
+        return allFinished.getTask();
+    }
+
+    public static <TResult> Task<List<TResult>> whenAllResult(final Collection<? extends Task<TResult>> tasks) {
+        return whenAll(tasks).onSuccessTask(new SuccessContinuation<Void, List<TResult>>() {
+            @NonNull
+            @Override
+            public Task<List<TResult>> then(Void unused) throws Exception {
+                if (tasks.size() == 0) {
+                    List<TResult> emptyList = new ArrayList<>();
+                    return Tasks.forResult(emptyList);
+                }
+
+                List<TResult> results = new ArrayList<>();
+                for (Task<TResult> individualTask : tasks) {
+                    results.add(individualTask.getResult());
+                }
+                return Tasks.forResult(results);
+            }
+        });
     }
 }

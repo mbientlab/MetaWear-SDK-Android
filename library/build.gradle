@@ -61,14 +61,9 @@ android {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'com.google.android.gms:play-services-tasks:18.0.2'
-    implementation 'com.google.android.gms:play-services-tasks:18.0.2'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.9.2')
     testImplementation 'org.junit.jupiter:junit-jupiter-params:5.9.2'
-    implementation 'com.google.android.gms:play-services-tasks:18.0.2'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.1'
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.1")
-    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.9.1'
     testImplementation 'org.json:json:20220924'
     testImplementation 'org.skyscreamer:jsonassert:1.5.1'
     testImplementation 'androidx.arch.core:core-testing:2.1.0'

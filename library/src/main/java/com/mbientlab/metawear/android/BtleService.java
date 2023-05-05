@@ -109,7 +109,7 @@ public class BtleService extends Service {
         if (!pendingGattOps.isEmpty() && (pendingGattOps.size() == 1 || ready)) {
             GattOp next = pendingGattOps.peek();
             gattOpTask.execute(next.msg, 1000, next.task).continueWith(IMMEDIATE_EXECUTOR, task -> {
-                if (!task.isSuccessful() || task.isCanceled()) {
+                if (task.getException() != null || task.isCanceled()) {
                     next.taskSource.setException(task.getException());
                 } else {
                     next.taskSource.setResult(task.getResult());
@@ -365,28 +365,18 @@ public class BtleService extends Service {
 
         @Override
         public Task<byte[][]> readCharacteristicAsync(final BtleGattCharacteristic[] characteristics) {
-            Log.d("Prabh", "readCharacteristicAsync");
             // Can use do this in parallel since internally, gatt operations are queued and only executed 1 by 1
             final ArrayList<Task<byte[]>> tasks = new ArrayList<>();
             for(BtleGattCharacteristic it: characteristics) {
                 tasks.add(readCharacteristicAsync(it));
             }
 
-            Log.d("Prabh", "before task");
-            Log.d("Prabh", Integer.toString(tasks.size()));
-            for (Task task : tasks) {
-                Log.d("Prabh success", Boolean.toString(task.isSuccessful()));
-                Log.d("Prabh complete", Boolean.toString(task.isComplete()));
-                Log.d("Prabh canceled", Boolean.toString(task.isCanceled()));
-            }
             return Tasks.whenAll(tasks).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                Log.d("Prabh", "in task");
                 byte[][] valuesArray = new byte[tasks.size()][];
                 for (int i = 0; i < valuesArray.length; i++) {
                     valuesArray[i] = tasks.get(i).getResult();
                 }
 
-                Log.d("Prabh", "end task");
                 return Tasks.forResult(valuesArray);
             });
         }
@@ -483,7 +473,7 @@ public class BtleService extends Service {
             return connectTask.execute("Failed to connect and discover services within %dms", 10000,
                     () -> androidBtGatt = btDevice.connectGatt(BtleService.this, false, btleGattCallback)
             ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                if (!task.isSuccessful()) {
+                if (task.getException() != null) {
                     closeGatt();
                 }
                 return task;

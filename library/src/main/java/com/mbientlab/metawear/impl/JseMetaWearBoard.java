@@ -120,7 +120,6 @@ import java.util.Queue;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.stream.Collectors;
 
 /**
  * Platform agnostic implementation of the {@link MetaWearBoard} interface using only standard Java APIs.  Platform specific functionality
@@ -721,10 +720,9 @@ public class JseMetaWearBoard implements MetaWearBoard {
             for(Image it: bootloaders) {
                 tasks.add(it.downloadAsync(io));
             }
-            return Tasks.whenAllSuccess(tasks);
-        }).onSuccessTask(IMMEDIATE_EXECUTOR, tasks -> {
-            List<File> resultFiles = tasks.stream().map(f -> (File) f).collect(Collectors.toList());
-            files.get().addAll(0, resultFiles);
+            return TaskHelper.whenAllResult(tasks);
+        }).onSuccessTask(IMMEDIATE_EXECUTOR, task -> {
+            files.get().addAll(0, task);
             return dcTask.get();
         }).onSuccessTask(IMMEDIATE_EXECUTOR, ignored -> Tasks.forResult(files.get()));
     }
@@ -848,7 +846,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
             return readModuleInfoTask.execute("Did not receive info for module (" + next.friendlyName + ") within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> gatt.writeCharacteristicAsync(MW_CMD_GATT_CHAR, WriteType.WITHOUT_RESPONSE, new byte[] { next.id, READ_INFO_REGISTER })
             ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                if (!task.isSuccessful()) {
+                if (task.getException() != null) {
                     terminate.set(true);
                     return Tasks.<Void>forException(task.getException());
                 } else {
@@ -856,7 +854,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                     return Tasks.<Void>forResult(null);
                 }
             });
-        }, IMMEDIATE_EXECUTOR, null).continueWithTask(IMMEDIATE_EXECUTOR, task -> !task.isSuccessful() ? Tasks.forException(new TaskTimeoutException(task.getException(), info)) : Tasks.forResult(info));
+        }, IMMEDIATE_EXECUTOR, null).continueWithTask(IMMEDIATE_EXECUTOR, task -> task.getException() != null ? Tasks.forException(new TaskTimeoutException(task.getException(), info)) : Tasks.forResult(info));
     }
 
     @Override
@@ -953,7 +951,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
                 return task;
             }
 
-            if (!task.isSuccessful()) {
+            if (task.getException() != null) {
                 if (inMetaBootMode()) {
                     connected = true;
                     return Tasks.forResult(null);
@@ -998,7 +996,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
         return TaskHelper.continueWhile(() -> remaining.get() > 0, ignored ->
                 connectAsync().continueWithTask(IMMEDIATE_EXECUTOR, task -> {
                     lastResult.set(task);
-                    remaining.set(!task.isSuccessful() || task.isCanceled() ? remaining.get() - 1 : -1);
+                    remaining.set(task.getResult() != null || task.isCanceled() ? remaining.get() - 1 : -1);
                     return Tasks.forResult(null);
                 }), IMMEDIATE_EXECUTOR, null
         ).continueWithTask(IMMEDIATE_EXECUTOR, ignored -> lastResult.get());
@@ -1159,7 +1157,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
         }
 
         return discoverModules(ignore).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-            Queue<ModuleInfo> result = !task.isSuccessful() ?
+            Queue<ModuleInfo> result = task.getException() != null ?
                     (Queue<ModuleInfo>) ((TaskTimeoutException) task.getException()).partial :
                     task.getResult();
 
@@ -1169,7 +1167,7 @@ public class JseMetaWearBoard implements MetaWearBoard {
             }
 
             JSONObject actual = new JSONObject(diagnosticResult);
-            return task.isSuccessful() ? Tasks.forResult(actual) : Tasks.forException(new TaskTimeoutException((Exception) task.getException().getCause(), actual));
+            return task.getException() == null ? Tasks.forResult(actual) : Tasks.forException(new TaskTimeoutException((Exception) task.getException().getCause(), actual));
         });
     }
 

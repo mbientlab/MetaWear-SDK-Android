@@ -801,17 +801,7 @@ public class TestDataProcessor {
             junitPlatform.boardInfo= new MetaWearBoardInfo(AccelerometerBmi160.class);
             return connectToBoard();
         }
-//mwBoard.getModule(Accelerometer.class).acceleration().addRouteAsync(source -> source.map(Function1.RMS).accumulate()
-//                .multicast()
-//                    .to().limit(1000).stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class)))
-//                .to().buffer().name("rms_accum")
-//                .end()).continueWithTask(task -> {
-//            activityRoute = task.getResult();
-//            return mwBoard.getModule(DataProcessor.class).state("rms_accum").addRouteAsync(source -> source.stream((Subscriber) (data, env) -> ((Capture<Float>) env[0]).set(data.value(Float.class))));
-//        }).continueWith(task -> {
-//            bufferStateRoute= task.getResult();
-//            return null;
-//        }).getResult();
+
         @Test
         public void createRoute() throws InterruptedException {
             CountDownLatch doneSignal = new CountDownLatch(1);

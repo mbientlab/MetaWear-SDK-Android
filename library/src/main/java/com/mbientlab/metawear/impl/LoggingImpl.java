@@ -440,7 +440,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                 return createLoggerTask.execute("Did not receive log id within %dms", Constant.RESPONSE_TIMEOUT,
                         () -> mwPrivate.sendCommand(command)
                 ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                    if (!task.isSuccessful()) {
+                    if (task.getException() != null) {
                         terminate.set(true);
                         return Tasks.<Void>forException(new TaskTimeoutException(task.getException(), next));
                     }
@@ -457,7 +457,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
                 return Tasks.forResult(null);
             });
         }, IMMEDIATE_EXECUTOR, null).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-            if (!task.isSuccessful()) {
+            if (task.getException() != null) {
                 boolean taskTimeout = task.getException() instanceof TaskTimeoutException;
                 if (taskTimeout) {
                     loggers.add((DataLogger) ((TaskTimeoutException) task.getException()).partial);
@@ -621,7 +621,7 @@ class LoggingImpl extends ModuleImplBase implements Logging {
             }
             return Tasks.forResult(null);
         }).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-            if (task.isSuccessful()) {
+            if (task.getException() == null) {
                 byte nextId = (byte) (id + 1);
                 if (nextId < mwPrivate.lookupModuleInfo(LOGGING).extra[0]) {
                     return queryActiveLoggersInnerAsync(nextId);

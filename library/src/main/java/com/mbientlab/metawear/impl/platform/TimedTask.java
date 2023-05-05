@@ -24,7 +24,7 @@ public class TimedTask<T> {
         }
 
         cts = new CancellationTokenSource();
-        taskSource = new TaskCompletionSource<>(cts.getToken());
+        taskSource = new TaskCompletionSource<>();
         action.run();
 
         if (timeout != 0) {

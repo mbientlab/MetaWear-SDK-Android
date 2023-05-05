@@ -88,7 +88,7 @@ class EventImpl extends ModuleImplBase implements Module {
                 return createEventTask.execute("Did not receive event id within %dms", Constant.RESPONSE_TIMEOUT,
                         () -> mwPrivate.sendCommand(recordedCommands.poll())
                 ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                    if (!task.isSuccessful()) {
+                    if (task.getException() != null) {
                         terminate.set(true);
                         terminate2.set(true);
                         return Tasks.<Void>forException(task.getException());
@@ -99,7 +99,7 @@ class EventImpl extends ModuleImplBase implements Module {
                 });
             }, IMMEDIATE_EXECUTOR, null);
         }, IMMEDIATE_EXECUTOR, null).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-            if (!task.isSuccessful()) {
+            if (task.getException() != null) {
                 for(byte it: ids) {
                     removeEventCommand(it);
                 }

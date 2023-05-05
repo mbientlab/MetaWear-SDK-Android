@@ -252,7 +252,7 @@ public class TestAnonymousLogger {
                     doneSignal.countDown();
                 });
             });
-            doneSignal.await(30, TimeUnit.SECONDS);
+            doneSignal.await(TEST_WAIT_TIME, TimeUnit.SECONDS);
             assertEquals(0, doneSignal.getCount());
         }
 

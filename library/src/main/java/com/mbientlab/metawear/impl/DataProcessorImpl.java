@@ -182,7 +182,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             return createProcessorTask.execute("Did not receive data processor id within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(DATA_PROCESSOR, ADD, filterConfig)
             ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-                if (!task.isSuccessful()) {
+                if (task.getException() != null) {
                     terminate.set(true);
                     return Tasks.<Void>forException(task.getException());
                 }
@@ -197,7 +197,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
                 return Tasks.forResult(null);
             });
         }, IMMEDIATE_EXECUTOR, null).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-            if (!task.isSuccessful()) {
+            if (task.getException() != null) {
                 for(byte it: ids) {
                     removeProcessor(true, it);
                 }
@@ -268,7 +268,7 @@ class DataProcessorImpl extends ModuleImplBase implements DataProcessor {
             pullProcessorConfigTask.execute("Did not received data processor config within %dms", Constant.RESPONSE_TIMEOUT,
                     () -> mwPrivate.sendCommand(new byte[] {DATA_PROCESSOR.id, Util.setRead(ADD), nextId.get()})
         ).continueWithTask(IMMEDIATE_EXECUTOR, task -> {
-            if (!task.isSuccessful()) {
+            if (task.getException() != null) {
                 terminate.set(true);
                 return Tasks.<Void>forException(task.getException());
             }
