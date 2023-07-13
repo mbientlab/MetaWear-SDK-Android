@@ -48,27 +48,35 @@ import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
 class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi270 {
     static String createUri(DataTypeBase dataType) {
         switch (dataType.eventConfig[1]) {
-            case DATA_INTERRUPT:
-                return dataType.attributes.length() > 2 ? "acceleration" : String.format(Locale.US, "acceleration[%d]", (dataType.attributes.offset >> 1));
-            case PACKED_ACC_DATA:
-                return "acceleration";
-            default:
-                return null;
+        case DATA_INTERRUPT:
+            return dataType.attributes.length() > 2 ? "acceleration" : String.format(Locale.US, "acceleration[%d]", (dataType.attributes.offset >> 1));
+        case PACKED_ACC_DATA:
+            return "acceleration";
+        default:
+            return null;
         }
     }
 
     private static final long serialVersionUID = 0000000;
-    final static byte IMPLEMENTATION= 0x4;
+    final static byte IMPLEMENTATION = 0x4;
+    private static final String STEP_DETECTOR_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.STEP_DETECTOR_PRODUCER",
+        STEP_COUNTER_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.STEP_COUNTER_PRODUCER";
+    private static final byte FEATURE_ENABLE = 0x6,
+        FEATURE_INTERRUPT_ENABLE = 0x7,
+        FEATURE_CONFIG = 0x8,
+        STEP_COUNT_INTERRUPT = 0xb;
     protected static final byte POWER_MODE = 1,
-            DATA_INTERRUPT_ENABLE = 2, DATA_CONFIG = 3, DATA_INTERRUPT = 4, PACKED_ACC_DATA= 0x5;
-    protected final static String ACCEL_PRODUCER= "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_PRODUCER",
-            ACCEL_X_AXIS_PRODUCER= "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_X_AXIS_PRODUCER",
-            ACCEL_Y_AXIS_PRODUCER= "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_Y_AXIS_PRODUCER",
-            ACCEL_Z_AXIS_PRODUCER= "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_Z_AXIS_PRODUCER",
-            ACCEL_PACKED_PRODUCER= "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_PACKED_PRODUCER";
-    private final byte[] accDataConfig= new byte[] {(byte) 0xa8, 0x02};
+        DATA_INTERRUPT_ENABLE = 2, DATA_CONFIG = 3, DATA_INTERRUPT = 4, PACKED_ACC_DATA = 0x5;
+    protected final static String ACCEL_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_PRODUCER",
+        ACCEL_X_AXIS_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_X_AXIS_PRODUCER",
+        ACCEL_Y_AXIS_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_Y_AXIS_PRODUCER",
+        ACCEL_Z_AXIS_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_Z_AXIS_PRODUCER",
+        ACCEL_PACKED_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_PACKED_PRODUCER";
+    private final byte[] accDataConfig = new byte[] { (byte) 0xa8, 0x02 };
 
     private transient AsyncDataProducer packedAcceleration, acceleration;
+    private transient StepDetectorDataProducer stepDetector;
+    private transient StepCounterDataProducer stepCounter;
     private transient TimedTask<byte[]> pullConfigTask;
 
     private static class BoschAccCartesianFloatData extends FloatVectorData {
@@ -79,7 +87,7 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
         }
 
         public BoschAccCartesianFloatData(byte register, byte copies) {
-            super(ACCELEROMETER, register, new DataAttributes(new byte[] {2, 2, 2}, copies, (byte) 0, true));
+            super(ACCELEROMETER, register, new DataAttributes(new byte[] { 2, 2, 2 }, copies, (byte) 0, true));
         }
 
         public BoschAccCartesianFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
@@ -93,7 +101,7 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
         @Override
         public DataTypeBase[] createSplits() {
-            return new DataTypeBase[] {new BoschAccSFloatData((byte) 0), new BoschAccSFloatData((byte) 2), new BoschAccSFloatData((byte) 4)};
+            return new DataTypeBase[] { new BoschAccSFloatData((byte) 0), new BoschAccSFloatData((byte) 2), new BoschAccSFloatData((byte) 4) };
         }
 
         @Override
@@ -104,9 +112,9 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
         @Override
         public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, final byte[] data, final Calendar timestamp, DataPrivate.ClassToObject mapper) {
             ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-            short[] unscaled = new short[]{buffer.getShort(), buffer.getShort(), buffer.getShort()};
-            final float scale= scale(mwPrivate);
-            final Acceleration value= new Acceleration(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
+            short[] unscaled = new short[] { buffer.getShort(), buffer.getShort(), buffer.getShort() };
+            final float scale = scale(mwPrivate);
+            final Acceleration value = new Acceleration(unscaled[0] / scale, unscaled[1] / scale, unscaled[2] / scale);
 
             return new DataPrivate(timestamp, data, mapper) {
                 @Override
@@ -116,26 +124,28 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
                 @Override
                 public Class<?>[] types() {
-                    return new Class<?>[] {Acceleration.class, float[].class};
+                    return new Class<?>[] { Acceleration.class, float[].class };
                 }
 
                 @Override
                 public <T> T value(Class<T> clazz) {
                     if (clazz.equals(Acceleration.class)) {
                         return clazz.cast(value);
-                    } else if (clazz.equals(float[].class)) {
-                        return clazz.cast(new float[] {value.x(), value.y(), value.z()});
+                    }
+                    else if (clazz.equals(float[].class)) {
+                        return clazz.cast(new float[] { value.x(), value.y(), value.z() });
                     }
                     return super.value(clazz);
                 }
             };
         }
     }
+
     private static class BoschAccSFloatData extends SFloatData {
         private static final long serialVersionUID = 0000000;
 
         BoschAccSFloatData(byte offset) {
-            super(ACCELEROMETER, DATA_INTERRUPT, new DataAttributes(new byte[] {2}, (byte) 1, offset, true));
+            super(ACCELEROMETER, DATA_INTERRUPT, new DataAttributes(new byte[] { 2 }, (byte) 1, offset, true));
         }
 
         BoschAccSFloatData(DataTypeBase input, Constant.Module module, byte register, byte id, DataAttributes attributes) {
@@ -158,12 +168,17 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
         DataTypeBase cfProducer = new BoschAccCartesianFloatData();
 
-        this.mwPrivate= mwPrivate;
+        this.mwPrivate = mwPrivate;
         this.mwPrivate.tagProducer(ACCEL_PRODUCER, cfProducer);
         this.mwPrivate.tagProducer(ACCEL_X_AXIS_PRODUCER, cfProducer.split[0]);
         this.mwPrivate.tagProducer(ACCEL_Y_AXIS_PRODUCER, cfProducer.split[1]);
         this.mwPrivate.tagProducer(ACCEL_Z_AXIS_PRODUCER, cfProducer.split[2]);
         this.mwPrivate.tagProducer(ACCEL_PACKED_PRODUCER, new BoschAccCartesianFloatData(PACKED_ACC_DATA, (byte) 3));
+
+        this.mwPrivate.tagProducer(STEP_DETECTOR_PRODUCER, new UintData(ACCELEROMETER, STEP_COUNT_INTERRUPT,
+            new DataAttributes(new byte[] { 1 }, (byte) 1, (byte) 0, false)));
+        this.mwPrivate.tagProducer(STEP_COUNTER_PRODUCER, new UintData(ACCELEROMETER, STEP_COUNT_INTERRUPT,
+            new DataAttributes(new byte[] { 1 }, (byte) 1, (byte) 0, false)));
     }
 
     @Override
@@ -179,19 +194,19 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
     @Override
     public AccelerometerBmi270.ConfigEditor configure() {
         return new AccelerometerBmi270.ConfigEditor() {
-            private OutputDataRate odr= OutputDataRate.ODR_100_HZ;
-            private AccRange ar= AccRange.AR_8G;
+            private OutputDataRate odr = OutputDataRate.ODR_100_HZ;
+            private AccRange ar = AccRange.AR_8G;
             private FilterMode mode = FilterMode.NORMAL;
 
             @Override
             public AccelerometerBmi270.ConfigEditor odr(OutputDataRate odr) {
-                this.odr= odr;
+                this.odr = odr;
                 return this;
             }
 
             @Override
             public AccelerometerBmi270.ConfigEditor range(AccRange ar) {
-                this.ar= ar;
+                this.ar = ar;
                 return this;
             }
 
@@ -213,14 +228,14 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
             @Override
             public void commit() {
-                accDataConfig[0]&= 0xf0;
-                accDataConfig[0]|= odr.ordinal() + 1;
+                accDataConfig[0] &= 0xf0;
+                accDataConfig[0] |= odr.ordinal() + 1;
 
-                accDataConfig[0]&= 0x0f;
-                accDataConfig[0]|= 0xa0; //TODO
+                accDataConfig[0] &= 0x0f;
+                accDataConfig[0] |= 0xa0; //TODO
 
-                accDataConfig[1]&= 0xf0;
-                accDataConfig[1]|= ar.bitmask;
+                accDataConfig[1] &= 0xf0;
+                accDataConfig[1] |= ar.bitmask;
 
                 mwPrivate.sendCommand(ACCELEROMETER, DATA_CONFIG, accDataConfig);
             }
@@ -243,12 +258,12 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
                 @Override
                 public void start() {
-                    mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, DATA_INTERRUPT_ENABLE, 0x01, 0x00});
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, DATA_INTERRUPT_ENABLE, 0x01, 0x00 });
                 }
 
                 @Override
                 public void stop() {
-                    mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, DATA_INTERRUPT_ENABLE, 0x00, 0x01});
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, DATA_INTERRUPT_ENABLE, 0x00, 0x01 });
                 }
             };
         }
@@ -271,12 +286,12 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
                 @Override
                 public void start() {
-                    mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, DATA_INTERRUPT_ENABLE, 0x01, 0x00});
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, DATA_INTERRUPT_ENABLE, 0x01, 0x00 });
                 }
 
                 @Override
                 public void stop() {
-                    mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, DATA_INTERRUPT_ENABLE, 0x00, 0x01});
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, DATA_INTERRUPT_ENABLE, 0x00, 0x01 });
                 }
 
                 @Override
@@ -311,7 +326,7 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
     @Override
     public Task<Void> pullConfigAsync() {
         return pullConfigTask.execute("Did not receive BMI270 acc config within %dms", Constant.RESPONSE_TIMEOUT,
-                () -> mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, Util.setRead(DATA_CONFIG)})
+            () -> mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, Util.setRead(DATA_CONFIG) })
         ).onSuccessTask(task -> {
             System.arraycopy(task.getResult(), 2, accDataConfig, 0, accDataConfig.length);
             return Task.forResult(null);
@@ -320,12 +335,133 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
     @Override
     public void start() {
-        mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, POWER_MODE, 0x01});
+        mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, POWER_MODE, 0x01 });
     }
 
     @Override
     public void stop() {
-        mwPrivate.sendCommand(new byte[] {ACCELEROMETER.id, POWER_MODE, 0x00});
+        mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, POWER_MODE, 0x00 });
+    }
+
+    private class StepConfigEditorInner implements StepConfigEditor {
+        private final byte STEP_COUNTER_3_INDEX = 0x7;
+        byte param_250 = 0x00;         // bit 0-7
+        byte param_251 = 0x00;         // bit 8-15
+        byte watermark_level_0 = 0x00; // bit 0-7
+        byte watermark_level_1 = 0b00; // bit 0-1
+        byte reset_counter = 0b0;      // bit 2
+
+        private byte[] getBitmap() {
+            int watermark_level_1_shifted = watermark_level_1 << 5;
+            int reset_counter_shifted = reset_counter << 4;
+
+            return new byte[] {
+                param_250,
+                param_251,
+                watermark_level_0,
+                (byte) (watermark_level_1_shifted | reset_counter_shifted)
+            };
+        }
+
+        @Override
+        public StepConfigEditor trigger(final int trigger) {
+            if (trigger >= 1 && trigger <= 1023) {
+                int lower_8 = trigger & 0x00ff;
+                int higher_2 = (trigger & 0x0300) >> 8;
+                watermark_level_0 = (byte) lower_8;
+                watermark_level_1 = (byte) higher_2;
+            }
+            else {
+                watermark_level_0 = 0x00;
+                watermark_level_1 = 0b00;
+            }
+
+            return this;
+        }
+
+        @Override
+        public void commit() {
+            mwPrivate.sendCommand(ACCELEROMETER, FEATURE_CONFIG, STEP_COUNTER_3_INDEX, getBitmap());
+        }
+    }
+
+    @Override
+    public StepDetectorDataProducer stepDetector() {
+        if (stepDetector == null) {
+            stepDetector = new StepDetectorDataProducer() {
+                @Override
+                public StepConfigEditor configure() {
+                    return new StepConfigEditorInner();
+                }
+
+                @Override
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, STEP_DETECTOR_PRODUCER);
+                }
+
+                @Override
+                public String name() {
+                    return STEP_DETECTOR_PRODUCER;
+                }
+
+                @Override
+                public void start() {
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_INTERRUPT_ENABLE, (byte) 0x80, (byte) 0x00 });
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_ENABLE, (byte) 0x80, (byte) 0x00 });
+                }
+
+                @Override
+                public void stop() {
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_INTERRUPT_ENABLE, (byte) 0x00, (byte) 0x80 });
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_ENABLE, (byte) 0x00, (byte) 0x80 });
+                }
+            };
+        }
+        return stepDetector;
+    }
+
+    @Override
+    public StepCounterDataProducer stepCounter() {
+        if (stepCounter == null) {
+            stepCounter = new StepCounterDataProducer() {
+                private StepConfigEditorInner configEditor = new StepConfigEditorInner();
+                @Override
+                public StepConfigEditor configure() {
+                    configEditor = new StepConfigEditorInner();
+                    return configEditor;
+                }
+
+                @Override
+                public void reset() {
+                    configEditor.reset_counter = 0b1;
+                    configEditor.commit();
+                    configEditor.reset_counter = 0b0;
+                }
+
+                @Override
+                public Task<Route> addRouteAsync(RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, STEP_COUNTER_PRODUCER);
+                }
+
+                @Override
+                public String name() {
+                    return STEP_COUNTER_PRODUCER;
+                }
+
+                @Override
+                public void start() {
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_INTERRUPT_ENABLE, (byte) 0x02, (byte) 0x00 });
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_ENABLE, (byte) 0x02, (byte) 0x00 });
+                }
+
+                @Override
+                public void stop() {
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_INTERRUPT_ENABLE, (byte) 0x00, (byte) 0x20 });
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_ENABLE, (byte) 0x00, (byte) 0x20 });
+                }
+            };
+        }
+        return stepCounter;
     }
 
 }

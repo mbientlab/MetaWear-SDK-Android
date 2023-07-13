@@ -27,6 +27,7 @@ package com.mbientlab.metawear.module;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.ConfigEditorBase;
 import com.mbientlab.metawear.Configurable;
+import com.mbientlab.metawear.ForcedDataProducer;
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.Sign;
 import com.mbientlab.metawear.data.TapType;
@@ -168,4 +169,47 @@ public interface AccelerometerBmi270 extends Accelerometer {
      */
     @Override
     ConfigEditor configure();
+
+    /**
+     * Configuration editor for the step detection algorithm
+     */
+    interface StepConfigEditor extends ConfigEditorBase {
+        /**
+         * Sets the watermark level of the step counter The Step-counter will trigger output every time this number of steps are counted.
+         * Holds implicitly a 20x factor, so the range is 0 to 20460, with resolution of 20 steps. If 0, the output is disabled. If 1, it will count to 20 steps.
+         *
+         * @param trigger    Number of steps
+         * @return Calling object
+         */
+        StepConfigEditor trigger(int trigger);
+        /**
+         * Write the configuration to the sensor
+         */
+        void commit();
+    }
+    /**
+     * Interrupt driven step detection where each detected step triggers a data interrupt.  This data producer
+     * cannot be used in conjunction with the {@link StepCounterDataProducer} interface.
+     */
+    interface StepDetectorDataProducer extends AsyncDataProducer, Configurable<StepConfigEditor> { }
+    /**
+     * Get an implementation of the StepDetectorDataProducer interface
+     * @return StepDetectorDataProducer object
+     */
+    StepDetectorDataProducer stepDetector();
+    /**
+     * Accumulates the number of detected steps in a counter that will send its current value on request.  This
+     * data producer cannot be used in conjunction with the {@link StepDetectorDataProducer} interface.
+     */
+    interface StepCounterDataProducer extends AsyncDataProducer, Configurable<StepConfigEditor> {
+        /**
+         * Reset the internal step counter
+         */
+        void reset();
+    }
+    /**
+     * Get an implementation of the StepCounterDataProducer interface
+     * @return StepCounterDataProducer object
+     */
+    StepCounterDataProducer stepCounter();
 }
