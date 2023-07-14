@@ -47,11 +47,13 @@ import static com.mbientlab.metawear.impl.Constant.Module.ACCELEROMETER;
  */
 class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi270 {
     static String createUri(DataTypeBase dataType) {
-        switch (dataType.eventConfig[1]) {
+        switch (Util.clearRead(dataType.eventConfig[1])) {
         case DATA_INTERRUPT:
             return dataType.attributes.length() > 2 ? "acceleration" : String.format(Locale.US, "acceleration[%d]", (dataType.attributes.offset >> 1));
         case PACKED_ACC_DATA:
             return "acceleration";
+        case STEP_COUNT_INTERRUPT:
+            return "step-counter";
         default:
             return null;
         }
@@ -177,8 +179,8 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
         this.mwPrivate.tagProducer(STEP_DETECTOR_PRODUCER, new UintData(ACCELEROMETER, STEP_COUNT_INTERRUPT,
             new DataAttributes(new byte[] { 1 }, (byte) 1, (byte) 0, false)));
-        this.mwPrivate.tagProducer(STEP_COUNTER_PRODUCER, new UintData(ACCELEROMETER, STEP_COUNT_INTERRUPT,
-            new DataAttributes(new byte[] { 1 }, (byte) 1, (byte) 0, false)));
+        this.mwPrivate.tagProducer(STEP_COUNTER_PRODUCER, new UintData(ACCELEROMETER, Util.setSilentRead(STEP_COUNT_INTERRUPT),
+            new DataAttributes(new byte[] { 2 }, (byte) 1, (byte) 0, false)));
     }
 
     @Override
