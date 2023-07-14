@@ -425,6 +425,7 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
         if (stepCounter == null) {
             stepCounter = new StepCounterDataProducer() {
                 private StepConfigEditorInner configEditor = new StepConfigEditorInner();
+
                 @Override
                 public StepConfigEditor configure() {
                     configEditor = new StepConfigEditorInner();
@@ -456,8 +457,8 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
 
                 @Override
                 public void stop() {
-                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_INTERRUPT_ENABLE, (byte) 0x00, (byte) 0x20 });
-                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_ENABLE, (byte) 0x00, (byte) 0x20 });
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_INTERRUPT_ENABLE, (byte) 0x00, (byte) 0x02 });
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_ENABLE, (byte) 0x00, (byte) 0x02 });
                 }
             };
         }
