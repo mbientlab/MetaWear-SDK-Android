@@ -29,6 +29,8 @@ import com.mbientlab.metawear.Data;
 import com.mbientlab.metawear.Route;
 import com.mbientlab.metawear.builder.RouteBuilder;
 import com.mbientlab.metawear.data.Acceleration;
+import com.mbientlab.metawear.data.Activity;
+import com.mbientlab.metawear.impl.DataPrivate.ClassToObject;
 import com.mbientlab.metawear.impl.platform.TimedTask;
 import com.mbientlab.metawear.module.Accelerometer;
 import com.mbientlab.metawear.module.AccelerometerBmi270;
@@ -75,10 +77,13 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
         ACCEL_Z_AXIS_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_Z_AXIS_PRODUCER",
         ACCEL_PACKED_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACCEL_PACKED_PRODUCER";
     private final byte[] accDataConfig = new byte[] { (byte) 0xa8, 0x02 };
+    private final static String ACTIVITY_DETECTOR_PRODUCER = "com.mbientlab.metawear.impl.AccelerometerBmi270Impl.ACTIVITY_DETECTOR_PRODUCER";
+    private static final byte ACTIVITY_INTERRUPT = 0xc;
 
     private transient AsyncDataProducer packedAcceleration, acceleration;
     private transient StepDetectorDataProducer stepDetector;
     private transient StepCounterDataProducer stepCounter;
+    private transient AsyncDataProducer activityDetector;
     private transient TimedTask<byte[]> pullConfigTask;
 
     private static class BoschAccCartesianFloatData extends FloatVectorData {
@@ -165,6 +170,34 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
         }
     }
 
+
+    private static class Bmi270ActivityData extends UintData {
+        public Bmi270ActivityData() {
+            super(ACCELEROMETER, ACTIVITY_INTERRUPT, new DataAttributes(new byte[] { 1 }, (byte) 1, (byte) 0, false));
+        }
+
+        @Override
+        public Data createMessage(boolean logData, MetaWearBoardPrivate mwPrivate, byte[] data, Calendar timestamp, ClassToObject mapper) {
+            final Activity activity = Activity.fromInt(data[0] >> 1);
+
+            return new DataPrivate(timestamp, data, mapper) {
+                @Override
+                public <T> T value(final Class<T> clazz) {
+                    if (clazz == Activity.class) {
+                        return clazz.cast(activity);
+                    }
+                    return super.value(clazz);
+                }
+
+                @Override
+                public Class<?>[] types() {
+                    return new Class[] { Activity.class };
+                }
+            };
+        }
+    }
+
+
     AccelerometerBmi270Impl(MetaWearBoardPrivate mwPrivate) {
         super(mwPrivate);
 
@@ -176,11 +209,11 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
         this.mwPrivate.tagProducer(ACCEL_Y_AXIS_PRODUCER, cfProducer.split[1]);
         this.mwPrivate.tagProducer(ACCEL_Z_AXIS_PRODUCER, cfProducer.split[2]);
         this.mwPrivate.tagProducer(ACCEL_PACKED_PRODUCER, new BoschAccCartesianFloatData(PACKED_ACC_DATA, (byte) 3));
-
         this.mwPrivate.tagProducer(STEP_DETECTOR_PRODUCER, new UintData(ACCELEROMETER, STEP_COUNT_INTERRUPT,
             new DataAttributes(new byte[] { 1 }, (byte) 1, (byte) 0, false)));
         this.mwPrivate.tagProducer(STEP_COUNTER_PRODUCER, new UintData(ACCELEROMETER, Util.setSilentRead(STEP_COUNT_INTERRUPT),
             new DataAttributes(new byte[] { 2 }, (byte) 1, (byte) 0, false)));
+        this.mwPrivate.tagProducer(ACTIVITY_DETECTOR_PRODUCER, new Bmi270ActivityData());
     }
 
     @Override
@@ -467,4 +500,34 @@ class AccelerometerBmi270Impl extends ModuleImplBase implements AccelerometerBmi
         return stepCounter;
     }
 
+    @Override
+    public AsyncDataProducer activityDetector() {
+        if (activityDetector == null) {
+            activityDetector = new AsyncDataProducer() {
+                @Override
+                public String name() {
+                    return ACTIVITY_DETECTOR_PRODUCER;
+                }
+
+                @Override
+                public Task<Route> addRouteAsync(final RouteBuilder builder) {
+                    return mwPrivate.queueRouteBuilder(builder, ACTIVITY_DETECTOR_PRODUCER);
+                }
+
+                @Override
+                public void start() {
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_INTERRUPT_ENABLE, (byte) 0x04, (byte) 0x00 });
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_ENABLE, (byte) 0x04, (byte) 0x00 });
+                }
+
+                @Override
+                public void stop() {
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_INTERRUPT_ENABLE, (byte) 0x00, (byte) 0x04 });
+                    mwPrivate.sendCommand(new byte[] { ACCELEROMETER.id, FEATURE_ENABLE, (byte) 0x00, (byte) 0x04 });
+                }
+            };
+        }
+
+        return activityDetector;
+    }
 }

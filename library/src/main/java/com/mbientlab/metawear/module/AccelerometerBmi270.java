@@ -27,14 +27,8 @@ package com.mbientlab.metawear.module;
 import com.mbientlab.metawear.AsyncDataProducer;
 import com.mbientlab.metawear.ConfigEditorBase;
 import com.mbientlab.metawear.Configurable;
-import com.mbientlab.metawear.ForcedDataProducer;
-import com.mbientlab.metawear.data.CartesianAxis;
-import com.mbientlab.metawear.data.Sign;
-import com.mbientlab.metawear.data.TapType;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Locale;
 
 /**
  * Extension of the {@link Accelerometer} interface providing finer control of the BMI270 accelerometer
@@ -212,4 +206,10 @@ public interface AccelerometerBmi270 extends Accelerometer {
      * @return StepCounterDataProducer object
      */
     StepCounterDataProducer stepCounter();
+
+    /**
+     * Get an implementation of the AsyncDataProducer interface for detected activity
+     * @return AsyncDataProducer Object for detected activity
+     */
+    AsyncDataProducer activityDetector();
 }
